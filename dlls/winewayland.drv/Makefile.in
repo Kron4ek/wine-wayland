@@ -1,0 +1,46 @@
+MODULE    = winewayland.drv
+IMPORTS   = uuid user32 gdi32 advapi32
+DELAYIMPORTS = comctl32 ole32 shell32 imm32
+EXTRAINCL = 
+#-lX11 
+EXTRALIBS = -lwayland-client  -lwayland-cursor 
+
+EXTRACFLAGS += -std=c11 -Wno-declaration-after-statement
+
+
+
+#	xim.c \
+# ime.c \
+#	wintab.c \
+#	xvidmode.c
+#	xrandr.c \
+#	xdnd.c \
+#	xrender.c
+# systray.c \
+#	clipboard.c \
+#	
+#	keyboard.c \
+# palette.c \
+#	pen.c \
+#	mouse.c \
+#	bitblt.c \
+#	graphics.c \ 
+# brush.c \
+#  opengl.c \
+# window.c \
+# event.c \
+# 
+
+C_SRCS = \
+  desktop.c \
+	init.c \
+	settings.c \
+	vulkan.c \
+	waylanddrv_main.c \
+  pointer-constraints-unstable-v1-protocol.c \
+  relative-pointer-unstable-v1-protocol.c \
+  relative-pointer-unstable-v1-protocol.c \
+  xdg-shell-protocol.c \
+	xinerama.c
+
+RC_SRCS = version.rc

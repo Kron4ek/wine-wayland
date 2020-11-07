@@ -314,7 +314,8 @@ typedef struct _PEB
     PVOID /*PPEBLOCKROUTINE*/    FastPebUnlockRoutine;              /* 024/048 */
     ULONG                        EnvironmentUpdateCount;            /* 028/050 */
     PVOID                        KernelCallbackTable;               /* 02c/058 */
-    ULONG                        Reserved[2];                       /* 030/060 */
+    ULONG                        Reserved;                          /* 030/060 */
+    ULONG                        AtlThunkSListPtr32;                /* 034/064 */
     PVOID /*PPEB_FREE_BLOCK*/    FreeList;                          /* 038/068 */
     ULONG                        TlsExpansionCounter;               /* 03c/070 */
     PRTL_BITMAP                  TlsBitmap;                         /* 040/078 */
@@ -379,6 +380,12 @@ typedef struct _PEB
     PVOID                        WaitOnAddressHashTable [0x80];     /* 25c/3a0 */
     PVOID                        TelemetryCoverageHeader;           /* 45c/7a0 */
     ULONG                        CloudFileFlags;                    /* 460/7a8 */
+    ULONG                        CloudFileDiagFlags;                /* 464/7ac */
+    CHAR                         PlaceholderCompatibilityMode;      /* 468/7b0 */
+    CHAR                         PlaceholderCompatibilityModeReserved[7]; /* 469/7b1 */
+    PVOID                        LeapSecondData;                    /* 470/7b8 */
+    ULONG                        LeapSecondFlags;                   /* 474/7c0 */
+    ULONG                        NtGlobalFlag2;                     /* 478/7c4 */
 } PEB, *PPEB;
 
 
@@ -552,7 +559,8 @@ typedef struct _PEB64
     ULONG64                      FastPebUnlockRoutine;              /* 0048 */
     ULONG                        EnvironmentUpdateCount;            /* 0050 */
     ULONG64                      KernelCallbackTable;               /* 0058 */
-    ULONG                        Reserved[2];                       /* 0060 */
+    ULONG                        Reserved;                          /* 0060 */
+    ULONG                        AtlThunkSListPtr32;                /* 0064 */
     ULONG64                      FreeList;                          /* 0068 */
     ULONG                        TlsExpansionCounter;               /* 0070 */
     ULONG64                      TlsBitmap;                         /* 0078 */
@@ -617,6 +625,12 @@ typedef struct _PEB64
     ULONG64                      WaitOnAddressHashTable [0x80];     /* 03a0 */
     ULONG64                      TelemetryCoverageHeader;           /* 07a0 */
     ULONG                        CloudFileFlags;                    /* 07a8 */
+    ULONG                        CloudFileDiagFlags;                /* 07ac */
+    CHAR                         PlaceholderCompatibilityMode;      /* 07b0 */
+    CHAR                         PlaceholderCompatibilityModeReserved[7]; /* 07b1 */
+    ULONG64                      LeapSecondData;                    /* 07b8 */
+    ULONG                        LeapSecondFlags;                   /* 07c0 */
+    ULONG                        NtGlobalFlag2;                     /* 07c4 */
 } PEB64;
 
 typedef struct _TEB64
@@ -2805,6 +2819,15 @@ typedef struct _SYSTEM_MODULE_INFORMATION
 #define PROCESS_CREATE_FLAGS_SUSPENDED              0x00000200
 #define PROCESS_CREATE_FLAGS_EXTENDED_UNKNOWN       0x00000400
 
+typedef struct _RTL_PROCESS_MODULE_INFORMATION_EX
+{
+    USHORT NextOffset;
+    SYSTEM_MODULE BaseInfo;
+    ULONG ImageCheckSum;
+    ULONG TimeDateStamp;
+    void *DefaultBase;
+} RTL_PROCESS_MODULE_INFORMATION_EX;
+
 #define THREAD_CREATE_FLAGS_CREATE_SUSPENDED        0x00000001
 #define THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH      0x00000002
 #define THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER      0x00000004
@@ -3020,6 +3043,7 @@ NTSYSAPI NTSTATUS  WINAPI NtAlertThread(HANDLE ThreadHandle);
 NTSYSAPI NTSTATUS  WINAPI NtAllocateLocallyUniqueId(PLUID lpLuid);
 NTSYSAPI NTSTATUS  WINAPI NtAllocateUuids(PULARGE_INTEGER,PULONG,PULONG,PUCHAR);
 NTSYSAPI NTSTATUS  WINAPI NtAllocateVirtualMemory(HANDLE,PVOID*,ULONG_PTR,SIZE_T*,ULONG,ULONG);
+NTSYSAPI NTSTATUS  WINAPI NtAllocateVirtualMemoryEx(HANDLE,PVOID*,SIZE_T*,ULONG,ULONG,MEM_EXTENDED_PARAMETER*,ULONG);
 NTSYSAPI NTSTATUS  WINAPI NtAreMappedFilesTheSame(PVOID,PVOID);
 NTSYSAPI NTSTATUS  WINAPI NtAssignProcessToJobObject(HANDLE,HANDLE);
 NTSYSAPI NTSTATUS  WINAPI NtCallbackReturn(PVOID,ULONG,NTSTATUS);

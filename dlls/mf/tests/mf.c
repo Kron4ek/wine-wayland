@@ -1452,7 +1452,6 @@ todo_wine
         return;
 
     hr = IMFMediaSource_CreatePresentationDescriptor(source, &pd);
-todo_wine
     ok(hr == S_OK, "Failed to create descriptor, hr %#x.\n", hr);
     if (FAILED(hr))
         return;
@@ -3381,7 +3380,6 @@ static void test_evr(void)
     ok(!sample_count, "Unexpected sample count %d.\n", sample_count);
 
     hr = IMFVideoSampleAllocator_AllocateSample(allocator, &sample);
-todo_wine
     ok(hr == MF_E_NOT_INITIALIZED, "Unexpected hr %#x.\n", hr);
 
     IMFVideoSampleAllocatorCallback_Release(allocator_callback);

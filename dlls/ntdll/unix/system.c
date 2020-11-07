@@ -2333,30 +2333,62 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             "\\SystemRoot\\system32\\drivers\\mountmgr.sys"
         };
 
-        if (!info) ret = STATUS_ACCESS_VIOLATION;
-        else
-        {
-            ULONG i;
-            SYSTEM_MODULE_INFORMATION *smi = info;
+        ULONG i;
+        SYSTEM_MODULE_INFORMATION *smi = info;
 
-            len = offsetof( SYSTEM_MODULE_INFORMATION, Modules[ARRAY_SIZE(fake_modules)] );
-            if (len <= size)
+        len = offsetof( SYSTEM_MODULE_INFORMATION, Modules[ARRAY_SIZE(fake_modules)] );
+        if (len <= size)
+        {
+            memset( smi, 0, len );
+            for (i = 0; i < ARRAY_SIZE(fake_modules); i++)
             {
-                memset( smi, 0, len );
-                for (i = 0; i < ARRAY_SIZE(fake_modules); i++)
-                {
-                    SYSTEM_MODULE *sm = &smi->Modules[i];
-                    sm->ImageBaseAddress = (char *)0x10000000 + 0x200000 * i;
-                    sm->ImageSize = 0x200000;
-                    sm->LoadOrderIndex = i;
-                    sm->LoadCount = 1;
-                    strcpy( (char *)sm->Name, fake_modules[i] );
-                    sm->NameOffset = strrchr( fake_modules[i], '\\' ) - fake_modules[i] + 1;
-                }
-                smi->ModulesCount = i;
+                SYSTEM_MODULE *sm = &smi->Modules[i];
+                sm->ImageBaseAddress = (char *)0x10000000 + 0x200000 * i;
+                sm->ImageSize = 0x200000;
+                sm->LoadOrderIndex = i;
+                sm->LoadCount = 1;
+                strcpy( (char *)sm->Name, fake_modules[i] );
+                sm->NameOffset = strrchr( fake_modules[i], '\\' ) - fake_modules[i] + 1;
             }
-            else ret = STATUS_INFO_LENGTH_MISMATCH;
+            smi->ModulesCount = i;
         }
+        else ret = STATUS_INFO_LENGTH_MISMATCH;
+
+        break;
+    }
+
+    case SystemModuleInformationEx:
+    {
+        /* FIXME: return some fake info for now */
+        static const char *fake_modules[] =
+        {
+            "\\SystemRoot\\system32\\ntoskrnl.exe",
+            "\\SystemRoot\\system32\\hal.dll",
+            "\\SystemRoot\\system32\\drivers\\mountmgr.sys"
+        };
+
+        ULONG i;
+        RTL_PROCESS_MODULE_INFORMATION_EX *module_info = info;
+
+        len = sizeof(*module_info) * ARRAY_SIZE(fake_modules) + sizeof(module_info->NextOffset);
+        if (len <= size)
+        {
+            memset( info, 0, len );
+            for (i = 0; i < ARRAY_SIZE(fake_modules); i++)
+            {
+                SYSTEM_MODULE *sm = &module_info[i].BaseInfo;
+                sm->ImageBaseAddress = (char *)0x10000000 + 0x200000 * i;
+                sm->ImageSize = 0x200000;
+                sm->LoadOrderIndex = i;
+                sm->LoadCount = 1;
+                strcpy( (char *)sm->Name, fake_modules[i] );
+                sm->NameOffset = strrchr( fake_modules[i], '\\' ) - fake_modules[i] + 1;
+                module_info[i].NextOffset = sizeof(*module_info);
+            }
+            module_info[ARRAY_SIZE(fake_modules)].NextOffset = 0;
+        }
+        else ret = STATUS_INFO_LENGTH_MISMATCH;
+
         break;
     }
 
@@ -2614,6 +2646,12 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         else ret = STATUS_INFO_LENGTH_MISMATCH;
         break;
     }
+
+    case SystemExtendedProcessInformation:
+        FIXME("SystemExtendedProcessInformation, size %u, info %p, stub!\n", size, info);
+        memset( info, 0, size );
+        ret = STATUS_SUCCESS;
+        break;
 
     default:
 	FIXME( "(0x%08x,%p,0x%08x,%p) stub\n", class, info, size, ret_size );

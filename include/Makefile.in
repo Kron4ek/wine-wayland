@@ -63,6 +63,9 @@ SOURCES = \
 	cierror.h \
 	clusapi.h \
 	cmdbas.idl \
+	cmdpre.idl \
+	cmdprp.idl \
+	cmdstrm.idl \
 	cmdtxt.idl \
 	cmnquery.idl \
 	codecapi.h \
@@ -89,6 +92,7 @@ SOURCES = \
 	ctxtcall.idl \
 	custcntl.h \
 	cvconst.h \
+	cvttyp.idl \
 	d2d1.idl \
 	d2d1_1.idl \
 	d2d1_2.idl \
@@ -307,6 +311,7 @@ SOURCES = \
 	gdiplusmetaheader.h \
 	gdipluspixelformats.h \
 	gdiplustypes.h \
+	getdts.idl \
 	guiddef.h \
 	hidusage.h \
 	highlevelmonitorconfigurationapi.h \
@@ -607,9 +612,11 @@ SOURCES = \
 	rpcproxy.h \
 	rpcsal.h \
 	rstbas.idl \
+	rstchg.idl \
 	rstinf.idl \
 	rstloc.idl \
 	rstnot.idl \
+	rstupd.idl \
 	rtutils.h \
 	rtworkq.idl \
 	sal.h \

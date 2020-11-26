@@ -1035,12 +1035,14 @@ static HRESULT WINAPI media_source_GetCharacteristics(IMFMediaSource *iface, DWO
 {
     struct media_source *source = impl_from_IMFMediaSource(iface);
 
-    FIXME("(%p)->(%p): stub\n", source, characteristics);
+    TRACE("(%p)->(%p)\n", source, characteristics);
 
     if (source->state == SOURCE_SHUTDOWN)
         return MF_E_SHUTDOWN;
 
-    return E_NOTIMPL;
+    *characteristics = MFMEDIASOURCE_CAN_SEEK;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI media_source_CreatePresentationDescriptor(IMFMediaSource *iface, IMFPresentationDescriptor **descriptor)
@@ -1235,12 +1237,23 @@ static HRESULT media_source_constructor(IMFByteStream *bytestream, struct media_
 
     struct media_source *object = heap_alloc_zero(sizeof(*object));
     IMFStreamDescriptor **descriptors = NULL;
+    gint64 total_pres_time = 0;
+    DWORD bytestream_caps;
     unsigned int i;
     HRESULT hr;
     int ret;
 
     if (!object)
         return E_OUTOFMEMORY;
+
+    if (FAILED(hr = IMFByteStream_GetCapabilities(bytestream, &bytestream_caps)))
+        return hr;
+
+    if (!(bytestream_caps & MFBYTESTREAM_IS_SEEKABLE))
+    {
+        FIXME("Non-seekable bytestreams not supported.\n");
+        return MF_E_BYTESTREAM_NOT_SEEKABLE;
+    }
 
     object->IMFMediaSource_iface.lpVtbl = &IMFMediaSource_vtbl;
     object->async_commands_callback.lpVtbl = &source_async_commands_callback_vtbl;
@@ -1344,6 +1357,25 @@ static HRESULT media_source_constructor(IMFByteStream *bytestream, struct media_
     }
     heap_free(descriptors);
     descriptors = NULL;
+
+    for (i = 0; i < object->stream_count; i++)
+    {
+        gint64 stream_pres_time;
+        if (gst_pad_query_duration(object->streams[i]->their_src, GST_FORMAT_TIME, &stream_pres_time))
+        {
+            TRACE("Stream %u has duration %llu\n", i, (unsigned long long int) stream_pres_time);
+
+            if (stream_pres_time > total_pres_time)
+                total_pres_time = stream_pres_time;
+        }
+        else
+        {
+            WARN("Unable to get presentation time of stream %u\n", i);
+        }
+    }
+
+    if (object->stream_count)
+        IMFPresentationDescriptor_SetUINT64(object->pres_desc, &MF_PD_DURATION, total_pres_time / 100);
 
     object->state = SOURCE_STOPPED;
 

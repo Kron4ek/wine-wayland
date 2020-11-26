@@ -49,7 +49,6 @@ AC_ARG_WITH(gettext,   AS_HELP_STRING([--without-gettext],[do not use gettext]))
 AC_ARG_WITH(gettextpo, AS_HELP_STRING([--with-gettextpo],[use the GetTextPO library to rebuild po files]),
             [if test "x$withval" = "xno"; then ac_cv_header_gettext_po_h=no; fi])
 AC_ARG_WITH(gphoto,    AS_HELP_STRING([--without-gphoto],[do not use gphoto (Digital Camera support)]))
-AC_ARG_WITH(glu,       AS_HELP_STRING([--without-glu],[do not use the GLU library]))
 AC_ARG_WITH(gnutls,    AS_HELP_STRING([--without-gnutls],[do not use GnuTLS (schannel support)]))
 AC_ARG_WITH(gsm,       AS_HELP_STRING([--without-gsm],[do not use libgsm (GSM 06.10 codec support)]),
             [if test "x$withval" = "xno"; then ac_cv_header_gsm_h=no; ac_cv_header_gsm_gsm_h=no; fi])
@@ -541,7 +540,7 @@ AC_HEADER_STAT()
 
 dnl **** Checks for headers that depend on other ones ****
 
-AC_CHECK_HEADERS([sys/mount.h sys/statfs.h sys/user.h sys/vfs.h],,,
+AC_CHECK_HEADERS([sys/conf.h sys/mount.h sys/statfs.h sys/user.h sys/vfs.h],,,
     [#include <sys/types.h>
      #ifdef HAVE_SYS_PARAM_H
      # include <sys/param.h>
@@ -1294,13 +1293,6 @@ This probably prevents linking to OpenGL. Try deleting the file and restarting c
                             fi],
 			    $X_LIBS -lm $X_EXTRA_LIBS -dylib_file /System/Library/Frameworks/OpenGL.framework/Versions/A/Libraries/libGL.dylib:/System/Library/Frameworks/OpenGL.framework/Versions/A/Libraries/libGL.dylib)],
 		     $X_LIBS -lm $X_EXTRA_LIBS)
-        if test "x$with_glu" != "xno"
-        then
-            WINE_CHECK_SONAME(GLU,gluLookAt,,,[$OPENGL_LIBS $X_LIBS -lm $X_EXTRA_LIBS])
-            WINE_NOTICE_WITH(glu,[test "x$ac_cv_lib_soname_GLU" = "x"],
-                             [libGLU ${notice_platform}development files not found, GLU won't be supported.])
-        fi
-
         if test "x$with_osmesa" != "xno"
         then
             WINE_CHECK_SONAME(OSMesa,OSMesaGetProcAddress,,,[$X_LIBS -lm $X_EXTRA_LIBS])
@@ -2173,11 +2165,8 @@ AC_CHECK_FUNCS(\
 	_spawnvp \
 	epoll_create \
 	ffs \
-	finite \
-	finitef \
 	fnmatch \
 	fork \
-	fpclass \
 	fstatfs \
 	fstatvfs \
 	futimens \
@@ -2720,8 +2709,6 @@ AC_CHECK_FUNCS(\
 	expm1f \
 	fma \
 	fmaf \
-	ilogb \
-	ilogbf \
 	j0 \
 	j1 \
 	jn \
@@ -3118,6 +3105,8 @@ WINE_CONFIG_MAKEFILE(dlls/d3d10)
 WINE_CONFIG_MAKEFILE(dlls/d3d10_1)
 WINE_CONFIG_MAKEFILE(dlls/d3d10core)
 WINE_CONFIG_MAKEFILE(dlls/d3d11)
+WINE_CONFIG_MAKEFILE(dlls/d3d8)
+WINE_CONFIG_MAKEFILE(dlls/d3d8thk)
 WINE_CONFIG_MAKEFILE(dlls/d3d9)
 WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_33)
 WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_34)
@@ -3321,7 +3310,6 @@ WINE_CONFIG_MAKEFILE(dlls/irprops.cpl)
 WINE_CONFIG_MAKEFILE(dlls/itircl)
 WINE_CONFIG_MAKEFILE(dlls/itss)
 WINE_CONFIG_MAKEFILE(dlls/joy.cpl)
-WINE_CONFIG_MAKEFILE(dlls/jscript)
 WINE_CONFIG_MAKEFILE(dlls/jsproxy)
 WINE_CONFIG_MAKEFILE(dlls/kerberos)
 WINE_CONFIG_MAKEFILE(dlls/kernel32)
@@ -3742,13 +3730,13 @@ WINE_CONFIG_MAKEFILE(programs/cacls)
 WINE_CONFIG_MAKEFILE(programs/chcp.com)
 WINE_CONFIG_MAKEFILE(programs/clock)
 WINE_CONFIG_MAKEFILE(programs/cmd)
-WINE_CONFIG_MAKEFILE(programs/conhost)
 WINE_CONFIG_MAKEFILE(programs/control)
 WINE_CONFIG_MAKEFILE(programs/cscript)
 WINE_CONFIG_MAKEFILE(programs/dism)
 WINE_CONFIG_MAKEFILE(programs/dplaysvr)
 WINE_CONFIG_MAKEFILE(programs/dpnsvr)
 WINE_CONFIG_MAKEFILE(programs/dpvsetup)
+WINE_CONFIG_MAKEFILE(programs/dxdiag)
 WINE_CONFIG_MAKEFILE(programs/eject)
 WINE_CONFIG_MAKEFILE(programs/expand)
 WINE_CONFIG_MAKEFILE(programs/extrac32)
@@ -3811,7 +3799,6 @@ WINE_CONFIG_MAKEFILE(programs/wineboot)
 WINE_CONFIG_MAKEFILE(programs/winebrowser)
 WINE_CONFIG_MAKEFILE(programs/winecfg)
 WINE_CONFIG_MAKEFILE(programs/wineconsole)
-WINE_CONFIG_MAKEFILE(programs/winedbg)
 WINE_CONFIG_MAKEFILE(programs/winedevice)
 WINE_CONFIG_MAKEFILE(programs/winefile)
 WINE_CONFIG_MAKEFILE(programs/winemine)
@@ -3936,7 +3923,6 @@ programs/regsvr32/regsvr32 \
 programs/wineboot/wineboot \
 programs/winecfg/winecfg \
 programs/wineconsole/wineconsole \
-programs/winedbg/winedbg \
 programs/winefile/winefile \
 programs/winemine/winemine \
 programs/winepath/winepath \

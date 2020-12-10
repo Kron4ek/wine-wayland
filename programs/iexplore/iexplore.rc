@@ -1,7 +1,5 @@
 /*
- * rint family
- *
- * Copyright 2017 Alex Henrie
+ * Copyright 2003 Francois Gouget (for CodeWeavers)
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,49 +16,18 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
+#define WINE_FILEDESCRIPTION_STR "Wine Internet Explorer"
+#define WINE_FILENAME_STR "iexplore.exe"
+#define WINE_FILEVERSION 9,0,8112,16421
+#define WINE_FILEVERSION_STR "9.0.8112.16421"
+#define WINE_PRODUCTVERSION 9,0,8112,16421
+#define WINE_PRODUCTVERSION_STR "9.0.8112.16421"
+#define WINE_EXTRAVALUES VALUE "OLESelfRegister",""
 
-#include <math.h>
+#include "wine/wine_common_ver.rc"
 
-#ifndef HAVE_RINT
-double rint(double x)
-{
-    return x >= 0 ? floor(x + 0.5) : ceil(x - 0.5);
-}
-#endif
+/* @makedep: iexplore.ico */
+1 ICON iexplore.ico
 
-#ifndef HAVE_RINTF
-float rintf(float x)
-{
-    return rint(x);
-}
-#endif
-
-#ifndef HAVE_LRINT
-long lrint(double x)
-{
-    return x >= 0 ? floor(x + 0.5) : ceil(x - 0.5);
-}
-#endif
-
-#ifndef HAVE_LRINTF
-long lrintf(float x)
-{
-    return lrint(x);
-}
-#endif
-
-#ifndef HAVE_LLRINT
-__int64 llrint(double x)
-{
-    return x >= 0 ? floor(x + 0.5) : ceil(x - 0.5);
-}
-#endif
-
-#ifndef HAVE_LLRINTF
-__int64 llrintf(float x)
-{
-    return llrint(x);
-}
-#endif
+/* @makedep: iexplore.inf */
+REGINST REGINST iexplore.inf

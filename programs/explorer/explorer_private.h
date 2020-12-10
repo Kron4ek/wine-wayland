@@ -1,7 +1,7 @@
 /*
- * isfinite function
+ * Explorer private definitions
  *
- * Copyright 2013 Francois Gouget
+ * Copyright 2006 Alexandre Julliard
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,21 +18,14 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
+#ifndef __WINE_EXPLORER_PRIVATE_H
+#define __WINE_EXPLORER_PRIVATE_H
 
-#if !defined(HAVE_ISFINITE) && !defined(isfinite)
+extern void manage_desktop( WCHAR *arg ) DECLSPEC_HIDDEN;
+extern void initialize_systray( HMODULE graphics_driver, BOOL using_root, BOOL enable_shell ) DECLSPEC_HIDDEN;
+extern void initialize_appbar(void) DECLSPEC_HIDDEN;
+extern void handle_parent_notify( HWND hwnd, WPARAM wp ) DECLSPEC_HIDDEN;
+extern void do_startmenu( HWND owner ) DECLSPEC_HIDDEN;
+extern LRESULT menu_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) DECLSPEC_HIDDEN;
 
-#ifdef HAVE_IEEEFP_H
-#include <ieeefp.h>
-
-int isfinite(double x)
-{
-  return finite(x);
-}
-
-#else
-#error No isfinite() implementation available.
-#endif
-
-#endif /* HAVE_ISFINITE */
+#endif  /* __WINE_EXPLORER_PRIVATE_H */

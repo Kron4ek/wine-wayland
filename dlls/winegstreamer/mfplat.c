@@ -405,6 +405,8 @@ failed:
 
 static const GUID CLSID_GStreamerByteStreamHandler = {0x317df618, 0x5e5a, 0x468a, {0x9f, 0x15, 0xd8, 0x27, 0xa9, 0xa0, 0x81, 0x62}};
 
+static const GUID CLSID_WINEAudioConverter = {0x6a170414,0xaad9,0x4693,{0xb8,0x06,0x3a,0x0c,0x47,0xc5,0x70,0xd6}};
+
 static const struct class_object
 {
     const GUID *clsid;
@@ -414,6 +416,7 @@ class_objects[] =
 {
     { &CLSID_VideoProcessorMFT, &video_processor_create },
     { &CLSID_GStreamerByteStreamHandler, &winegstreamer_stream_handler_create },
+    { &CLSID_WINEAudioConverter, &audio_converter_create },
 };
 
 HRESULT mfplat_get_class_object(REFCLSID rclsid, REFIID riid, void **obj)
@@ -440,6 +443,75 @@ HRESULT mfplat_get_class_object(REFCLSID rclsid, REFIID riid, void **obj)
     }
 
     return CLASS_E_CLASSNOTAVAILABLE;
+}
+
+static WCHAR audio_converterW[] = {'A','u','d','i','o',' ','C','o','n','v','e','r','t','e','r',0};
+static const GUID *audio_converter_supported_types[] =
+{
+    &MFAudioFormat_PCM,
+    &MFAudioFormat_Float,
+};
+
+static const struct mft
+{
+    const GUID *clsid;
+    const GUID *category;
+    LPWSTR name;
+    const UINT32 flags;
+    const GUID *major_type;
+    const UINT32 input_types_count;
+    const GUID **input_types;
+    const UINT32 output_types_count;
+    const GUID **output_types;
+    IMFAttributes *attributes;
+}
+mfts[] =
+{
+    {
+        &CLSID_WINEAudioConverter,
+        &MFT_CATEGORY_AUDIO_EFFECT,
+        audio_converterW,
+        MFT_ENUM_FLAG_SYNCMFT,
+        &MFMediaType_Audio,
+        ARRAY_SIZE(audio_converter_supported_types),
+        audio_converter_supported_types,
+        ARRAY_SIZE(audio_converter_supported_types),
+        audio_converter_supported_types,
+        NULL
+    },
+};
+
+HRESULT mfplat_DllRegisterServer(void)
+{
+    unsigned int i, j;
+    HRESULT hr;
+    MFT_REGISTER_TYPE_INFO input_types[2], output_types[2];
+
+    for (i = 0; i < ARRAY_SIZE(mfts); i++)
+    {
+        const struct mft *cur = &mfts[i];
+
+        for (j = 0; j < cur->input_types_count; j++)
+        {
+            input_types[j].guidMajorType = *(cur->major_type);
+            input_types[j].guidSubtype = *(cur->input_types[j]);
+        }
+        for (j = 0; j < cur->output_types_count; j++)
+        {
+            output_types[j].guidMajorType = *(cur->major_type);
+            output_types[j].guidSubtype = *(cur->output_types[j]);
+        }
+
+        hr = MFTRegister(*(cur->clsid), *(cur->category), cur->name, cur->flags, cur->input_types_count,
+                    input_types, cur->output_types_count, output_types, cur->attributes);
+
+        if (FAILED(hr))
+        {
+            FIXME("Failed to register MFT, hr %#x\n", hr);
+            return hr;
+        }
+    }
+    return S_OK;
 }
 
 static const struct
@@ -669,31 +741,39 @@ GstCaps *caps_from_mf_media_type(IMFMediaType *type)
     }
     else if (IsEqualGUID(&major_type, &MFMediaType_Audio))
     {
-        DWORD rate, channels, channel_mask, bitrate;
+        DWORD rate = -1, channels = -1, channel_mask = -1;
+
+        if (FAILED(IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate)))
+        {
+            ERR("Sample rate not set.\n");
+            return NULL;
+        }
+        if (FAILED(IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_NUM_CHANNELS, &channels)))
+        {
+            ERR("Channel count not set.\n");
+            return NULL;
+        }
+        IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_CHANNEL_MASK, &channel_mask);
 
         if (IsEqualGUID(&subtype, &MFAudioFormat_Float))
         {
-            output = gst_caps_new_empty_simple("audio/x-raw");
+            GstAudioInfo float_info;
 
-            gst_caps_set_simple(output, "format", G_TYPE_STRING, "F32LE", NULL);
-            gst_caps_set_simple(output, "layout", G_TYPE_STRING, "interleaved", NULL);
+            gst_audio_info_set_format(&float_info, GST_AUDIO_FORMAT_F32LE, rate, channels, NULL);
+            output = gst_audio_info_to_caps(&float_info);
         }
         else if (IsEqualGUID(&subtype, &MFAudioFormat_PCM))
         {
+            GstAudioFormat pcm_format;
+            GstAudioInfo pcm_info;
             DWORD bits_per_sample;
 
             if (SUCCEEDED(IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_BITS_PER_SAMPLE, &bits_per_sample)))
             {
-                char format[6];
-                char type;
+                pcm_format = gst_audio_format_build_integer(bits_per_sample > 8, G_LITTLE_ENDIAN, bits_per_sample, bits_per_sample);
 
-                type = bits_per_sample > 8 ? 'S' : 'U';
-
-                output = gst_caps_new_empty_simple("audio/x-raw");
-
-                sprintf(format, "%c%u%s", type, bits_per_sample, bits_per_sample > 8 ? "LE" : "");
-
-                gst_caps_set_simple(output, "format", G_TYPE_STRING, format, NULL);
+                gst_audio_info_set_format(&pcm_info, pcm_format, rate, channels, NULL);
+                output = gst_audio_info_to_caps(&pcm_info);
             }
             else
             {
@@ -707,23 +787,8 @@ GstCaps *caps_from_mf_media_type(IMFMediaType *type)
             return NULL;
         }
 
-        if (SUCCEEDED(IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_SAMPLES_PER_SECOND, &rate)))
-        {
-            gst_caps_set_simple(output, "rate", G_TYPE_INT, rate, NULL);
-        }
-        if (SUCCEEDED(IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_NUM_CHANNELS, &channels)))
-        {
-            gst_caps_set_simple(output, "channels", G_TYPE_INT, channels, NULL);
-        }
-        if (SUCCEEDED(IMFMediaType_GetUINT32(type, &MF_MT_AUDIO_CHANNEL_MASK, &channel_mask)))
-        {
+        if (channel_mask != -1)
             gst_caps_set_simple(output, "channel-mask", GST_TYPE_BITMASK, (guint64) channel_mask, NULL);
-        }
-
-        if (SUCCEEDED(IMFMediaType_GetUINT32(type, &MF_MT_AVG_BITRATE, &bitrate)))
-        {
-            gst_caps_set_simple(output, "bitrate", G_TYPE_INT, bitrate, NULL);
-        }
 
         return output;
     }

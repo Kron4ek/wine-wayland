@@ -1,7 +1,7 @@
 /*
- * isnan function
+ * DirectComposition Library
  *
- * Copyright 2008 Jacek Caban for CodeWeavers
+ * Copyright 2020 Austin English
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,22 +17,28 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
+#include <stdarg.h>
 
-#include "config.h"
-#include "wine/port.h"
+#include "windef.h"
+#include "winbase.h"
+#include "wine/debug.h"
 
-#if !defined(HAVE_ISNAN) && !defined(isnan)
+WINE_DEFAULT_DEBUG_CHANNEL(dcomp);
 
-#ifdef HAVE_IEEEFP_H
-#include <ieeefp.h>
-
-int isnan(double x)
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
-  return isnand(x);
+    TRACE("(0x%p, %d, %p)\n", hinstDLL, fdwReason, lpvReserved);
+
+    switch (fdwReason)
+    {
+        case DLL_WINE_PREATTACH:
+            return FALSE;    /* prefer native version */
+        case DLL_PROCESS_ATTACH:
+            DisableThreadLibraryCalls(hinstDLL);
+            break;
+        default:
+            break;
+    }
+
+    return TRUE;
 }
-
-#else
-#error No isnan() implementation available.
-#endif
-
-#endif /* HAVE_ISNAN */

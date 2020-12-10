@@ -84,6 +84,8 @@ enum attr_type
     ATTR_CODE,
     ATTR_COMMSTATUS,
     ATTR_CONTEXTHANDLE,
+    ATTR_CONTRACT,
+    ATTR_CONTRACTVERSION,
     ATTR_CONTROL,
     ATTR_CUSTOM,
     ATTR_DECODE,
@@ -439,6 +441,7 @@ enum type_type
     TYPE_POINTER,
     TYPE_ARRAY,
     TYPE_BITFIELD,
+    TYPE_APICONTRACT,
 };
 
 struct _type_t {
@@ -613,7 +616,8 @@ var_list_t *append_var(var_list_t *list, var_t *var);
 
 void init_loc_info(loc_info_t *);
 
-char *format_namespace(struct namespace *namespace, const char *prefix, const char *separator, const char *suffix);
+char *format_namespace(struct namespace *namespace, const char *prefix, const char *separator, const char *suffix,
+                       const char *abi_prefix);
 
 static inline enum type_type type_get_type_detect_alias(const type_t *type)
 {

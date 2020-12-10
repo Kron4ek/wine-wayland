@@ -1,7 +1,7 @@
 /*
- * strnlen function
+ * Explorer resource definitions
  *
- * Copyright 2017 Alexandre Julliard
+ * Copyright 2011 Jay Yang
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,14 +18,12 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-#include "wine/port.h"
+#ifndef __WINE_EXPLORER_RESOURCE_H
+#define __WINE_EXPLORER_RESOURCE_H
 
-#ifndef HAVE_STRNLEN
-size_t strnlen( const char *str, size_t maxlen )
-{
-    const char *ptr = memchr( str, 0, maxlen );
-    if (!ptr) return maxlen;
-    return ptr - str;
-}
-#endif /* HAVE_STRNLEN */
+#define IDS_EXPLORER_TITLE 1
+#define IDS_PATHBOX_LABEL 2
+#define IDS_START_LABEL 3
+#define IDS_RUN 4
+
+#endif

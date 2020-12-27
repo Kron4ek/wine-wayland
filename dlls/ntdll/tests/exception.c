@@ -37,6 +37,8 @@ static void *code_mem;
 
 static NTSTATUS  (WINAPI *pNtGetContextThread)(HANDLE,CONTEXT*);
 static NTSTATUS  (WINAPI *pNtSetContextThread)(HANDLE,CONTEXT*);
+static NTSTATUS  (WINAPI *pNtQueueApcThread)(HANDLE handle, PNTAPCFUNC func,
+        ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3);
 static NTSTATUS  (WINAPI *pRtlRaiseException)(EXCEPTION_RECORD *rec);
 static PVOID     (WINAPI *pRtlUnwind)(PVOID, PVOID, PEXCEPTION_RECORD, PVOID);
 static VOID      (WINAPI *pRtlCaptureContext)(CONTEXT*);
@@ -56,6 +58,7 @@ static void *    (WINAPI *pRtlLocateExtendedFeature)(CONTEXT_EX *context_ex, ULO
 static void *    (WINAPI *pRtlLocateLegacyContext)(CONTEXT_EX *context_ex, ULONG *length);
 static void      (WINAPI *pRtlSetExtendedFeaturesMask)(CONTEXT_EX *context_ex, ULONG64 feature_mask);
 static ULONG64   (WINAPI *pRtlGetExtendedFeaturesMask)(CONTEXT_EX *context_ex);
+static NTSTATUS  (WINAPI *pNtRaiseException)(EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance);
 static NTSTATUS  (WINAPI *pNtReadVirtualMemory)(HANDLE, const void*, void*, SIZE_T, SIZE_T*);
 static NTSTATUS  (WINAPI *pNtTerminateProcess)(HANDLE handle, LONG exit_code);
 static NTSTATUS  (WINAPI *pNtQueryInformationProcess)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
@@ -1828,7 +1831,7 @@ static LONG WINAPI dbg_except_continue_vectored_handler(struct _EXCEPTION_POINTE
 }
 
 /* Use CDECL to leave arguments on stack. */
-void CDECL hook_KiUserExceptionDispatcher(EXCEPTION_RECORD *rec, CONTEXT *context)
+static void CDECL hook_KiUserExceptionDispatcher(EXCEPTION_RECORD *rec, CONTEXT *context)
 {
     trace("rec %p, context %p.\n", rec, context);
     trace("context->Eip %#x, context->Esp %#x, ContextFlags %#x.\n",
@@ -1998,6 +2001,53 @@ static void test_kiuserexceptiondispatcher(void)
     ok(ret, "Got unexpected ret %#x, GetLastError() %u.\n", ret, GetLastError());
 }
 
+static BOOL test_apc_called;
+
+static void CALLBACK test_apc(ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3)
+{
+    test_apc_called = TRUE;
+}
+
+static void test_user_apc(void)
+{
+    NTSTATUS status;
+    CONTEXT context;
+    int pass;
+
+    if (!pNtQueueApcThread)
+    {
+        win_skip("NtQueueApcThread is not available.\n");
+        return;
+    }
+
+    pass = 0;
+    InterlockedIncrement(&pass);
+    RtlCaptureContext(&context);
+    InterlockedIncrement(&pass);
+
+    if (pass == 2)
+    {
+        /* Try to make sure context data is far enough below context.Esp. */
+        CONTEXT c[4];
+
+        c[0] = context;
+
+        test_apc_called = FALSE;
+        status = pNtQueueApcThread(GetCurrentThread(), test_apc, 0, 0, 0);
+        ok(!status, "Got unexpected status %#x.\n", status);
+        SleepEx(0, TRUE);
+        ok(test_apc_called, "Test user APC was not called.\n");
+        test_apc_called = FALSE;
+        status = pNtQueueApcThread(GetCurrentThread(), test_apc, 0, 0, 0);
+        ok(!status, "Got unexpected status %#x.\n", status);
+        status = NtContinue(&c[0], TRUE );
+
+        /* Broken before Win7, in that case NtContinue returns here instead of restoring context after calling APC. */
+        ok(0, "Should not get here, status %#x.\n", status);
+    }
+    ok(pass == 3, "Got unexpected pass %d.\n", pass);
+    ok(test_apc_called, "Test user APC was not called.\n");
+}
 #elif defined(__x86_64__)
 
 #define UNW_FLAG_NHANDLER  0
@@ -3716,6 +3766,8 @@ static struct
 }
 test_kiuserexceptiondispatcher_regs;
 
+static ULONG64 test_kiuserexceptiondispatcher_saved_r12;
+
 static DWORD dbg_except_continue_handler(EXCEPTION_RECORD *rec, EXCEPTION_REGISTRATION_RECORD *frame,
         CONTEXT *context, EXCEPTION_REGISTRATION_RECORD **dispatcher)
 {
@@ -3738,6 +3790,13 @@ static LONG WINAPI dbg_except_continue_vectored_handler(struct _EXCEPTION_POINTE
 
     trace("dbg_except_continue_vectored_handler, code %#x, Rip %#lx.\n", rec->ExceptionCode, context->Rip);
 
+    if (rec->ExceptionCode == 0xceadbeef)
+    {
+        ok(context->P1Home == (ULONG64)0xdeadbeeffeedcafe, "Got unexpected context->P1Home %#lx.\n", context->P1Home);
+        context->R12 = test_kiuserexceptiondispatcher_saved_r12;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+
     ok(rec->ExceptionCode == 0x80000003, "Got unexpected exception code %#x.\n", rec->ExceptionCode);
 
     got_exception = 1;
@@ -3752,7 +3811,7 @@ static LONG WINAPI dbg_except_continue_vectored_handler(struct _EXCEPTION_POINTE
     return EXCEPTION_CONTINUE_EXECUTION;
 }
 
-void WINAPI hook_KiUserExceptionDispatcher(EXCEPTION_RECORD *rec, CONTEXT *context)
+static void WINAPI hook_KiUserExceptionDispatcher(EXCEPTION_RECORD *rec, CONTEXT *context)
 {
     trace("rec %p, context %p.\n", rec, context);
     trace("context->Rip %#lx, context->Rsp %#lx, ContextFlags %#lx.\n",
@@ -3760,7 +3819,7 @@ void WINAPI hook_KiUserExceptionDispatcher(EXCEPTION_RECORD *rec, CONTEXT *conte
 
     hook_called = TRUE;
     /* Broken on Win2008, probably rec offset in stack is different. */
-    ok(rec->ExceptionCode == 0x80000003 || broken(!rec->ExceptionCode),
+    ok(rec->ExceptionCode == 0x80000003 || rec->ExceptionCode == 0xceadbeef || broken(!rec->ExceptionCode),
             "Got unexpected ExceptionCode %#x.\n", rec->ExceptionCode);
 
     hook_KiUserExceptionDispatcher_rip = (void *)context->Rip;
@@ -3810,15 +3869,15 @@ static void test_kiuserexceptiondispatcher(void)
         0x48, 0x89, 0xe2,           /* mov %rsp,%rdx */
         0x48, 0x8d, 0x8c, 0x24, 0xf0, 0x04, 0x00, 0x00,
                                     /* lea 0x4f0(%rsp),%rcx */
-
+        0x4c, 0x89, 0x22,           /* mov %r12,(%rdx) */
         0xff, 0x14, 0x25,
-        /* offset: 14 bytes */
+        /* offset: 17 bytes */
         0x00, 0x00, 0x00, 0x00,     /* callq *addr */ /* call hook implementation. */
         0x48, 0x31, 0xc9,           /* xor %rcx, %rcx */
         0x48, 0x31, 0xd2,           /* xor %rdx, %rdx */
 
         0xff, 0x24, 0x25,
-        /* offset: 27 bytes */
+        /* offset: 30 bytes */
         0x00, 0x00, 0x00, 0x00,     /* jmpq *addr */ /* jump to original function. */
     };
 
@@ -3827,6 +3886,8 @@ static void test_kiuserexceptiondispatcher(void)
     DWORD old_protect1, old_protect2;
     EXCEPTION_RECORD record;
     void *bpt_address;
+    CONTEXT ctx;
+    LONG pass;
     BYTE *ptr;
     BOOL ret;
 
@@ -3845,8 +3906,8 @@ static void test_kiuserexceptiondispatcher(void)
     ok(((ULONG64)&pKiUserExceptionDispatcher & 0xffffffff) == ((ULONG64)&pKiUserExceptionDispatcher),
             "Address is too long.\n");
 
-    *(unsigned int *)(hook_trampoline + 14) = (unsigned int)(ULONG_PTR)&phook_KiUserExceptionDispatcher;
-    *(unsigned int *)(hook_trampoline + 27) = (unsigned int)(ULONG_PTR)&pKiUserExceptionDispatcher;
+    *(unsigned int *)(hook_trampoline + 17) = (unsigned int)(ULONG_PTR)&phook_KiUserExceptionDispatcher;
+    *(unsigned int *)(hook_trampoline + 30) = (unsigned int)(ULONG_PTR)&pKiUserExceptionDispatcher;
 
     ret = VirtualProtect(hook_trampoline, ARRAY_SIZE(hook_trampoline), PAGE_EXECUTE_READWRITE, &old_protect1);
     ok(ret, "Got unexpected ret %#x, GetLastError() %u.\n", ret, GetLastError());
@@ -3954,6 +4015,35 @@ static void test_kiuserexceptiondispatcher(void)
 
     NtCurrentTeb()->Peb->BeingDebugged = 0;
 
+    vectored_handler = AddVectoredExceptionHandler(TRUE, dbg_except_continue_vectored_handler);
+    pass = 0;
+    InterlockedIncrement(&pass);
+    pRtlCaptureContext(&ctx);
+    if (InterlockedIncrement(&pass) == 2) /* interlocked to prevent compiler from moving before capture */
+    {
+        memcpy(pKiUserExceptionDispatcher, patched_KiUserExceptionDispatcher_bytes,
+                sizeof(patched_KiUserExceptionDispatcher_bytes));
+        got_exception = 0;
+        hook_called = FALSE;
+
+        record.ExceptionCode = 0xceadbeef;
+        test_kiuserexceptiondispatcher_saved_r12 = ctx.R12;
+        ctx.R12 = (ULONG64)0xdeadbeeffeedcafe;
+
+#ifdef __GNUC__
+        /* Spoil r12 value to make sure it doesn't come from the current userspace registers. */
+        __asm__ volatile("movq $0xdeadcafe, %%r12" : : : "%r12");
+#endif
+        pNtRaiseException(&record, &ctx, TRUE);
+        ok(0, "Shouldn't be reached.\n");
+    }
+    else
+    {
+        ok(pass == 3, "Got unexpected pass %d.\n", pass);
+    }
+    ok(hook_called, "Hook was not called.\n");
+    RemoveVectoredExceptionHandler(vectored_handler);
+
     ret = VirtualProtect(pKiUserExceptionDispatcher, sizeof(saved_KiUserExceptionDispatcher_bytes),
             old_protect2, &old_protect2);
     ok(ret, "Got unexpected ret %#x, GetLastError() %u.\n", ret, GetLastError());
@@ -4020,6 +4110,55 @@ static void test_nested_exception(void)
     ok(got_prev_frame_exception, "Did not get nested exception in the previous frame.\n");
 }
 
+static CONTEXT test_unwind_apc_context;
+static BOOL test_unwind_apc_called;
+
+static void CALLBACK test_unwind_apc(ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3)
+{
+    EXCEPTION_RECORD rec;
+
+    test_unwind_apc_called = TRUE;
+    memset(&rec, 0, sizeof(rec));
+    pRtlUnwind((void *)test_unwind_apc_context.Rsp, (void *)test_unwind_apc_context.Rip, &rec, (void *)0xdeadbeef);
+    ok(0, "Should not get here.\n");
+}
+
+static void test_unwind_from_apc(void)
+{
+    NTSTATUS status;
+    int pass;
+
+    if (!pNtQueueApcThread)
+    {
+        win_skip("NtQueueApcThread is not available.\n");
+        return;
+    }
+
+    pass = 0;
+    InterlockedIncrement(&pass);
+    RtlCaptureContext(&test_unwind_apc_context);
+    InterlockedIncrement(&pass);
+
+    if (pass == 2)
+    {
+        test_unwind_apc_called = FALSE;
+        status = pNtQueueApcThread(GetCurrentThread(), test_unwind_apc, 0, 0, 0);
+        ok(!status, "Got unexpected status %#x.\n", status);
+        SleepEx(0, TRUE);
+        ok(0, "Should not get here.\n");
+    }
+    if (pass == 3)
+    {
+        ok(test_unwind_apc_called, "Test user APC was not called.\n");
+        test_unwind_apc_called = FALSE;
+        status = pNtQueueApcThread(GetCurrentThread(), test_unwind_apc, 0, 0, 0);
+        ok(!status, "Got unexpected status %#x.\n", status);
+        NtContinue(&test_unwind_apc_context, TRUE );
+        ok(0, "Should not get here.\n");
+    }
+    ok(pass == 4, "Got unexpected pass %d.\n", pass);
+    ok(test_unwind_apc_called, "Test user APC was not called.\n");
+}
 #elif defined(__arm__)
 
 static void test_thread_context(void)
@@ -7634,9 +7773,10 @@ static void test_extended_context(void)
     memset(&xs->YmmContext, 0xcc, sizeof(xs->YmmContext));
     bret = GetThreadContext(thread, context);
     ok(bret, "Got unexpected bret %#x, GetLastError() %u.\n", bret, GetLastError());
-    ok(xs->Mask == (sizeof(void *) == 4 ? 4 : 0), "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
+    ok(xs->Mask == (sizeof(void *) == 4 ? 4 : 0) || broken(sizeof(void *) == 4 && !xs->Mask) /* Win7u */,
+            "Got unexpected Mask %s.\n", wine_dbgstr_longlong(xs->Mask));
     for (i = 0; i < 16 * 4; ++i)
-        ok(((ULONG *)&xs->YmmContext)[i] == (sizeof(void *) == 4 ? (i < 8 * 4 ? 0 : 0x48484848) : 0xcccccccc),
+        ok(((ULONG *)&xs->YmmContext)[i] == (xs->Mask ? (i < 8 * 4 ? 0 : 0x48484848) : 0xcccccccc),
                 "Got unexpected value %#x, i %u.\n", ((ULONG *)&xs->YmmContext)[i], i);
 
     bret = ResumeThread(thread);
@@ -8031,6 +8171,7 @@ START_TEST(exception)
 #define X(f) p##f = (void*)GetProcAddress(hntdll, #f)
     X(NtGetContextThread);
     X(NtSetContextThread);
+    X(NtQueueApcThread);
     X(NtReadVirtualMemory);
     X(NtClose);
     X(RtlUnwind);
@@ -8046,6 +8187,7 @@ START_TEST(exception)
     X(NtQueryInformationThread);
     X(NtSetInformationProcess);
     X(NtSuspendProcess);
+    X(NtRaiseException);
     X(NtResumeProcess);
     X(RtlGetUnloadEventTrace);
     X(RtlGetUnloadEventTraceEx);
@@ -8158,6 +8300,7 @@ START_TEST(exception)
     test_kiuserexceptiondispatcher();
     test_extended_context();
     test_copy_context();
+    test_user_apc();
 
 #elif defined(__x86_64__)
 
@@ -8198,6 +8341,7 @@ START_TEST(exception)
       skip( "Dynamic unwind functions not found\n" );
     test_extended_context();
     test_copy_context();
+    test_unwind_from_apc();
 
 #elif defined(__aarch64__)
 

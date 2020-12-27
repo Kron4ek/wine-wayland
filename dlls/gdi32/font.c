@@ -605,7 +605,7 @@ static struct gdi_font_family *create_family( const WCHAR *name, const WCHAR *se
 
     family->refcount = 1;
     lstrcpynW( family->family_name, name, LF_FACESIZE );
-    if (second_name && second_name[0])
+    if (second_name && second_name[0] && wcsicmp( name, second_name ))
     {
         lstrcpynW( family->second_name, second_name, LF_FACESIZE );
         add_gdi_font_subst( second_name, -1, name, -1 );
@@ -1717,11 +1717,7 @@ static struct gdi_font *alloc_gdi_font( const WCHAR *file, void *data_ptr, SIZE_
         font->data_size = data_size;
     }
 
-    if (!(font->handle = alloc_font_handle( font )))
-    {
-        HeapFree( GetProcessHeap(), 0, font );
-        return NULL;
-    }
+    font->handle = alloc_font_handle( font );
     return font;
 }
 
@@ -2919,6 +2915,8 @@ static UINT get_glyph_index( struct gdi_font *font, UINT glyph )
         glyph = (unsigned char)ch;
         font_funcs->get_glyph_index( font, &glyph, FALSE );
     }
+    else return 0;
+
     return glyph;
 }
 
@@ -3761,9 +3759,9 @@ static HFONT CDECL font_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
 
         font = select_font( &lf, dcmat, can_use_bitmap );
 
-        if (font && !*aa_flags)
+        if (font)
         {
-            *aa_flags = font->aa_flags;
+            if (!*aa_flags) *aa_flags = font->aa_flags;
             if (!*aa_flags)
             {
                 if (lf.lfQuality == CLEARTYPE_QUALITY || lf.lfQuality == CLEARTYPE_NATURAL_QUALITY)
@@ -6887,6 +6885,7 @@ BOOL WINAPI CreateScalableFontResourceW( DWORD hidden, LPCWSTR resource_file,
     fontdir.dfReserved        = 0;
     WideCharToMultiByte( CP_ACP, 0, (WCHAR *)font->otm.otmpFamilyName, -1,
                          fontdir.szFaceName, LF_FACESIZE, NULL, NULL );
+    free_gdi_font( font );
 
     if (hidden) fontdir.dfType |= 0x80;
     return create_fot( resource_file, font_file, &fontdir );

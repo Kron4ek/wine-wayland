@@ -391,8 +391,24 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
     {
         IO_STATUS_BLOCK *iosb = wine_server_get_ptr( call->async_io.sb );
         NTSTATUS (**user)(void *, IO_STATUS_BLOCK *, NTSTATUS) = wine_server_get_ptr( call->async_io.user );
+        void *saved_frame = get_syscall_frame();
+        void *frame;
+
         result->type = call->type;
         result->async_io.status = (*user)( user, iosb, call->async_io.status );
+
+        if ((frame = get_syscall_frame()) != saved_frame)
+        {
+            /* The frame can be altered by syscalls from ws2_32 async callbacks
+             * which are currently in the user part. */
+            static unsigned int once;
+
+            if (!once++)
+                FIXME( "syscall frame changed in APC function, frame %p, saved_frame %p.\n", frame, saved_frame );
+
+            set_syscall_frame( saved_frame );
+        }
+
         if (result->async_io.status != STATUS_PENDING)
             result->async_io.total = iosb->Information;
         break;
@@ -1468,7 +1484,7 @@ void server_init_process_done(void)
     IMAGE_NT_HEADERS *nt = get_exe_nt_header();
     void *entry = (char *)peb->ImageBaseAddress + nt->OptionalHeader.AddressOfEntryPoint;
     NTSTATUS status;
-    int suspend;
+    int suspend, needs_close, unixdir;
   
     TRACE("Begin unix esync load hack\n");  
     //Hack hack hack
@@ -1478,6 +1494,15 @@ void server_init_process_done(void)
     activate_fsync();
     if (do_fsync())
       fsync_init();
+
+    if (peb->ProcessParameters->CurrentDirectory.Handle &&
+        !server_get_unix_fd( peb->ProcessParameters->CurrentDirectory.Handle,
+                             FILE_TRAVERSE, &unixdir, &needs_close, NULL, NULL ))
+    {
+        fchdir( unixdir );
+        if (needs_close) close( unixdir );
+    }
+    else chdir( "/" ); /* avoid locking removable devices */
 
 #ifdef __APPLE__
     send_server_task_port();

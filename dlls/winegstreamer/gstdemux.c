@@ -1024,9 +1024,6 @@ static void init_new_decoded_pad(GstElement *bin, GstPad *pad, struct gstdemux *
             goto out;
         }
 
-        /* Avoid expensive color matrix conversions. */
-        gst_util_set_object_arg(G_OBJECT(vconv), "matrix-mode", "none");
-
         /* GStreamer outputs RGB video top-down, but DirectShow expects bottom-up. */
         if (!(flip = gst_element_factory_make("videoflip", NULL)))
         {
@@ -1043,9 +1040,6 @@ static void init_new_decoded_pad(GstElement *bin, GstPad *pad, struct gstdemux *
                     8 * (int)sizeof(void *));
             goto out;
         }
-
-        /* Avoid expensive color matrix conversions. */
-        gst_util_set_object_arg(G_OBJECT(vconv2), "matrix-mode", "none");
 
         /* The bin takes ownership of these elements. */
         gst_bin_add(GST_BIN(This->container), deinterlace);

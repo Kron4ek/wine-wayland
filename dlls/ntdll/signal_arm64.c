@@ -100,6 +100,14 @@ static inline BOOL is_valid_frame( ULONG_PTR frame )
 }
 
 
+/**************************************************************************
+ *		__chkstk (NTDLL.@)
+ *
+ * Supposed to touch all the stack pages, but we shouldn't need that.
+ */
+__ASM_GLOBAL_FUNC( __chkstk, "ret")
+
+
 /***********************************************************************
  *		RtlCaptureContext (NTDLL.@)
  */
@@ -522,6 +530,18 @@ NTSTATUS WINAPI KiUserExceptionDispatcher( EXCEPTION_RECORD *rec, CONTEXT *conte
     if (status != STATUS_UNHANDLED_EXCEPTION) RtlRaiseStatus( status );
     return NtRaiseException( rec, context, FALSE );
 }
+
+
+/*******************************************************************
+ *		KiUserApcDispatcher (NTDLL.@)
+ */
+void WINAPI KiUserApcDispatcher( CONTEXT *context, ULONG_PTR ctx, ULONG_PTR arg1, ULONG_PTR arg2,
+                                 PNTAPCFUNC func )
+{
+    func( ctx, arg1, arg2 );
+    NtContinue( context, TRUE );
+}
+
 
 /***********************************************************************
  * Definitions for Win32 unwind tables

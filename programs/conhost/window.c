@@ -385,7 +385,7 @@ static void fill_mem_dc( struct console *console, const RECT *update )
     INT *dx;
     RECT r;
 
-    if (!console->window->font)
+    if (!console->window->font || !console->window->bitmap)
         return;
 
     if (!(line = malloc( (update->right - update->left + 1) * sizeof(WCHAR))) ) return;
@@ -479,7 +479,7 @@ static void update_window( struct console *console )
 
     if (console->window->sb_width != console->active->width ||
         console->window->sb_height != console->active->height ||
-        !console->window->bitmap)
+        (!console->window->bitmap && IsWindowVisible( console->win )))
     {
         console->window->sb_width  = console->active->width;
         console->window->sb_height = console->active->height;
@@ -878,7 +878,7 @@ static COORD get_cell( struct console *console, LPARAM lparam )
 {
     COORD c;
     c.X = console->active->win.left + (short)LOWORD(lparam) / console->active->font.width;
-    c.Y = console->active->win.left + (short)HIWORD(lparam) / console->active->font.height;
+    c.Y = console->active->win.top + (short)HIWORD(lparam) / console->active->font.height;
     return c;
 }
 
@@ -906,11 +906,11 @@ static void get_selection_rect( struct console *console, RECT *r )
     r->left   = (min(console->window->selection_start.X, console->window->selection_end.X) -
                  console->active->win.left) * console->active->font.width;
     r->top    = (min(console->window->selection_start.Y, console->window->selection_end.Y) -
-                 console->active->win.left) * console->active->font.height;
+                 console->active->win.top) * console->active->font.height;
     r->right  = (max(console->window->selection_start.X, console->window->selection_end.X) + 1 -
                  console->active->win.left) * console->active->font.width;
     r->bottom = (max(console->window->selection_start.Y, console->window->selection_end.Y) + 1 -
-                 console->active->win.left) * console->active->font.height;
+                 console->active->win.top) * console->active->font.height;
 }
 
 static void update_selection( struct console *console, HDC ref_dc )
@@ -969,13 +969,13 @@ static void copy_selection( struct console *console )
     WCHAR *p, *buf;
     HANDLE mem;
 
-    w = abs( console->window->selection_start.X - console->window->selection_end.X ) + 2;
+    w = abs( console->window->selection_start.X - console->window->selection_end.X ) + 1;
     h = abs( console->window->selection_start.Y - console->window->selection_end.Y ) + 1;
 
     if (!OpenClipboard( console->win )) return;
     EmptyClipboard();
 
-    mem = GlobalAlloc( GMEM_MOVEABLE, (w * h) * sizeof(WCHAR) );
+    mem = GlobalAlloc( GMEM_MOVEABLE, (w + 1) * h * sizeof(WCHAR) );
     if (mem && (p = buf = GlobalLock( mem )))
     {
         int x, y;
@@ -992,20 +992,21 @@ static void copy_selection( struct console *console )
                 p[x - c.X] = console->active->data[y * console->active->width + x].ch;
 
             /* strip spaces from the end of the line */
-            end = p + w - 1;
+            end = p + w;
             while (end > p && *(end - 1) == ' ')
                 end--;
-            *end = (y < h - 1) ? '\n' : '\0';
+            *end = (y < c.Y + h - 1) ? '\n' : '\0';
             p = end + 1;
         }
 
-        GlobalUnlock( mem );
-        if (p - buf != w * h)
+        TRACE( "%s\n", debugstr_w( buf ));
+        if (p - buf != (w + 1) * h)
         {
             HANDLE new_mem;
             new_mem = GlobalReAlloc( mem, (p - buf) * sizeof(WCHAR), GMEM_MOVEABLE );
             if (new_mem) mem = new_mem;
         }
+        GlobalUnlock( mem );
         SetClipboardData( CF_UNICODETEXT, mem );
     }
     CloseClipboard();
@@ -2187,6 +2188,16 @@ static LRESULT WINAPI window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
             EndPaint( console->win, &ps );
             break;
         }
+
+    case WM_SHOWWINDOW:
+        if (wparam)
+            update_window( console );
+        else
+        {
+            if (console->window->bitmap) DeleteObject( console->window->bitmap );
+            console->window->bitmap = NULL;
+        }
+        break;
 
     case WM_KEYDOWN:
     case WM_KEYUP:

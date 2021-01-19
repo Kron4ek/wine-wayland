@@ -691,6 +691,7 @@ static void edit_line_find_in_history( struct console *console )
     unsigned int len, oldoffset;
     WCHAR *line;
 
+    if (!console->history_index) return;
     if (ctx->history_index && ctx->history_index == console->history_index)
     {
         start_pos--;
@@ -699,28 +700,28 @@ static void edit_line_find_in_history( struct console *console )
 
     do
     {
-       line = edit_line_history(console, ctx->history_index);
+        line = edit_line_history(console, ctx->history_index);
 
-       if (ctx->history_index) ctx->history_index--;
-       else ctx->history_index = console->history_index;
+        if (ctx->history_index) ctx->history_index--;
+        else ctx->history_index = console->history_index - 1;
 
-       len = lstrlenW(line) + 1;
-       if (len >= ctx->cursor && !memcmp( ctx->buf, line, ctx->cursor * sizeof(WCHAR) ))
-       {
-           /* need to clean also the screen if new string is shorter than old one */
-           edit_line_delete(console, 0, ctx->len);
+        len = lstrlenW(line) + 1;
+        if (len >= ctx->cursor && !memcmp( ctx->buf, line, ctx->cursor * sizeof(WCHAR) ))
+        {
+            /* need to clean also the screen if new string is shorter than old one */
+            edit_line_delete(console, 0, ctx->len);
 
-           if (edit_line_grow(console, len))
-           {
-              oldoffset = ctx->cursor;
-              ctx->cursor = 0;
-              edit_line_insert( console, line, len - 1 );
-              ctx->cursor = oldoffset;
-              free(line);
-              return;
-           }
-       }
-       free(line);
+            if (edit_line_grow(console, len))
+            {
+                oldoffset = ctx->cursor;
+                ctx->cursor = 0;
+                edit_line_insert( console, line, len - 1 );
+                ctx->cursor = oldoffset;
+                free(line);
+                return;
+            }
+        }
+        free(line);
     }
     while (ctx->history_index != start_pos);
 }
@@ -2674,6 +2675,14 @@ static int main_loop( struct console *console, HANDLE signal )
     return 0;
 }
 
+static LONG WINAPI handle_ctrl_c( EXCEPTION_POINTERS *eptr )
+{
+    if (eptr->ExceptionRecord->ExceptionCode != CONTROL_C_EXIT) return EXCEPTION_CONTINUE_SEARCH;
+    /* In Unix mode, ignore ctrl c exceptions. Signals are sent it to clients as well and we will
+     * terminate the usual way if they don't handle it. */
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
 int __cdecl wmain(int argc, WCHAR *argv[])
 {
     int headless = 0, i, width = 0, height = 0;
@@ -2762,6 +2771,8 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         set_console_title( &console, si.lpTitle, wcslen( si.lpTitle ) * sizeof(WCHAR) );
         ShowWindow( console.win, (si.dwFlags & STARTF_USESHOWWINDOW) ? si.wShowWindow : SW_SHOW );
     }
+
+    if (console.is_unix) RtlAddVectoredExceptionHandler( FALSE, handle_ctrl_c );
 
     return main_loop( &console, signal );
 }

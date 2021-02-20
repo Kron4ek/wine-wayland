@@ -250,6 +250,13 @@ struct dwrite_fontresource
     IDWriteFactory7 *factory;
 };
 
+struct dwrite_fontset_builder
+{
+    IDWriteFontSetBuilder2 IDWriteFontSetBuilder2_iface;
+    LONG refcount;
+    IDWriteFactory7 *factory;
+};
+
 static void dwrite_grab_font_table(void *context, UINT32 table, const BYTE **data, UINT32 *size, void **data_context)
 {
     struct dwrite_fontface *fontface = context;
@@ -371,6 +378,11 @@ static inline struct dwrite_fontfacereference *impl_from_IDWriteFontFaceReferenc
 static struct dwrite_fontresource *impl_from_IDWriteFontResource(IDWriteFontResource *iface)
 {
     return CONTAINING_RECORD(iface, struct dwrite_fontresource, IDWriteFontResource_iface);
+}
+
+static struct dwrite_fontset_builder *impl_from_IDWriteFontSetBuilder2(IDWriteFontSetBuilder2 *iface)
+{
+    return CONTAINING_RECORD(iface, struct dwrite_fontset_builder, IDWriteFontSetBuilder2_iface);
 }
 
 static HRESULT get_cached_glyph_metrics(struct dwrite_fontface *fontface, UINT16 glyph, DWRITE_GLYPH_METRICS *metrics)
@@ -3932,9 +3944,6 @@ static HRESULT init_font_data(const struct fontface_desc *desc, struct dwrite_fo
     data->file = desc->files[0];
     data->face_index = desc->index;
     data->face_type = desc->face_type;
-    data->simulations = DWRITE_FONT_SIMULATIONS_NONE;
-    data->bold_sim_tested = 0;
-    data->oblique_sim_tested = 0;
     IDWriteFontFile_AddRef(data->file);
 
     stream_desc.stream = desc->stream;
@@ -4558,7 +4567,7 @@ err:
     return hr;
 }
 
-static const struct IDWriteFontFileEnumeratorVtbl systemfontfileenumeratorvtbl =
+static const IDWriteFontFileEnumeratorVtbl systemfontfileenumeratorvtbl =
 {
     systemfontfileenumerator_QueryInterface,
     systemfontfileenumerator_AddRef,
@@ -5441,7 +5450,7 @@ static HRESULT WINAPI localfontfileloader_GetLastWriteTimeFromKey(IDWriteLocalFo
     return S_OK;
 }
 
-static const struct IDWriteLocalFontFileLoaderVtbl localfontfileloadervtbl =
+static const IDWriteLocalFontFileLoaderVtbl localfontfileloadervtbl =
 {
     localfontfileloader_QueryInterface,
     localfontfileloader_AddRef,
@@ -5864,7 +5873,7 @@ static HRESULT WINAPI glyphrunanalysis_GetAlphaBlendParams(IDWriteGlyphRunAnalys
     return S_OK;
 }
 
-static const struct IDWriteGlyphRunAnalysisVtbl glyphrunanalysisvtbl =
+static const IDWriteGlyphRunAnalysisVtbl glyphrunanalysisvtbl =
 {
     glyphrunanalysis_QueryInterface,
     glyphrunanalysis_AddRef,
@@ -5931,7 +5940,7 @@ HRESULT create_glyphrunanalysis(const struct glyphrunanalysis_desc *desc, IDWrit
     if ((UINT32)desc->measuring_mode > DWRITE_MEASURING_MODE_GDI_NATURAL)
         return E_INVALIDARG;
 
-    analysis = heap_alloc(sizeof(*analysis));
+    analysis = heap_alloc_zero(sizeof(*analysis));
     if (!analysis)
         return E_OUTOFMEMORY;
 
@@ -5945,10 +5954,6 @@ HRESULT create_glyphrunanalysis(const struct glyphrunanalysis_desc *desc, IDWrit
     else
         analysis->texture_type = DWRITE_TEXTURE_CLEARTYPE_3x1;
 
-    analysis->flags = 0;
-    analysis->bitmap = NULL;
-    analysis->max_glyph_bitmap_size = 0;
-    SetRectEmpty(&analysis->bounds);
     analysis->run = *desc->run;
     IDWriteFontFace_AddRef(analysis->run.fontFace);
     analysis->glyphs = heap_calloc(desc->run->glyphCount, sizeof(*analysis->glyphs));
@@ -5970,12 +5975,8 @@ HRESULT create_glyphrunanalysis(const struct glyphrunanalysis_desc *desc, IDWrit
         analysis->m = *desc->transform;
         analysis->flags |= RUNANALYSIS_USE_TRANSFORM;
     }
-    else
-        memset(&analysis->m, 0, sizeof(analysis->m));
 
     analysis->run.glyphIndices = analysis->glyphs;
-    analysis->run.glyphAdvances = NULL;
-    analysis->run.glyphOffsets = NULL;
 
     rtl_factor = desc->run->bidiLevel & 1 ? -1.0f : 1.0f;
 
@@ -6661,9 +6662,7 @@ HRESULT create_fontfacereference(IDWriteFactory7 *factory, IDWriteFontFile *file
 
 static HRESULT WINAPI inmemoryfilestream_QueryInterface(IDWriteFontFileStream *iface, REFIID riid, void **obj)
 {
-    struct dwrite_inmemory_filestream *stream = inmemory_impl_from_IDWriteFontFileStream(iface);
-
-    TRACE_(dwrite_file)("(%p)->(%s, %p)\n", stream, debugstr_guid(riid), obj);
+    TRACE_(dwrite_file)("%p, %s, %p.\n", iface, debugstr_guid(riid), obj);
 
     if (IsEqualIID(riid, &IID_IDWriteFontFileStream) || IsEqualIID(riid, &IID_IUnknown)) {
         *obj = iface;
@@ -6680,24 +6679,27 @@ static HRESULT WINAPI inmemoryfilestream_QueryInterface(IDWriteFontFileStream *i
 static ULONG WINAPI inmemoryfilestream_AddRef(IDWriteFontFileStream *iface)
 {
     struct dwrite_inmemory_filestream *stream = inmemory_impl_from_IDWriteFontFileStream(iface);
-    ULONG ref = InterlockedIncrement(&stream->ref);
-    TRACE_(dwrite_file)("(%p)->(%u)\n", stream, ref);
-    return ref;
+    ULONG refcount = InterlockedIncrement(&stream->ref);
+
+    TRACE_(dwrite_file)("%p, refcount %u.\n", iface, refcount);
+
+    return refcount;
 }
 
 static ULONG WINAPI inmemoryfilestream_Release(IDWriteFontFileStream *iface)
 {
     struct dwrite_inmemory_filestream *stream = inmemory_impl_from_IDWriteFontFileStream(iface);
-    ULONG ref = InterlockedDecrement(&stream->ref);
+    ULONG refcount = InterlockedDecrement(&stream->ref);
 
-    TRACE_(dwrite_file)("(%p)->(%u)\n", stream, ref);
+    TRACE_(dwrite_file)("%p, refcount %u.\n", iface, refcount);
 
-    if (!ref) {
+    if (!refcount)
+    {
         release_inmemory_stream(stream->data);
         heap_free(stream);
     }
 
-    return ref;
+    return refcount;
 }
 
 static HRESULT WINAPI inmemoryfilestream_ReadFileFragment(IDWriteFontFileStream *iface, void const **fragment_start,
@@ -6705,7 +6707,7 @@ static HRESULT WINAPI inmemoryfilestream_ReadFileFragment(IDWriteFontFileStream 
 {
     struct dwrite_inmemory_filestream *stream = inmemory_impl_from_IDWriteFontFileStream(iface);
 
-    TRACE_(dwrite_file)("(%p)->(%p, 0x%s, 0x%s, %p)\n", stream, fragment_start,
+    TRACE_(dwrite_file)("%p, %p, 0x%s, 0x%s, %p.\n", iface, fragment_start,
           wine_dbgstr_longlong(offset), wine_dbgstr_longlong(fragment_size), fragment_context);
 
     *fragment_context = NULL;
@@ -6721,16 +6723,14 @@ static HRESULT WINAPI inmemoryfilestream_ReadFileFragment(IDWriteFontFileStream 
 
 static void WINAPI inmemoryfilestream_ReleaseFileFragment(IDWriteFontFileStream *iface, void *fragment_context)
 {
-    struct dwrite_inmemory_filestream *stream = inmemory_impl_from_IDWriteFontFileStream(iface);
-
-    TRACE_(dwrite_file)("(%p)->(%p)\n", stream, fragment_context);
+    TRACE_(dwrite_file)("%p, %p.\n", iface, fragment_context);
 }
 
 static HRESULT WINAPI inmemoryfilestream_GetFileSize(IDWriteFontFileStream *iface, UINT64 *size)
 {
     struct dwrite_inmemory_filestream *stream = inmemory_impl_from_IDWriteFontFileStream(iface);
 
-    TRACE_(dwrite_file)("(%p)->(%p)\n", stream, size);
+    TRACE_(dwrite_file)("%p, %p.\n", iface, size);
 
     *size = stream->data->size;
 
@@ -6739,9 +6739,7 @@ static HRESULT WINAPI inmemoryfilestream_GetFileSize(IDWriteFontFileStream *ifac
 
 static HRESULT WINAPI inmemoryfilestream_GetLastWriteTime(IDWriteFontFileStream *iface, UINT64 *last_writetime)
 {
-    struct dwrite_inmemory_filestream *stream = inmemory_impl_from_IDWriteFontFileStream(iface);
-
-    TRACE_(dwrite_file)("(%p)->(%p)\n", stream, last_writetime);
+    TRACE_(dwrite_file)("%p, %p.\n", iface, last_writetime);
 
     *last_writetime = 0;
 
@@ -6761,9 +6759,7 @@ static const IDWriteFontFileStreamVtbl inmemoryfilestreamvtbl = {
 static HRESULT WINAPI inmemoryfontfileloader_QueryInterface(IDWriteInMemoryFontFileLoader *iface,
         REFIID riid, void **obj)
 {
-    struct dwrite_inmemory_fileloader *loader = impl_from_IDWriteInMemoryFontFileLoader(iface);
-
-    TRACE("(%p)->(%s, %p)\n", loader, debugstr_guid(riid), obj);
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), obj);
 
     if (IsEqualIID(riid, &IID_IDWriteInMemoryFontFileLoader) ||
         IsEqualIID(riid, &IID_IDWriteFontFileLoader) ||
@@ -6784,27 +6780,30 @@ static HRESULT WINAPI inmemoryfontfileloader_QueryInterface(IDWriteInMemoryFontF
 static ULONG WINAPI inmemoryfontfileloader_AddRef(IDWriteInMemoryFontFileLoader *iface)
 {
     struct dwrite_inmemory_fileloader *loader = impl_from_IDWriteInMemoryFontFileLoader(iface);
-    ULONG ref = InterlockedIncrement(&loader->ref);
-    TRACE("(%p)->(%u)\n", loader, ref);
-    return ref;
+    ULONG refcount = InterlockedIncrement(&loader->ref);
+
+    TRACE("%p, refcount %u.\n", iface, refcount);
+
+    return refcount;
 }
 
 static ULONG WINAPI inmemoryfontfileloader_Release(IDWriteInMemoryFontFileLoader *iface)
 {
     struct dwrite_inmemory_fileloader *loader = impl_from_IDWriteInMemoryFontFileLoader(iface);
-    ULONG ref = InterlockedDecrement(&loader->ref);
+    ULONG refcount = InterlockedDecrement(&loader->ref);
     size_t i;
 
-    TRACE("(%p)->(%u)\n", loader, ref);
+    TRACE("%p, refcount %u.\n", iface, refcount);
 
-    if (!ref) {
+    if (!refcount)
+    {
         for (i = 0; i < loader->count; ++i)
             release_inmemory_stream(loader->streams[i]);
         heap_free(loader->streams);
         heap_free(loader);
     }
 
-    return ref;
+    return refcount;
 }
 
 static HRESULT WINAPI inmemoryfontfileloader_CreateStreamFromKey(IDWriteInMemoryFontFileLoader *iface,
@@ -6814,7 +6813,7 @@ static HRESULT WINAPI inmemoryfontfileloader_CreateStreamFromKey(IDWriteInMemory
     struct dwrite_inmemory_filestream *stream;
     DWORD index;
 
-    TRACE("(%p)->(%p, %u, %p)\n", loader, key, key_size, ret);
+    TRACE("%p, %p, %u, %p.\n", iface, key, key_size, ret);
 
     *ret = NULL;
 
@@ -6846,7 +6845,7 @@ static HRESULT WINAPI inmemoryfontfileloader_CreateInMemoryFontFileReference(IDW
     struct dwrite_inmemory_stream_data *stream;
     DWORD key;
 
-    TRACE("(%p)->(%p, %p, %u, %p, %p)\n", loader, factory, data, data_size, owner, fontfile);
+    TRACE("%p, %p, %p, %u, %p, %p.\n", iface, factory, data, data_size, owner, fontfile);
 
     *fontfile = NULL;
 
@@ -7113,6 +7112,140 @@ HRESULT create_font_resource(IDWriteFactory7 *factory, IDWriteFontFile *file, UI
     IDWriteFactory7_AddRef(resource->factory);
 
     *ret = &resource->IDWriteFontResource_iface;
+
+    return S_OK;
+}
+
+static HRESULT WINAPI dwritefontsetbuilder_QueryInterface(IDWriteFontSetBuilder2 *iface,
+        REFIID riid, void **obj)
+{
+    TRACE("%p, %s, %p.\n", iface, debugstr_guid(riid), obj);
+
+    if (IsEqualIID(riid, &IID_IDWriteFontSetBuilder2) ||
+            IsEqualIID(riid, &IID_IDWriteFontSetBuilder1) ||
+            IsEqualIID(riid, &IID_IDWriteFontSetBuilder) ||
+            IsEqualIID(riid, &IID_IUnknown))
+    {
+        *obj = iface;
+        IDWriteFontSetBuilder2_AddRef(iface);
+        return S_OK;
+    }
+
+    WARN("Unsupported interface %s.\n", debugstr_guid(riid));
+    *obj = NULL;
+    return E_NOINTERFACE;
+}
+
+static ULONG WINAPI dwritefontsetbuilder_AddRef(IDWriteFontSetBuilder2 *iface)
+{
+    struct dwrite_fontset_builder *builder = impl_from_IDWriteFontSetBuilder2(iface);
+    ULONG refcount = InterlockedIncrement(&builder->refcount);
+
+    TRACE("%p, refcount %u.\n", iface, refcount);
+
+    return refcount;
+}
+
+static ULONG WINAPI dwritefontsetbuilder_Release(IDWriteFontSetBuilder2 *iface)
+{
+    struct dwrite_fontset_builder *builder = impl_from_IDWriteFontSetBuilder2(iface);
+    ULONG refcount = InterlockedDecrement(&builder->refcount);
+
+    TRACE("%p, refcount %u.\n", iface, refcount);
+
+    if (!refcount)
+    {
+        IDWriteFactory7_Release(builder->factory);
+        heap_free(builder);
+    }
+
+    return refcount;
+}
+
+static HRESULT WINAPI dwritefontsetbuilder_AddFontFaceReference_(IDWriteFontSetBuilder2 *iface,
+        IDWriteFontFaceReference *ref, DWRITE_FONT_PROPERTY const *props, UINT32 prop_count)
+{
+    FIXME("%p, %p, %p, %u.\n", iface, ref, props, prop_count);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dwritefontsetbuilder_AddFontFaceReference(IDWriteFontSetBuilder2 *iface,
+        IDWriteFontFaceReference *ref)
+{
+    FIXME("%p, %p.\n", iface, ref);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dwritefontsetbuilder_AddFontSet(IDWriteFontSetBuilder2 *iface, IDWriteFontSet *fontset)
+{
+    FIXME("%p, %p.\n", iface, fontset);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dwritefontsetbuilder_CreateFontSet(IDWriteFontSetBuilder2 *iface, IDWriteFontSet **fontset)
+{
+    FIXME("%p, %p.\n", iface, fontset);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dwritefontsetbuilder1_AddFontFile(IDWriteFontSetBuilder2 *iface, IDWriteFontFile *file)
+{
+    FIXME("%p, %p.\n", iface, file);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dwritefontsetbuilder2_AddFont(IDWriteFontSetBuilder2 *iface, IDWriteFontFile *file,
+        unsigned int face_index, DWRITE_FONT_SIMULATIONS simulations, const DWRITE_FONT_AXIS_VALUE *axis_values,
+        unsigned int num_values, const DWRITE_FONT_AXIS_RANGE *axis_ranges, unsigned int num_ranges,
+        const DWRITE_FONT_PROPERTY *props, unsigned int num_properties)
+{
+    FIXME("%p, %p, %u, %#x, %p, %u, %p, %u, %p, %u.\n", iface, file, face_index, simulations, axis_values, num_values,
+            axis_ranges, num_ranges, props, num_properties);
+
+    return E_NOTIMPL;
+}
+
+static HRESULT WINAPI dwritefontsetbuilder2_AddFontFile(IDWriteFontSetBuilder2 *iface, const WCHAR *filepath)
+{
+    FIXME("%p, %s.\n", iface, debugstr_w(filepath));
+
+    return E_NOTIMPL;
+}
+
+static const IDWriteFontSetBuilder2Vtbl fontsetbuildervtbl =
+{
+    dwritefontsetbuilder_QueryInterface,
+    dwritefontsetbuilder_AddRef,
+    dwritefontsetbuilder_Release,
+    dwritefontsetbuilder_AddFontFaceReference_,
+    dwritefontsetbuilder_AddFontFaceReference,
+    dwritefontsetbuilder_AddFontSet,
+    dwritefontsetbuilder_CreateFontSet,
+    dwritefontsetbuilder1_AddFontFile,
+    dwritefontsetbuilder2_AddFont,
+    dwritefontsetbuilder2_AddFontFile,
+};
+
+HRESULT create_fontset_builder(IDWriteFactory7 *factory, IDWriteFontSetBuilder2 **ret)
+{
+    struct dwrite_fontset_builder *builder;
+
+    *ret = NULL;
+
+    if (!(builder = heap_alloc_zero(sizeof(*builder))))
+        return E_OUTOFMEMORY;
+
+    builder->IDWriteFontSetBuilder2_iface.lpVtbl = &fontsetbuildervtbl;
+    builder->refcount = 1;
+    builder->factory = factory;
+    IDWriteFactory7_AddRef(builder->factory);
+
+    *ret = &builder->IDWriteFontSetBuilder2_iface;
 
     return S_OK;
 }

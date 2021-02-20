@@ -59,7 +59,9 @@
 # define __ASM_FUNC_TYPE(name) ".def " name "\n\t.scl 2\n\t.type 32\n\t.endef"
 #elif defined(__APPLE__)
 # define __ASM_FUNC_TYPE(name) ""
-#elif defined(__arm__) || defined(__arm64__)
+#elif defined(__arm__) && defined(__thumb__)
+# define __ASM_FUNC_TYPE(name) ".type " name ",%function\n\t.thumb_func"
+#elif defined(__arm__) || defined(__aarch64__)
 # define __ASM_FUNC_TYPE(name) ".type " name ",%function"
 #else
 # define __ASM_FUNC_TYPE(name) ".type " name ",@function"
@@ -173,7 +175,7 @@
 
 #endif  /* __i386__ */
 
-#if defined(__GNUC__) && !defined(_WIN32) && !defined(__APPLE__) && !defined(__ANDROID__)
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__)) && !defined(_WIN32) && !defined(__APPLE__) && !defined(__ANDROID__)
 #define __ASM_OBSOLETE(func) __asm__( ".symver " #func "_obsolete," #func "@WINE_1.0" )
 #else
 #undef __ASM_OBSOLETE

@@ -509,6 +509,7 @@ SOURCES = \
 	msxml6did.h \
 	msxmldid.h \
 	mtxdm.h \
+	mulres.idl \
 	multimon.h \
 	natupnp.idl \
 	nb30.h \
@@ -592,6 +593,7 @@ SOURCES = \
 	raserror.h \
 	reason.h \
 	regstr.h \
+	relogger.idl \
 	restartmanager.h \
 	restrictederrorinfo.idl \
 	richedit.h \
@@ -746,6 +748,7 @@ SOURCES = \
 	windns.h \
 	windows.foundation.idl \
 	windows.h \
+	windows.media.speechsynthesis.idl \
 	windowscontracts.idl \
 	windowsx.h \
 	wine/debug.h \
@@ -796,6 +799,8 @@ SOURCES = \
 	wmiutils.idl \
 	wmp.idl \
 	wmpids.h \
+	wmprealestate.idl \
+	wmpservices.idl \
 	wmsbuffer.idl \
 	wmsdk.h \
 	wmsdkidl.idl \

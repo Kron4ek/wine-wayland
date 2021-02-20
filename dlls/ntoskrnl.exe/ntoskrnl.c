@@ -1941,6 +1941,7 @@ VOID WINAPI IoCompleteRequest( IRP *irp, UCHAR priority_boost )
 
     if (irp->Flags & IRP_DEALLOCATE_BUFFER)
         HeapFree( GetProcessHeap(), 0, irp->AssociatedIrp.SystemBuffer );
+    if (irp->UserIosb) *irp->UserIosb = irp->IoStatus;
     if (irp->UserEvent) KeSetEvent( irp->UserEvent, IO_NO_INCREMENT, FALSE );
 
     IoFreeIrp( irp );
@@ -4254,6 +4255,18 @@ void WINAPI KeStackAttachProcess(KPROCESS *process, KAPC_STATE *apc_state)
 void WINAPI KeUnstackDetachProcess(KAPC_STATE *apc_state)
 {
     FIXME("apc_state %p stub.\n", apc_state);
+}
+
+NTSTATUS WINAPI KdDisableDebugger(void)
+{
+    FIXME(": stub.\n");
+    return STATUS_DEBUGGER_INACTIVE;
+}
+
+NTSTATUS WINAPI KdEnableDebugger(void)
+{
+    FIXME(": stub.\n");
+    return STATUS_DEBUGGER_INACTIVE;
 }
 
 /*****************************************************

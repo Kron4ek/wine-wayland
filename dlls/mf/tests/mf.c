@@ -1154,7 +1154,6 @@ static void test_session_events(IMFMediaSession *session)
 static void test_media_session(void)
 {
     IMFRateControl *rate_control, *rate_control2;
-    IMFLocalMFTRegistration *local_reg;
     MFCLOCK_PROPERTIES clock_props;
     IMFRateSupport *rate_support;
     IMFAttributes *attributes;
@@ -1163,7 +1162,6 @@ static void test_media_session(void)
     IMFShutdown *shutdown;
     PROPVARIANT propvar;
     DWORD status, caps;
-    IMFGetService *gs;
     IMFClock *clock;
     IUnknown *unk;
     HRESULT hr;
@@ -1176,23 +1174,28 @@ static void test_media_session(void)
     hr = MFCreateMediaSession(NULL, &session);
     ok(hr == S_OK, "Failed to create media session, hr %#x.\n", hr);
 
-    hr = IMFMediaSession_QueryInterface(session, &IID_IMFAttributes, (void **)&unk);
-    ok(hr == E_NOINTERFACE, "Unexpected hr %#x.\n", hr);
+    check_interface(session, &IID_IMFGetService, TRUE);
+    check_interface(session, &IID_IMFAttributes, FALSE);
+    check_interface(session, &IID_IMFTopologyNodeAttributeEditor, FALSE);
 
-    hr = IMFMediaSession_QueryInterface(session, &IID_IMFGetService, (void **)&gs);
-    ok(hr == S_OK, "Failed to get interface, hr %#x.\n", hr);
+    hr = MFGetService((IUnknown *)session, &MF_TOPONODE_ATTRIBUTE_EDITOR_SERVICE, &IID_IMFTopologyNodeAttributeEditor,
+            (void **)&unk);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
 
-    hr = IMFGetService_GetService(gs, &MF_RATE_CONTROL_SERVICE, &IID_IMFRateSupport, (void **)&rate_support);
+    check_interface(unk, &IID_IMFMediaSession, FALSE);
+
+    IUnknown_Release(unk);
+
+    hr = MFGetService((IUnknown *)session, &MF_RATE_CONTROL_SERVICE, &IID_IMFRateSupport, (void **)&rate_support);
     ok(hr == S_OK, "Failed to get rate support interface, hr %#x.\n", hr);
 
-    hr = IMFGetService_GetService(gs, &MF_RATE_CONTROL_SERVICE, &IID_IMFRateControl, (void **)&rate_control);
+    hr = MFGetService((IUnknown *)session, &MF_RATE_CONTROL_SERVICE, &IID_IMFRateControl, (void **)&rate_control);
     ok(hr == S_OK, "Failed to get rate control interface, hr %#x.\n", hr);
 
-    hr = IMFGetService_GetService(gs, &MF_LOCAL_MFT_REGISTRATION_SERVICE, &IID_IMFLocalMFTRegistration,
-            (void **)&local_reg);
+    hr = MFGetService((IUnknown *)session, &MF_LOCAL_MFT_REGISTRATION_SERVICE, &IID_IMFLocalMFTRegistration, (void **)&unk);
     ok(hr == S_OK || broken(hr == E_NOINTERFACE) /* Vista */, "Failed to get registration service, hr %#x.\n", hr);
     if (SUCCEEDED(hr))
-        IMFLocalMFTRegistration_Release(local_reg);
+        IUnknown_Release(unk);
 
     hr = IMFRateSupport_QueryInterface(rate_support, &IID_IMFMediaSession, (void **)&unk);
     ok(hr == S_OK, "Failed to get session interface, hr %#x.\n", hr);
@@ -1220,6 +1223,8 @@ static void test_media_session(void)
     hr = IMFMediaSession_GetClock(session, &clock);
     ok(hr == S_OK, "Failed to get clock, hr %#x.\n", hr);
 
+    check_interface(clock, &IID_IMFPresentationClock, TRUE);
+
     hr = IMFClock_QueryInterface(clock, &IID_IMFRateControl, (void **)&rate_control2);
     ok(hr == S_OK, "Failed to get rate control, hr %#x.\n", hr);
 
@@ -1240,8 +1245,6 @@ todo_wine
 
     IMFRateControl_Release(rate_control);
     IMFRateSupport_Release(rate_support);
-
-    IMFGetService_Release(gs);
 
     IMFMediaSession_Release(session);
 
@@ -3344,7 +3347,7 @@ static void test_video_processor(void)
     IMFTransform *transform;
     IMFMediaBuffer *buffer;
     IMFMediaEvent *event;
-    IUnknown *unk;
+    unsigned int value;
     HRESULT hr;
     GUID guid;
 
@@ -3359,15 +3362,28 @@ static void test_video_processor(void)
         goto failed;
     }
 
-    hr = IMFTransform_QueryInterface(transform, &IID_IMFMediaEventGenerator, (void **)&unk);
-    ok(hr == E_NOINTERFACE, "Unexpected hr %#x.\n", hr);
-
-    hr = IMFTransform_QueryInterface(transform, &IID_IMFShutdown, (void **)&unk);
-    ok(hr == E_NOINTERFACE, "Unexpected hr %#x.\n", hr);
+todo_wine
+    check_interface(transform, &IID_IMFVideoProcessorControl, TRUE);
+todo_wine
+    check_interface(transform, &IID_IMFRealTimeClientEx, TRUE);
+    check_interface(transform, &IID_IMFMediaEventGenerator, FALSE);
+    check_interface(transform, &IID_IMFShutdown, FALSE);
 
     /* Transform global attributes. */
     hr = IMFTransform_GetAttributes(transform, &attributes);
     ok(hr == S_OK, "Failed to get attributes, hr %#x.\n", hr);
+
+    hr = IMFAttributes_GetCount(attributes, &count);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+todo_wine
+    ok(!!count, "Unexpected attribute count %u.\n", count);
+
+    value = 0;
+    hr = IMFAttributes_GetUINT32(attributes, &MF_SA_D3D11_AWARE, &value);
+todo_wine {
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(value == 1, "Unexpected attribute value %u.\n", value);
+}
     hr = IMFTransform_GetAttributes(transform, &attributes2);
     ok(hr == S_OK, "Failed to get attributes, hr %#x.\n", hr);
     ok(attributes == attributes2, "Unexpected instance.\n");
@@ -3644,16 +3660,113 @@ failed:
 
 static void test_quality_manager(void)
 {
+    IMFPresentationClock *clock;
     IMFQualityManager *manager;
+    IMFTopology *topology;
     HRESULT hr;
+
+    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
+    ok(hr == S_OK, "Startup failure, hr %#x.\n", hr);
+
+    hr = MFCreatePresentationClock(&clock);
+    ok(hr == S_OK, "Failed to create presentation clock, hr %#x.\n", hr);
 
     hr = MFCreateStandardQualityManager(&manager);
     ok(hr == S_OK, "Failed to create quality manager, hr %#x.\n", hr);
 
+    check_interface(manager, &IID_IMFQualityManager, TRUE);
+    check_interface(manager, &IID_IMFClockStateSink, TRUE);
+
     hr = IMFQualityManager_NotifyPresentationClock(manager, NULL);
     ok(hr == E_POINTER, "Unexpected hr %#x.\n", hr);
 
+    hr = IMFQualityManager_NotifyTopology(manager, NULL);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Set clock, then shutdown. */
+    EXPECT_REF(clock, 1);
+    EXPECT_REF(manager, 1);
+    hr = IMFQualityManager_NotifyPresentationClock(manager, clock);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    EXPECT_REF(clock, 2);
+    EXPECT_REF(manager, 2);
+
+    hr = IMFQualityManager_Shutdown(manager);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    EXPECT_REF(clock, 1);
+
+    hr = IMFQualityManager_NotifyPresentationClock(manager, clock);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFQualityManager_NotifyTopology(manager, NULL);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFQualityManager_NotifyPresentationClock(manager, NULL);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFQualityManager_Shutdown(manager);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
     IMFQualityManager_Release(manager);
+
+    /* Set clock, then release without shutting down. */
+    hr = MFCreateStandardQualityManager(&manager);
+    ok(hr == S_OK, "Failed to create quality manager, hr %#x.\n", hr);
+
+    EXPECT_REF(clock, 1);
+    hr = IMFQualityManager_NotifyPresentationClock(manager, clock);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    EXPECT_REF(clock, 2);
+
+    IMFQualityManager_Release(manager);
+    EXPECT_REF(clock, 2);
+
+    IMFPresentationClock_Release(clock);
+
+    /* Set topology. */
+    hr = MFCreateStandardQualityManager(&manager);
+    ok(hr == S_OK, "Failed to create quality manager, hr %#x.\n", hr);
+
+    hr = MFCreateTopology(&topology);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    EXPECT_REF(topology, 1);
+    hr = IMFQualityManager_NotifyTopology(manager, topology);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    EXPECT_REF(topology, 2);
+
+    hr = IMFQualityManager_NotifyTopology(manager, NULL);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    EXPECT_REF(topology, 1);
+
+    hr = IMFQualityManager_NotifyTopology(manager, topology);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    EXPECT_REF(topology, 2);
+    hr = IMFQualityManager_Shutdown(manager);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    EXPECT_REF(topology, 1);
+
+    hr = IMFQualityManager_NotifyTopology(manager, topology);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
+
+    IMFQualityManager_Release(manager);
+
+    hr = MFCreateStandardQualityManager(&manager);
+    ok(hr == S_OK, "Failed to create quality manager, hr %#x.\n", hr);
+
+    EXPECT_REF(topology, 1);
+    hr = IMFQualityManager_NotifyTopology(manager, topology);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    EXPECT_REF(topology, 2);
+
+    IMFQualityManager_Release(manager);
+    EXPECT_REF(topology, 1);
+
+    IMFTopology_Release(topology);
+
+    hr = MFShutdown();
+    ok(hr == S_OK, "Shutdown failure, hr %#x.\n", hr);
 }
 
 static void test_sar(void)

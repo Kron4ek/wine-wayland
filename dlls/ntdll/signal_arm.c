@@ -61,8 +61,8 @@ __ASM_GLOBAL_FUNC( __chkstk, "lsl r4, r4, #2\n\t"
  *		RtlCaptureContext (NTDLL.@)
  */
 __ASM_STDCALL_FUNC( RtlCaptureContext, 4,
-                    ".arm\n\t"
-                    "stmib r0, {r0-r12}\n\t"   /* context->R0..R12 */
+                    "str r0, [r0, #0x4]\n\t"   /* context->R0 */
+                    "str r1, [r0, #0x8]\n\t"   /* context->R1 */
                     "mov r1, #0x0200000\n\t"   /* CONTEXT_ARM */
                     "add r1, r1, #0x3\n\t"     /* CONTEXT_FULL */
                     "str r1, [r0]\n\t"         /* context->ContextFlags */
@@ -70,7 +70,13 @@ __ASM_STDCALL_FUNC( RtlCaptureContext, 4,
                     "str LR, [r0, #0x3c]\n\t"  /* context->Lr */
                     "str LR, [r0, #0x40]\n\t"  /* context->Pc */
                     "mrs r1, CPSR\n\t"
+                    "tst lr, #1\n\t"           /* Thumb? */
+                    "ite ne\n\t"
+                    "orrne r1, r1, #0x20\n\t"
+                    "biceq r1, r1, #0x20\n\t"
                     "str r1, [r0, #0x44]\n\t"  /* context->Cpsr */
+                    "add r0, #0x0c\n\t"
+                    "stm r0, {r2-r12}\n\t"     /* context->R2..R12 */
                     "bx lr"
                     )
 
@@ -154,8 +160,25 @@ NTSTATUS WINAPI KiUserExceptionDispatcher( EXCEPTION_RECORD *rec, CONTEXT *conte
                      rec->ExceptionAddress,
                      (char*)rec->ExceptionInformation[0], rec->ExceptionInformation[1] );
     }
+    else if (rec->ExceptionCode == EXCEPTION_WINE_NAME_THREAD && rec->ExceptionInformation[0] == 0x1000)
+    {
+        WARN( "Thread %04x renamed to %s\n", (DWORD)rec->ExceptionInformation[2], debugstr_a((char *)rec->ExceptionInformation[1]) );
+    }
+    else if (rec->ExceptionCode == DBG_PRINTEXCEPTION_C)
+    {
+        WARN( "%s\n", debugstr_an((char *)rec->ExceptionInformation[1], rec->ExceptionInformation[0] - 1) );
+    }
+    else if (rec->ExceptionCode == DBG_PRINTEXCEPTION_WIDE_C)
+    {
+        WARN( "%s\n", debugstr_wn((WCHAR *)rec->ExceptionInformation[1], rec->ExceptionInformation[0] - 1) );
+    }
     else
     {
+        if (rec->ExceptionFlags & EH_NONCONTINUABLE)
+            ERR( "Fatal %s exception (code=%x) raised\n", debugstr_exception_code(rec->ExceptionCode), rec->ExceptionCode );
+        else
+            WARN( "%s exception (code=%x) raised\n", debugstr_exception_code(rec->ExceptionCode), rec->ExceptionCode );
+
         TRACE( " r0=%08x r1=%08x r2=%08x r3=%08x r4=%08x r5=%08x\n",
                context->R0, context->R1, context->R2, context->R3, context->R4, context->R5 );
         TRACE( " r6=%08x r7=%08x r8=%08x r9=%08x r10=%08x r11=%08x\n",
@@ -257,6 +280,12 @@ __ASM_STDCALL_FUNC( RtlRaiseException, 4,
                     "ldr r0, [sp, #0x1a0]\n\t" /* rec */
                     "ldr r1, [sp, #0x1a4]\n\t"
                     "str r1, [sp, #0x40]\n\t"  /* context->Pc */
+                    "ldr r2, [sp, #0x44]\n\t"  /* context->Cpsr */
+                    "tst r1, #1\n\t"           /* Thumb? */
+                    "ite ne\n\t"
+                    "orrne r2, r2, #0x20\n\t"
+                    "biceq r2, r2, #0x20\n\t"
+                    "str r2, [sp, #0x44]\n\t"  /* context->Cpsr */
                     "str r1, [r0, #12]\n\t"    /* rec->ExceptionAddress */
                     "add r1, sp, #0x1a8\n\t"
                     "str r1, [sp, #0x38]\n\t"  /* context->Sp */
@@ -291,13 +320,5 @@ __ASM_STDCALL_FUNC( DbgBreakPoint, 0, "bkpt #0; bx lr; nop; nop; nop; nop" );
  *              DbgUserBreakPoint   (NTDLL.@)
  */
 __ASM_STDCALL_FUNC( DbgUserBreakPoint, 0, "bkpt #0; bx lr; nop; nop; nop; nop" );
-
-/**********************************************************************
- *           NtCurrentTeb   (NTDLL.@)
- */
-TEB * WINAPI NtCurrentTeb(void)
-{
-    return unix_funcs->NtCurrentTeb();
-}
 
 #endif  /* __arm__ */

@@ -33,6 +33,9 @@
 #include "mferror.h"
 #include "mfidl.h"
 #include "mfreadwrite.h"
+#include "d3d9.h"
+#include "initguid.h"
+#include "dxva2api.h"
 
 #include "wine/debug.h"
 #include "wine/heap.h"
@@ -108,6 +111,7 @@ struct media_stream
     IMFMediaStream *stream;
     IMFMediaType *current;
     IMFTransform *decoder;
+    IMFVideoSampleAllocatorEx *allocator;
     unsigned int id;
     unsigned int index;
     enum media_stream_state state;
@@ -157,6 +161,9 @@ enum source_reader_flags
     SOURCE_READER_FLUSHING = 0x1,
     SOURCE_READER_SEEKING = 0x2,
     SOURCE_READER_SHUTDOWN_ON_RELEASE = 0x4,
+    SOURCE_READER_D3D9_DEVICE_MANAGER = 0x8,
+    SOURCE_READER_DXGI_DEVICE_MANAGER = 0x10,
+    SOURCE_READER_HAS_DEVICE_MANAGER = SOURCE_READER_D3D9_DEVICE_MANAGER | SOURCE_READER_DXGI_DEVICE_MANAGER,
 };
 
 struct source_reader
@@ -169,6 +176,8 @@ struct source_reader
     IMFMediaSource *source;
     IMFPresentationDescriptor *descriptor;
     IMFSourceReaderCallback *async_callback;
+    IMFAttributes *attributes;
+    IUnknown *device_manager;
     unsigned int first_audio_stream_index;
     unsigned int first_video_stream_index;
     unsigned int last_read_index;
@@ -1268,6 +1277,8 @@ static ULONG WINAPI src_reader_Release(IMFSourceReader *iface)
             IMFMediaSource_Shutdown(reader->source);
         if (reader->descriptor)
             IMFPresentationDescriptor_Release(reader->descriptor);
+        if (reader->attributes)
+            IMFAttributes_Release(reader->attributes);
         IMFMediaSource_Release(reader->source);
 
         for (i = 0; i < reader->stream_count; ++i)
@@ -1280,6 +1291,8 @@ static ULONG WINAPI src_reader_Release(IMFSourceReader *iface)
                 IMFMediaType_Release(stream->current);
             if (stream->decoder)
                 IMFTransform_Release(stream->decoder);
+            if (stream->allocator)
+                IMFVideoSampleAllocatorEx_Release(stream->allocator);
         }
         source_reader_release_responses(reader, NULL);
         heap_free(reader->streams);
@@ -1516,6 +1529,48 @@ static HRESULT source_reader_set_compatible_media_type(struct source_reader *rea
     return type_set ? S_OK : S_FALSE;
 }
 
+static HRESULT source_reader_setup_sample_allocator(struct source_reader *reader, unsigned int index,
+        IMFMediaType *media_type)
+{
+    struct media_stream *stream = &reader->streams[index];
+    GUID major = { 0 };
+    HRESULT hr;
+
+    IMFMediaType_GetMajorType(media_type, &major);
+    if (!IsEqualGUID(&major, &MFMediaType_Video))
+        return S_OK;
+
+    if (!(reader->flags & SOURCE_READER_HAS_DEVICE_MANAGER))
+        return S_OK;
+
+    if (reader->flags & SOURCE_READER_DXGI_DEVICE_MANAGER)
+    {
+        FIXME("DXGI device manager is not supported.\n");
+        return S_OK;
+    }
+
+    if (!stream->allocator)
+    {
+        if (FAILED(hr = MFCreateVideoSampleAllocatorEx(&IID_IMFVideoSampleAllocatorEx, (void **)&stream->allocator)))
+        {
+            WARN("Failed to create sample allocator, hr %#x.\n", hr);
+            return hr;
+        }
+    }
+
+    IMFVideoSampleAllocatorEx_UninitializeSampleAllocator(stream->allocator);
+    if (FAILED(hr = IMFVideoSampleAllocatorEx_SetDirectXManager(stream->allocator, reader->device_manager)))
+    {
+        WARN("Failed to set device manager, hr %#x.\n", hr);
+        return hr;
+    }
+
+    if (FAILED(hr = IMFVideoSampleAllocatorEx_InitializeSampleAllocatorEx(stream->allocator, 2, 8, NULL, media_type)))
+        WARN("Failed to initialize sample allocator, hr %#x.\n", hr);
+
+    return hr;
+}
+
 static HRESULT source_reader_configure_decoder(struct source_reader *reader, DWORD index, const CLSID *clsid,
         IMFMediaType *input_type, IMFMediaType *output_type)
 {
@@ -1665,8 +1720,11 @@ static HRESULT WINAPI src_reader_SetCurrentMediaType(IMFSourceReader *iface, DWO
 
     EnterCriticalSection(&reader->cs);
 
-    if ((hr = source_reader_set_compatible_media_type(reader, index, type)) == S_FALSE)
+    hr = source_reader_set_compatible_media_type(reader, index, type);
+    if (hr == S_FALSE)
         hr = source_reader_create_decoder_for_stream(reader, index, type);
+    if (SUCCEEDED(hr))
+        hr = source_reader_setup_sample_allocator(reader, index, type);
 
     LeaveCriticalSection(&reader->cs);
 
@@ -2011,7 +2069,7 @@ static HRESULT WINAPI src_reader_GetPresentationAttribute(IMFSourceReader *iface
     return hr;
 }
 
-struct IMFSourceReaderVtbl srcreader_vtbl =
+static const IMFSourceReaderVtbl srcreader_vtbl =
 {
     src_reader_QueryInterface,
     src_reader_AddRef,
@@ -2162,10 +2220,34 @@ static HRESULT create_source_reader_from_source(IMFMediaSource *source, IMFAttri
 
     if (attributes)
     {
+        object->attributes = attributes;
+        IMFAttributes_AddRef(object->attributes);
+
         IMFAttributes_GetUnknown(attributes, &MF_SOURCE_READER_ASYNC_CALLBACK, &IID_IMFSourceReaderCallback,
                 (void **)&object->async_callback);
         if (object->async_callback)
             TRACE("Using async callback %p.\n", object->async_callback);
+
+        IMFAttributes_GetUnknown(attributes, &MF_SOURCE_READER_D3D_MANAGER, &IID_IUnknown, (void **)&object->device_manager);
+        if (object->device_manager)
+        {
+            IUnknown *unk = NULL;
+
+            if (SUCCEEDED(IUnknown_QueryInterface(object->device_manager, &IID_IMFDXGIDeviceManager, (void **)&unk)))
+                object->flags |= SOURCE_READER_DXGI_DEVICE_MANAGER;
+            else if (SUCCEEDED(IUnknown_QueryInterface(object->device_manager, &IID_IDirect3DDeviceManager9, (void **)&unk)))
+                object->flags |= SOURCE_READER_D3D9_DEVICE_MANAGER;
+
+            if (!(object->flags & (SOURCE_READER_HAS_DEVICE_MANAGER)))
+            {
+                WARN("Unknown device manager.\n");
+                IUnknown_Release(object->device_manager);
+                object->device_manager = NULL;
+            }
+
+            if (unk)
+                IUnknown_Release(unk);
+        }
     }
 
     hr = IMFSourceReader_QueryInterface(&object->IMFSourceReader_iface, riid, out);
@@ -2536,7 +2618,7 @@ static HRESULT WINAPI classfactory_LockServer(IClassFactory *iface, BOOL dolock)
     return S_OK;
 }
 
-static const struct IClassFactoryVtbl classfactoryvtbl =
+static const IClassFactoryVtbl classfactoryvtbl =
 {
     classfactory_QueryInterface,
     classfactory_AddRef,

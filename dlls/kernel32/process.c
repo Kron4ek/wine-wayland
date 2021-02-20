@@ -34,12 +34,15 @@
 #include "wincon.h"
 #include "kernel_private.h"
 #include "psapi.h"
+#include "ddk/wdm.h"
 #include "wine/exception.h"
 #include "wine/server.h"
 #include "wine/asm.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(process);
+
+static const struct _KUSER_SHARED_DATA *user_shared_data = (struct _KUSER_SHARED_DATA *)0x7ffe0000;
 
 typedef struct
 {
@@ -553,18 +556,25 @@ DWORD WINAPI WTSGetActiveConsoleSessionId(void)
  */
 DEP_SYSTEM_POLICY_TYPE WINAPI GetSystemDEPPolicy(void)
 {
-    FIXME("stub\n");
-    return OptIn;
+    return user_shared_data->NXSupportPolicy;
 }
 
 /**********************************************************************
  *           SetProcessDEPPolicy     (KERNEL32.@)
  */
-BOOL WINAPI SetProcessDEPPolicy(DWORD newDEP)
+BOOL WINAPI SetProcessDEPPolicy( DWORD flags )
 {
-    FIXME("(%d): stub\n", newDEP);
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
+    ULONG dep_flags = 0;
+
+    TRACE("%#x\n", flags);
+
+    if (flags & PROCESS_DEP_ENABLE)
+        dep_flags |= MEM_EXECUTE_OPTION_DISABLE | MEM_EXECUTE_OPTION_PERMANENT;
+    if (flags & PROCESS_DEP_DISABLE_ATL_THUNK_EMULATION)
+        dep_flags |= MEM_EXECUTE_OPTION_DISABLE_THUNK_EMULATION;
+
+    return set_ntstatus( NtSetInformationProcess( GetCurrentProcess(), ProcessExecuteFlags,
+                                                  &dep_flags, sizeof(dep_flags) ) );
 }
 
 /**********************************************************************

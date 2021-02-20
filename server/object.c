@@ -50,6 +50,18 @@ struct namespace
 };
 
 
+struct type_descr no_type =
+{
+    { NULL, 0 },                /* name */
+    STANDARD_RIGHTS_REQUIRED,   /* valid_access */
+    {                           /* mapping */
+        STANDARD_RIGHTS_READ,
+        STANDARD_RIGHTS_WRITE,
+        STANDARD_RIGHTS_EXECUTE,
+        STANDARD_RIGHTS_REQUIRED
+    },
+};
+
 #ifdef DEBUG_OBJECTS
 static struct list object_list = LIST_INIT(object_list);
 
@@ -197,6 +209,8 @@ void *alloc_object( const struct object_ops *ops )
 #ifdef DEBUG_OBJECTS
         list_add_head( &object_list, &obj->obj_list );
 #endif
+        obj->ops->type->obj_count++;
+        obj->ops->type->obj_max = max( obj->ops->type->obj_max, obj->ops->type->obj_count );
         return obj;
     }
     return NULL;
@@ -206,6 +220,7 @@ void *alloc_object( const struct object_ops *ops )
 static void free_object( struct object *obj )
 {
     free( obj->sd );
+    obj->ops->type->obj_count--;
 #ifdef DEBUG_OBJECTS
     list_remove( &obj->obj_list );
     memset( obj, 0xaa, obj->ops->size );
@@ -491,11 +506,6 @@ struct namespace *create_namespace( unsigned int hash_size )
 
 /* functions for unimplemented/default object operations */
 
-struct object_type *no_get_type( struct object *obj )
-{
-    return NULL;
-}
-
 int no_add_queue( struct object *obj, struct wait_queue_entry *entry )
 {
     set_error( STATUS_OBJECT_TYPE_MISMATCH );
@@ -518,13 +528,9 @@ struct fd *no_get_fd( struct object *obj )
     return NULL;
 }
 
-unsigned int no_map_access( struct object *obj, unsigned int access )
+unsigned int default_map_access( struct object *obj, unsigned int access )
 {
-    if (access & GENERIC_READ)    access |= STANDARD_RIGHTS_READ;
-    if (access & GENERIC_WRITE)   access |= STANDARD_RIGHTS_WRITE;
-    if (access & GENERIC_EXECUTE) access |= STANDARD_RIGHTS_EXECUTE;
-    if (access & GENERIC_ALL)     access |= STANDARD_RIGHTS_ALL;
-    return access & ~(GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE | GENERIC_ALL);
+    return map_access( access, &obj->ops->type->mapping );
 }
 
 struct security_descriptor *default_get_sd( struct object *obj )

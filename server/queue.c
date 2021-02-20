@@ -174,8 +174,8 @@ static void timer_callback( void *private );
 static const struct object_ops msg_queue_ops =
 {
     sizeof(struct msg_queue),  /* size */
+    &no_type,                  /* type */
     msg_queue_dump,            /* dump */
-    no_get_type,               /* get_type */
     msg_queue_add_queue,       /* add_queue */
     msg_queue_remove_queue,    /* remove_queue */
     msg_queue_signaled,        /* signaled */
@@ -184,7 +184,7 @@ static const struct object_ops msg_queue_ops =
     msg_queue_satisfied,       /* satisfied */
     no_signal,                 /* signal */
     no_get_fd,                 /* get_fd */
-    no_map_access,             /* map_access */
+    default_map_access,        /* map_access */
     default_get_sd,            /* get_sd */
     default_set_sd,            /* set_sd */
     no_get_full_name,          /* get_full_name */
@@ -213,8 +213,8 @@ static const struct fd_ops msg_queue_fd_ops =
 static const struct object_ops thread_input_ops =
 {
     sizeof(struct thread_input),  /* size */
+    &no_type,                     /* type */
     thread_input_dump,            /* dump */
-    no_get_type,                  /* get_type */
     no_add_queue,                 /* add_queue */
     NULL,                         /* remove_queue */
     NULL,                         /* signaled */
@@ -223,7 +223,7 @@ static const struct object_ops thread_input_ops =
     NULL,                         /* satisfied */
     no_signal,                    /* signal */
     no_get_fd,                    /* get_fd */
-    no_map_access,                /* map_access */
+    default_map_access,           /* map_access */
     default_get_sd,               /* get_sd */
     default_set_sd,               /* set_sd */
     no_get_full_name,             /* get_full_name */
@@ -3313,12 +3313,11 @@ DECL_HANDLER(get_rawinput_buffer)
     struct thread_input *input = current->queue->input;
     data_size_t size = 0, next_size = 0;
     struct list *ptr;
-    char *buf, *cur;
-    int count = 0;
+    char *buf, *cur, *tmp;
+    int count = 0, buf_size = 16 * sizeof(struct hardware_msg_data);
 
     if (!req->buffer_size) buf = NULL;
-    else if (!(buf = mem_alloc( get_reply_max_size() )))
-        return;
+    else if (!(buf = mem_alloc( buf_size ))) return;
 
     cur = buf;
     ptr = list_head( &input->msg_list );
@@ -3333,6 +3332,17 @@ DECL_HANDLER(get_rawinput_buffer)
         next_size = req->rawinput_size;
         if (size + next_size > req->buffer_size) break;
         if (cur + sizeof(*data) > buf + get_reply_max_size()) break;
+        if (cur + sizeof(*data) > buf + buf_size)
+        {
+            buf_size += buf_size / 2;
+            if (!(tmp = realloc( buf, buf_size )))
+            {
+                set_error( STATUS_NO_MEMORY );
+                return;
+            }
+            cur = tmp + (cur - buf);
+            buf = tmp;
+        }
 
         memcpy(cur, data, sizeof(*data));
         list_remove( &msg->entry );

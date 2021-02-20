@@ -187,6 +187,8 @@ struct fd
     unsigned int         options;     /* file options (FILE_DELETE_ON_CLOSE, FILE_SYNCHRONOUS...) */
     unsigned int         sharing;     /* file sharing mode */
     char                *unix_name;   /* unix file name */
+    WCHAR               *nt_name;     /* NT file name */
+    data_size_t          nt_namelen;  /* length of NT file name */
     int                  unix_fd;     /* unix file descriptor */
     unsigned int         no_fd_status;/* status to return when unix_fd is -1 */
     unsigned int         cacheable :1;/* can the fd be cached on the client side? */
@@ -209,8 +211,8 @@ static void fd_destroy( struct object *obj );
 static const struct object_ops fd_ops =
 {
     sizeof(struct fd),        /* size */
+    &no_type,                 /* type */
     fd_dump,                  /* dump */
-    no_get_type,              /* get_type */
     no_add_queue,             /* add_queue */
     NULL,                     /* remove_queue */
     NULL,                     /* signaled */
@@ -219,7 +221,7 @@ static const struct object_ops fd_ops =
     NULL,                     /* satisfied */
     no_signal,                /* signal */
     no_get_fd,                /* get_fd */
-    no_map_access,            /* map_access */
+    default_map_access,       /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
     no_get_full_name,         /* get_full_name */
@@ -252,8 +254,8 @@ static void device_destroy( struct object *obj );
 static const struct object_ops device_ops =
 {
     sizeof(struct device),    /* size */
+    &no_type,                 /* type */
     device_dump,              /* dump */
-    no_get_type,              /* get_type */
     no_add_queue,             /* add_queue */
     NULL,                     /* remove_queue */
     NULL,                     /* signaled */
@@ -262,7 +264,7 @@ static const struct object_ops device_ops =
     NULL,                     /* satisfied */
     no_signal,                /* signal */
     no_get_fd,                /* get_fd */
-    no_map_access,            /* map_access */
+    default_map_access,       /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
     no_get_full_name,         /* get_full_name */
@@ -294,8 +296,8 @@ static void inode_destroy( struct object *obj );
 static const struct object_ops inode_ops =
 {
     sizeof(struct inode),     /* size */
+    &no_type,                 /* type */
     inode_dump,               /* dump */
-    no_get_type,              /* get_type */
     no_add_queue,             /* add_queue */
     NULL,                     /* remove_queue */
     NULL,                     /* signaled */
@@ -304,7 +306,7 @@ static const struct object_ops inode_ops =
     NULL,                     /* satisfied */
     no_signal,                /* signal */
     no_get_fd,                /* get_fd */
-    no_map_access,            /* map_access */
+    default_map_access,       /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
     no_get_full_name,         /* get_full_name */
@@ -338,8 +340,8 @@ static int file_lock_signaled( struct object *obj, struct wait_queue_entry *entr
 static const struct object_ops file_lock_ops =
 {
     sizeof(struct file_lock),   /* size */
+    &no_type,                   /* type */
     file_lock_dump,             /* dump */
-    no_get_type,                /* get_type */
     add_queue,                  /* add_queue */
     remove_queue,               /* remove_queue */
     file_lock_signaled,         /* signaled */
@@ -348,7 +350,7 @@ static const struct object_ops file_lock_ops =
     no_satisfied,               /* satisfied */
     no_signal,                  /* signal */
     no_get_fd,                  /* get_fd */
-    no_map_access,              /* map_access */
+    default_map_access,         /* map_access */
     default_get_sd,             /* get_sd */
     default_set_sd,             /* set_sd */
     no_get_full_name,           /* get_full_name */
@@ -1582,6 +1584,7 @@ static void fd_destroy( struct object *obj )
     remove_fd_locks( fd );
     list_remove( &fd->inode_entry );
     if (fd->poll_index != -1) remove_poll_user( fd, fd->poll_index );
+    free( fd->nt_name );
     if (fd->inode)
     {
         inode_add_closed_fd( fd->inode, fd->closed );
@@ -1703,6 +1706,8 @@ static struct fd *alloc_fd_object(void)
     fd->sharing    = 0;
     fd->unix_fd    = -1;
     fd->unix_name  = NULL;
+    fd->nt_name    = NULL;
+    fd->nt_namelen = 0;
     fd->cacheable  = 0;
     fd->signaled   = 1;
     fd->fs_locks   = 1;
@@ -1743,6 +1748,8 @@ struct fd *alloc_pseudo_fd( const struct fd_ops *fd_user_ops, struct object *use
     fd->options    = options;
     fd->sharing    = 0;
     fd->unix_name  = NULL;
+    fd->nt_name    = NULL;
+    fd->nt_namelen = 0;
     fd->unix_fd    = -1;
     fd->cacheable  = 0;
     fd->signaled   = 0;
@@ -1783,6 +1790,11 @@ struct fd *dup_fd_object( struct fd *orig, unsigned int access, unsigned int sha
     {
         if (!(fd->unix_name = mem_alloc( strlen(orig->unix_name) + 1 ))) goto failed;
         strcpy( fd->unix_name, orig->unix_name );
+    }
+    if (orig->nt_namelen)
+    {
+        if (!(fd->nt_name = memdup( orig->nt_name, orig->nt_namelen ))) goto failed;
+        fd->nt_namelen = orig->nt_namelen;
     }
 
     if (orig->inode)
@@ -1860,8 +1872,50 @@ char *dup_fd_name( struct fd *root, const char *name )
     return ret;
 }
 
+static WCHAR *dup_nt_name( struct fd *root, struct unicode_str name, data_size_t *len )
+{
+    WCHAR *ret;
+    data_size_t retlen;
+
+    if (!root)
+    {
+        *len = name.len;
+        if (!name.len) return NULL;
+        return memdup( name.str, name.len );
+    }
+    if (!root->nt_namelen) return NULL;
+    retlen = root->nt_namelen;
+
+    /* skip . prefix */
+    if (name.len && name.str[0] == '.' && (name.len == sizeof(WCHAR) || name.str[1] == '\\'))
+    {
+        name.str++;
+        name.len -= sizeof(WCHAR);
+    }
+    if ((ret = malloc( retlen + name.len + 1 )))
+    {
+        memcpy( ret, root->nt_name, root->nt_namelen );
+        if (name.len && name.str[0] != '\\' &&
+            root->nt_namelen && root->nt_name[root->nt_namelen / sizeof(WCHAR) - 1] != '\\')
+        {
+            ret[retlen / sizeof(WCHAR)] = '\\';
+            retlen += sizeof(WCHAR);
+        }
+        memcpy( ret + retlen / sizeof(WCHAR), name.str, name.len );
+        *len = retlen + name.len;
+    }
+    return ret;
+}
+
+void get_nt_name( struct fd *fd, struct unicode_str *name )
+{
+    name->str = fd->nt_name;
+    name->len = fd->nt_namelen;
+}
+
 /* open() wrapper that returns a struct fd with no fd user set */
-struct fd *open_fd( struct fd *root, const char *name, int flags, mode_t *mode, unsigned int access,
+struct fd *open_fd( struct fd *root, const char *name, struct unicode_str nt_name,
+                    int flags, mode_t *mode, unsigned int access,
                     unsigned int sharing, unsigned int options )
 {
     struct stat st;
@@ -1935,6 +1989,7 @@ struct fd *open_fd( struct fd *root, const char *name, int flags, mode_t *mode, 
         }
     }
 
+    fd->nt_name = dup_nt_name( root, nt_name, &fd->nt_namelen );
     fd->unix_name = NULL;
     if ((path = dup_fd_name( root, name )))
     {
@@ -2143,16 +2198,6 @@ unsigned int default_fd_get_fsync_idx( struct object *obj, enum fsync_type *type
     *type = FSYNC_MANUAL_SERVER;
     release_object( fd );
     return ret;
-}
-
-/* default map_access() routine for objects that behave like an fd */
-unsigned int default_fd_map_access( struct object *obj, unsigned int access )
-{
-    if (access & GENERIC_READ)    access |= FILE_GENERIC_READ;
-    if (access & GENERIC_WRITE)   access |= FILE_GENERIC_WRITE;
-    if (access & GENERIC_EXECUTE) access |= FILE_GENERIC_EXECUTE;
-    if (access & GENERIC_ALL)     access |= FILE_ALL_ACCESS;
-    return access & ~(GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE | GENERIC_ALL);
 }
 
 int default_fd_get_poll_events( struct fd *fd )
@@ -2500,8 +2545,8 @@ static void set_fd_disposition( struct fd *fd, int unlink )
 }
 
 /* set new name for the fd */
-static void set_fd_name( struct fd *fd, struct fd *root, const char *nameptr,
-                         data_size_t len, int create_link, int replace )
+static void set_fd_name( struct fd *fd, struct fd *root, const char *nameptr, data_size_t len,
+                         struct unicode_str nt_name, int create_link, int replace )
 {
     struct inode *inode;
     struct stat st, st2;
@@ -2616,6 +2661,8 @@ static void set_fd_name( struct fd *fd, struct fd *root, const char *nameptr,
         fchmod( fd->unix_fd, st.st_mode );
     }
 
+    free( fd->nt_name );
+    fd->nt_name = dup_nt_name( root, nt_name, &fd->nt_namelen );
     free( fd->unix_name );
     fd->closed->unix_name = fd->unix_name = realpath( name, NULL );
     free( name );
@@ -2887,6 +2934,15 @@ DECL_HANDLER(set_fd_disp_info)
 DECL_HANDLER(set_fd_name_info)
 {
     struct fd *fd, *root_fd = NULL;
+    struct unicode_str nt_name;
+
+    if (req->namelen > get_req_data_size())
+    {
+        set_error( STATUS_INVALID_PARAMETER );
+        return;
+    }
+    nt_name.str = get_req_data();
+    nt_name.len = (req->namelen / sizeof(WCHAR)) * sizeof(WCHAR);
 
     if (req->rootdir)
     {
@@ -2900,7 +2956,8 @@ DECL_HANDLER(set_fd_name_info)
 
     if ((fd = get_handle_fd_obj( current->process, req->handle, 0 )))
     {
-        set_fd_name( fd, root_fd, get_req_data(), get_req_data_size(), req->link, req->replace );
+        set_fd_name( fd, root_fd, (const char *)get_req_data() + req->namelen,
+                     get_req_data_size() - req->namelen, nt_name, req->link, req->replace );
         release_object( fd );
     }
     if (root_fd) release_object( root_fd );

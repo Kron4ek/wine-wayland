@@ -204,7 +204,7 @@ static DWRITE_RENDERING_MODE1 WINAPI renderingparams3_GetRenderingMode1(IDWriteR
     return params->mode;
 }
 
-static const struct IDWriteRenderingParams3Vtbl renderingparamsvtbl =
+static const IDWriteRenderingParams3Vtbl renderingparamsvtbl =
 {
     renderingparams_QueryInterface,
     renderingparams_AddRef,
@@ -1501,9 +1501,9 @@ static HRESULT WINAPI dwritefactory3_GetSystemFontSet(IDWriteFactory7 *iface, ID
 
 static HRESULT WINAPI dwritefactory3_CreateFontSetBuilder(IDWriteFactory7 *iface, IDWriteFontSetBuilder **builder)
 {
-    FIXME("%p, %p: stub\n", iface, builder);
+    TRACE("%p, %p.\n", iface, builder);
 
-    return E_NOTIMPL;
+    return create_fontset_builder(iface, (IDWriteFontSetBuilder2 **)builder);
 }
 
 static HRESULT WINAPI dwritefactory3_CreateFontCollectionFromFontSet(IDWriteFactory7 *iface, IDWriteFontSet *fontset,
@@ -1644,9 +1644,9 @@ static HRESULT WINAPI dwritefactory4_ComputeGlyphOrigins(IDWriteFactory7 *iface,
 
 static HRESULT WINAPI dwritefactory5_CreateFontSetBuilder(IDWriteFactory7 *iface, IDWriteFontSetBuilder1 **builder)
 {
-    FIXME("%p, %p: stub\n", iface, builder);
+    TRACE("%p, %p.\n", iface, builder);
 
-    return E_NOTIMPL;
+    return create_fontset_builder(iface, (IDWriteFontSetBuilder2 **)builder);
 }
 
 static HRESULT WINAPI dwritefactory5_CreateInMemoryFontFileLoader(IDWriteFactory7 *iface,
@@ -1725,9 +1725,9 @@ static HRESULT WINAPI dwritefactory6_CreateFontCollectionFromFontSet(IDWriteFact
 
 static HRESULT WINAPI dwritefactory6_CreateFontSetBuilder(IDWriteFactory7 *iface, IDWriteFontSetBuilder2 **builder)
 {
-    FIXME("%p, %p.\n", iface, builder);
+    TRACE("%p, %p.\n", iface, builder);
 
-    return E_NOTIMPL;
+    return create_fontset_builder(iface, builder);
 }
 
 static HRESULT WINAPI dwritefactory6_CreateTextFormat(IDWriteFactory7 *iface, const WCHAR *familyname,
@@ -1756,7 +1756,7 @@ static HRESULT WINAPI dwritefactory7_GetSystemFontCollection(IDWriteFactory7 *if
     return E_NOTIMPL;
 }
 
-static const struct IDWriteFactory7Vtbl dwritefactoryvtbl =
+static const IDWriteFactory7Vtbl dwritefactoryvtbl =
 {
     dwritefactory_QueryInterface,
     dwritefactory_AddRef,
@@ -1831,7 +1831,7 @@ static ULONG WINAPI shareddwritefactory_Release(IDWriteFactory7 *iface)
     return 1;
 }
 
-static const struct IDWriteFactory7Vtbl shareddwritefactoryvtbl =
+static const IDWriteFactory7Vtbl shareddwritefactoryvtbl =
 {
     dwritefactory_QueryInterface,
     shareddwritefactory_AddRef,
@@ -1931,7 +1931,7 @@ HRESULT WINAPI DWriteCreateFactory(DWRITE_FACTORY_TYPE type, REFIID riid, IUnkno
     struct dwritefactory *factory;
     HRESULT hr;
 
-    TRACE("(%d, %s, %p)\n", type, debugstr_guid(riid), ret);
+    TRACE("%d, %s, %p.\n", type, debugstr_guid(riid), ret);
 
     *ret = NULL;
 

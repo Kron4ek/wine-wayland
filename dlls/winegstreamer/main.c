@@ -40,12 +40,15 @@ static const WCHAR avi_splitterW[] =
 static const WCHAR mpeg_splitterW[] =
 {'M','P','E','G','-','I',' ','S','t','r','e','a','m',' ','S','p','l','i','t','t','e','r',0};
 
+const struct unix_funcs *unix_funcs = NULL;
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void *reserved)
 {
     if (reason == DLL_PROCESS_ATTACH)
     {
         winegstreamer_instance = instance;
         DisableThreadLibraryCalls(instance);
+        __wine_init_unix_lib(instance, reason, NULL, &unix_funcs);
     }
     return TRUE;
 }
@@ -135,7 +138,7 @@ static const IClassFactoryVtbl class_factory_vtbl =
 };
 
 static struct class_factory avi_splitter_cf = {{&class_factory_vtbl}, avi_splitter_create};
-static struct class_factory gstdemux_cf = {{&class_factory_vtbl}, gstdemux_create};
+static struct class_factory decodebin_parser_cf = {{&class_factory_vtbl}, decodebin_parser_create};
 static struct class_factory mpeg_splitter_cf = {{&class_factory_vtbl}, mpeg_splitter_create};
 static struct class_factory wave_parser_cf = {{&class_factory_vtbl}, wave_parser_create};
 
@@ -154,8 +157,8 @@ HRESULT WINAPI DllGetClassObject(REFCLSID clsid, REFIID iid, void **out)
 
     if (IsEqualGUID(clsid, &CLSID_AviSplitter))
         factory = &avi_splitter_cf;
-    else if (IsEqualGUID(clsid, &CLSID_Gstreamer_Splitter))
-        factory = &gstdemux_cf;
+    else if (IsEqualGUID(clsid, &CLSID_decodebin_parser))
+        factory = &decodebin_parser_cf;
     else if (IsEqualGUID(clsid, &CLSID_MPEG1Splitter))
         factory = &mpeg_splitter_cf;
     else if (IsEqualGUID(clsid, &CLSID_WAVEParser))
@@ -171,41 +174,16 @@ HRESULT WINAPI DllGetClassObject(REFCLSID clsid, REFIID iid, void **out)
 
 static BOOL CALLBACK init_gstreamer_proc(INIT_ONCE *once, void *param, void **ctx)
 {
-    BOOL *status = param;
-    char argv0[] = "wine";
-    char argv1[] = "--gst-disable-registry-fork";
-    char *args[3];
-    char **argv = args;
-    int argc = 2;
-    GError *err = NULL;
+    HINSTANCE handle;
 
-    TRACE("Initializing...\n");
+    /* Unloading glib is a bad idea.. it installs atexit handlers,
+     * so never unload the dll after loading */
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+            (LPCWSTR)winegstreamer_instance, &handle);
+    if (!handle)
+        ERR("Failed to pin module %p.\n", winegstreamer_instance);
 
-    argv[0] = argv0;
-    argv[1] = argv1;
-    argv[2] = NULL;
-    *status = gst_init_check(&argc, &argv, &err);
-    if (*status)
-    {
-        HINSTANCE handle;
-
-        TRACE("Initialized, version %s. Built with %d.%d.%d.\n", gst_version_string(),
-                GST_VERSION_MAJOR, GST_VERSION_MINOR, GST_VERSION_MICRO);
-
-        /* Unloading glib is a bad idea.. it installs atexit handlers,
-         * so never unload the dll after loading */
-        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
-                (LPCWSTR)winegstreamer_instance, &handle);
-        if (!handle)
-            ERR("Failed to pin module %p.\n", winegstreamer_instance);
-
-        start_dispatch_thread();
-    }
-    else if (err)
-    {
-        ERR("Failed to initialize gstreamer: %s\n", debugstr_a(err->message));
-        g_error_free(err);
-    }
+    start_dispatch_thread();
 
     return TRUE;
 }
@@ -213,11 +191,10 @@ static BOOL CALLBACK init_gstreamer_proc(INIT_ONCE *once, void *param, void **ct
 BOOL init_gstreamer(void)
 {
     static INIT_ONCE once = INIT_ONCE_STATIC_INIT;
-    static BOOL status;
 
-    InitOnceExecuteOnce(&once, init_gstreamer_proc, &status, NULL);
+    InitOnceExecuteOnce(&once, init_gstreamer_proc, NULL, NULL);
 
-    return status;
+    return TRUE;
 }
 
 static const REGPINTYPES reg_audio_mt = {&MEDIATYPE_Audio, &GUID_NULL};
@@ -321,7 +298,7 @@ static const REGFILTER2 reg_wave_parser =
     .u.s2.rgPins2 = reg_wave_parser_pins,
 };
 
-static const REGFILTERPINS2 reg_gstdemux_pins[3] =
+static const REGFILTERPINS2 reg_decodebin_parser_pins[3] =
 {
     {
         .nMediaTypes = 1,
@@ -339,12 +316,12 @@ static const REGFILTERPINS2 reg_gstdemux_pins[3] =
     },
 };
 
-static const REGFILTER2 reg_gstdemux =
+static const REGFILTER2 reg_decodebin_parser =
 {
     .dwVersion = 2,
     .dwMerit = MERIT_PREFERRED,
     .u.s2.cPins2 = 3,
-    .u.s2.rgPins2 = reg_gstdemux_pins,
+    .u.s2.rgPins2 = reg_decodebin_parser_pins,
 };
 
 HRESULT WINAPI DllRegisterServer(void)
@@ -362,8 +339,8 @@ HRESULT WINAPI DllRegisterServer(void)
         return hr;
 
     IFilterMapper2_RegisterFilter(mapper, &CLSID_AviSplitter, avi_splitterW, NULL, NULL, NULL, &reg_avi_splitter);
-    IFilterMapper2_RegisterFilter(mapper, &CLSID_Gstreamer_Splitter,
-            wGstreamer_Splitter, NULL, NULL, NULL, &reg_gstdemux);
+    IFilterMapper2_RegisterFilter(mapper, &CLSID_decodebin_parser,
+            wGstreamer_Splitter, NULL, NULL, NULL, &reg_decodebin_parser);
     IFilterMapper2_RegisterFilter(mapper, &CLSID_MPEG1Splitter, mpeg_splitterW, NULL, NULL, NULL, &reg_mpeg_splitter);
     IFilterMapper2_RegisterFilter(mapper, &CLSID_WAVEParser, wave_parserW, NULL, NULL, NULL, &reg_wave_parser);
 
@@ -387,7 +364,7 @@ HRESULT WINAPI DllUnregisterServer(void)
         return hr;
 
     IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_AviSplitter);
-    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_Gstreamer_Splitter);
+    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_decodebin_parser);
     IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_MPEG1Splitter);
     IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_WAVEParser);
 

@@ -190,11 +190,17 @@ static IDWriteTextAnalysisSourceVtbl analysissourcevtbl = {
 
 static IDWriteTextAnalysisSource analysissource = { &analysissourcevtbl };
 
+static void *create_factory_iid(REFIID riid)
+{
+    IUnknown *factory = NULL;
+    DWriteCreateFactory(DWRITE_FACTORY_TYPE_ISOLATED, riid, &factory);
+    return factory;
+}
+
 static IDWriteFactory *create_factory(void)
 {
-    IDWriteFactory *factory;
-    HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_ISOLATED, &IID_IDWriteFactory, (IUnknown**)&factory);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
+    IDWriteFactory *factory = create_factory_iid(&IID_IDWriteFactory);
+    ok(factory != NULL, "Failed to create factory.\n");
     return factory;
 }
 
@@ -908,7 +914,7 @@ static void test_CreateTextLayout(void)
     factory = create_factory();
 
     layout = (void*)0xdeadbeef;
-    hr = IDWriteFactory_CreateTextLayout(factory, NULL, 0, NULL, 0.0, 0.0, &layout);
+    hr = IDWriteFactory_CreateTextLayout(factory, NULL, 0, NULL, 0.0f, 0.0f, &layout);
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
     ok(layout == NULL, "got %p\n", layout);
 
@@ -940,6 +946,21 @@ static void test_CreateTextLayout(void)
     hr = IDWriteFactory_CreateTextLayout(factory, NULL, 0, format, 100.0f, 100.0f, &layout);
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
     ok(layout == NULL, "got %p\n", layout);
+
+    layout = (void *)0xdeadbeef;
+    hr = IDWriteFactory_CreateTextLayout(factory, L"string", 6, format, -100.0f, 100.0f, &layout);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+    ok(layout == NULL, "Unexpected pointer %p.\n", layout);
+
+    layout = (void *)0xdeadbeef;
+    hr = IDWriteFactory_CreateTextLayout(factory, L"string", 6, format, 100.0f, -100.0f, &layout);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+    ok(layout == NULL, "Unexpected pointer %p.\n", layout);
+
+    layout = (void *)0xdeadbeef;
+    hr = IDWriteFactory_CreateTextLayout(factory, L"string", 6, format, -100.0f, -100.0f, &layout);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+    ok(layout == NULL, "Unexpected pointer %p.\n", layout);
 
     hr = IDWriteFactory_CreateTextLayout(factory, L"string", 0, format, 0.0f, 0.0f, &layout);
     ok(hr == S_OK, "Failed to create text layout, hr %#x.\n", hr);
@@ -1031,7 +1052,7 @@ static void test_CreateGdiCompatibleTextLayout(void)
     factory = create_factory();
 
     layout = (void*)0xdeadbeef;
-    hr = IDWriteFactory_CreateGdiCompatibleTextLayout(factory, NULL, 0, NULL, 0.0, 0.0, 0.0, NULL, FALSE, &layout);
+    hr = IDWriteFactory_CreateGdiCompatibleTextLayout(factory, NULL, 0, NULL, 0.0f, 0.0f, 0.0f, NULL, FALSE, &layout);
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
     ok(layout == NULL, "got %p\n", layout);
 
@@ -1069,6 +1090,24 @@ static void test_CreateGdiCompatibleTextLayout(void)
     hr = IDWriteFactory_CreateGdiCompatibleTextLayout(factory, NULL, 0, format, 100.0f, 100.0f, 1.0f, NULL, FALSE, &layout);
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
     ok(layout == NULL, "got %p\n", layout);
+
+    layout = (void *)0xdeadbeef;
+    hr = IDWriteFactory_CreateGdiCompatibleTextLayout(factory, L"string", 6, format, -100.0f, 100.0f, 1.0f,
+            NULL, FALSE, &layout);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+    ok(layout == NULL, "Unexpected pointer %p.\n", layout);
+
+    layout = (void *)0xdeadbeef;
+    hr = IDWriteFactory_CreateGdiCompatibleTextLayout(factory, L"string", 6, format, 100.0f, -100.0f, 1.0f,
+            NULL, FALSE, &layout);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+    ok(layout == NULL, "Unexpected pointer %p.\n", layout);
+
+    layout = (void *)0xdeadbeef;
+    hr = IDWriteFactory_CreateGdiCompatibleTextLayout(factory, L"string", 6, format, -100.0f, -100.0f, 1.0f,
+            NULL, FALSE, &layout);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+    ok(layout == NULL, "Unexpected pointer %p.\n", layout);
 
     hr = IDWriteFactory_CreateGdiCompatibleTextLayout(factory, L"string", 6, format, 100.0f, 100.0f, 1.0f, NULL,
             FALSE, &layout);
@@ -1320,6 +1359,11 @@ static void test_CreateEllipsisTrimmingSign(void)
     hr = IDWriteFactory_CreateTextFormat(factory, L"Tahoma", NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL, 10.0f, L"en-GB", &format);
     ok(hr == S_OK, "Failed to create text format, hr %#x.\n", hr);
+
+    sign = (void *)0xdeadbeef;
+    hr = IDWriteFactory_CreateEllipsisTrimmingSign(factory, NULL, &sign);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+    ok(!sign, "Unexpected pointer %p.\n", sign);
 
     EXPECT_REF(format, 1);
     hr = IDWriteFactory_CreateEllipsisTrimmingSign(factory, format, &sign);
@@ -2664,6 +2708,7 @@ static void test_SetVerticalGlyphOrientation(void)
 {
     DWRITE_VERTICAL_GLYPH_ORIENTATION orientation;
     IDWriteTextLayout2 *layout2;
+    IDWriteTextFormat1 *format1;
     IDWriteTextFormat *format;
     IDWriteTextLayout *layout;
     IDWriteFactory *factory;
@@ -2693,6 +2738,29 @@ static void test_SetVerticalGlyphOrientation(void)
 
     hr = IDWriteTextLayout2_SetVerticalGlyphOrientation(layout2, DWRITE_VERTICAL_GLYPH_ORIENTATION_STACKED+1);
     ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+
+    hr = IDWriteTextLayout2_QueryInterface(layout2, &IID_IDWriteTextFormat1, (void **)&format1);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    orientation = IDWriteTextFormat1_GetVerticalGlyphOrientation(format1);
+    ok(orientation == DWRITE_VERTICAL_GLYPH_ORIENTATION_DEFAULT, "Unexpected orientation %d.\n", orientation);
+
+    hr = IDWriteTextLayout2_SetVerticalGlyphOrientation(layout2, DWRITE_VERTICAL_GLYPH_ORIENTATION_STACKED);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    orientation = IDWriteTextLayout2_GetVerticalGlyphOrientation(layout2);
+    ok(orientation == DWRITE_VERTICAL_GLYPH_ORIENTATION_STACKED, "Unexpected orientation %d.\n", orientation);
+
+    orientation = IDWriteTextFormat1_GetVerticalGlyphOrientation(format1);
+    ok(orientation == DWRITE_VERTICAL_GLYPH_ORIENTATION_STACKED, "Unexpected orientation %d.\n", orientation);
+
+    hr = IDWriteTextFormat1_SetVerticalGlyphOrientation(format1, DWRITE_VERTICAL_GLYPH_ORIENTATION_DEFAULT);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    orientation = IDWriteTextLayout2_GetVerticalGlyphOrientation(layout2);
+    ok(orientation == DWRITE_VERTICAL_GLYPH_ORIENTATION_DEFAULT, "Unexpected orientation %d.\n", orientation);
+
+    IDWriteTextFormat1_Release(format1);
 
     IDWriteTextLayout2_Release(layout2);
     IDWriteFactory_Release(factory);
@@ -5822,6 +5890,87 @@ static void test_automatic_font_axes(void)
     IDWriteFactory_Release(factory);
 }
 
+static void test_text_format_axes(void)
+{
+    IDWriteFontCollection *collection;
+    IDWriteFontCollection2 *collection2;
+    DWRITE_FONT_AXIS_VALUE axis;
+    IDWriteTextFormat3 *format3;
+    DWRITE_FONT_STRETCH stretch;
+    DWRITE_FONT_WEIGHT weight;
+    IDWriteTextFormat *format;
+    IDWriteFactory6 *factory;
+    DWRITE_FONT_STYLE style;
+    DWRITE_FONT_FAMILY_MODEL model;
+    unsigned int count;
+    HRESULT hr;
+
+    factory = create_factory_iid(&IID_IDWriteFactory6);
+
+    if (!factory)
+    {
+        win_skip("Text format does not support variations.\n");
+        return;
+    }
+
+    hr = IDWriteFactory6_CreateTextFormat(factory, L"test_family", NULL, NULL, 0, 10.0f, L"en-us", &format3);
+todo_wine
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+if (SUCCEEDED(hr))
+{
+    hr = IDWriteTextFormat3_GetFontCollection(format3, &collection);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = IDWriteFontCollection_QueryInterface(collection, &IID_IDWriteFontCollection2, (void **)&collection2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    model = IDWriteFontCollection2_GetFontFamilyModel(collection2);
+    ok(model == DWRITE_FONT_FAMILY_MODEL_TYPOGRAPHIC, "Unexpected model %d.\n", model);
+
+    IDWriteFontCollection_Release(collection);
+    IDWriteFontCollection2_Release(collection2);
+
+    count = IDWriteTextFormat3_GetFontAxisValueCount(format3);
+    ok(!count, "Unexpected axis count %u.\n", count);
+
+    stretch = IDWriteTextFormat3_GetFontStretch(format3);
+    ok(stretch == DWRITE_FONT_STRETCH_NORMAL, "Unexpected font stretch %d.\n", stretch);
+
+    style = IDWriteTextFormat3_GetFontStyle(format3);
+    ok(style == DWRITE_FONT_STYLE_NORMAL, "Unexpected font style %d.\n", style);
+
+    weight = IDWriteTextFormat3_GetFontWeight(format3);
+    ok(weight == DWRITE_FONT_WEIGHT_NORMAL, "Unexpected font weight %d.\n", weight);
+
+    /* Regular properties are not set from axis values. */
+    axis.axisTag = DWRITE_FONT_AXIS_TAG_WEIGHT;
+    axis.value = 200.0f;
+    hr = IDWriteTextFormat3_SetFontAxisValues(format3, &axis, 1);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    weight = IDWriteTextFormat3_GetFontWeight(format3);
+    ok(weight == DWRITE_FONT_WEIGHT_NORMAL, "Unexpected font weight %d.\n", weight);
+
+    IDWriteTextFormat3_Release(format3);
+}
+    hr = IDWriteFactory_CreateTextFormat((IDWriteFactory *)factory, L"test_family", NULL,
+            DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_STYLE_ITALIC, DWRITE_FONT_STRETCH_EXPANDED,
+            10.0f, L"en-us", &format);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = IDWriteTextFormat_QueryInterface(format, &IID_IDWriteTextFormat3, (void **)&format3);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    count = IDWriteTextFormat3_GetFontAxisValueCount(format3);
+    ok(!count, "Unexpected axis count %u.\n", count);
+
+    IDWriteTextFormat3_Release(format3);
+    IDWriteTextFormat_Release(format);
+
+    IDWriteFactory6_Release(factory);
+}
+
 START_TEST(layout)
 {
     IDWriteFactory *factory;
@@ -5874,6 +6023,7 @@ START_TEST(layout)
     test_GetOverhangMetrics();
     test_tab_stops();
     test_automatic_font_axes();
+    test_text_format_axes();
 
     IDWriteFactory_Release(factory);
 }

@@ -27,12 +27,14 @@
 struct _DISPATCHER_CONTEXT;
 
 /* increment this when you change the function table */
-#define NTDLL_UNIXLIB_VERSION 106
+#define NTDLL_UNIXLIB_VERSION 108
 
 struct unix_funcs
 {
     /* Nt* functions */
+#ifdef __aarch64__
     TEB *         (WINAPI *NtCurrentTeb)(void);
+#endif
 
     /* other Win32 API functions */
     NTSTATUS      (WINAPI *DbgUiIssueRemoteBreakin)( HANDLE process );
@@ -85,7 +87,7 @@ struct unix_funcs
 
     /* loader functions */
     NTSTATUS      (CDECL *load_so_dll)( UNICODE_STRING *nt_name, void **module );
-    NTSTATUS      (CDECL *load_builtin_dll)( const WCHAR *name, void **module, void **unix_entry,
+    NTSTATUS      (CDECL *load_builtin_dll)( UNICODE_STRING *name, void **module, void **unix_entry,
                                              SECTION_IMAGE_INFORMATION *image_info );
     NTSTATUS      (CDECL *unload_builtin_dll)( void *module );
     void          (CDECL *init_builtin_dll)( void *module );

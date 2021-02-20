@@ -1910,6 +1910,11 @@ static void shader_dump_global_flags(struct wined3d_string_buffer *buffer, DWORD
 
 static void shader_dump_sync_flags(struct wined3d_string_buffer *buffer, DWORD sync_flags)
 {
+    if (sync_flags & WINED3DSSF_GLOBAL_UAV)
+    {
+        shader_addline(buffer, "_uglobal");
+        sync_flags &= ~WINED3DSSF_GLOBAL_UAV;
+    }
     if (sync_flags & WINED3DSSF_GROUP_SHARED_MEMORY)
     {
         shader_addline(buffer, "_g");
@@ -3399,6 +3404,8 @@ static void wined3d_shader_init_object(void *object)
     struct wined3d_shader *shader = object;
     struct wined3d_device *device = shader->device;
 
+    TRACE("shader %p.\n", shader);
+
     list_add_head(&device->shaders, &shader->shader_list_entry);
 
     device->shader_backend->shader_precompile(device->shader_priv, shader);
@@ -3406,6 +3413,8 @@ static void wined3d_shader_init_object(void *object)
 
 static void wined3d_shader_destroy_object(void *object)
 {
+    TRACE("object %p.\n", object);
+
     shader_cleanup(object);
     heap_free(object);
 }

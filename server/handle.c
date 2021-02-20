@@ -101,6 +101,8 @@ static inline obj_handle_t handle_global_to_local( obj_handle_t handle )
 static struct object *grab_object_for_handle( struct object *obj )
 {
     obj->handle_count++;
+    obj->ops->type->handle_count++;
+    obj->ops->type->handle_max = max( obj->ops->type->handle_max, obj->ops->type->handle_count );
     return grab_object( obj );
 }
 
@@ -108,6 +110,7 @@ static struct object *grab_object_for_handle( struct object *obj )
 static void release_object_from_handle( struct object *obj )
 {
     assert( obj->handle_count );
+    obj->ops->type->handle_count--;
     obj->handle_count--;
     release_object( obj );
 }
@@ -118,8 +121,8 @@ static void handle_table_destroy( struct object *obj );
 static const struct object_ops handle_table_ops =
 {
     sizeof(struct handle_table),     /* size */
+    &no_type,                        /* type */
     handle_table_dump,               /* dump */
-    no_get_type,                     /* get_type */
     no_add_queue,                    /* add_queue */
     NULL,                            /* remove_queue */
     NULL,                            /* signaled */
@@ -128,7 +131,7 @@ static const struct object_ops handle_table_ops =
     NULL,                            /* satisfied */
     no_signal,                       /* signal */
     no_get_fd,                       /* get_fd */
-    no_map_access,                   /* map_access */
+    default_map_access,              /* map_access */
     default_get_sd,                  /* get_sd */
     default_set_sd,                  /* set_sd */
     no_get_full_name,                /* get_full_name */

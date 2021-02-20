@@ -199,6 +199,11 @@ typedef struct _RTL_USER_PROCESS_PARAMETERS
     UNICODE_STRING      ShellInfo;
     UNICODE_STRING      RuntimeInfo;
     RTL_DRIVE_LETTER_CURDIR DLCurrentDirectory[0x20];
+    ULONG               EnvironmentSize;
+    ULONG               EnvironmentVersion;
+    PVOID               PackageDependencyData;
+    ULONG               ProcessGroupId;
+    ULONG               LoaderThreads;
 } RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
 
 /* value for Flags field (FIXME: not the correct name) */
@@ -1155,7 +1160,7 @@ typedef enum _OBJECT_INFORMATION_CLASS {
     ObjectBasicInformation,
     ObjectNameInformation,
     ObjectTypeInformation,
-    ObjectAllInformation,
+    ObjectTypesInformation,
     ObjectDataInformation
 } OBJECT_INFORMATION_CLASS, *POBJECT_INFORMATION_CLASS;
 
@@ -1594,8 +1599,34 @@ typedef struct _OBJECT_NAME_INFORMATION {
 
 typedef struct __OBJECT_TYPE_INFORMATION {
     UNICODE_STRING TypeName;
-    ULONG Reserved [22];
+    ULONG TotalNumberOfObjects;
+    ULONG TotalNumberOfHandles;
+    ULONG TotalPagedPoolUsage;
+    ULONG TotalNonPagedPoolUsage;
+    ULONG TotalNamePoolUsage;
+    ULONG TotalHandleTableUsage;
+    ULONG HighWaterNumberOfObjects;
+    ULONG HighWaterNumberOfHandles;
+    ULONG HighWaterPagedPoolUsage;
+    ULONG HighWaterNonPagedPoolUsage;
+    ULONG HighWaterNamePoolUsage;
+    ULONG HighWaterHandleTableUsage;
+    ULONG InvalidAttributes;
+    GENERIC_MAPPING GenericMapping;
+    ULONG ValidAccessMask;
+    BOOLEAN SecurityRequired;
+    BOOLEAN MaintainHandleCount;
+    UCHAR TypeIndex;
+    CHAR ReservedByte;
+    ULONG PoolType;
+    ULONG DefaultPagedPoolCharge;
+    ULONG DefaultNonPagedPoolCharge;
 } OBJECT_TYPE_INFORMATION, *POBJECT_TYPE_INFORMATION;
+
+typedef struct _OBJECT_TYPES_INFORMATION
+{
+    ULONG NumberOfTypes;
+} OBJECT_TYPES_INFORMATION, *POBJECT_TYPES_INFORMATION;
 
 typedef struct _PROCESS_BASIC_INFORMATION {
 #ifdef __WINESRC__
@@ -2409,6 +2440,9 @@ typedef enum _SECTION_INFORMATION_CLASS
 {
   SectionBasicInformation,
   SectionImageInformation,
+  SectionRelocationInformation,
+  SectionOriginalBaseInformation,
+  SectionInternalImageInformation
 } SECTION_INFORMATION_CLASS;
 
 typedef struct _SECTION_BASIC_INFORMATION {
@@ -2423,9 +2457,10 @@ typedef struct _SECTION_IMAGE_INFORMATION {
   SIZE_T MaximumStackSize;
   SIZE_T CommittedStackSize;
   ULONG SubSystemType;
-  WORD SubsystemVersionLow;
-  WORD SubsystemVersionHigh;
-  ULONG GpValue;
+  USHORT MinorSubsystemVersion;
+  USHORT MajorSubsystemVersion;
+  USHORT MajorOperatingSystemVersion;
+  USHORT MinorOperatingSystemVersion;
   USHORT ImageCharacteristics;
   USHORT DllCharacteristics;
   USHORT Machine;
@@ -2440,7 +2475,8 @@ typedef struct _SECTION_IMAGE_INFORMATION {
           UCHAR ImageDynamicallyRelocated : 1;
           UCHAR ImageMappedFlat           : 1;
           UCHAR BaseBelow4gb              : 1;
-          UCHAR Reserved                  : 3;
+          UCHAR ComPlusPrefer32bit        : 1;
+          UCHAR Reserved                  : 2;
       } DUMMYSTRUCTNAME;
   } DUMMYUNIONNAME;
   ULONG LoaderFlags;
@@ -2997,6 +3033,112 @@ typedef struct _PS_CREATE_INFO
     };
 } PS_CREATE_INFO, *PPS_CREATE_INFO;
 
+typedef struct _DBGKM_EXCEPTION
+{
+    EXCEPTION_RECORD ExceptionRecord;
+    ULONG FirstChance;
+} DBGKM_EXCEPTION, *PDBGKM_EXCEPTION;
+
+typedef struct _DBGKM_CREATE_THREAD
+{
+    ULONG SubSystemKey;
+    PVOID StartAddress;
+} DBGKM_CREATE_THREAD, *PDBGKM_CREATE_THREAD;
+
+typedef struct _DBGKM_CREATE_PROCESS
+{
+    ULONG SubSystemKey;
+    HANDLE FileHandle;
+    PVOID BaseOfImage;
+    ULONG DebugInfoFileOffset;
+    ULONG DebugInfoSize;
+    DBGKM_CREATE_THREAD InitialThread;
+} DBGKM_CREATE_PROCESS, *PDBGKM_CREATE_PROCESS;
+
+typedef struct _DBGKM_EXIT_THREAD
+{
+    NTSTATUS ExitStatus;
+} DBGKM_EXIT_THREAD, *PDBGKM_EXIT_THREAD;
+
+typedef struct _DBGKM_EXIT_PROCESS
+{
+    NTSTATUS ExitStatus;
+} DBGKM_EXIT_PROCESS, *PDBGKM_EXIT_PROCESS;
+
+typedef struct _DBGKM_LOAD_DLL
+{
+    HANDLE FileHandle;
+    PVOID BaseOfDll;
+    ULONG DebugInfoFileOffset;
+    ULONG DebugInfoSize;
+    PVOID NamePointer;
+} DBGKM_LOAD_DLL, *PDBGKM_LOAD_DLL;
+
+typedef struct _DBGKM_UNLOAD_DLL
+{
+    PVOID BaseAddress;
+} DBGKM_UNLOAD_DLL, *PDBGKM_UNLOAD_DLL;
+
+typedef enum _DBG_STATE
+{
+    DbgIdle,
+    DbgReplyPending,
+    DbgCreateThreadStateChange,
+    DbgCreateProcessStateChange,
+    DbgExitThreadStateChange,
+    DbgExitProcessStateChange,
+    DbgExceptionStateChange,
+    DbgBreakpointStateChange,
+    DbgSingleStepStateChange,
+    DbgLoadDllStateChange,
+    DbgUnloadDllStateChange
+} DBG_STATE, *PDBG_STATE;
+
+typedef struct _DBGUI_CREATE_THREAD
+{
+    HANDLE HandleToThread;
+    DBGKM_CREATE_THREAD NewThread;
+} DBGUI_CREATE_THREAD, *PDBGUI_CREATE_THREAD;
+
+typedef struct _DBGUI_CREATE_PROCESS
+{
+    HANDLE HandleToProcess;
+    HANDLE HandleToThread;
+    DBGKM_CREATE_PROCESS NewProcess;
+} DBGUI_CREATE_PROCESS, *PDBGUI_CREATE_PROCESS;
+
+typedef struct _DBGUI_WAIT_STATE_CHANGE
+{
+    DBG_STATE NewState;
+    CLIENT_ID AppClientId;
+    union
+    {
+        DBGKM_EXCEPTION Exception;
+        DBGUI_CREATE_THREAD CreateThread;
+        DBGUI_CREATE_PROCESS CreateProcessInfo;
+        DBGKM_EXIT_THREAD ExitThread;
+        DBGKM_EXIT_PROCESS ExitProcess;
+        DBGKM_LOAD_DLL LoadDll;
+        DBGKM_UNLOAD_DLL UnloadDll;
+    } StateInfo;
+} DBGUI_WAIT_STATE_CHANGE, *PDBGUI_WAIT_STATE_CHANGE;
+
+struct _DEBUG_EVENT;
+
+#define DEBUG_READ_EVENT        0x0001
+#define DEBUG_PROCESS_ASSIGN    0x0002
+#define DEBUG_SET_INFORMATION   0x0004
+#define DEBUG_QUERY_INFORMATION 0x0008
+#define DEBUG_ALL_ACCESS        (STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x0f)
+
+#define DEBUG_KILL_ON_CLOSE 0x1
+
+typedef enum _DEBUGOBJECTINFOCLASS
+{
+    DebugObjectKillProcessOnExitInformation = 1,
+    MaxDebugObjectInfoClass
+} DEBUGOBJECTINFOCLASS, *PDEBUGOBJECTINFOCLASS;
+
 /***********************************************************************
  * Function declarations
  */
@@ -3004,8 +3146,16 @@ typedef struct _PS_CREATE_INFO
 NTSYSAPI void      WINAPI DbgBreakPoint(void);
 NTSYSAPI NTSTATUS WINAPIV DbgPrint(LPCSTR fmt, ...);
 NTSYSAPI NTSTATUS WINAPIV DbgPrintEx(ULONG iComponentId, ULONG Level, LPCSTR fmt, ...);
+NTSYSAPI NTSTATUS  WINAPI DbgUiConnectToDbg(void);
+NTSYSAPI NTSTATUS  WINAPI DbgUiContinue(CLIENT_ID*,NTSTATUS);
+NTSYSAPI NTSTATUS  WINAPI DbgUiConvertStateChangeStructure(DBGUI_WAIT_STATE_CHANGE*,struct _DEBUG_EVENT*);
+NTSYSAPI NTSTATUS WINAPI  DbgUiDebugActiveProcess(HANDLE);
+NTSYSAPI HANDLE    WINAPI DbgUiGetThreadDebugObject(void);
 NTSYSAPI NTSTATUS  WINAPI DbgUiIssueRemoteBreakin(HANDLE);
 NTSYSAPI void      WINAPI DbgUiRemoteBreakin(void*);
+NTSYSAPI void      WINAPI DbgUiSetThreadDebugObject(HANDLE);
+NTSYSAPI NTSTATUS  WINAPI DbgUiStopDebugging(HANDLE);
+NTSYSAPI NTSTATUS  WINAPI DbgUiWaitStateChange(DBGUI_WAIT_STATE_CHANGE*,LARGE_INTEGER*);
 NTSYSAPI void      WINAPI DbgUserBreakPoint(void);
 NTSYSAPI NTSTATUS  WINAPI LdrAccessResource(HMODULE,const IMAGE_RESOURCE_DATA_ENTRY*,void**,PULONG);
 NTSYSAPI NTSTATUS  WINAPI LdrAddDllDirectory(const UNICODE_STRING*,void**);
@@ -3057,6 +3207,7 @@ NTSYSAPI NTSTATUS  WINAPI NtCloseObjectAuditAlarm(PUNICODE_STRING,HANDLE,BOOLEAN
 NTSYSAPI NTSTATUS  WINAPI NtCompleteConnectPort(HANDLE);
 NTSYSAPI NTSTATUS  WINAPI NtConnectPort(PHANDLE,PUNICODE_STRING,PSECURITY_QUALITY_OF_SERVICE,PLPC_SECTION_WRITE,PLPC_SECTION_READ,PULONG,PVOID,PULONG);
 NTSYSAPI NTSTATUS  WINAPI NtContinue(PCONTEXT,BOOLEAN);
+NTSYSAPI NTSTATUS  WINAPI NtCreateDebugObject(HANDLE*,ACCESS_MASK,OBJECT_ATTRIBUTES*,ULONG);
 NTSYSAPI NTSTATUS  WINAPI NtCreateDirectoryObject(PHANDLE,ACCESS_MASK,POBJECT_ATTRIBUTES);
 NTSYSAPI NTSTATUS  WINAPI NtCreateEvent(PHANDLE,ACCESS_MASK,const OBJECT_ATTRIBUTES *,EVENT_TYPE,BOOLEAN);
 NTSYSAPI NTSTATUS  WINAPI NtCreateEventPair(PHANDLE,ACCESS_MASK,POBJECT_ATTRIBUTES);
@@ -3082,6 +3233,8 @@ NTSYSAPI NTSTATUS  WINAPI NtCreateThreadEx(HANDLE*,ACCESS_MASK,OBJECT_ATTRIBUTES
 NTSYSAPI NTSTATUS  WINAPI NtCreateTimer(HANDLE*, ACCESS_MASK, const OBJECT_ATTRIBUTES*, TIMER_TYPE);
 NTSYSAPI NTSTATUS  WINAPI NtCreateToken(PHANDLE,ACCESS_MASK,POBJECT_ATTRIBUTES,TOKEN_TYPE,PLUID,PLARGE_INTEGER,PTOKEN_USER,PTOKEN_GROUPS,PTOKEN_PRIVILEGES,PTOKEN_OWNER,PTOKEN_PRIMARY_GROUP,PTOKEN_DEFAULT_DACL,PTOKEN_SOURCE);
 NTSYSAPI NTSTATUS  WINAPI NtCreateUserProcess(HANDLE*,HANDLE*,ACCESS_MASK,ACCESS_MASK,OBJECT_ATTRIBUTES*,OBJECT_ATTRIBUTES*,ULONG,ULONG,RTL_USER_PROCESS_PARAMETERS*,PS_CREATE_INFO*,PS_ATTRIBUTE_LIST*);
+NTSYSAPI NTSTATUS  WINAPI NtDebugActiveProcess(HANDLE,HANDLE);
+NTSYSAPI NTSTATUS  WINAPI NtDebugContinue(HANDLE,CLIENT_ID*,NTSTATUS);
 NTSYSAPI NTSTATUS  WINAPI NtDelayExecution(BOOLEAN,const LARGE_INTEGER*);
 NTSYSAPI NTSTATUS  WINAPI NtDeleteAtom(RTL_ATOM);
 NTSYSAPI NTSTATUS  WINAPI NtDeleteFile(POBJECT_ATTRIBUTES);
@@ -3206,6 +3359,7 @@ NTSYSAPI NTSTATUS  WINAPI NtReleaseMutant(HANDLE,PLONG);
 NTSYSAPI NTSTATUS  WINAPI NtReleaseSemaphore(HANDLE,ULONG,PULONG);
 NTSYSAPI NTSTATUS  WINAPI NtRemoveIoCompletion(HANDLE,PULONG_PTR,PULONG_PTR,PIO_STATUS_BLOCK,PLARGE_INTEGER);
 NTSYSAPI NTSTATUS  WINAPI NtRemoveIoCompletionEx(HANDLE,FILE_IO_COMPLETION_INFORMATION*,ULONG,ULONG*,LARGE_INTEGER*,BOOLEAN);
+NTSYSAPI NTSTATUS  WINAPI NtRemoveProcessDebug(HANDLE,HANDLE);
 NTSYSAPI NTSTATUS  WINAPI NtRenameKey(HANDLE,UNICODE_STRING*);
 NTSYSAPI NTSTATUS  WINAPI NtReplaceKey(POBJECT_ATTRIBUTES,HANDLE,POBJECT_ATTRIBUTES);
 NTSYSAPI NTSTATUS  WINAPI NtReplyPort(HANDLE,PLPC_MESSAGE);
@@ -3230,6 +3384,7 @@ NTSYSAPI NTSTATUS  WINAPI NtSetEvent(HANDLE,LONG*);
 NTSYSAPI NTSTATUS  WINAPI NtSetHighEventPair(HANDLE);
 NTSYSAPI NTSTATUS  WINAPI NtSetHighWaitLowEventPair(HANDLE);
 NTSYSAPI NTSTATUS  WINAPI NtSetHighWaitLowThread(VOID);
+NTSYSAPI NTSTATUS WINAPI  NtSetInformationDebugObject(HANDLE,DEBUGOBJECTINFOCLASS,PVOID,ULONG,ULONG*);
 NTSYSAPI NTSTATUS  WINAPI NtSetInformationFile(HANDLE,PIO_STATUS_BLOCK,PVOID,ULONG,FILE_INFORMATION_CLASS);
 NTSYSAPI NTSTATUS  WINAPI NtSetInformationJobObject(HANDLE,JOBOBJECTINFOCLASS,PVOID,ULONG);
 NTSYSAPI NTSTATUS  WINAPI NtSetInformationKey(HANDLE,const int,PVOID,ULONG);
@@ -3272,6 +3427,7 @@ NTSYSAPI NTSTATUS  WINAPI NtUnlockFile(HANDLE,PIO_STATUS_BLOCK,PLARGE_INTEGER,PL
 NTSYSAPI NTSTATUS  WINAPI NtUnlockVirtualMemory(HANDLE,PVOID*,SIZE_T*,ULONG);
 NTSYSAPI NTSTATUS  WINAPI NtUnmapViewOfSection(HANDLE,PVOID);
 NTSYSAPI NTSTATUS  WINAPI NtVdmControl(ULONG,PVOID);
+NTSYSAPI NTSTATUS  WINAPI NtWaitForDebugEvent(HANDLE,BOOLEAN,LARGE_INTEGER*,DBGUI_WAIT_STATE_CHANGE*);
 NTSYSAPI NTSTATUS  WINAPI NtWaitForKeyedEvent(HANDLE,const void*,BOOLEAN,const LARGE_INTEGER*);
 NTSYSAPI NTSTATUS  WINAPI NtWaitForSingleObject(HANDLE,BOOLEAN,const LARGE_INTEGER*);
 NTSYSAPI NTSTATUS  WINAPI NtWaitForMultipleObjects(ULONG,const HANDLE*,BOOLEAN,BOOLEAN,const LARGE_INTEGER*);

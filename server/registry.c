@@ -52,11 +52,26 @@
 struct notify
 {
     struct list       entry;    /* entry in list of notifications */
-    struct event     *event;    /* event to set when changing this key */
+    struct event    **events;   /* events to set when changing this key */
+    unsigned int      event_count; /* number of events */
     int               subtree;  /* true if subtree notification */
     unsigned int      filter;   /* which events to notify on */
     obj_handle_t      hkey;     /* hkey associated with this notification */
     struct process   *process;  /* process in which the hkey is valid */
+};
+
+static const WCHAR key_name[] = {'K','e','y'};
+
+struct type_descr key_type =
+{
+    { key_name, sizeof(key_name) },   /* name */
+    KEY_ALL_ACCESS | SYNCHRONIZE,     /* valid_access */
+    {                                 /* mapping */
+        STANDARD_RIGHTS_READ | KEY_NOTIFY | KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE,
+        STANDARD_RIGHTS_WRITE | KEY_CREATE_SUB_KEY | KEY_SET_VALUE,
+        STANDARD_RIGHTS_EXECUTE | KEY_CREATE_LINK | KEY_NOTIFY | KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE,
+        KEY_ALL_ACCESS
+    },
 };
 
 /* a registry key */
@@ -145,7 +160,6 @@ struct file_load_info
 
 
 static void key_dump( struct object *obj, int verbose );
-static struct object_type *key_get_type( struct object *obj );
 static unsigned int key_map_access( struct object *obj, unsigned int access );
 static struct security_descriptor *key_get_sd( struct object *obj );
 static WCHAR *key_get_full_name( struct object *obj, data_size_t *len );
@@ -155,8 +169,8 @@ static void key_destroy( struct object *obj );
 static const struct object_ops key_ops =
 {
     sizeof(struct key),      /* size */
+    &key_type,               /* type */
     key_dump,                /* dump */
-    key_get_type,            /* get_type */
     no_add_queue,            /* add_queue */
     NULL,                    /* remove_queue */
     NULL,                    /* signaled */
@@ -306,22 +320,20 @@ static void key_dump( struct object *obj, int verbose )
     fprintf( stderr, "\n" );
 }
 
-static struct object_type *key_get_type( struct object *obj )
-{
-    static const WCHAR name[] = {'K','e','y'};
-    static const struct unicode_str str = { name, sizeof(name) };
-    return get_object_type( &str );
-}
-
 /* notify waiter and maybe delete the notification */
 static void do_notification( struct key *key, struct notify *notify, int del )
 {
-    if (notify->event)
+    unsigned int i;
+
+    for (i = 0; i < notify->event_count; ++i)
     {
-        set_event( notify->event );
-        release_object( notify->event );
-        notify->event = NULL;
+        set_event( notify->events[i] );
+        release_object( notify->events[i] );
     }
+    free( notify->events );
+    notify->events = NULL;
+    notify->event_count = 0;
+
     if (del)
     {
         list_remove( &notify->entry );
@@ -342,13 +354,9 @@ static inline struct notify *find_notify( struct key *key, struct process *proce
 
 static unsigned int key_map_access( struct object *obj, unsigned int access )
 {
-    if (access & GENERIC_READ)    access |= KEY_READ;
-    if (access & GENERIC_WRITE)   access |= KEY_WRITE;
-    if (access & GENERIC_EXECUTE) access |= KEY_EXECUTE;
-    if (access & GENERIC_ALL)     access |= KEY_ALL_ACCESS;
+    access = default_map_access( obj, access );
     /* filter the WOW64 masks, as they aren't real access bits */
-    return access & ~(GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE | GENERIC_ALL |
-                      KEY_WOW64_64KEY | KEY_WOW64_32KEY);
+    return access & ~(KEY_WOW64_64KEY | KEY_WOW64_32KEY);
 }
 
 static struct security_descriptor *key_get_sd( struct object *obj )
@@ -2285,20 +2293,13 @@ DECL_HANDLER(set_registry_notification)
         if (event)
         {
             notify = find_notify( key, current->process, req->hkey );
-            if (notify)
-            {
-                if (notify->event)
-                    release_object( notify->event );
-                grab_object( event );
-                notify->event = event;
-            }
-            else
+            if (!notify)
             {
                 notify = mem_alloc( sizeof(*notify) );
                 if (notify)
                 {
-                    grab_object( event );
-                    notify->event   = event;
+                    notify->events  = NULL;
+                    notify->event_count = 0;
                     notify->subtree = req->subtree;
                     notify->filter  = req->filter;
                     notify->hkey    = req->hkey;
@@ -2308,8 +2309,16 @@ DECL_HANDLER(set_registry_notification)
             }
             if (notify)
             {
-                reset_event( event );
-                set_error( STATUS_PENDING );
+                struct event **new_array;
+
+                if ((new_array = realloc( notify->events, (notify->event_count + 1) * sizeof(*notify->events) )))
+                {
+                    notify->events = new_array;
+                    notify->events[notify->event_count++] = (struct event *)grab_object( event );
+                    reset_event( event );
+                    set_error( STATUS_PENDING );
+                }
+                else set_error( STATUS_NO_MEMORY );
             }
             release_object( event );
         }

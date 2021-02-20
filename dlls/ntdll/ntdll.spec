@@ -34,16 +34,16 @@
 @ stub DbgPrompt
 # @ stub DbgQueryDebugFilterState
 # @ stub DbgSetDebugFilterState
-@ stub DbgUiConnectToDbg
-@ stub DbgUiContinue
-@ stub DbgUiConvertStateChangeStructure
-# @ stub DbgUiDebugActiveProcess
-# @ stub DbgUiGetThreadDebugObject
+@ stdcall DbgUiConnectToDbg()
+@ stdcall DbgUiContinue(ptr long)
+@ stdcall DbgUiConvertStateChangeStructure(ptr ptr)
+@ stdcall DbgUiDebugActiveProcess(long)
+@ stdcall DbgUiGetThreadDebugObject()
 @ stdcall DbgUiIssueRemoteBreakin(long)
 @ stdcall DbgUiRemoteBreakin(ptr)
-# @ stub DbgUiSetThreadDebugObject
-# @ stub DbgUiStopDebugging
-@ stub DbgUiWaitStateChange
+@ stdcall DbgUiSetThreadDebugObject(long)
+@ stdcall DbgUiStopDebugging(long)
+@ stdcall DbgUiWaitStateChange(ptr ptr)
 @ stdcall DbgUserBreakPoint()
 @ stdcall EtwEventActivityIdControl(long ptr)
 @ stdcall EtwEventEnabled(int64 ptr)
@@ -159,7 +159,7 @@
 # @ stub NtCompressKey
 @ stdcall -syscall NtConnectPort(ptr ptr ptr ptr ptr ptr ptr ptr)
 @ stdcall -syscall NtContinue(ptr long)
-# @ stub NtCreateDebugObject
+@ stdcall -syscall NtCreateDebugObject(ptr long ptr long)
 @ stdcall -syscall NtCreateDirectoryObject(ptr long ptr)
 @ stdcall -syscall NtCreateEvent(ptr long ptr long long)
 @ stub NtCreateEventPair
@@ -189,9 +189,9 @@
 @ stub NtCreateToken
 @ stdcall -syscall NtCreateUserProcess(ptr ptr long long ptr ptr long long ptr ptr ptr)
 # @ stub NtCreateWaitablePort
-@ stdcall -arch=win32,arm64 NtCurrentTeb()
+@ stdcall -arch=i386,arm64 NtCurrentTeb()
 @ stdcall -syscall NtDebugActiveProcess(long long)
-# @ stub NtDebugContinue
+@ stdcall -syscall NtDebugContinue(long ptr long)
 @ stdcall -syscall NtDelayExecution(long ptr)
 @ stdcall -syscall NtDeleteAtom(long)
 # @ stub NtDeleteBootEntry
@@ -340,7 +340,7 @@
 @ stdcall -syscall NtReleaseSemaphore(long long ptr)
 @ stdcall -syscall NtRemoveIoCompletion(ptr ptr ptr ptr ptr)
 @ stdcall -syscall NtRemoveIoCompletionEx(ptr ptr long ptr ptr long)
-# @ stub NtRemoveProcessDebug
+@ stdcall -syscall NtRemoveProcessDebug(long long)
 @ stdcall -syscall NtRenameKey(long ptr)
 @ stdcall -syscall NtReplaceKey(ptr long ptr)
 @ stub NtReplyPort
@@ -373,7 +373,7 @@
 @ stub NtSetHighEventPair
 @ stub NtSetHighWaitLowEventPair
 @ stub NtSetHighWaitLowThread
-# @ stub NtSetInformationDebugObject
+@ stdcall -syscall NtSetInformationDebugObject(long long ptr long ptr)
 @ stdcall -syscall NtSetInformationFile(long ptr ptr long long)
 @ stdcall -syscall NtSetInformationJobObject(long long ptr long)
 @ stdcall -syscall NtSetInformationKey(long long ptr long)
@@ -422,7 +422,7 @@
 @ stdcall -syscall NtUnmapViewOfSection(long ptr)
 @ stub NtVdmControl
 @ stub NtW32Call
-# @ stub NtWaitForDebugEvent
+@ stdcall -syscall NtWaitForDebugEvent(long long ptr ptr)
 @ stdcall -syscall NtWaitForKeyedEvent(long ptr long ptr)
 @ stdcall -syscall NtWaitForMultipleObjects(long ptr long long ptr)
 @ stub NtWaitForProcessMutant
@@ -1196,7 +1196,7 @@
 @ stdcall -private -syscall ZwCreateUserProcess(ptr ptr long long ptr ptr long long ptr ptr ptr) NtCreateUserProcess
 # @ stub ZwCreateWaitablePort
 @ stdcall -private -syscall ZwDebugActiveProcess(long long) NtDebugActiveProcess
-# @ stub ZwDebugContinue
+@ stdcall -private -syscall ZwDebugContinue(long ptr long) NtDebugContinue
 @ stdcall -private -syscall ZwDelayExecution(long ptr) NtDelayExecution
 @ stdcall -private -syscall ZwDeleteAtom(long) NtDeleteAtom
 # @ stub ZwDeleteBootEntry
@@ -1345,7 +1345,7 @@
 @ stdcall -private -syscall ZwReleaseSemaphore(long long ptr) NtReleaseSemaphore
 @ stdcall -private -syscall ZwRemoveIoCompletion(ptr ptr ptr ptr ptr) NtRemoveIoCompletion
 @ stdcall -private -syscall ZwRemoveIoCompletionEx(ptr ptr long ptr ptr long) NtRemoveIoCompletionEx
-# @ stub ZwRemoveProcessDebug
+@ stdcall -private -syscall ZwRemoveProcessDebug(long long) NtRemoveProcessDebug
 @ stdcall -private -syscall ZwRenameKey(long ptr) NtRenameKey
 @ stdcall -private -syscall ZwReplaceKey(ptr long ptr) NtReplaceKey
 @ stub ZwReplyPort
@@ -1378,7 +1378,7 @@
 @ stub ZwSetHighEventPair
 @ stub ZwSetHighWaitLowEventPair
 @ stub ZwSetHighWaitLowThread
-# @ stub ZwSetInformationDebugObject
+@ stdcall -private -syscall ZwSetInformationDebugObject(long long ptr long ptr) NtSetInformationDebugObject
 @ stdcall -private -syscall ZwSetInformationFile(long ptr ptr long long) NtSetInformationFile
 @ stdcall -private -syscall ZwSetInformationJobObject(long long ptr long) NtSetInformationJobObject
 @ stdcall -private -syscall ZwSetInformationKey(long long ptr long) NtSetInformationKey
@@ -1427,7 +1427,7 @@
 @ stdcall -private -syscall ZwUnmapViewOfSection(long ptr) NtUnmapViewOfSection
 @ stub ZwVdmControl
 @ stub ZwW32Call
-# @ stub ZwWaitForDebugEvent
+@ stdcall -private -syscall ZwWaitForDebugEvent(long long ptr ptr) NtWaitForDebugEvent
 @ stdcall -private -syscall ZwWaitForKeyedEvent(long ptr long ptr) NtWaitForKeyedEvent
 @ stdcall -private -syscall ZwWaitForMultipleObjects(long ptr long long ptr) NtWaitForMultipleObjects
 @ stub ZwWaitForProcessMutant
@@ -1450,17 +1450,17 @@
 @ cdecl __iscsym(long)
 @ cdecl __iscsymf(long)
 @ cdecl __toascii(long)
-@ cdecl -arch=i386 -ret64 _alldiv(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _alldiv(int64 int64)
 @ cdecl -arch=i386 -norelay _alldvrm(int64 int64)
-@ cdecl -arch=i386 -ret64 _allmul(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _allmul(int64 int64)
 @ cdecl -arch=i386 -norelay _alloca_probe()
-@ cdecl -arch=i386 -ret64 _allrem(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _allrem(int64 int64)
 @ stdcall -arch=i386 -ret64 _allshl(int64 long)
 @ stdcall -arch=i386 -ret64 _allshr(int64 long)
 @ cdecl -ret64 _atoi64(str)
-@ cdecl -arch=i386 -ret64 _aulldiv(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _aulldiv(int64 int64)
 @ cdecl -arch=i386 -norelay _aulldvrm(int64 int64)
-@ cdecl -arch=i386 -ret64 _aullrem(int64 int64)
+@ cdecl -norelay -arch=i386 -ret64 _aullrem(int64 int64)
 @ stdcall -arch=i386 -ret64 _aullshr(int64 long)
 @ cdecl -arch=i386 -norelay _chkstk()
 @ stub _fltused

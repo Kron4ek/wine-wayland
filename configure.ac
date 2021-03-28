@@ -31,6 +31,7 @@ dnl **** Command-line arguments ****
 AC_ARG_ENABLE(win16, AS_HELP_STRING([--disable-win16],[do not include Win16 support]))
 AC_ARG_ENABLE(win64, AS_HELP_STRING([--enable-win64],[build a Win64 emulator on AMD64 (won't run Win32 binaries)]))
 AC_ARG_ENABLE(tests, AS_HELP_STRING([--disable-tests],[do not build the regression tests]))
+AC_ARG_ENABLE(build-id, AS_HELP_STRING([--enable-build-id],[include .buildid section in output objects]))
 AC_ARG_ENABLE(maintainer-mode, AS_HELP_STRING([--enable-maintainer-mode],[enable maintainer-specific build rules]))
 AC_ARG_ENABLE(silent-rules, AS_HELP_STRING([--enable-silent-rules],[use silent build rules (override: "make V=1")]))
 AC_ARG_ENABLE(werror, AS_HELP_STRING([--enable-werror],[treat compilation warnings as errors]))
@@ -139,7 +140,7 @@ case $host in
     ;;
 esac
 
-AC_SUBST(TARGETFLAGS,"")
+AC_SUBST(TARGETFLAGS)
 case $host in
   x86_64*|amd64*)
     if test "x$enable_win64" != "xyes" -a "$cross_compiling" != "yes"
@@ -151,7 +152,7 @@ case $host in
       test $wine_cv_cc_m32 != no || AC_MSG_ERROR([Cannot build a 32-bit program, you need to install 32-bit development libraries.])
       host_cpu="i386"
       notice_platform="32-bit "
-      TARGETFLAGS="-m32"
+      TARGETFLAGS="$TARGETFLAGS -m32"
       PKG_CONFIG_PATH=${PKG_CONFIG_PATH:-/usr/lib/i386-linux-gnu/pkgconfig:/usr/lib32/pkgconfig:/usr/lib/pkgconfig}
       export PKG_CONFIG_PATH
       enable_win16=${enable_win16:-yes}
@@ -168,7 +169,8 @@ case $host in
       CXX="$CXX -m64"
       host_cpu="x86_64"
       notice_platform="64-bit "
-      TARGETFLAGS="-m64"
+      TARGETFLAGS="$TARGETFLAGS -m64"
+      enable_wow64cpu=${enable_wow64cpu:-yes}
     fi
     ;;
   arm*)
@@ -178,10 +180,10 @@ case $host in
     if test x"$wine_cv_thumb2" = xyes
     then
         CFLAGS="$CFLAGS -mthumb"
-        TARGETFLAGS="-mthumb"
+        TARGETFLAGS="$TARGETFLAGS -mthumb"
     else
         CFLAGS="$CFLAGS -marm"
-        TARGETFLAGS="-marm"
+        TARGETFLAGS="$TARGETFLAGS -marm"
     fi
     case $with_float_abi in
       soft|softfp|hard)
@@ -223,6 +225,7 @@ esac
 dnl enable_win16 defaults to yes on x86, to no on other CPUs
 enable_win16=${enable_win16:-no}
 enable_win64=${enable_win64:-no}
+enable_wow64cpu=${enable_wow64cpu:-no}
 
 dnl Disable winetest too if tests are disabled
 enable_winetest=${enable_winetest:-$enable_tests}
@@ -1043,6 +1046,7 @@ then
         WINE_TRY_CROSSCFLAGS([-Wdeclaration-after-statement])
         WINE_TRY_CROSSCFLAGS([-Wempty-body])
         WINE_TRY_CROSSCFLAGS([-Wignored-qualifiers])
+        WINE_TRY_CROSSCFLAGS([-Winit-self])
         WINE_TRY_CROSSCFLAGS([-Wpacked-not-aligned],[EXTRACROSSCFLAGS="$EXTRACROSSCFLAGS -Wno-packed-not-aligned"])
         WINE_TRY_CROSSCFLAGS([-Wpragma-pack],[EXTRACROSSCFLAGS="$EXTRACROSSCFLAGS -Wno-pragma-pack"])
         WINE_TRY_CROSSCFLAGS([-Wshift-overflow=2])
@@ -1087,6 +1091,11 @@ then
         if test "x$enable_werror" = "xyes"
         then
             WINE_TRY_CROSSCFLAGS([-Werror])
+        fi
+        if test "x$enable_build_id" = "xyes"
+        then
+            WINE_TRY_CROSSCFLAGS([-Wl,--build-id], [CROSSCFLAGS="$CROSSCFLAGS -Wl,--build-id"
+                            CROSSLDFLAGS="$CROSSLDFLAGS -Wl,--build-id"])
         fi
 
         CFLAGS=$saved_CFLAGS
@@ -1429,7 +1438,7 @@ WINE_WARNING_WITH(gnutls,[test "x$ac_cv_lib_soname_gnutls" = "x"],
 dnl **** Check for SANE ****
 if test "x$with_sane" != "xno"
 then
-    WINE_PACKAGE_FLAGS(SANE,[libsane],,[`${SANE_CONFIG:-sane-config} --cflags 2>/dev/null`],[`${SANE_CONFIG:-sane-config} --ldflags 2>/dev/null`],
+    WINE_PACKAGE_FLAGS(SANE,[sane-backends],,[`${SANE_CONFIG:-sane-config} --cflags 2>/dev/null`],[`${SANE_CONFIG:-sane-config} --ldflags 2>/dev/null`],
         [AC_CHECK_HEADER(sane/sane.h,
             [WINE_CHECK_SONAME(sane,sane_init,,[SANE_CFLAGS=""],[$SANE_LIBS])],
             [SANE_CFLAGS=""])])
@@ -2018,6 +2027,7 @@ then
   WINE_TRY_CFLAGS([-Wdeclaration-after-statement])
   WINE_TRY_CFLAGS([-Wempty-body])
   WINE_TRY_CFLAGS([-Wignored-qualifiers])
+  WINE_TRY_CFLAGS([-Winit-self])
   WINE_TRY_CFLAGS([-Wpacked-not-aligned],[EXTRACFLAGS="$EXTRACFLAGS -Wno-packed-not-aligned"])
   WINE_TRY_CFLAGS([-Wpragma-pack],[EXTRACFLAGS="$EXTRACFLAGS -Wno-pragma-pack"])
   WINE_TRY_CFLAGS([-Wshift-overflow=2])
@@ -2112,6 +2122,11 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
   if test "x$enable_werror" = "xyes"
   then
       WINE_TRY_CFLAGS([-Werror])
+  fi
+  if test "x$enable_build_id" = "xyes"
+  then
+      WINE_TRY_CFLAGS([-Wl,--build-id], [CFLAGS="$CFLAGS -Wl,--build-id"
+                      LDFLAGS="$LDFLAGS -Wl,--build-id"])
   fi
 fi
 
@@ -2845,6 +2860,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-job-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-job-l2-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-1)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-2)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-private-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-largeinteger-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-1-0)
@@ -3581,6 +3597,9 @@ WINE_CONFIG_MAKEFILE(dlls/win32s16.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/win87em.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/winaspi.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/windebug.dll16,enable_win16)
+WINE_CONFIG_MAKEFILE(dlls/windows.gaming.input)
+WINE_CONFIG_MAKEFILE(dlls/windows.globalization)
+WINE_CONFIG_MAKEFILE(dlls/windows.media.speech)
 WINE_CONFIG_MAKEFILE(dlls/windowscodecs)
 WINE_CONFIG_MAKEFILE(dlls/windowscodecsext)
 WINE_CONFIG_MAKEFILE(dlls/winealsa.drv)
@@ -3630,6 +3649,7 @@ WINE_CONFIG_MAKEFILE(dlls/wmphoto)
 WINE_CONFIG_MAKEFILE(dlls/wmvcore)
 WINE_CONFIG_MAKEFILE(dlls/wnaspi32)
 WINE_CONFIG_MAKEFILE(dlls/wow32,enable_win16)
+WINE_CONFIG_MAKEFILE(dlls/wow64cpu)
 WINE_CONFIG_MAKEFILE(dlls/wpc)
 WINE_CONFIG_MAKEFILE(dlls/wpcap)
 WINE_CONFIG_MAKEFILE(dlls/ws2_32)
@@ -3696,6 +3716,7 @@ WINE_CONFIG_MAKEFILE(programs/cacls)
 WINE_CONFIG_MAKEFILE(programs/chcp.com)
 WINE_CONFIG_MAKEFILE(programs/clock)
 WINE_CONFIG_MAKEFILE(programs/cmd)
+WINE_CONFIG_MAKEFILE(programs/conhost)
 WINE_CONFIG_MAKEFILE(programs/control)
 WINE_CONFIG_MAKEFILE(programs/cscript)
 WINE_CONFIG_MAKEFILE(programs/dism)
@@ -3778,6 +3799,7 @@ WINE_CONFIG_MAKEFILE(programs/winoldap.mod16,enable_win16)
 WINE_CONFIG_MAKEFILE(programs/winver)
 WINE_CONFIG_MAKEFILE(programs/wmic)
 WINE_CONFIG_MAKEFILE(programs/wmplayer)
+WINE_CONFIG_MAKEFILE(programs/wordpad)
 WINE_CONFIG_MAKEFILE(programs/write)
 WINE_CONFIG_MAKEFILE(programs/wscript)
 WINE_CONFIG_MAKEFILE(programs/wuauserv)

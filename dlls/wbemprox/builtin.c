@@ -247,6 +247,7 @@ static const struct column col_operatingsystem[] =
     { L"OSProductSuite",          CIM_UINT32 },
     { L"OSType",                  CIM_UINT16 },
     { L"Primary",                 CIM_BOOLEAN },
+    { L"ProductType",             CIM_UINT32 },
     { L"SerialNumber",            CIM_STRING|COL_FLAG_DYNAMIC },
     { L"ServicePackMajorVersion", CIM_UINT16 },
     { L"ServicePackMinorVersion", CIM_UINT16 },
@@ -393,6 +394,9 @@ static const struct column col_stdregprov[] =
     { L"EnumKey",        CIM_FLAG_ARRAY|COL_FLAG_METHOD },
     { L"EnumValues",     CIM_FLAG_ARRAY|COL_FLAG_METHOD },
     { L"GetStringValue", CIM_FLAG_ARRAY|COL_FLAG_METHOD },
+    { L"SetStringValue", CIM_FLAG_ARRAY|COL_FLAG_METHOD },
+    { L"SetDWORDValue",  CIM_FLAG_ARRAY|COL_FLAG_METHOD },
+    { L"DeleteKey",      CIM_FLAG_ARRAY|COL_FLAG_METHOD },
 };
 static const struct column col_systemenclosure[] =
 {
@@ -656,6 +660,7 @@ struct record_operatingsystem
     UINT32       osproductsuite;
     UINT16       ostype;
     int          primary;
+    UINT32       producttype;
     const WCHAR *serialnumber;
     UINT16       servicepackmajor;
     UINT16       servicepackminor;
@@ -802,6 +807,9 @@ struct record_stdregprov
     class_method *enumkey;
     class_method *enumvalues;
     class_method *getstringvalue;
+    class_method *setstringvalue;
+    class_method *setdwordvalue;
+    class_method *deletekey;
 };
 struct record_sysrestore
 {
@@ -898,6 +906,19 @@ static const struct record_param data_param[] =
     { L"StdRegProv", L"GetStringValue", 1, L"sValueName", CIM_STRING },
     { L"StdRegProv", L"GetStringValue", -1, L"ReturnValue", CIM_UINT32 },
     { L"StdRegProv", L"GetStringValue", -1, L"sValue", CIM_STRING },
+    { L"StdRegProv", L"SetStringValue", 1, L"hDefKey", CIM_SINT32, 0x80000002 },
+    { L"StdRegProv", L"SetStringValue", 1, L"sSubKeyName", CIM_STRING },
+    { L"StdRegProv", L"SetStringValue", 1, L"sValueName", CIM_STRING },
+    { L"StdRegProv", L"SetStringValue", 1, L"sValue", CIM_STRING },
+    { L"StdRegProv", L"SetStringValue", -1, L"ReturnValue", CIM_UINT32 },
+    { L"StdRegProv", L"SetDWORDValue", 1, L"hDefKey", CIM_SINT32, 0x80000002 },
+    { L"StdRegProv", L"SetDWORDValue", 1, L"sSubKeyName", CIM_STRING },
+    { L"StdRegProv", L"SetDWORDValue", 1, L"sValueName", CIM_STRING },
+    { L"StdRegProv", L"SetDWORDValue", 1, L"uValue", CIM_UINT32 },
+    { L"StdRegProv", L"SetDWORDValue", -1, L"ReturnValue", CIM_UINT32 },
+    { L"StdRegProv", L"DeleteKey", 1, L"hDefKey", CIM_SINT32, 0x80000002 },
+    { L"StdRegProv", L"DeleteKey", 1, L"sSubKeyName", CIM_STRING },
+    { L"StdRegProv", L"DeleteKey", -1, L"ReturnValue", CIM_UINT32 },
     { L"SystemRestore", L"Disable", 1, L"Drive", CIM_STRING },
     { L"SystemRestore", L"Disable", -1, L"ReturnValue", CIM_UINT32 },
     { L"SystemRestore", L"Enable", 1, L"Drive", CIM_STRING },
@@ -930,12 +951,21 @@ static const struct record_quickfixengineering data_quickfixengineering[] =
 
 static const struct record_stdregprov data_stdregprov[] =
 {
-    { reg_create_key, reg_enum_key, reg_enum_values, reg_get_stringvalue }
+    {
+        reg_create_key,
+        reg_enum_key,
+        reg_enum_values,
+        reg_get_stringvalue,
+        reg_set_stringvalue,
+        reg_set_dwordvalue,
+        reg_delete_key,
+    }
 };
 
 static const struct record_sysrestore data_sysrestore[] =
 {
-    { NULL, NULL, 0, 0, 0, create_restore_point, disable_restore, enable_restore, get_last_restore_status, restore }
+    { NULL, NULL, 0, 0, 0, sysrestore_create, sysrestore_disable, sysrestore_enable, sysrestore_get_last_status,
+      sysrestore_restore }
 };
 
 static UINT16 systemenclosure_chassistypes[] =
@@ -3546,6 +3576,7 @@ static enum fill_status fill_operatingsystem( struct table *table, const struct 
     rec->osproductsuite         = 2461140; /* Windows XP Professional  */
     rec->ostype                 = 18;      /* WINNT */
     rec->primary                = -1;
+    rec->producttype            = 1;
     rec->serialnumber           = get_osserialnumber();
     rec->servicepackmajor       = ver.wServicePackMajor;
     rec->servicepackminor       = ver.wServicePackMinor;

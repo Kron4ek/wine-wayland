@@ -2121,8 +2121,8 @@ static void test_GetClusterMetrics(void)
         hr = IDWriteTextLayout_GetClusterMetrics(layout, metrics2, ARRAY_SIZE(metrics2), &count);
         ok(hr == S_OK, "got 0x%08x\n", hr);
         ok(count == 4, "got %u\n", count);
-        for (i = 0; i < count; i++) {
-todo_wine
+        for (i = 0; i < count; ++i)
+        {
             ok(metrics2[i].width > metrics[i].width, "%u: got width %.2f, was %.2f\n", i, metrics2[i].width,
                 metrics[i].width);
             ok(metrics2[i].length == 1, "%u: got length %u\n", i, metrics2[i].length);
@@ -4699,12 +4699,6 @@ todo_wine {
 todo_wine
     ok(font != NULL, "got %p\n", font);
 if (font) {
-    /* font returned for Hiragana character, check if it supports Latin too */
-    exists = FALSE;
-    hr = IDWriteFont_HasCharacter(font, 'b', &exists);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
-    ok(exists, "got %d\n", exists);
-
     IDWriteFont_Release(font);
 }
     /* Try with explicit collection, Tahoma will be forced. */
@@ -5894,7 +5888,7 @@ static void test_text_format_axes(void)
 {
     IDWriteFontCollection *collection;
     IDWriteFontCollection2 *collection2;
-    DWRITE_FONT_AXIS_VALUE axis;
+    DWRITE_FONT_AXIS_VALUE axes[2];
     IDWriteTextFormat3 *format3;
     DWRITE_FONT_STRETCH stretch;
     DWRITE_FONT_WEIGHT weight;
@@ -5944,9 +5938,9 @@ if (SUCCEEDED(hr))
     ok(weight == DWRITE_FONT_WEIGHT_NORMAL, "Unexpected font weight %d.\n", weight);
 
     /* Regular properties are not set from axis values. */
-    axis.axisTag = DWRITE_FONT_AXIS_TAG_WEIGHT;
-    axis.value = 200.0f;
-    hr = IDWriteTextFormat3_SetFontAxisValues(format3, &axis, 1);
+    axes[0].axisTag = DWRITE_FONT_AXIS_TAG_WEIGHT;
+    axes[0].value = 200.0f;
+    hr = IDWriteTextFormat3_SetFontAxisValues(format3, axes, 1);
     ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
 
     weight = IDWriteTextFormat3_GetFontWeight(format3);
@@ -5965,10 +5959,429 @@ if (SUCCEEDED(hr))
     count = IDWriteTextFormat3_GetFontAxisValueCount(format3);
     ok(!count, "Unexpected axis count %u.\n", count);
 
+    axes[0].axisTag = DWRITE_FONT_AXIS_TAG_WEIGHT;
+    hr = IDWriteTextFormat3_GetFontAxisValues(format3, axes, 1);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(axes[0].axisTag == 0 && axes[0].value == 0.0f, "Unexpected value.\n");
+
+    axes[0].axisTag = DWRITE_FONT_AXIS_TAG_WEIGHT;
+    axes[0].value = 200.0f;
+    axes[1].axisTag = DWRITE_FONT_AXIS_TAG_WIDTH;
+    axes[1].value = 2.0f;
+    hr = IDWriteTextFormat3_SetFontAxisValues(format3, axes, 2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    count = IDWriteTextFormat3_GetFontAxisValueCount(format3);
+    ok(count == 2, "Unexpected axis count %u.\n", count);
+
+    hr = IDWriteTextFormat3_GetFontAxisValues(format3, axes, 1);
+    ok(hr == E_NOT_SUFFICIENT_BUFFER, "Unexpected hr %#x.\n", hr);
+
+    hr = IDWriteTextFormat3_GetFontAxisValues(format3, axes, 0);
+    ok(hr == E_NOT_SUFFICIENT_BUFFER, "Unexpected hr %#x.\n", hr);
+
+    hr = IDWriteTextFormat3_GetFontAxisValues(format3, axes, 2);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = IDWriteTextFormat3_SetFontAxisValues(format3, axes, 0);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    count = IDWriteTextFormat3_GetFontAxisValueCount(format3);
+    ok(!count, "Unexpected axis count %u.\n", count);
+
     IDWriteTextFormat3_Release(format3);
     IDWriteTextFormat_Release(format);
 
     IDWriteFactory6_Release(factory);
+}
+
+static void test_layout_range_length(void)
+{
+    IDWriteFontCollection *collection, *collection2;
+    IDWriteInlineObject *sign, *object;
+    IDWriteTypography *typography;
+    DWRITE_FONT_STRETCH stretch;
+    IDWriteTextLayout1 *layout1;
+    IDWriteTextFormat *format;
+    IDWriteTextLayout *layout;
+    DWRITE_FONT_WEIGHT weight;
+    DWRITE_FONT_STYLE style;
+    DWRITE_TEXT_RANGE range;
+    IDWriteFactory *factory;
+    HRESULT hr;
+    BOOL value;
+
+    factory = create_factory();
+
+    hr = IDWriteFactory_CreateTextFormat(factory, L"Tahoma", NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL, 10.0f, L"ru", &format);
+    ok(hr == S_OK, "Failed to create text format, hr %#x.\n", hr);
+
+    /* Range length is validated when setting properties. */
+
+    hr = IDWriteFactory_CreateTextLayout(factory, L"string", 6, format, 100.0f, 100.0f, &layout);
+    ok(hr == S_OK, "Failed to create text layout, hr %#x.\n", hr);
+
+    /* Weight */
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontWeight(layout, DWRITE_FONT_WEIGHT_NORMAL, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetFontWeight(layout, DWRITE_FONT_WEIGHT_NORMAL, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetFontWeight(layout, DWRITE_FONT_WEIGHT_HEAVY, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetFontWeight(layout, 0, &weight, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 0 && range.length == 10, "Unexpected range (%u, %u).\n", range.startPosition, range.length);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetFontWeight(layout, 10, &weight, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 10 && range.length == ~0u - 10, "Unexpected range (%u, %u).\n",
+            range.startPosition, range.length);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontWeight(layout, DWRITE_FONT_WEIGHT_NORMAL, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Family name */
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontFamilyName(layout, L"family", range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetFontFamilyName(layout, L"family", range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetFontFamilyName(layout, L"family", range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontFamilyName(layout, L"Tahoma", range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Style */
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontStyle(layout, DWRITE_FONT_STYLE_ITALIC, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetFontStyle(layout, DWRITE_FONT_STYLE_ITALIC, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetFontStyle(layout, DWRITE_FONT_STYLE_ITALIC, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetFontStyle(layout, 0, &style, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 0 && range.length == 10, "Unexpected range (%u, %u).\n", range.startPosition, range.length);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetFontStyle(layout, 10, &style, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 10 && range.length == ~0u - 10, "Unexpected range (%u, %u).\n",
+            range.startPosition, range.length);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontStyle(layout, DWRITE_FONT_STYLE_NORMAL, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Stretch */
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontStretch(layout, DWRITE_FONT_STRETCH_CONDENSED, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetFontStretch(layout, DWRITE_FONT_STRETCH_CONDENSED, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetFontStretch(layout, DWRITE_FONT_STRETCH_CONDENSED, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetFontStretch(layout, 0, &stretch, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 0 && range.length == 10, "Unexpected range (%u, %u).\n", range.startPosition, range.length);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetFontStretch(layout, 10, &stretch, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 10 && range.length == ~0u - 10, "Unexpected range (%u, %u).\n",
+            range.startPosition, range.length);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontStretch(layout, DWRITE_FONT_STRETCH_NORMAL, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Underline */
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetUnderline(layout, TRUE, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetUnderline(layout, TRUE, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetUnderline(layout, TRUE, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetUnderline(layout, 0, &value, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 0 && range.length == 10, "Unexpected range (%u, %u).\n", range.startPosition, range.length);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetUnderline(layout, 10, &value, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 10 && range.length == ~0u - 10, "Unexpected range (%u, %u).\n",
+            range.startPosition, range.length);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetUnderline(layout, FALSE, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Strikethrough */
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetStrikethrough(layout, TRUE, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetStrikethrough(layout, TRUE, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetStrikethrough(layout, TRUE, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetStrikethrough(layout, 0, &value, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 0 && range.length == 10, "Unexpected range (%u, %u).\n", range.startPosition, range.length);
+
+    range.startPosition = range.length = 0;
+    hr = IDWriteTextLayout_GetStrikethrough(layout, 10, &value, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 10 && range.length == ~0u - 10, "Unexpected range (%u, %u).\n",
+            range.startPosition, range.length);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetStrikethrough(layout, FALSE, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Locale name */
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetLocaleName(layout, L"locale", range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetLocaleName(layout, L"locale", range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetLocaleName(layout, L"locale", range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetLocaleName(layout, L"ru", range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Inline object */
+    hr = IDWriteFactory_CreateEllipsisTrimmingSign(factory, format, &sign);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetInlineObject(layout, sign, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetInlineObject(layout, sign, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetInlineObject(layout, sign, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = range.length = 0;
+    object = NULL;
+    hr = IDWriteTextLayout_GetInlineObject(layout, 10, &object, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.startPosition == 10 && range.length == ~0u - 10, "Unexpected range (%u, %u).\n",
+            range.startPosition, range.length);
+    IDWriteInlineObject_Release(object);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetInlineObject(layout, NULL, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    /* Drawing effect */
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, (IUnknown *)sign, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, (IUnknown *)sign, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, (IUnknown *)sign, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetDrawingEffect(layout, NULL, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    IDWriteInlineObject_Release(sign);
+
+    /* Typography */
+    hr = IDWriteFactory_CreateTypography(factory, &typography);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetTypography(layout, typography, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetTypography(layout, typography, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetTypography(layout, typography, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetTypography(layout, NULL, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    IDWriteTypography_Release(typography);
+
+    /* Font collection */
+    hr = IDWriteFactory_GetSystemFontCollection(factory, &collection, FALSE);
+    ok(hr == S_OK, "Failed to get system collection, hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontCollection(layout, collection, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 9;
+    hr = IDWriteTextLayout_SetFontCollection(layout, collection, range);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 10;
+    range.length = ~0u - 10;
+    hr = IDWriteTextLayout_SetFontCollection(layout, collection, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = 0;
+    range.length = ~0u;
+    hr = IDWriteTextLayout_SetFontCollection(layout, NULL, range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    range.startPosition = range.length = 0;
+    collection2 = NULL;
+    hr = IDWriteTextLayout_GetFontCollection(layout, 10, &collection2, &range);
+    ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+    ok(range.length == ~0u, "Unexpected range length %u.\n", range.length);
+    if (collection2)
+        IDWriteFontCollection_Release(collection2);
+
+    IDWriteFontCollection_Release(collection);
+
+    if (SUCCEEDED(IDWriteTextLayout_QueryInterface(layout, &IID_IDWriteTextLayout1, (void **)&layout1)))
+    {
+        /* Pair kerning */
+        range.startPosition = 10;
+        range.length = ~0u;
+        hr = IDWriteTextLayout1_SetPairKerning(layout1, TRUE, range);
+        ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+        range.startPosition = 10;
+        range.length = ~0u - 9;
+        hr = IDWriteTextLayout1_SetPairKerning(layout1, TRUE, range);
+        ok(hr == E_INVALIDARG, "Unexpected hr %#x.\n", hr);
+
+        range.startPosition = 10;
+        range.length = ~0u - 10;
+        hr = IDWriteTextLayout1_SetPairKerning(layout1, TRUE, range);
+        ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+        range.startPosition = range.length = 0;
+        hr = IDWriteTextLayout1_GetPairKerning(layout1, 0, &value, &range);
+        ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+        ok(range.startPosition == 0 && range.length == 10, "Unexpected range (%u, %u).\n", range.startPosition, range.length);
+
+        range.startPosition = range.length = 0;
+        value = FALSE;
+        hr = IDWriteTextLayout1_GetPairKerning(layout1, 10, &value, &range);
+        ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+        ok(range.startPosition == 10 && range.length == ~0u - 10, "Unexpected range (%u, %u).\n",
+                range.startPosition, range.length);
+        ok(!!value, "Unexpected value %d.\n", value);
+
+        range.startPosition = 0;
+        range.length = ~0u;
+        hr = IDWriteTextLayout1_SetPairKerning(layout1, FALSE, range);
+        ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+        IDWriteTextLayout1_Release(layout1);
+    }
+
+    IDWriteTextLayout_Release(layout);
+
+    IDWriteTextFormat_Release(format);
+    IDWriteFactory_Release(factory);
 }
 
 START_TEST(layout)
@@ -6024,6 +6437,7 @@ START_TEST(layout)
     test_tab_stops();
     test_automatic_font_axes();
     test_text_format_axes();
+    test_layout_range_length();
 
     IDWriteFactory_Release(factory);
 }

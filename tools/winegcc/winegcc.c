@@ -560,12 +560,12 @@ static strarray *get_link_args( struct options *opts, const char *output_name )
             strarray_add(link_args, "-Wl,-debug");
             strarray_add(link_args, strmake("-Wl,-pdb:%s", opts->debug_file));
         }
+        else if (!opts->strip)
+            strarray_add(link_args, "-Wl,-debug:dwarf");
 
         if (opts->out_implib)
             strarray_add(link_args, strmake("-Wl,-implib:%s", opts->out_implib));
 
-        else if (!opts->strip)
-            strarray_add(link_args, "-Wl,-debug:dwarf");
         strarray_add( link_args, strmake( "-Wl,-filealign:%s", opts->file_align ? opts->file_align : "0x1000" ));
 
         strarray_addall( link_args, flags );
@@ -1679,7 +1679,7 @@ int main(int argc, char **argv)
             strarray_add( opts.args, argv[i] );
             continue;
         }
-        if ((fstat( fd, &st ) == -1)) error( "Cannot stat %s", argv[i] + 1 );
+        if ((fstat( fd, &st ) == -1)) error( "Cannot stat %s\n", argv[i] + 1 );
         if (st.st_size)
         {
             input_buffer = xmalloc( st.st_size + 1 );

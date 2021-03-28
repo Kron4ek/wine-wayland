@@ -753,6 +753,16 @@ static void test_StdRegProv( IWbemServices *services )
     hr = IWbemClassObject_SpawnInstance( sig_in, 0, &in );
     ok( hr == S_OK, "failed to spawn instance %08x\n", hr );
 
+    hr = IWbemClassObject_BeginEnumeration( in, 0 );
+    ok( hr == S_OK, "failed to start enumeration %08x\n", hr );
+
+    hr = IWbemClassObject_Next( in, 0, &name, NULL, NULL, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    SysFreeString( name );
+
+    hr = IWbemClassObject_EndEnumeration( in );
+    ok( hr == S_OK, "failed to end enumeration %08x\n", hr );
+
     V_VT( &defkey ) = VT_I4;
     V_I4( &defkey ) = 0x80000001;
     hr = IWbemClassObject_Put( in, L"hDefKey", 0, &defkey, 0 );
@@ -1289,6 +1299,7 @@ static void test_Win32_OperatingSystem( IWbemServices *services )
     check_property( obj, L"CurrentTimeZone", VT_I2, CIM_SINT16 );
     check_property( obj, L"Manufacturer", VT_BSTR, CIM_STRING );
     check_property( obj, L"OSType", VT_I4, CIM_UINT16 );
+    check_property( obj, L"ProductType", VT_I4, CIM_UINT32 );
     check_property( obj, L"ServicePackMajorVersion", VT_I4, CIM_UINT16 );
     check_property( obj, L"ServicePackMinorVersion", VT_I4, CIM_UINT16 );
     check_property( obj, L"SuiteMask", VT_I4, CIM_UINT32 );

@@ -253,7 +253,7 @@ static HRESULT WINAPI IXACT3SoundBankImpl_Prepare(IXACT3SoundBank *iface,
     if (!cue)
     {
         FACTCue_Destroy(fcue);
-        ERR("Failed to allocate XACT3CueImpl!");
+        ERR("Failed to allocate XACT3CueImpl!\n");
         return E_OUTOFMEMORY;
     }
 
@@ -295,7 +295,7 @@ static HRESULT WINAPI IXACT3SoundBankImpl_Play(IXACT3SoundBank *iface,
         if (!cue)
         {
             FACTCue_Destroy(fcue);
-            ERR("Failed to allocate XACT3CueImpl!");
+            ERR("Failed to allocate XACT3CueImpl!\n");
             return E_OUTOFMEMORY;
         }
 
@@ -543,7 +543,7 @@ static HRESULT WINAPI IXACT3WaveBankImpl_Prepare(IXACT3WaveBank *iface,
     if (!wave)
     {
         FACTWave_Destroy(fwave);
-        ERR("Failed to allocate XACT3WaveImpl!");
+        ERR("Failed to allocate XACT3WaveImpl!\n");
         return E_OUTOFMEMORY;
     }
 
@@ -585,7 +585,7 @@ static HRESULT WINAPI IXACT3WaveBankImpl_Play(IXACT3WaveBank *iface,
         if (!wave)
         {
             FACTWave_Destroy(fwave);
-            ERR("Failed to allocate XACT3WaveImpl!");
+            ERR("Failed to allocate XACT3WaveImpl!\n");
             return E_OUTOFMEMORY;
         }
 
@@ -870,7 +870,7 @@ static HRESULT WINAPI IXACT3EngineImpl_CreateSoundBank(IXACT3Engine *iface,
     if (!sb)
     {
         FACTSoundBank_Destroy(fsb);
-        ERR("Failed to allocate XACT3SoundBankImpl!");
+        ERR("Failed to allocate XACT3SoundBankImpl!\n");
         return E_OUTOFMEMORY;
     }
 
@@ -907,7 +907,7 @@ static HRESULT WINAPI IXACT3EngineImpl_CreateInMemoryWaveBank(IXACT3Engine *ifac
     if (!wb)
     {
         FACTWaveBank_Destroy(fwb);
-        ERR("Failed to allocate XACT3WaveBankImpl!");
+        ERR("Failed to allocate XACT3WaveBankImpl!\n");
         return E_OUTOFMEMORY;
     }
 
@@ -955,7 +955,7 @@ static HRESULT WINAPI IXACT3EngineImpl_CreateStreamingWaveBank(IXACT3Engine *ifa
     if (!wb)
     {
         FACTWaveBank_Destroy(fwb);
-        ERR("Failed to allocate XACT3WaveBankImpl!");
+        ERR("Failed to allocate XACT3WaveBankImpl!\n");
         return E_OUTOFMEMORY;
     }
 
@@ -995,8 +995,35 @@ static HRESULT WINAPI IXACT3EngineImpl_PrepareWave(IXACT3Engine *iface,
         IXACT3Wave **ppWave)
 {
     XACT3EngineImpl *This = impl_from_IXACT3Engine(iface);
-    FIXME("(%p): stub!\n", This);
-    return E_NOTIMPL;
+    XACT3WaveImpl *wave;
+    FACTWave *fwave = NULL;
+    UINT ret;
+
+    TRACE("(%p)->(0x%08x, %s, %d, %d, %d, %d, %p)\n", This, dwFlags, debugstr_a(szWavePath),
+          wStreamingPacketSize, dwAlignment, dwPlayOffset, nLoopCount, ppWave);
+
+    ret = FACTAudioEngine_PrepareWave(This->fact_engine, dwFlags, szWavePath, wStreamingPacketSize,
+            dwAlignment, dwPlayOffset, nLoopCount, &fwave);
+    if(ret != 0 || !fwave)
+    {
+        ERR("Failed to CreateWave: %d (%p)\n", ret, fwave);
+        return E_FAIL;
+    }
+
+    wave = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*wave));
+    if (!wave)
+    {
+        FACTWave_Destroy(fwave);
+        return E_OUTOFMEMORY;
+    }
+
+    wave->IXACT3Wave_iface.lpVtbl = &XACT3Wave_Vtbl;
+    wave->fact_wave = fwave;
+    *ppWave = &wave->IXACT3Wave_iface;
+
+    TRACE("Created Wave: %p\n", wave);
+
+    return S_OK;
 }
 
 enum {

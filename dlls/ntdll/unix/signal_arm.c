@@ -333,6 +333,16 @@ __ASM_GLOBAL_FUNC( set_cpu_context,
 
 
 /***********************************************************************
+ *           signal_restore_full_cpu_context
+ *
+ * Restore full context from syscall frame
+ */
+void signal_restore_full_cpu_context(void)
+{
+}
+
+
+/***********************************************************************
  *           get_server_context_flags
  *
  * Convert CPU-specific flags to generic server flags
@@ -908,6 +918,7 @@ void signal_init_threading(void)
  */
 NTSTATUS signal_alloc_thread( TEB *teb )
 {
+    teb->WOW32Reserved = __wine_syscall_dispatcher;
     return STATUS_SUCCESS;
 }
 
@@ -960,6 +971,15 @@ void signal_init_process(void)
  error:
     perror("sigaction");
     exit(1);
+}
+
+
+/**********************************************************************
+ *		signal_init_syscalls
+ */
+void *signal_init_syscalls(void)
+{
+    return __wine_syscall_dispatcher;
 }
 
 

@@ -38,6 +38,7 @@
 #include "winbase.h"
 #include "winnls.h"
 #include "winreg.h"
+#include "winternl.h"
 #include "wine/debug.h"
 #include "wine/unicode.h"
 #include "wine/list.h"
@@ -1021,14 +1022,14 @@ static void pulse_read(ACImpl *This)
 
 static DWORD WINAPI pulse_timer_cb(void *user)
 {
-    DWORD delay;
+    LARGE_INTEGER delay;
     UINT32 adv_bytes;
     ACImpl *This = user;
     int success;
     pa_operation *o;
 
     pthread_mutex_lock(&pulse_lock);
-    delay = This->mmdev_period_usec / 1000;
+    delay.QuadPart = -This->mmdev_period_usec * 10;
     pa_stream_get_time(This->stream, &This->last_time);
     pthread_mutex_unlock(&pulse_lock);
 
@@ -1036,11 +1037,11 @@ static DWORD WINAPI pulse_timer_cb(void *user)
         pa_usec_t now, adv_usec = 0;
         int err;
 
-        Sleep(delay);
+        NtDelayExecution(FALSE, &delay);
 
         pthread_mutex_lock(&pulse_lock);
 
-        delay = This->mmdev_period_usec / 1000;
+        delay.QuadPart = -This->mmdev_period_usec * 10;
 
         o = pa_stream_update_timing_info(This->stream, pulse_op_cb, &success);
         if (o)
@@ -1076,7 +1077,7 @@ static DWORD WINAPI pulse_timer_cb(void *user)
                     else if(adjust < -((INT32)(This->mmdev_period_usec / 2)))
                         adjust = -1 * This->mmdev_period_usec / 2;
 
-                    delay = (This->mmdev_period_usec + adjust) / 1000;
+                    delay.QuadPart = -(This->mmdev_period_usec + adjust) * 10;
 
                     This->last_time += This->mmdev_period_usec;
                 }
@@ -1094,16 +1095,16 @@ static DWORD WINAPI pulse_timer_cb(void *user)
                 }
             }else{
                 This->last_time = now;
-                delay = This->mmdev_period_usec / 1000;
+                delay.QuadPart = -This->mmdev_period_usec * 10;
             }
         }
 
         if (This->event)
             SetEvent(This->event);
 
-        TRACE("%p after update, adv usec: %d, held: %u, delay: %u\n",
+        TRACE("%p after update, adv usec: %d, held: %u, delay usec: %u\n",
                 This, (int)adv_usec,
-                (int)(This->held_bytes/ pa_frame_size(&This->ss)), delay);
+                (int)(This->held_bytes/ pa_frame_size(&This->ss)), (unsigned int)(-delay.QuadPart / 10));
 
         pthread_mutex_unlock(&pulse_lock);
     }
@@ -2045,8 +2046,10 @@ static HRESULT WINAPI AudioClient_Start(IAudioClient3 *iface)
         This->started = TRUE;
         This->just_started = TRUE;
 
-        if(!This->timer)
+        if(!This->timer) {
             This->timer = CreateThread(NULL, 0, pulse_timer_cb, This, 0, NULL);
+            SetThreadPriority(This->timer, THREAD_PRIORITY_TIME_CRITICAL);
+        }
     }
     pthread_mutex_unlock(&pulse_lock);
     return hr;
@@ -3701,9 +3704,9 @@ HRESULT WINAPI AUDDRV_GetPropValue(GUID *guid, const PROPERTYKEY *prop, PROPVARI
 
     if (IsEqualGUID(guid, &pulse_render_guid) && IsEqualPropertyKey(*prop, PKEY_AudioEndpoint_PhysicalSpeakers)) {
         out->vt = VT_UI4;
-        out->u.ulVal = g_phys_speakers_mask;
+        out->ulVal = g_phys_speakers_mask;
 
-        return out->u.ulVal ? S_OK : E_FAIL;
+        return out->ulVal ? S_OK : E_FAIL;
     }
 
     return E_NOTIMPL;

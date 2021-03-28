@@ -1061,17 +1061,20 @@ VkResult WINAPI wine_vkEnumerateInstanceExtensionProperties(const char *layer_na
     return *count < num_properties ? VK_INCOMPLETE : VK_SUCCESS;
 }
 
+VkResult WINAPI wine_vkEnumerateDeviceLayerProperties(VkPhysicalDevice phys_dev, uint32_t *count, VkLayerProperties *properties)
+{
+    TRACE("%p, %p, %p\n", phys_dev, count, properties);
+
+    *count = 0;
+    return VK_SUCCESS;
+}
+
 VkResult WINAPI wine_vkEnumerateInstanceLayerProperties(uint32_t *count, VkLayerProperties *properties)
 {
     TRACE("%p, %p\n", count, properties);
 
-    if (!properties)
-    {
-        *count = 0;
-        return VK_SUCCESS;
-    }
-
-    return VK_ERROR_LAYER_NOT_PRESENT;
+    *count = 0;
+    return VK_SUCCESS;
 }
 
 VkResult WINAPI wine_vkEnumerateInstanceVersion(uint32_t *version)
@@ -1290,7 +1293,7 @@ VkResult WINAPI wine_vkQueueSubmit(VkQueue queue, uint32_t count,
         memcpy(&submits_host[i], &submits[i], sizeof(*submits_host));
 
         num_command_buffers = submits[i].commandBufferCount;
-        command_buffers = heap_calloc(num_command_buffers, sizeof(*submits_host));
+        command_buffers = heap_calloc(num_command_buffers, sizeof(*command_buffers));
         if (!command_buffers)
         {
             ERR("Unable to allocate memory for command buffers!\n");
@@ -1507,7 +1510,7 @@ static inline VkTimeDomainEXT get_performance_counter_time_domain(void)
     return VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT;
 # endif
 #else
-    FIXME("No mapping for VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT on this platform.");
+    FIXME("No mapping for VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT on this platform.\n");
     return VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT;
 #endif
 }
@@ -1536,7 +1539,7 @@ static inline uint64_t convert_timestamp(VkTimeDomainEXT host_domain, VkTimeDoma
             && target_domain == VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT)
         return convert_monotonic_timestamp(value);
 
-    FIXME("Couldn't translate between host domain %d and target domain %d", host_domain, target_domain);
+    FIXME("Couldn't translate between host domain %d and target domain %d\n", host_domain, target_domain);
     return value;
 }
 
@@ -1609,7 +1612,7 @@ VkResult WINAPI wine_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT(VkPhysicalDe
         else if (host_time_domains[i] == VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT)
             supports_monotonic_raw = TRUE;
         else
-            FIXME("Unknown time domain %d", host_time_domains[i]);
+            FIXME("Unknown time domain %d\n", host_time_domains[i]);
     }
 
     heap_free(host_time_domains);
@@ -1622,7 +1625,7 @@ VkResult WINAPI wine_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT(VkPhysicalDe
     else if (supports_monotonic && performance_counter_domain == VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT)
         out_time_domains[out_time_domain_count++] = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT;
     else
-        FIXME("VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT not supported on this platform.");
+        FIXME("VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT not supported on this platform.\n");
 
     /* Forward the device domain time */
     if (supports_device)

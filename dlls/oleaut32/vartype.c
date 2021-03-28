@@ -29,6 +29,8 @@
 #include "variant.h"
 #include "resource.h"
 
+#include "locale.h"
+
 WINE_DEFAULT_DEBUG_CHANNEL(variant);
 
 extern HMODULE hProxyDll DECLSPEC_HIDDEN;
@@ -515,7 +517,7 @@ HRESULT WINAPI VarI1FromUI4(ULONG ulIn, signed char* pcOut)
  *  Failure: E_INVALIDARG, if the source value is invalid
  *           DISP_E_OVERFLOW, if the value will not fit in the destination
  */
-HRESULT WINAPI VarI1FromDec(DECIMAL *pdecIn, signed char* pcOut)
+HRESULT WINAPI VarI1FromDec(const DECIMAL *pdecIn, signed char* pcOut)
 {
   LONG64 i64;
   HRESULT hRet;
@@ -826,7 +828,7 @@ HRESULT WINAPI VarUI1FromUI4(ULONG ulIn, BYTE* pbOut)
  *  Failure: E_INVALIDARG, if the source value is invalid
  *           DISP_E_OVERFLOW, if the value will not fit in the destination
  */
-HRESULT WINAPI VarUI1FromDec(DECIMAL *pdecIn, BYTE* pbOut)
+HRESULT WINAPI VarUI1FromDec(const DECIMAL *pdecIn, BYTE* pbOut)
 {
   LONG64 i64;
   HRESULT hRet;
@@ -1123,7 +1125,7 @@ HRESULT WINAPI VarI2FromUI4(ULONG ulIn, SHORT* psOut)
  *  Failure: E_INVALIDARG, if the source value is invalid
  *           DISP_E_OVERFLOW, if the value will not fit in the destination
  */
-HRESULT WINAPI VarI2FromDec(DECIMAL *pdecIn, SHORT* psOut)
+HRESULT WINAPI VarI2FromDec(const DECIMAL *pdecIn, SHORT* psOut)
 {
   LONG64 i64;
   HRESULT hRet;
@@ -1420,7 +1422,7 @@ HRESULT WINAPI VarUI2FromUI4(ULONG ulIn, USHORT* pusOut)
  *  Failure: E_INVALIDARG, if the source value is invalid
  *           DISP_E_OVERFLOW, if the value will not fit in the destination
  */
-HRESULT WINAPI VarUI2FromDec(DECIMAL *pdecIn, USHORT* pusOut)
+HRESULT WINAPI VarUI2FromDec(const DECIMAL *pdecIn, USHORT* pusOut)
 {
   LONG64 i64;
   HRESULT hRet;
@@ -1712,7 +1714,7 @@ HRESULT WINAPI VarI4FromUI4(ULONG ulIn, LONG *piOut)
  *  Failure: E_INVALIDARG, if pdecIn is invalid
  *           DISP_E_OVERFLOW, if the value will not fit in the destination
  */
-HRESULT WINAPI VarI4FromDec(DECIMAL *pdecIn, LONG *piOut)
+HRESULT WINAPI VarI4FromDec(const DECIMAL *pdecIn, LONG *piOut)
 {
   LONG64 i64;
   HRESULT hRet;
@@ -2004,7 +2006,7 @@ HRESULT WINAPI VarUI4FromUI2(USHORT usIn, ULONG *pulOut)
  *  Failure: E_INVALIDARG, if pdecIn is invalid
  *           DISP_E_OVERFLOW, if the value will not fit in the destination
  */
-HRESULT WINAPI VarUI4FromDec(DECIMAL *pdecIn, ULONG *pulOut)
+HRESULT WINAPI VarUI4FromDec(const DECIMAL *pdecIn, ULONG *pulOut)
 {
   LONG64 i64;
   HRESULT hRet;
@@ -2327,7 +2329,7 @@ HRESULT WINAPI VarI8FromUI4(ULONG ulIn, LONG64* pi64Out)
  *  Failure: E_INVALIDARG, if the source value is invalid
  *           DISP_E_OVERFLOW, if the value will not fit in the destination
  */
-HRESULT WINAPI VarI8FromDec(DECIMAL *pdecIn, LONG64* pi64Out)
+HRESULT WINAPI VarI8FromDec(const DECIMAL *pdecIn, LONG64* pi64Out)
 {
   if (!DEC_SCALE(pdecIn))
   {
@@ -2662,7 +2664,7 @@ HRESULT WINAPI VarUI8FromUI4(ULONG ulIn, ULONG64* pui64Out)
  *  with DISP_E_OVERFLOW. This bug has been fixed in Wine's implementation
  *  (use VarAbs() on pDecIn first if you really want this behaviour).
  */
-HRESULT WINAPI VarUI8FromDec(DECIMAL *pdecIn, ULONG64* pui64Out)
+HRESULT WINAPI VarUI8FromDec(const DECIMAL *pdecIn, ULONG64* pui64Out)
 {
   if (!DEC_SCALE(pdecIn))
   {
@@ -2938,7 +2940,7 @@ HRESULT WINAPI VarR4FromUI4(ULONG ulIn, float *pFltOut)
  *  Success: S_OK.
  *  Failure: E_INVALIDARG, if the source value is invalid.
  */
-HRESULT WINAPI VarR4FromDec(DECIMAL* pDecIn, float *pFltOut)
+HRESULT WINAPI VarR4FromDec(const DECIMAL* pDecIn, float *pFltOut)
 {
   BYTE scale = DEC_SCALE(pDecIn);
   double divisor = 1.0;
@@ -3696,7 +3698,7 @@ HRESULT WINAPI VarCyFromUI4(ULONG ulIn, CY* pCyOut)
  *           DISP_E_OVERFLOW, if the value will not fit in the destination
  *           DISP_E_TYPEMISMATCH, if the type cannot be converted
  */
-HRESULT WINAPI VarCyFromDec(DECIMAL* pdecIn, CY* pCyOut)
+HRESULT WINAPI VarCyFromDec(const DECIMAL* pdecIn, CY* pCyOut)
 {
   DECIMAL rounded;
   HRESULT hRet;
@@ -6267,7 +6269,7 @@ HRESULT WINAPI VarBoolFromUI4(ULONG ulIn, VARIANT_BOOL *pBoolOut)
  *  Success: S_OK.
  *  Failure: E_INVALIDARG, if pDecIn is invalid.
  */
-HRESULT WINAPI VarBoolFromDec(DECIMAL* pDecIn, VARIANT_BOOL *pBoolOut)
+HRESULT WINAPI VarBoolFromDec(const DECIMAL* pDecIn, VARIANT_BOOL *pBoolOut)
 {
   if (DEC_SCALE(pDecIn) > DEC_MAX_SCALE || (DEC_SIGN(pDecIn) & ~DECIMAL_NEG))
     return E_INVALIDARG;
@@ -6501,12 +6503,15 @@ static BSTR VARIANT_BstrReplaceDecimal(const WCHAR * buff, LCID lcid, ULONG dwFl
 static HRESULT VARIANT_BstrFromReal(DOUBLE dblIn, LCID lcid, ULONG dwFlags,
                                     BSTR* pbstrOut, LPCWSTR lpszFormat)
 {
+  _locale_t locale;
   WCHAR buff[256];
 
   if (!pbstrOut)
     return E_INVALIDARG;
 
-  swprintf( buff, ARRAY_SIZE(buff), lpszFormat, dblIn );
+  if (!(locale = _create_locale(LC_ALL, "C"))) return E_OUTOFMEMORY;
+  _swprintf_l(buff, ARRAY_SIZE(buff), lpszFormat, locale, dblIn);
+  _free_locale(locale);
 
   /* Negative zeroes are disallowed (some applications depend on this).
      If buff starts with a minus, and then nothing follows but zeroes
@@ -6979,7 +6984,7 @@ HRESULT WINAPI VarBstrFromUI4(ULONG ulIn, LCID lcid, ULONG dwFlags, BSTR* pbstrO
  *  Failure: E_INVALIDARG, if pbstrOut is invalid.
  *           E_OUTOFMEMORY, if memory allocation fails.
  */
-HRESULT WINAPI VarBstrFromDec(DECIMAL* pDecIn, LCID lcid, ULONG dwFlags, BSTR* pbstrOut)
+HRESULT WINAPI VarBstrFromDec(const DECIMAL* pDecIn, LCID lcid, ULONG dwFlags, BSTR* pbstrOut)
 {
   WCHAR buff[256];
   VARIANT_DI temp;
@@ -7993,7 +7998,7 @@ HRESULT WINAPI VarDateFromUI4(ULONG ulIn, DATE* pdateOut)
  * RETURNS
  *  S_OK.
  */
-HRESULT WINAPI VarDateFromDec(DECIMAL *pdecIn, DATE* pdateOut)
+HRESULT WINAPI VarDateFromDec(const DECIMAL *pdecIn, DATE* pdateOut)
 {
   return VarR8FromDec(pdecIn, pdateOut);
 }

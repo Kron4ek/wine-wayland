@@ -1213,6 +1213,7 @@
 @ stdcall RtlQueryInformationAcl(ptr ptr long long)
 @ stdcall RtlQueryPackageIdentity(long ptr ptr ptr ptr ptr)
 @ stdcall RtlQueryRegistryValues(long ptr ptr ptr ptr)
+@ stdcall RtlQueryRegistryValuesEx(long ptr ptr ptr ptr) RtlQueryRegistryValues
 @ stdcall RtlQueryTimeZoneInformation(ptr)
 @ stdcall -norelay RtlRaiseException(ptr)
 @ stdcall RtlRaiseStatus(long)
@@ -1465,7 +1466,7 @@
 @ stdcall -private ZwQueryInstallUILanguage(ptr) NtQueryInstallUILanguage
 @ stdcall -private ZwQueryKey(long long ptr long ptr) NtQueryKey
 @ stdcall -private ZwQueryLicenseValue(ptr ptr ptr long ptr) NtQueryLicenseValue
-@ stdcall -private ZwQueryObject(long long ptr long ptr) NtQueryObject
+@ stdcall ZwQueryObject(long long ptr long ptr) NtQueryObject
 @ stdcall -private ZwQuerySection(long long ptr long ptr) NtQuerySection
 @ stdcall -private ZwQuerySecurityObject(long long ptr long ptr) NtQuerySecurityObject
 @ stdcall -private ZwQuerySymbolicLinkObject(long ptr ptr) NtQuerySymbolicLinkObject
@@ -1527,16 +1528,16 @@
 @ cdecl -private -arch=i386 _CIsin()
 @ cdecl -private -arch=i386 _CIsqrt()
 @ cdecl -private _abnormal_termination()
-@ cdecl -arch=i386 -ret64 _alldiv(int64 int64)
+@ cdecl -arch=i386 -norelay -ret64 _alldiv(int64 int64)
 @ cdecl -arch=i386 -norelay _alldvrm(int64 int64)
-@ cdecl -arch=i386 -ret64 _allmul(int64 int64)
+@ cdecl -arch=i386 -norelay -ret64 _allmul(int64 int64)
 @ cdecl -arch=i386 -norelay _alloca_probe()
-@ cdecl -arch=i386 -ret64 _allrem(int64 int64)
+@ cdecl -arch=i386 -norelay -ret64 _allrem(int64 int64)
 @ stdcall -arch=i386 -ret64 _allshl(int64 long)
 @ stdcall -arch=i386 -ret64 _allshr(int64 long)
-@ cdecl -arch=i386 -ret64 _aulldiv(int64 int64)
+@ cdecl -arch=i386 -norelay -ret64 _aulldiv(int64 int64)
 @ cdecl -arch=i386 -norelay _aulldvrm(int64 int64)
-@ cdecl -arch=i386 -ret64 _aullrem(int64 int64)
+@ cdecl -arch=i386 -norelay -ret64 _aullrem(int64 int64)
 @ stdcall -arch=i386 -ret64 _aullshr(int64 long)
 @ cdecl -arch=i386 -norelay _chkstk()
 @ cdecl -arch=i386 _except_handler2(ptr ptr ptr ptr)

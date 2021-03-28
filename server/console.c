@@ -102,7 +102,7 @@ static const struct object_ops console_ops =
 
 static enum server_fd_type console_get_fd_type( struct fd *fd );
 static void console_get_file_info( struct fd *fd, obj_handle_t handle, unsigned int info_class );
-static void console_get_volume_info( struct fd *fd, unsigned int info_class );
+static int console_get_volume_info( struct fd *fd, struct async *async, unsigned int info_class );
 static int console_read( struct fd *fd, struct async *async, file_pos_t pos );
 static int console_flush( struct fd *fd, struct async *async );
 static int console_ioctl( struct fd *fd, ioctl_code_t code, struct async *async );
@@ -173,7 +173,7 @@ static const struct object_ops console_server_ops =
     NULL,                             /* unlink_name */
     console_server_open_file,         /* open_file */
     no_kernel_obj_list,               /* get_kernel_obj_list */
-    fd_close_handle,                  /* close_handle */
+    no_close_handle,                  /* close_handle */
     console_server_destroy            /* destroy */
 };
 
@@ -436,7 +436,7 @@ static const struct object_ops console_connection_ops =
     NULL,                             /* remove_queue */
     NULL,                             /* signaled */
     NULL,                             /* get_esync_fd */
-    NULL,                             /* get_fsync_idx */     
+    NULL,                             /* get_fsync_idx */
     no_satisfied,                     /* satisfied */
     no_signal,                        /* signal */
     console_connection_get_fd,        /* get_fd */
@@ -495,7 +495,7 @@ static void console_get_file_info( struct fd *fd, obj_handle_t handle, unsigned 
     set_error( STATUS_INVALID_DEVICE_REQUEST );
 }
 
-static void console_get_volume_info( struct fd *fd, unsigned int info_class )
+static int console_get_volume_info( struct fd *fd, struct async *async, unsigned int info_class )
 {
     switch (info_class)
     {
@@ -515,6 +515,7 @@ static void console_get_volume_info( struct fd *fd, unsigned int info_class )
     default:
         set_error( STATUS_NOT_IMPLEMENTED );
     }
+    return 0;
 }
 
 static struct object *create_console(void)
@@ -663,8 +664,7 @@ static int propagate_console_signal_cb(struct process *process, void *user)
 {
     struct console_signal_info* csi = (struct console_signal_info*)user;
 
-    if (process->console == csi->console && process->running_threads &&
-        (!csi->group || process->group_id == csi->group))
+    if (process->console == csi->console && (!csi->group || process->group_id == csi->group))
     {
         /* find a suitable thread to signal */
         struct thread *thread;

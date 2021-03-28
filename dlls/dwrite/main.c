@@ -323,11 +323,9 @@ static ULONG WINAPI localizedstrings_Release(IDWriteLocalizedStrings *iface)
 
 static UINT32 WINAPI localizedstrings_GetCount(IDWriteLocalizedStrings *iface)
 {
-    struct localizedstrings *strings = impl_from_IDWriteLocalizedStrings(iface);
-
     TRACE("%p.\n", iface);
 
-    return strings->count;
+    return get_localizedstrings_count(iface);
 }
 
 static HRESULT WINAPI localizedstrings_FindLocaleName(IDWriteLocalizedStrings *iface,
@@ -470,7 +468,7 @@ HRESULT add_localizedstring(IDWriteLocalizedStrings *iface, const WCHAR *locale,
     if (*locale)
     {
         for (i = 0; i < count; i++)
-            if (!strcmpW(strings->data[i].locale, locale))
+            if (!lstrcmpiW(strings->data[i].locale, locale))
                 return S_OK;
     }
 
@@ -485,6 +483,7 @@ HRESULT add_localizedstring(IDWriteLocalizedStrings *iface, const WCHAR *locale,
         heap_free(strings->data[count].string);
         return E_OUTOFMEMORY;
     }
+    strlwrW(strings->data[count].locale);
 
     strings->count++;
 
@@ -557,6 +556,25 @@ void sort_localizedstrings(IDWriteLocalizedStrings *iface)
     struct localizedstrings *strings = impl_from_IDWriteLocalizedStrings(iface);
 
     qsort(strings->data, strings->count, sizeof(*strings->data), localizedstrings_sorting_compare);
+}
+
+unsigned int get_localizedstrings_count(IDWriteLocalizedStrings *iface)
+{
+    struct localizedstrings *strings = impl_from_IDWriteLocalizedStrings(iface);
+    return strings->count;
+}
+
+BOOL localizedstrings_contains(IDWriteLocalizedStrings *iface, const WCHAR *str)
+{
+    struct localizedstrings *strings = impl_from_IDWriteLocalizedStrings(iface);
+    unsigned int i;
+
+    for (i = 0; i < strings->count; ++i)
+    {
+        if (!lstrcmpiW(strings->data[i].string, str)) return TRUE;
+    }
+
+    return FALSE;
 }
 
 struct collectionloader
@@ -1033,9 +1051,8 @@ static HRESULT WINAPI dwritefactory_CreateFontFace(IDWriteFactory7 *iface, DWRIT
 
     desc.factory = iface;
     desc.face_type = req_facetype;
-    desc.files = font_files;
+    desc.file = *font_files;
     desc.stream = stream;
-    desc.files_number = files_number;
     desc.index = index;
     desc.simulations = simulations;
     desc.font_data = NULL;
@@ -1243,7 +1260,7 @@ static HRESULT WINAPI dwritefactory_CreateTextAnalyzer(IDWriteFactory7 *iface, I
 {
     TRACE("%p, %p.\n", iface, analyzer);
 
-    *analyzer = get_text_analyzer();
+    *analyzer = (IDWriteTextAnalyzer *)get_text_analyzer();
 
     return S_OK;
 }
@@ -1492,11 +1509,152 @@ static HRESULT WINAPI dwritefactory3_CreateFontFaceReference(IDWriteFactory7 *if
     return hr;
 }
 
+static HRESULT create_system_path_list(WCHAR ***ret, unsigned int *ret_count)
+{
+    unsigned int index = 0, value_size, name_count, max_name_count, type, data_size;
+    WCHAR **paths = NULL, *name, *value = NULL;
+    size_t capacity = 0, count = 0;
+    HKEY hkey;
+    LONG r;
+
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts",
+            0, GENERIC_READ, &hkey))
+    {
+        return E_UNEXPECTED;
+    }
+
+    value_size = MAX_PATH * sizeof(*value);
+    value = heap_alloc(value_size);
+
+    max_name_count = MAX_PATH;
+    name = heap_alloc(max_name_count * sizeof(*name));
+
+    for (;;)
+    {
+        if (!value)
+        {
+            value_size = MAX_PATH * sizeof(*value);
+            value = heap_alloc(value_size);
+        }
+
+        do
+        {
+            name_count = max_name_count;
+            data_size = value_size - sizeof(*value);
+
+            r = RegEnumValueW(hkey, index, name, &name_count, NULL, &type, (BYTE *)value, &data_size);
+            if (r == ERROR_MORE_DATA)
+            {
+                if (name_count >= max_name_count)
+                {
+                    max_name_count *= 2;
+                    heap_free(name);
+                    name = heap_alloc(max_name_count * sizeof(*name));
+                }
+
+                if (data_size > value_size - sizeof(*value))
+                {
+                    heap_free(value);
+                    value_size = max(data_size + sizeof(*value), value_size * 2);
+                    value = heap_alloc(value_size);
+                }
+            }
+        } while (r == ERROR_MORE_DATA);
+
+        if (r != ERROR_SUCCESS)
+            break;
+
+        value[data_size / sizeof(*value)] = 0;
+        if (type == REG_SZ && *name != '@')
+        {
+            if (dwrite_array_reserve((void **)&paths, &capacity, count + 1, sizeof(*paths)))
+            {
+                if (!strchrW(value, '\\'))
+                {
+                    static const WCHAR fontsW[] = {'\\','f','o','n','t','s','\\',0};
+                    WCHAR *ptrW;
+
+                    ptrW = heap_alloc((MAX_PATH + lstrlenW(value)) * sizeof(WCHAR));
+                    GetWindowsDirectoryW(ptrW, MAX_PATH);
+                    lstrcatW(ptrW, fontsW);
+                    lstrcatW(ptrW, value);
+
+                    heap_free(value);
+                    value = ptrW;
+                }
+
+                paths[count++] = value;
+                value = NULL;
+            }
+        }
+        index++;
+    }
+
+    heap_free(name);
+
+    *ret = paths;
+    *ret_count = count;
+
+    RegCloseKey(hkey);
+
+    return S_OK;
+}
+
+static int create_system_fontset_compare(const void *left, const void *right)
+{
+    const WCHAR *_l = *(WCHAR **)left, *_r = *(WCHAR **)right;
+    return lstrcmpiW(_l, _r);
+};
+
+static HRESULT create_system_fontset(IDWriteFactory7 *factory, REFIID riid, void **obj)
+{
+    IDWriteFontSetBuilder2 *builder;
+    IDWriteFontSet *fontset;
+    unsigned int i, j, count;
+    WCHAR **paths;
+    HRESULT hr;
+
+    *obj = NULL;
+
+    if (FAILED(hr = create_fontset_builder(factory, &builder))) return hr;
+
+    if (SUCCEEDED(hr = create_system_path_list(&paths, &count)))
+    {
+        /* Sort, skip duplicates. */
+
+        qsort(paths, count, sizeof(*paths), create_system_fontset_compare);
+
+        for (i = 0, j = 0; i < count; ++i)
+        {
+            if (i != j && !lstrcmpiW(paths[i], paths[j])) continue;
+
+            if (FAILED(hr = IDWriteFontSetBuilder2_AddFontFile(builder, paths[i])) && hr != DWRITE_E_FILEFORMAT)
+                WARN("Failed to add font file, hr %#x, path %s.\n", hr, debugstr_w(paths[i]));
+
+            j = i;
+        }
+
+        for (i = 0; i < count; ++i)
+            heap_free(paths[i]);
+        heap_free(paths);
+    }
+
+    if (SUCCEEDED(hr = IDWriteFontSetBuilder2_CreateFontSet(builder, &fontset)))
+    {
+        hr = IDWriteFontSet_QueryInterface(fontset, riid, obj);
+        IDWriteFontSet_Release(fontset);
+    }
+
+    IDWriteFontSetBuilder2_Release(builder);
+
+    return hr;
+}
+
 static HRESULT WINAPI dwritefactory3_GetSystemFontSet(IDWriteFactory7 *iface, IDWriteFontSet **fontset)
 {
-    FIXME("%p, %p: stub\n", iface, fontset);
+    TRACE("%p, %p.\n", iface, fontset);
 
-    return E_NOTIMPL;
+    return create_system_fontset(iface, &IID_IDWriteFontSet, (void **)fontset);
 }
 
 static HRESULT WINAPI dwritefactory3_CreateFontSetBuilder(IDWriteFactory7 *iface, IDWriteFontSetBuilder **builder)
@@ -1550,77 +1708,49 @@ static HRESULT WINAPI dwritefactory4_TranslateColorGlyphRun(IDWriteFactory7 *ifa
     return E_NOTIMPL;
 }
 
-static HRESULT compute_glyph_origins(DWRITE_GLYPH_RUN const *run, DWRITE_MEASURING_MODE measuring_mode,
-    D2D1_POINT_2F baseline_origin, DWRITE_MATRIX const *transform,  D2D1_POINT_2F *origins)
+HRESULT compute_glyph_origins(DWRITE_GLYPH_RUN const *run, DWRITE_MEASURING_MODE measuring_mode,
+    D2D1_POINT_2F baseline_origin, DWRITE_MATRIX const *transform, D2D1_POINT_2F *origins)
 {
-    IDWriteFontFace1 *fontface1 = NULL;
-    DWRITE_FONT_METRICS metrics;
-    FLOAT rtl_factor;
-    HRESULT hr;
-    UINT32 i;
+    struct dwrite_fontface *font_obj;
+    unsigned int i;
+    float advance;
 
-    rtl_factor = run->bidiLevel & 1 ? -1.0f : 1.0f;
+    font_obj = unsafe_impl_from_IDWriteFontFace(run->fontFace);
 
-    if (run->fontFace) {
-        IDWriteFontFace_GetMetrics(run->fontFace, &metrics);
-        if (FAILED(hr = IDWriteFontFace_QueryInterface(run->fontFace, &IID_IDWriteFontFace1, (void **)&fontface1)))
-            WARN("Failed to get IDWriteFontFace1, %#x.\n", hr);
-    }
-
-    for (i = 0; i < run->glyphCount; i++) {
-        FLOAT advance;
-
-        /* Use nominal advances if not provided by caller. */
-        if (run->glyphAdvances)
-            advance = rtl_factor * run->glyphAdvances[i];
-        else {
-            INT32 a;
-
-            advance = 0.0f;
-            switch (measuring_mode)
-            {
-            case DWRITE_MEASURING_MODE_NATURAL:
-                if (SUCCEEDED(IDWriteFontFace1_GetDesignGlyphAdvances(fontface1, 1, run->glyphIndices + i, &a,
-                        run->isSideways)))
-                    advance = rtl_factor * get_scaled_advance_width(a, run->fontEmSize, &metrics);
-                break;
-            case DWRITE_MEASURING_MODE_GDI_CLASSIC:
-            case DWRITE_MEASURING_MODE_GDI_NATURAL:
-                if (SUCCEEDED(IDWriteFontFace1_GetGdiCompatibleGlyphAdvances(fontface1, run->fontEmSize,
-                        1.0f, transform, measuring_mode == DWRITE_MEASURING_MODE_GDI_NATURAL,
-                        run->isSideways, 1, run->glyphIndices + i, &a)))
-                    advance = rtl_factor * floorf(a * run->fontEmSize / metrics.designUnitsPerEm + 0.5f);
-                break;
-            default:
-                ;
-            }
-        }
-
+    for (i = 0; i < run->glyphCount; ++i)
+    {
         origins[i] = baseline_origin;
 
-        /* Apply offsets. */
-        if (run->glyphOffsets) {
-            FLOAT advanceoffset = rtl_factor * run->glyphOffsets[i].advanceOffset;
-            FLOAT ascenderoffset = -run->glyphOffsets[i].ascenderOffset;
+        if (run->bidiLevel & 1)
+        {
+            advance = fontface_get_scaled_design_advance(font_obj, measuring_mode, run->fontEmSize,
+                    1.0f, transform, run->glyphIndices[i], run->isSideways);
 
-            if (run->isSideways) {
-                origins[i].x += ascenderoffset;
-                origins[i].y += advanceoffset;
+            origins[i].x -= advance;
+
+            if (run->glyphOffsets)
+            {
+                origins[i].x -= run->glyphOffsets[i].advanceOffset;
+                origins[i].y -= run->glyphOffsets[i].ascenderOffset;
             }
-            else {
-                origins[i].x += advanceoffset;
-                origins[i].y += ascenderoffset;
-            }
+
+            baseline_origin.x -= run->glyphAdvances ? run->glyphAdvances[i] : advance;
         }
-
-        if (run->isSideways)
-            baseline_origin.y += advance;
         else
-            baseline_origin.x += advance;
+        {
+            if (run->glyphOffsets)
+            {
+                origins[i].x += run->glyphOffsets[i].advanceOffset;
+                origins[i].y -= run->glyphOffsets[i].ascenderOffset;
+            }
+
+            baseline_origin.x += run->glyphAdvances ? run->glyphAdvances[i] :
+                    fontface_get_scaled_design_advance(font_obj, measuring_mode, run->fontEmSize, 1.0f, transform,
+                            run->glyphIndices[i], run->isSideways);
+
+        }
     }
 
-    if (fontface1)
-        IDWriteFontFace1_Release(fontface1);
     return S_OK;
 }
 
@@ -1702,9 +1832,12 @@ static HRESULT WINAPI dwritefactory6_CreateFontResource(IDWriteFactory7 *iface, 
 static HRESULT WINAPI dwritefactory6_GetSystemFontSet(IDWriteFactory7 *iface, BOOL include_downloadable,
         IDWriteFontSet1 **fontset)
 {
-    FIXME("%p, %d, %p.\n", iface, include_downloadable, fontset);
+    TRACE("%p, %d, %p.\n", iface, include_downloadable, fontset);
 
-    return E_NOTIMPL;
+    if (include_downloadable)
+        FIXME("Downloadable fonts are not supported.\n");
+
+    return create_system_fontset(iface, &IID_IDWriteFontSet1, (void **)fontset);
 }
 
 static HRESULT WINAPI dwritefactory6_GetSystemFontCollection(IDWriteFactory7 *iface, BOOL include_downloadable,
@@ -1743,9 +1876,12 @@ static HRESULT WINAPI dwritefactory6_CreateTextFormat(IDWriteFactory7 *iface, co
 static HRESULT WINAPI dwritefactory7_GetSystemFontSet(IDWriteFactory7 *iface, BOOL include_downloadable,
         IDWriteFontSet2 **fontset)
 {
-    FIXME("%p, %d, %p.\n", iface, include_downloadable, fontset);
+    TRACE("%p, %d, %p.\n", iface, include_downloadable, fontset);
 
-    return E_NOTIMPL;
+    if (include_downloadable)
+        FIXME("Downloadable fonts are not supported.\n");
+
+    return create_system_fontset(iface, &IID_IDWriteFontSet2, (void **)fontset);
 }
 
 static HRESULT WINAPI dwritefactory7_GetSystemFontCollection(IDWriteFactory7 *iface, BOOL include_downloadable,

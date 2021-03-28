@@ -20,6 +20,7 @@ SOURCES = \
 	appmodel.h \
 	asferr.h \
 	asptlb.idl \
+	asyncinfo.idl \
 	asynot.idl \
 	asysta.idl \
 	atlbase.h \
@@ -71,6 +72,7 @@ SOURCES = \
 	codecapi.h \
 	colinf.idl \
 	colordlg.h \
+	colrst.idl \
 	comcat.idl \
 	commctrl.h \
 	commctrl.rh \
@@ -282,6 +284,7 @@ SOURCES = \
 	errors.h \
 	errrec.idl \
 	evcode.h \
+	eventtoken.idl \
 	evntprov.h \
 	evntrace.h \
 	evr.idl \
@@ -746,9 +749,15 @@ SOURCES = \
 	wincrypt.h \
 	windef.h \
 	windns.h \
+	windows.foundation.collections.idl \
 	windows.foundation.idl \
+	windows.gaming.input.forcefeedback.idl \
+	windows.gaming.input.idl \
+	windows.globalization.idl \
 	windows.h \
 	windows.media.speechsynthesis.idl \
+	windows.system.idl \
+	windows.system.userprofile.idl \
 	windowscontracts.idl \
 	windowsx.h \
 	wine/debug.h \

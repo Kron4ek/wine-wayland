@@ -515,8 +515,8 @@ NTSTATUS WINAPI KiUserExceptionDispatcher( EXCEPTION_RECORD *rec, CONTEXT *conte
     }
     else
     {
-        if (rec->ExceptionFlags & EH_NONCONTINUABLE)
-            ERR( "Fatal %s exception (code=%x) raised\n", debugstr_exception_code(rec->ExceptionCode), rec->ExceptionCode );
+        if (rec->ExceptionCode == STATUS_ASSERTION_FAILURE)
+            ERR( "%s exception (code=%x) raised\n", debugstr_exception_code(rec->ExceptionCode), rec->ExceptionCode );
         else
             WARN( "%s exception (code=%x) raised\n", debugstr_exception_code(rec->ExceptionCode), rec->ExceptionCode );
 
@@ -1134,7 +1134,7 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
     }
 
     TRACE( "returning to %lx stack %lx\n", context->Pc, context->Sp );
-    NtSetContextThread( GetCurrentThread(), context );
+    NtContinue( context, FALSE );
 }
 
 /*******************************************************************

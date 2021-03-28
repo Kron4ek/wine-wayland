@@ -211,7 +211,7 @@ static HRESULT WINAPI factory_QueryInterface( IClassFactory *iface, REFIID riid,
         *obj = iface;
         return S_OK;
     }
-    FIXME( "interface %s not implemented\n", debugstr_guid(riid) );
+    WARN( "interface %s not implemented\n", debugstr_guid(riid) );
     return E_NOINTERFACE;
 }
 
@@ -262,6 +262,7 @@ static const struct IClassFactoryVtbl factory_vtbl =
 };
 
 static struct factory swbem_locator_cf = { { &factory_vtbl }, SWbemLocator_create };
+static struct factory swbem_namedvalueset_cf = { { &factory_vtbl }, SWbemNamedValueSet_create };
 static struct factory winmgmts_cf = { { &factory_vtbl }, WinMGMTS_create };
 
 BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
@@ -269,8 +270,6 @@ BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
 
     switch (reason)
     {
-        case DLL_WINE_PREATTACH:
-            return FALSE;    /* prefer native version */
         case DLL_PROCESS_ATTACH:
             instance = hinst;
             DisableThreadLibraryCalls( hinst );
@@ -289,6 +288,8 @@ HRESULT WINAPI DllGetClassObject( REFCLSID rclsid, REFIID iid, LPVOID *obj )
         cf = &swbem_locator_cf.IClassFactory_iface;
     else if (IsEqualGUID( rclsid, &CLSID_WinMGMTS ))
         cf = &winmgmts_cf.IClassFactory_iface;
+    else if (IsEqualGUID( rclsid, &CLSID_SWbemNamedValueSet ))
+        cf = &swbem_namedvalueset_cf.IClassFactory_iface;
     else
         return CLASS_E_CLASSNOTAVAILABLE;
 

@@ -483,6 +483,7 @@ enum apc_type
     APC_MAP_VIEW,
     APC_UNMAP_VIEW,
     APC_CREATE_THREAD,
+    APC_DUP_HANDLE,
     APC_BREAK_PROCESS
 };
 
@@ -593,6 +594,15 @@ typedef union
         mem_size_t       reserve;   /* reserve size for thread stack */
         mem_size_t       commit;    /* commit size for thread stack */
     } create_thread;
+    struct
+    {
+        enum apc_type    type;         /* APC_DUP_HANDLE */
+        obj_handle_t     src_handle;   /* src handle to duplicate */
+        obj_handle_t     dst_process;  /* dst process handle */
+        unsigned int     access;       /* wanted access rights */
+        unsigned int     attributes;   /* object attributes */
+        unsigned int     options;      /* duplicate options */
+    } dup_handle;
 } apc_call_t;
 
 typedef union
@@ -668,7 +678,7 @@ typedef union
     } map_view;
     struct
     {
-        enum apc_type    type;      /* APC_MAP_VIEW */
+        enum apc_type    type;      /* APC_UNMAP_VIEW */
         unsigned int     status;    /* status returned by call */
     } unmap_view;
     struct
@@ -680,6 +690,12 @@ typedef union
         client_ptr_t     teb;       /* thread teb (in process address space) */
         obj_handle_t     handle;    /* handle to new thread */
     } create_thread;
+    struct
+    {
+        enum apc_type    type;      /* APC_DUP_HANDLE */
+        unsigned int     status;    /* status returned by call */
+        obj_handle_t     handle;    /* duplicated handle in dst process */
+    } dup_handle;
     struct
     {
         enum apc_type    type;      /* APC_BREAK_PROCESS */
@@ -696,6 +712,7 @@ enum irp_type
     IRP_CALL_WRITE,
     IRP_CALL_FLUSH,
     IRP_CALL_IOCTL,
+    IRP_CALL_VOLUME,
     IRP_CALL_FREE,
     IRP_CALL_CANCEL
 };
@@ -750,6 +767,14 @@ typedef union
     } ioctl;
     struct
     {
+        enum irp_type    type;      /* IRP_CALL_VOLUME */
+        unsigned int     info_class;/* information class */
+        data_size_t      out_size;  /* needed output size */
+        int              __pad;
+        client_ptr_t     file;      /* opaque ptr for the file object */
+    } volume;
+    struct
+    {
         enum irp_type    type;      /* IRP_CALL_FREE */
         int              __pad;
         client_ptr_t     obj;       /* opaque ptr for the freed object */
@@ -787,8 +812,6 @@ typedef struct
     unsigned int   checksum;
     unsigned int   dbg_offset;
     unsigned int   dbg_size;
-    client_cpu_t   cpu;
-    int            __pad;
 } pe_image_info_t;
 #define IMAGE_FLAGS_ComPlusNativeReady        0x01
 #define IMAGE_FLAGS_ComPlusILOnly             0x02
@@ -839,13 +862,6 @@ typedef struct
     obj_handle_t info;           /* new process info handle */
     process_id_t pid;            /* process id */
     obj_handle_t handle;         /* process handle (in the current process) */
-@END
-
-
-/* Execute a process, replacing the current one */
-@REQ(exec_process)
-    int          socket_fd;      /* file descriptor for process socket */
-    client_cpu_t cpu;            /* CPU that the new process will use */
 @END
 
 
@@ -1107,15 +1123,10 @@ typedef struct
     obj_handle_t dst_process;  /* dst process handle */
     unsigned int access;       /* wanted access rights */
     unsigned int attributes;   /* object attributes */
-    unsigned int options;      /* duplicate options (see below) */
+    unsigned int options;      /* duplicate options */
 @REPLY
     obj_handle_t handle;       /* duplicated handle in dst process */
-    int          self;         /* is the source the current process? */
-    int          closed;       /* whether the source handle has been closed */
 @END
-#define DUP_HANDLE_CLOSE_SOURCE  DUPLICATE_CLOSE_SOURCE
-#define DUP_HANDLE_SAME_ACCESS   DUPLICATE_SAME_ACCESS
-#define DUP_HANDLE_MAKE_GLOBAL   0x80000000  /* Not a Windows flag */
 
 
 /* Make an object temporary */
@@ -1392,8 +1403,10 @@ enum server_fd_type
 /* Query volume information */
 @REQ(get_volume_info)
     obj_handle_t handle;        /* handle to the file */
+    async_data_t async;         /* async I/O parameters */
     unsigned int info_class;    /* queried information class */
 @REPLY
+    obj_handle_t wait;          /* handle to wait on for blocking read */
     VARARG(data,bytes);         /* volume info data */
 @END
 
@@ -1528,7 +1541,9 @@ enum server_fd_type
     mem_size_t   size;          /* mapping size */
     unsigned int flags;         /* SEC_* flags */
     obj_handle_t shared_file;   /* shared mapping file handle */
+    data_size_t  total;         /* total required buffer size in bytes */
     VARARG(image,pe_image_info);/* image info for SEC_IMAGE mappings */
+    VARARG(name,unicode_str);   /* filename for SEC_IMAGE mappings */
 @END
 
 
@@ -1540,6 +1555,7 @@ enum server_fd_type
     mem_size_t   size;          /* view size */
     file_pos_t   start;         /* start offset in mapping */
     VARARG(image,pe_image_info);/* image info for .so builtins */
+    VARARG(name,unicode_str);   /* image filename for .so builtins */
 @END
 
 
@@ -1803,7 +1819,9 @@ struct process_info
 
 /* UnLoad a registry branch from a file */
 @REQ(unload_registry)
-    obj_handle_t hkey;         /* root key to unload to */
+    obj_handle_t parent;       /* handle to the parent key */
+    unsigned int attributes;   /* object attributes */
+    VARARG(name,unicode_str);  /* key name */
 @END
 
 
@@ -1903,7 +1921,6 @@ struct process_info
 
 /* Add an atom */
 @REQ(add_atom)
-    obj_handle_t  table;       /* which table to add atom to */
     VARARG(name,unicode_str);  /* atom name */
 @REPLY
     atom_t        atom;        /* resulting atom */
@@ -1912,14 +1929,12 @@ struct process_info
 
 /* Delete an atom */
 @REQ(delete_atom)
-    obj_handle_t  table;       /* which table to delete atom from */
     atom_t        atom;        /* atom handle */
 @END
 
 
 /* Find an atom */
 @REQ(find_atom)
-    obj_handle_t table;        /* which table to find atom from */
     VARARG(name,unicode_str);  /* atom name */
 @REPLY
     atom_t       atom;         /* atom handle */
@@ -1928,36 +1943,12 @@ struct process_info
 
 /* Get information about an atom */
 @REQ(get_atom_information)
-    obj_handle_t table;        /* which table to find atom from */
     atom_t       atom;         /* atom handle */
 @REPLY
     int          count;        /* atom lock count */
     int          pinned;       /* whether the atom has been pinned */
     data_size_t  total;        /* actual length of atom name */
     VARARG(name,unicode_str);  /* atom name */
-@END
-
-
-/* Set information about an atom */
-@REQ(set_atom_information)
-    obj_handle_t table;        /* which table to find atom from */
-    atom_t       atom;         /* atom handle */
-    int          pinned;       /* whether to bump atom information */
-@END
-
-
-/* Empty an atom table */
-@REQ(empty_atom_table)
-    obj_handle_t table;        /* which table to find atom from */
-    int          if_pinned;    /* whether to delete pinned atoms */
-@END
-
-
-/* Init an atom table */
-@REQ(init_atom_table)
-    int          entries;      /* number of entries (only for local) */
-@REPLY
-    obj_handle_t table;        /* handle to the atom table */
 @END
 
 
@@ -3213,6 +3204,8 @@ struct handle_info
     process_id_t owner;
     obj_handle_t handle;
     unsigned int access;
+    unsigned int attributes;
+    unsigned int type;
 };
 
 /* Return a list of all opened handles */
@@ -3335,13 +3328,6 @@ struct handle_info
 @END
 
 
-/* Query the impersonation level of an impersonation token */
-@REQ(get_token_impersonation_level)
-    obj_handle_t   handle;        /* handle to the object */
-@REPLY
-    int            impersonation_level; /* impersonation level of the impersonation token */
-@END
-
 /* Allocate a locally-unique identifier */
 @REQ(allocate_locally_unique_id)
 @REPLY
@@ -3439,15 +3425,24 @@ struct handle_info
 
 
 /* Get detailed fixed-size information about a token */
-@REQ(get_token_statistics)
+@REQ(get_token_info)
     obj_handle_t   handle;        /* handle to the object */
 @REPLY
     luid_t         token_id;      /* locally-unique identifier of the token */
     luid_t         modified_id;   /* locally-unique identifier of the modified version of the token */
     int            primary;       /* is the token primary or impersonation? */
     int            impersonation_level; /* level of impersonation */
+    int            elevation;     /* elevation type */
     int            group_count;   /* the number of groups the token is a member of */
     int            privilege_count; /* the number of privileges the token has */
+@END
+
+
+/* Create a token which is an elevation counterpart to this token */
+@REQ(create_linked_token)
+    obj_handle_t   handle;        /* handle to the token */
+@REPLY
+    obj_handle_t   linked;        /* handle to the linked token */
 @END
 
 

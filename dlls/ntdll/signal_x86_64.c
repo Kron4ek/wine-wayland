@@ -552,8 +552,8 @@ NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
     }
     else
     {
-        if (rec->ExceptionFlags & EH_NONCONTINUABLE)
-            ERR( "Fatal %s exception (code=%x) raised\n", debugstr_exception_code(rec->ExceptionCode), rec->ExceptionCode );
+        if (rec->ExceptionCode == STATUS_ASSERTION_FAILURE)
+            ERR( "%s exception (code=%x) raised\n", debugstr_exception_code(rec->ExceptionCode), rec->ExceptionCode );
         else
             WARN( "%s exception (code=%x) raised\n", debugstr_exception_code(rec->ExceptionCode), rec->ExceptionCode );
 
@@ -1210,7 +1210,7 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
     }
 
     TRACE( "returning to %p stack %p\n", (void *)context->Rip, (void *)context->Rsp );
-    NtSetContextThread( GetCurrentThread(), context );
+    NtContinue( context, FALSE );
 }
 
 

@@ -26,7 +26,6 @@
 #include "winnt.h"
 #include "winternl.h"
 #include "unixlib.h"
-#include "wine/server.h"
 #include "wine/asm.h"
 
 #define DECLARE_CRITICAL_SECTION(cs) \
@@ -62,7 +61,6 @@ extern void version_init(void) DECLSPEC_HIDDEN;
 extern void debug_init(void) DECLSPEC_HIDDEN;
 extern void actctx_init(void) DECLSPEC_HIDDEN;
 extern void heap_set_debug_flags( HANDLE handle ) DECLSPEC_HIDDEN;
-extern void init_unix_codepage(void) DECLSPEC_HIDDEN;
 extern void init_locale( HMODULE module ) DECLSPEC_HIDDEN;
 extern void init_user_process_params(void) DECLSPEC_HIDDEN;
 extern void CDECL DECLSPEC_NORETURN signal_start_thread( CONTEXT *ctx ) DECLSPEC_HIDDEN;
@@ -85,32 +83,12 @@ extern const WCHAR syswow64_dir[] DECLSPEC_HIDDEN;
 extern void (FASTCALL *pBaseThreadInitThunk)(DWORD,LPTHREAD_START_ROUTINE,void *) DECLSPEC_HIDDEN;
 extern const struct unix_funcs *unix_funcs DECLSPEC_HIDDEN;
 
-extern void init_directories(void) DECLSPEC_HIDDEN;
-
 extern struct _KUSER_SHARED_DATA *user_shared_data DECLSPEC_HIDDEN;
-
-/* locale */
-extern LCID user_lcid, system_lcid;
-extern DWORD ntdll_umbstowcs( const char* src, DWORD srclen, WCHAR* dst, DWORD dstlen ) DECLSPEC_HIDDEN;
-extern int ntdll_wcstoumbs( const WCHAR* src, DWORD srclen, char* dst, DWORD dstlen, BOOL strict ) DECLSPEC_HIDDEN;
 
 extern int CDECL NTDLL__vsnprintf( char *str, SIZE_T len, const char *format, __ms_va_list args ) DECLSPEC_HIDDEN;
 extern int CDECL NTDLL__vsnwprintf( WCHAR *str, SIZE_T len, const WCHAR *format, __ms_va_list args ) DECLSPEC_HIDDEN;
 
 /* load order */
-
-enum loadorder
-{
-    LO_INVALID,
-    LO_DISABLED,
-    LO_NATIVE,
-    LO_BUILTIN,
-    LO_NATIVE_BUILTIN,  /* native then builtin */
-    LO_BUILTIN_NATIVE,  /* builtin then native */
-    LO_DEFAULT          /* nothing specified, use default strategy */
-};
-
-extern enum loadorder get_load_order( const WCHAR *app_name, const UNICODE_STRING *nt_name ) DECLSPEC_HIDDEN;
 
 #ifndef _WIN64
 static inline TEB64 *NtCurrentTeb64(void) { return (TEB64 *)NtCurrentTeb()->GdiBatchCount; }

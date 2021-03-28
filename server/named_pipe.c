@@ -148,7 +148,7 @@ static WCHAR *pipe_end_get_full_name( struct object *obj, data_size_t *len );
 static int pipe_end_read( struct fd *fd, struct async *async, file_pos_t pos );
 static int pipe_end_write( struct fd *fd, struct async *async_data, file_pos_t pos );
 static int pipe_end_flush( struct fd *fd, struct async *async );
-static void pipe_end_get_volume_info( struct fd *fd, unsigned int info_class );
+static int pipe_end_get_volume_info( struct fd *fd, struct async *async, unsigned int info_class );
 static void pipe_end_reselect_async( struct fd *fd, struct async_queue *queue );
 static void pipe_end_get_file_info( struct fd *fd, obj_handle_t handle, unsigned int info_class );
 
@@ -183,7 +183,7 @@ static const struct object_ops pipe_server_ops =
     NULL,                         /* unlink_name */
     pipe_server_open_file,        /* open_file */
     no_kernel_obj_list,           /* get_kernel_obj_list */
-    fd_close_handle,              /* close_handle */
+    no_close_handle,              /* close_handle */
     pipe_server_destroy           /* destroy */
 };
 
@@ -228,7 +228,7 @@ static const struct object_ops pipe_client_ops =
     NULL,                         /* unlink_name */
     no_open_file,                 /* open_file */
     no_kernel_obj_list,           /* get_kernel_obj_list */
-    fd_close_handle,              /* close_handle */
+    no_close_handle,              /* close_handle */
     pipe_end_destroy              /* destroy */
 };
 
@@ -309,7 +309,7 @@ static const struct object_ops named_pipe_device_file_ops =
     NULL,                                    /* unlink_name */
     no_open_file,                            /* open_file */
     no_kernel_obj_list,                      /* get_kernel_obj_list */
-    fd_close_handle,                         /* close_handle */
+    no_close_handle,                         /* close_handle */
     named_pipe_device_file_destroy           /* destroy */
 };
 
@@ -752,7 +752,7 @@ static WCHAR *pipe_end_get_full_name( struct object *obj, data_size_t *len )
     return pipe_end->pipe->obj.ops->get_full_name( &pipe_end->pipe->obj, len );
 }
 
-static void pipe_end_get_volume_info( struct fd *fd, unsigned int info_class )
+static int pipe_end_get_volume_info( struct fd *fd, struct async *async, unsigned int info_class )
 {
     switch (info_class)
     {
@@ -772,6 +772,7 @@ static void pipe_end_get_volume_info( struct fd *fd, unsigned int info_class )
     default:
         set_error( STATUS_NOT_IMPLEMENTED );
     }
+    return 0;
 }
 
 static void message_queue_read( struct pipe_end *pipe_end, struct iosb *iosb )

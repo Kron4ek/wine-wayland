@@ -532,8 +532,16 @@ static int thread_apc_signaled( struct object *obj, struct wait_queue_entry *ent
 static void thread_apc_destroy( struct object *obj )
 {
     struct thread_apc *apc = (struct thread_apc *)obj;
+
     if (apc->caller) release_object( apc->caller );
-    if (apc->owner) release_object( apc->owner );
+    if (apc->owner)
+    {
+        if (apc->result.type == APC_ASYNC_IO)
+            async_set_result( apc->owner, apc->result.async_io.status, apc->result.async_io.total );
+        else if (apc->call.type == APC_ASYNC_IO)
+            async_set_result( apc->owner, apc->call.async_io.status, 0 );
+        release_object( apc->owner );
+    }
 }
 
 /* queue an async procedure call */
@@ -1708,15 +1716,10 @@ DECL_HANDLER(select)
         if (apc->result.type == APC_CREATE_THREAD)  /* transfer the handle to the caller process */
         {
             obj_handle_t handle = duplicate_handle( current->process, apc->result.create_thread.handle,
-                                                    apc->caller->process, 0, 0, DUP_HANDLE_SAME_ACCESS );
+                                                    apc->caller->process, 0, 0, DUPLICATE_SAME_ACCESS );
             close_handle( current->process, apc->result.create_thread.handle );
             apc->result.create_thread.handle = handle;
             clear_error();  /* ignore errors from the above calls */
-        }
-        else if (apc->result.type == APC_ASYNC_IO)
-        {
-            if (apc->owner)
-                async_set_result( apc->owner, apc->result.async_io.status, apc->result.async_io.total );
         }
         wake_up( &apc->obj, 0 );
         close_handle( current->process, req->prev_apc );
@@ -1804,7 +1807,7 @@ DECL_HANDLER(queue_apc)
         {
             /* duplicate the handle into the target process */
             obj_handle_t handle = duplicate_handle( current->process, apc->call.map_view.handle,
-                                                    process, 0, 0, DUP_HANDLE_SAME_ACCESS );
+                                                    process, 0, 0, DUPLICATE_SAME_ACCESS );
             if (handle) apc->call.map_view.handle = handle;
             else
             {
@@ -1817,6 +1820,21 @@ DECL_HANDLER(queue_apc)
     case APC_BREAK_PROCESS:
         process = get_process_from_handle( req->handle, PROCESS_CREATE_THREAD );
         break;
+    case APC_DUP_HANDLE:
+        process = get_process_from_handle( req->handle, PROCESS_DUP_HANDLE );
+        if (process && process != current->process)
+        {
+            /* duplicate the destination process handle into the target process */
+            obj_handle_t handle = duplicate_handle( current->process, apc->call.dup_handle.dst_process,
+                                                    process, 0, 0, DUPLICATE_SAME_ACCESS );
+            if (handle) apc->call.dup_handle.dst_process = handle;
+            else
+            {
+                release_object( process );
+                process = NULL;
+            }
+        }
+        break;
     default:
         set_error( STATUS_INVALID_PARAMETER );
         break;
@@ -1824,7 +1842,7 @@ DECL_HANDLER(queue_apc)
 
     if (thread)
     {
-        if (!queue_apc( NULL, thread, apc )) set_error( STATUS_THREAD_IS_TERMINATING );
+        if (!queue_apc( NULL, thread, apc )) set_error( STATUS_UNSUCCESSFUL );
         release_object( thread );
     }
     else if (process)
@@ -1951,8 +1969,7 @@ DECL_HANDLER(set_thread_context)
     reply->self = (thread == current);
 
     if (thread->state == TERMINATED) set_error( STATUS_UNSUCCESSFUL );
-    else if (context->cpu != thread->process->cpu) set_error( STATUS_INVALID_PARAMETER );
-    else
+    else if (context->cpu == thread->process->cpu)
     {
         unsigned int system_flags = get_context_system_regs(context->cpu) & context->flags;
 
@@ -1964,6 +1981,25 @@ DECL_HANDLER(set_thread_context)
             thread->context->regs.flags |= context->flags;
         }
     }
+    else if (context->cpu == CPU_x86_64 && thread->process->cpu == CPU_x86)
+    {
+        /* convert the WoW64 context */
+        unsigned int system_flags = get_context_system_regs( context->cpu ) & context->flags;
+        if (system_flags)
+        {
+            set_thread_context( thread, context, system_flags );
+            if (thread->context && !get_error())
+            {
+                thread->context->regs.debug.i386_regs.dr0 = context->debug.x86_64_regs.dr0;
+                thread->context->regs.debug.i386_regs.dr1 = context->debug.x86_64_regs.dr1;
+                thread->context->regs.debug.i386_regs.dr2 = context->debug.x86_64_regs.dr2;
+                thread->context->regs.debug.i386_regs.dr3 = context->debug.x86_64_regs.dr3;
+                thread->context->regs.debug.i386_regs.dr6 = context->debug.x86_64_regs.dr6;
+                thread->context->regs.debug.i386_regs.dr7 = context->debug.x86_64_regs.dr7;
+            }
+        }
+    }
+    else set_error( STATUS_INVALID_PARAMETER );
 
     release_object( thread );
 }

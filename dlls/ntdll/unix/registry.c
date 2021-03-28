@@ -30,6 +30,7 @@
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
+#include "winternl.h"
 #include "unix_private.h"
 #include "wine/debug.h"
 
@@ -37,6 +38,35 @@ WINE_DEFAULT_DEBUG_CHANNEL(reg);
 
 /* maximum length of a value name in bytes (without terminating null) */
 #define MAX_VALUE_LENGTH (16383 * sizeof(WCHAR))
+
+
+NTSTATUS open_hkcu_key( const char *path, HANDLE *key )
+{
+    NTSTATUS status;
+    char buffer[256];
+    WCHAR bufferW[256];
+    DWORD_PTR sid_data[(sizeof(TOKEN_USER) + SECURITY_MAX_SID_SIZE) / sizeof(DWORD_PTR)];
+    DWORD i, len = sizeof(sid_data);
+    SID *sid;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attr;
+
+    status = NtQueryInformationToken( GetCurrentThreadEffectiveToken(), TokenUser, sid_data, len, &len );
+    if (status) return status;
+
+    sid = ((TOKEN_USER *)sid_data)->User.Sid;
+    len = sprintf( buffer, "\\Registry\\User\\S-%u-%u", sid->Revision,
+                 MAKELONG( MAKEWORD( sid->IdentifierAuthority.Value[5], sid->IdentifierAuthority.Value[4] ),
+                           MAKEWORD( sid->IdentifierAuthority.Value[3], sid->IdentifierAuthority.Value[2] )));
+    for (i = 0; i < sid->SubAuthorityCount; i++)
+        len += sprintf( buffer + len, "-%u", sid->SubAuthority[i] );
+    len += sprintf( buffer + len, "\\%s", path );
+
+    ascii_to_unicode( bufferW, buffer, len + 1 );
+    init_unicode_string( &name, bufferW );
+    InitializeObjectAttributes( &attr, &name, OBJ_CASE_INSENSITIVE, 0, NULL );
+    return NtCreateKey( key, KEY_ALL_ACCESS, &attr, 0, NULL, 0, NULL );
+}
 
 
 /******************************************************************************
@@ -676,9 +706,15 @@ NTSTATUS WINAPI NtUnloadKey( OBJECT_ATTRIBUTES *attr )
 
     TRACE( "(%p)\n", attr );
 
+    if (!attr || !attr->ObjectName) return STATUS_ACCESS_VIOLATION;
+    if (attr->Length != sizeof(*attr)) return STATUS_INVALID_PARAMETER;
+    if (attr->ObjectName->Length & 1) return STATUS_OBJECT_NAME_INVALID;
+
     SERVER_START_REQ( unload_registry )
     {
-        req->hkey = wine_server_obj_handle( attr->RootDirectory );
+        req->parent     = wine_server_obj_handle( attr->RootDirectory );
+        req->attributes = attr->Attributes;
+        wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
         ret = wine_server_call(req);
     }
     SERVER_END_REQ;

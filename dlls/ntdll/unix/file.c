@@ -1963,19 +1963,18 @@ static NTSTATUS get_mountmgr_fs_info( HANDLE handle, int fd, struct mountmgr_uni
     letter = find_dos_device( unix_name );
     free( unix_name );
 
+    memset( drive, 0, sizeof(*drive) );
     if (letter == -1)
     {
         struct stat st;
 
         fstat( fd, &st );
-        drive->unix_dev = st.st_dev;
-        drive->letter = 0;
+        drive->unix_dev = st.st_rdev ? st.st_rdev : st.st_dev;
     }
     else
         drive->letter = 'a' + letter;
 
-    string.Buffer = (WCHAR *)MOUNTMGR_DEVICE_NAME;
-    string.Length = sizeof(MOUNTMGR_DEVICE_NAME) - sizeof(WCHAR);
+    init_unicode_string( &string, MOUNTMGR_DEVICE_NAME );
     InitializeObjectAttributes( &attr, &string, 0, NULL, NULL );
     status = NtOpenFile( &mountmgr, GENERIC_READ | SYNCHRONIZE, &attr, &io,
                          FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_NONALERT );
@@ -2726,11 +2725,15 @@ static int get_redirect_path( char *unix_name, int pos, const WCHAR *name, int l
 
 #endif
 
+#define IS_OPTION_TRUE(ch) ((ch) == 'y' || (ch) == 'Y' || (ch) == 't' || (ch) == 'T' || (ch) == '1')
+
 /***********************************************************************
  *           init_files
  */
 void init_files(void)
 {
+    HANDLE key;
+
 #ifndef _WIN64
     if (is_wow64) init_redirects();
 #endif
@@ -2744,6 +2747,22 @@ void init_files(void)
     /* retrieve initial umask */
     start_umask = umask( 0777 );
     umask( start_umask );
+
+    if (!open_hkcu_key( "Software\\Wine", &key ))
+    {
+        static WCHAR showdotfilesW[] = {'S','h','o','w','D','o','t','F','i','l','e','s',0};
+        char tmp[80];
+        DWORD dummy;
+        UNICODE_STRING nameW;
+
+        init_unicode_string( &nameW, showdotfilesW );
+        if (!NtQueryValueKey( key, &nameW, KeyValuePartialInformation, tmp, sizeof(tmp), &dummy ))
+        {
+            WCHAR *str = (WCHAR *)((KEY_VALUE_PARTIAL_INFORMATION *)tmp)->Data;
+            show_dot_files = IS_OPTION_TRUE( str[0] );
+        }
+        NtClose( key );
+    }
 }
 
 
@@ -3474,6 +3493,141 @@ NTSTATUS CDECL wine_unix_to_nt_file_name( const char *name, WCHAR *buffer, SIZE_
 }
 
 
+/******************************************************************
+ *		collapse_path
+ *
+ * Get rid of . and .. components in the path.
+ */
+static void collapse_path( WCHAR *path )
+{
+    WCHAR *p, *start, *next;
+
+    /* convert every / into a \ */
+    for (p = path; *p; p++) if (*p == '/') *p = '\\';
+
+    p = path + 4;
+    while (*p && *p != '\\') p++;
+    start = p + 1;
+
+    /* collapse duplicate backslashes */
+    next = start;
+    for (p = next; *p; p++) if (*p != '\\' || next[-1] != '\\') *next++ = *p;
+    *next = 0;
+
+    p = start;
+    while (*p)
+    {
+        if (*p == '.')
+        {
+            switch(p[1])
+            {
+            case '\\': /* .\ component */
+                next = p + 2;
+                memmove( p, next, (wcslen(next) + 1) * sizeof(WCHAR) );
+                continue;
+            case 0:  /* final . */
+                if (p > start) p--;
+                *p = 0;
+                continue;
+            case '.':
+                if (p[2] == '\\')  /* ..\ component */
+                {
+                    next = p + 3;
+                    if (p > start)
+                    {
+                        p--;
+                        while (p > start && p[-1] != '\\') p--;
+                    }
+                    memmove( p, next, (wcslen(next) + 1) * sizeof(WCHAR) );
+                    continue;
+                }
+                else if (!p[2])  /* final .. */
+                {
+                    if (p > start)
+                    {
+                        p--;
+                        while (p > start && p[-1] != '\\') p--;
+                        if (p > start) p--;
+                    }
+                    *p = 0;
+                    continue;
+                }
+                break;
+            }
+        }
+        /* skip to the next component */
+        while (*p && *p != '\\') p++;
+        if (*p == '\\')
+        {
+            /* remove last dot in previous dir name */
+            if (p > start && p[-1] == '.') memmove( p-1, p, (wcslen(p) + 1) * sizeof(WCHAR) );
+            else p++;
+        }
+    }
+
+    /* remove trailing spaces and dots (yes, Windows really does that, don't ask) */
+    while (p > start && (p[-1] == ' ' || p[-1] == '.')) p--;
+    *p = 0;
+}
+
+
+#define IS_SEPARATOR(ch)   ((ch) == '\\' || (ch) == '/')
+
+/***********************************************************************
+ *           get_full_path
+ *
+ * Simplified version of RtlGetFullPathName_U.
+ */
+NTSTATUS get_full_path( const WCHAR *name, const WCHAR *curdir, WCHAR **path )
+{
+    static const WCHAR uncW[] = {'\\','?','?','\\','U','N','C','\\',0};
+    static const WCHAR devW[] = {'\\','?','?','\\',0};
+    static const WCHAR unixW[] = {'u','n','i','x'};
+    WCHAR *ret, root[] = {'\\','?','?','\\','C',':','\\',0};
+    NTSTATUS status = STATUS_SUCCESS;
+    const WCHAR *prefix;
+
+    if (IS_SEPARATOR(name[0]) && IS_SEPARATOR(name[1]))  /* \\ prefix */
+    {
+        if ((name[2] == '.' || name[2] == '?') && IS_SEPARATOR(name[3])) /* \\?\ device */
+        {
+            name += 4;
+            if (!wcsnicmp( name, unixW, 4 ) && IS_SEPARATOR(name[4]))  /* \\?\unix special name */
+            {
+                char *unix_name;
+                name += 4;
+                unix_name = malloc( wcslen(name) * 3 + 1 );
+                ntdll_wcstoumbs( name, wcslen(name) + 1, unix_name, wcslen(name) * 3 + 1, FALSE );
+                status = unix_to_nt_file_name( unix_name, path );
+                free( unix_name );
+                return status;
+            }
+            prefix = devW;
+        }
+        else prefix = uncW;  /* UNC path */
+    }
+    else if (IS_SEPARATOR(name[0]))  /* absolute path */
+    {
+        root[4] = curdir[0];
+        prefix = root;
+    }
+    else if (name[0] && name[1] == ':')  /* drive letter */
+    {
+        root[4] = towupper(name[0]);
+        name += 2;
+        prefix = root;
+    }
+    else prefix = curdir;  /* relative path */
+
+    ret = malloc( (wcslen(prefix) + wcslen(name) + 1) * sizeof(WCHAR) );
+    wcscpy( ret, prefix );
+    wcscat( ret, name );
+    collapse_path( ret );
+    *path = ret;
+    return STATUS_SUCCESS;
+}
+
+
 /***********************************************************************
  *           unmount_device
  *
@@ -3519,15 +3673,6 @@ static NTSTATUS unmount_device( HANDLE handle )
         if (needs_close) close( unix_fd );
     }
     return status;
-}
-
-
-/***********************************************************************
- *           set_show_dot_files
- */
-void CDECL set_show_dot_files( BOOL enable )
-{
-    show_dot_files = enable;
 }
 
 
@@ -4098,7 +4243,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
             FILE_ID_INFORMATION *info = ptr;
 
             info->VolumeSerialNumber = 0;
-            if (!(io->u.Status = get_mountmgr_fs_info( handle, fd, &drive, sizeof(drive) )))
+            if (!get_mountmgr_fs_info( handle, fd, &drive, sizeof(drive) ))
                 info->VolumeSerialNumber = drive.serial;
             memset( &info->FileId, 0, sizeof(info->FileId) );
             *(ULONGLONG *)&info->FileId = st.st_ino;
@@ -6257,16 +6402,33 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
     io->u.Status = server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL );
     if (io->u.Status == STATUS_BAD_DEVICE_TYPE)
     {
+        struct async_irp *async;
+        HANDLE wait_handle;
+        NTSTATUS status;
+
+        if (!(async = (struct async_irp *)alloc_fileio( sizeof(*async), irp_completion, handle )))
+            return STATUS_NO_MEMORY;
+        async->buffer  = buffer;
+        async->size    = length;
+
         SERVER_START_REQ( get_volume_info )
         {
+            req->async = server_async( handle, &async->io, NULL, NULL, NULL, io );
             req->handle = wine_server_obj_handle( handle );
             req->info_class = info_class;
             wine_server_set_reply( req, buffer, length );
-            io->u.Status = wine_server_call( req );
-            if (!io->u.Status) io->Information = wine_server_reply_size( reply );
+            status = wine_server_call( req );
+            if (status != STATUS_PENDING)
+            {
+                io->u.Status = status;
+                io->Information = wine_server_reply_size( reply );
+            }
+            wait_handle = wine_server_ptr_handle( reply->wait );
         }
         SERVER_END_REQ;
-        return io->u.Status;
+        if (status != STATUS_PENDING) free( async );
+        if (wait_handle) status = wait_async( wait_handle, FALSE, io );
+        return status;
     }
     else if (io->u.Status) return io->u.Status;
 

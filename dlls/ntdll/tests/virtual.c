@@ -31,12 +31,16 @@ static unsigned int page_size;
 
 static DWORD64 (WINAPI *pGetEnabledXStateFeatures)(void);
 static NTSTATUS (WINAPI *pRtlCreateUserStack)(SIZE_T, SIZE_T, ULONG, SIZE_T, SIZE_T, INITIAL_TEB *);
+static NTSTATUS (WINAPI *pRtlCreateUserThread)(HANDLE, SECURITY_DESCRIPTOR*, BOOLEAN, ULONG, SIZE_T,
+                                               SIZE_T, PRTL_THREAD_START_ROUTINE, void*, HANDLE*, CLIENT_ID* );
 static ULONG64 (WINAPI *pRtlGetEnabledExtendedFeatures)(ULONG64);
 static NTSTATUS (WINAPI *pRtlFreeUserStack)(void *);
+static void * (WINAPI *pRtlFindExportedRoutineByName)(HMODULE,const char*);
 static BOOL (WINAPI *pIsWow64Process)(HANDLE, PBOOL);
 static NTSTATUS (WINAPI *pNtAllocateVirtualMemoryEx)(HANDLE, PVOID *, SIZE_T *, ULONG, ULONG,
                                                      MEM_EXTENDED_PARAMETER *, ULONG);
 static const BOOL is_win64 = sizeof(void*) != sizeof(int);
+static BOOL is_wow64;
 
 static SYSTEM_BASIC_INFORMATION sbi;
 
@@ -90,9 +94,6 @@ static void test_NtAllocateVirtualMemory(void)
     NTSTATUS status;
     SIZE_T size;
     ULONG_PTR zero_bits;
-    BOOL is_wow64;
-
-    if (!pIsWow64Process || !pIsWow64Process(NtCurrentProcess(), &is_wow64)) is_wow64 = FALSE;
 
     /* simple allocation should success */
     size = 0x1000;
@@ -237,14 +238,272 @@ static void test_NtAllocateVirtualMemory(void)
     ok(status == STATUS_INVALID_PARAMETER, "NtAllocateVirtualMemoryEx returned %08x\n", status);
 }
 
+struct test_stack_size_thread_args
+{
+    DWORD expect_committed;
+    DWORD expect_reserved;
+};
+
+static void force_stack_grow(void)
+{
+    volatile int buffer[0x2000];
+    buffer[0] = 0xdeadbeef;
+    (void)buffer[0];
+}
+
+#ifdef _WIN64
+static void force_stack_grow_small(void)
+{
+    volatile int buffer[0x400];
+    buffer[0] = 0xdeadbeef;
+    (void)buffer[0];
+}
+#endif
+
+static DWORD WINAPI test_stack_size_thread(void *ptr)
+{
+    struct test_stack_size_thread_args *args = ptr;
+    MEMORY_BASIC_INFORMATION mbi;
+    NTSTATUS status;
+    SIZE_T size, guard_size;
+    DWORD committed, reserved;
+    void *addr;
+#ifdef _WIN64
+    DWORD prot;
+    void *tmp;
+#endif
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    reserved = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->DeallocationStack;
+    todo_wine ok( committed == args->expect_committed || broken(committed == 0x1000), "unexpected stack committed size %x, expected %x\n", committed, args->expect_committed );
+    ok( reserved == args->expect_reserved, "unexpected stack reserved size %x, expected %x\n", reserved, args->expect_reserved );
+
+    addr = (char *)NtCurrentTeb()->DeallocationStack;
+    status = NtQueryVirtualMemory( NtCurrentProcess(), addr, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.AllocationBase == NtCurrentTeb()->DeallocationStack, "unexpected AllocationBase %p, expected %p\n", mbi.AllocationBase, NtCurrentTeb()->DeallocationStack );
+    ok( mbi.AllocationProtect == PAGE_READWRITE, "unexpected AllocationProtect %#x, expected %#x\n", mbi.AllocationProtect, PAGE_READWRITE );
+    ok( mbi.BaseAddress == addr, "unexpected BaseAddress %p, expected %p\n", mbi.BaseAddress, addr );
+    todo_wine ok( mbi.State == MEM_RESERVE, "unexpected State %#x, expected %#x\n", mbi.State, MEM_RESERVE );
+    todo_wine ok( mbi.Protect == 0, "unexpected Protect %#x, expected %#x\n", mbi.Protect, 0 );
+    ok( mbi.Type == MEM_PRIVATE, "unexpected Type %#x, expected %#x\n", mbi.Type, MEM_PRIVATE );
+
+
+    force_stack_grow();
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    reserved = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->DeallocationStack;
+    todo_wine ok( committed == 0x9000, "unexpected stack committed size %x, expected 9000\n", committed );
+    ok( reserved == args->expect_reserved, "unexpected stack reserved size %x, expected %x\n", reserved, args->expect_reserved );
+
+
+    /* reserved area shrinks whenever stack grows */
+
+    addr = (char *)NtCurrentTeb()->DeallocationStack;
+    status = NtQueryVirtualMemory( NtCurrentProcess(), addr, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.AllocationBase == NtCurrentTeb()->DeallocationStack, "unexpected AllocationBase %p, expected %p\n", mbi.AllocationBase, NtCurrentTeb()->DeallocationStack );
+    ok( mbi.AllocationProtect == PAGE_READWRITE, "unexpected AllocationProtect %#x, expected %#x\n", mbi.AllocationProtect, PAGE_READWRITE );
+    ok( mbi.BaseAddress == addr, "unexpected BaseAddress %p, expected %p\n", mbi.BaseAddress, addr );
+    todo_wine ok( mbi.State == MEM_RESERVE, "unexpected State %#x, expected %#x\n", mbi.State, MEM_RESERVE );
+    todo_wine ok( mbi.Protect == 0, "unexpected Protect %#x, expected %#x\n", mbi.Protect, 0 );
+    ok( mbi.Type == MEM_PRIVATE, "unexpected Type %#x, expected %#x\n", mbi.Type, MEM_PRIVATE );
+
+    guard_size = reserved - committed - mbi.RegionSize;
+    ok( guard_size == 0x1000 || guard_size == 0x2000 || guard_size == 0x3000, "unexpected guard_size %I64x, expected 1000, 2000 or 3000\n", (UINT64)guard_size );
+
+    /* the commit area is initially preceded by guard pages */
+
+    addr = (char *)NtCurrentTeb()->DeallocationStack + mbi.RegionSize;
+    status = NtQueryVirtualMemory( NtCurrentProcess(), addr, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.AllocationBase == NtCurrentTeb()->DeallocationStack, "unexpected AllocationBase %p, expected %p\n", mbi.AllocationBase, NtCurrentTeb()->DeallocationStack );
+    ok( mbi.AllocationProtect == PAGE_READWRITE, "unexpected AllocationProtect %#x, expected %#x\n", mbi.AllocationProtect, PAGE_READWRITE );
+    ok( mbi.BaseAddress == addr, "unexpected BaseAddress %p, expected %p\n", mbi.BaseAddress, addr );
+    ok( mbi.RegionSize == guard_size, "unexpected RegionSize %I64x, expected 3000\n", (UINT64)mbi.RegionSize );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    ok( mbi.Protect == (PAGE_READWRITE|PAGE_GUARD), "unexpected Protect %#x, expected %#x\n", mbi.Protect, PAGE_READWRITE|PAGE_GUARD );
+    ok( mbi.Type == MEM_PRIVATE, "unexpected Type %#x, expected %#x\n", mbi.Type, MEM_PRIVATE );
+
+    addr = (char *)NtCurrentTeb()->Tib.StackLimit;
+    status = NtQueryVirtualMemory( NtCurrentProcess(), addr, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.AllocationBase == NtCurrentTeb()->DeallocationStack, "unexpected AllocationBase %p, expected %p\n", mbi.AllocationBase, NtCurrentTeb()->DeallocationStack );
+    ok( mbi.AllocationProtect == PAGE_READWRITE, "unexpected AllocationProtect %#x, expected %#x\n", mbi.AllocationProtect, PAGE_READWRITE );
+    ok( mbi.BaseAddress == addr, "unexpected BaseAddress %p, expected %p\n", mbi.BaseAddress, addr );
+    ok( mbi.RegionSize == committed, "unexpected RegionSize %I64x, expected %I64x\n", (UINT64)mbi.RegionSize, (UINT64)committed );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    ok( mbi.Protect == PAGE_READWRITE, "unexpected Protect %#x, expected %#x\n", mbi.Protect, PAGE_READWRITE );
+    ok( mbi.Type == MEM_PRIVATE, "unexpected Type %#x, expected %#x\n", mbi.Type, MEM_PRIVATE );
+
+
+#ifdef _WIN64
+    /* setting a guard page shrinks stack automatically */
+
+    addr = (char *)NtCurrentTeb()->Tib.StackLimit + 0x2000;
+    size = 0x1000;
+    status = NtAllocateVirtualMemory( NtCurrentProcess(), &addr, 0, &size, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD );
+    ok( !status, "NtAllocateVirtualMemory returned %08x\n", status );
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    todo_wine ok( committed == 0x6000, "unexpected stack committed size %x, expected 6000\n", committed );
+
+    status = NtQueryVirtualMemory( NtCurrentProcess(), (char *)addr - 0x2000, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.RegionSize == 0x2000, "unexpected RegionSize %I64x, expected 2000\n", (UINT64)mbi.RegionSize );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    ok( mbi.Protect == PAGE_READWRITE, "unexpected Protect %#x, expected %#x\n", mbi.Protect, PAGE_READWRITE );
+
+    status = NtQueryVirtualMemory( NtCurrentProcess(), addr, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.RegionSize == 0x1000, "unexpected RegionSize %I64x, expected 1000\n", (UINT64)mbi.RegionSize );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    ok( mbi.Protect == (PAGE_READWRITE|PAGE_GUARD), "unexpected Protect %#x, expected %#x\n", mbi.Protect, (PAGE_READWRITE|PAGE_GUARD) );
+
+    addr = (char *)NtCurrentTeb()->Tib.StackLimit;
+    status = NtQueryVirtualMemory( NtCurrentProcess(), addr, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    todo_wine ok( mbi.RegionSize == 0x6000, "unexpected RegionSize %I64x, expected 6000\n", (UINT64)mbi.RegionSize );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    ok( mbi.Protect == PAGE_READWRITE, "unexpected Protect %#x, expected %#x\n", mbi.Protect, PAGE_READWRITE );
+
+
+    /* guard pages are restored as the stack grows back */
+
+    addr = (char *)NtCurrentTeb()->Tib.StackLimit + 0x4000;
+    tmp = (char *)addr - guard_size - 0x1000;
+    size = 0x1000;
+    status = NtAllocateVirtualMemory( NtCurrentProcess(), &addr, 0, &size, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD );
+    ok( !status, "NtAllocateVirtualMemory returned %08x\n", status );
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    todo_wine ok( committed == 0x1000, "unexpected stack committed size %x, expected 1000\n", committed );
+
+    status = NtQueryVirtualMemory( NtCurrentProcess(), tmp, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    todo_wine ok( mbi.RegionSize == guard_size + 0x1000, "unexpected RegionSize %I64x, expected %I64x\n", (UINT64)mbi.RegionSize, (UINT64)(guard_size + 0x1000) );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    todo_wine ok( mbi.Protect == PAGE_READWRITE, "unexpected Protect %#x, expected %#x\n", mbi.Protect, PAGE_READWRITE );
+
+    force_stack_grow_small();
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    todo_wine ok( committed == 0x2000, "unexpected stack committed size %x, expected 2000\n", committed );
+
+    status = NtQueryVirtualMemory( NtCurrentProcess(), tmp, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.RegionSize == 0x1000, "unexpected RegionSize %I64x, expected 1000\n", (UINT64)mbi.RegionSize );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    todo_wine ok( mbi.Protect == PAGE_READWRITE, "unexpected Protect %#x, expected %#x\n", mbi.Protect, PAGE_READWRITE );
+
+    status = NtQueryVirtualMemory( NtCurrentProcess(), (char *)tmp + 0x1000, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.RegionSize == guard_size, "unexpected RegionSize %I64x, expected %I64x\n", (UINT64)mbi.RegionSize, (UINT64)guard_size );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    todo_wine ok( mbi.Protect == (PAGE_READWRITE|PAGE_GUARD), "unexpected Protect %#x, expected %#x\n", mbi.Protect, (PAGE_READWRITE|PAGE_GUARD) );
+
+
+    /* forcing stack limit over guard pages still shrinks the stack on page fault */
+
+    addr = (char *)tmp + guard_size + 0x1000;
+    size = 0x1000;
+    status = NtAllocateVirtualMemory( NtCurrentProcess(), &addr, 0, &size, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD );
+    ok( !status, "NtAllocateVirtualMemory returned %08x\n", status );
+
+    NtCurrentTeb()->Tib.StackLimit = (char *)tmp;
+
+    status = NtQueryVirtualMemory( NtCurrentProcess(), (char *)tmp + 0x1000, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    todo_wine ok( mbi.RegionSize == guard_size + 0x1000, "unexpected RegionSize %I64x, expected %I64x\n", (UINT64)mbi.RegionSize, (UINT64)(guard_size + 0x1000) );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    todo_wine ok( mbi.Protect == (PAGE_READWRITE|PAGE_GUARD), "unexpected Protect %#x, expected %#x\n", mbi.Protect, (PAGE_READWRITE|PAGE_GUARD) );
+
+    force_stack_grow_small();
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    todo_wine ok( committed == 0x2000, "unexpected stack committed size %x, expected 2000\n", committed );
+
+
+    /* it works with NtProtectVirtualMemory as well */
+
+    force_stack_grow();
+
+    addr = (char *)NtCurrentTeb()->Tib.StackLimit + 0x2000;
+    size = 0x1000;
+    status = NtProtectVirtualMemory( NtCurrentProcess(), &addr, &size, PAGE_READWRITE | PAGE_GUARD, &prot );
+    ok( !status, "NtProtectVirtualMemory returned %08x\n", status );
+    todo_wine ok( prot == PAGE_READWRITE, "unexpected prot %#x, expected %#x\n", prot, PAGE_READWRITE );
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    todo_wine ok( committed == 0x6000, "unexpected stack committed size %x, expected 6000\n", committed );
+
+    status = NtQueryVirtualMemory( NtCurrentProcess(), (char *)addr - 0x2000, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    todo_wine ok( mbi.RegionSize == 0x2000, "unexpected RegionSize %I64x, expected 2000\n", (UINT64)mbi.RegionSize );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    todo_wine ok( mbi.Protect == PAGE_READWRITE, "unexpected Protect %#x, expected %#x\n", mbi.Protect, PAGE_READWRITE );
+
+    status = NtQueryVirtualMemory( NtCurrentProcess(), addr, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    ok( mbi.RegionSize == 0x1000, "unexpected RegionSize %I64x, expected 1000\n", (UINT64)mbi.RegionSize );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    ok( mbi.Protect == (PAGE_READWRITE|PAGE_GUARD), "unexpected Protect %#x, expected %#x\n", mbi.Protect, (PAGE_READWRITE|PAGE_GUARD) );
+
+    addr = (char *)NtCurrentTeb()->Tib.StackLimit;
+    status = NtQueryVirtualMemory( NtCurrentProcess(), addr, MemoryBasicInformation, &mbi, sizeof(mbi), &size );
+    ok( !status, "NtQueryVirtualMemory returned %08x\n", status );
+    todo_wine ok( mbi.RegionSize == 0x6000, "unexpected RegionSize %I64x, expected 6000\n", (UINT64)mbi.RegionSize );
+    ok( mbi.State == MEM_COMMIT, "unexpected State %#x, expected %#x\n", mbi.State, MEM_COMMIT );
+    todo_wine ok( mbi.Protect == PAGE_READWRITE, "unexpected Protect %#x, expected %#x\n", mbi.Protect, PAGE_READWRITE );
+
+
+    /* clearing the guard pages doesn't change StackLimit back */
+
+    force_stack_grow();
+
+    addr = (char *)NtCurrentTeb()->Tib.StackLimit + 0x2000;
+    size = 0x1000;
+    status = NtProtectVirtualMemory( NtCurrentProcess(), &addr, &size, PAGE_READWRITE | PAGE_GUARD, &prot );
+    ok( !status, "NtProtectVirtualMemory returned %08x\n", status );
+    todo_wine ok( prot == PAGE_READWRITE, "unexpected prot %#x, expected %#x\n", prot, PAGE_READWRITE );
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    todo_wine ok( committed == 0x6000, "unexpected stack committed size %x, expected 6000\n", committed );
+
+    status = NtProtectVirtualMemory( NtCurrentProcess(), &addr, &size, PAGE_READWRITE, &prot );
+    ok( !status, "NtProtectVirtualMemory returned %08x\n", status );
+    ok( prot == (PAGE_READWRITE | PAGE_GUARD), "unexpected prot %#x, expected %#x\n", prot, (PAGE_READWRITE | PAGE_GUARD) );
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    todo_wine ok( committed == 0x6000, "unexpected stack committed size %x, expected 6000\n", committed );
+
+    /* and as we messed with it and it now doesn't fault, it doesn't grow back either */
+
+    force_stack_grow();
+
+    committed = (char *)NtCurrentTeb()->Tib.StackBase - (char *)NtCurrentTeb()->Tib.StackLimit;
+    todo_wine ok( committed == 0x6000, "unexpected stack committed size %x, expected 6000\n", committed );
+#endif
+
+    ExitThread(0);
+}
+
+static DWORD WINAPI test_stack_size_dummy_thread(void *ptr)
+{
+    return 0;
+}
+
 static void test_RtlCreateUserStack(void)
 {
     IMAGE_NT_HEADERS *nt = RtlImageNtHeader( NtCurrentTeb()->Peb->ImageBaseAddress );
+    struct test_stack_size_thread_args args;
     SIZE_T default_commit = nt->OptionalHeader.SizeOfStackCommit;
     SIZE_T default_reserve = nt->OptionalHeader.SizeOfStackReserve;
     INITIAL_TEB stack = {0};
     unsigned int i;
     NTSTATUS ret;
+    HANDLE thread;
+    CLIENT_ID id;
 
     struct
     {
@@ -298,6 +557,74 @@ static void test_RtlCreateUserStack(void)
 
     ret = pRtlCreateUserStack(0x11000, 0x110000, 0, 0, 1, &stack);
     ok(ret == STATUS_INVALID_PARAMETER, "got %#x\n", ret);
+
+    args.expect_committed = 0x4000;
+    args.expect_reserved = default_reserve;
+    thread = CreateThread(NULL, 0x3f00, test_stack_size_thread, &args, 0, NULL);
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+
+    args.expect_committed = default_commit < 0x2000 ? 0x2000 : default_commit;
+    args.expect_reserved = 0x400000;
+    thread = CreateThread(NULL, 0x3ff000, test_stack_size_thread, &args, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+
+    if (is_win64)
+    {
+        thread = CreateThread(NULL, 0x80000000, test_stack_size_dummy_thread, NULL, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+        ok(thread != NULL, "CreateThread with huge stack failed\n");
+        WaitForSingleObject(thread, INFINITE);
+        CloseHandle(thread);
+    }
+
+    args.expect_committed = default_commit < 0x2000 ? 0x2000 : default_commit;
+    args.expect_reserved = 0x100000;
+    for (i = 0; i < 32; i++)
+    {
+        ULONG mask = ~0u >> i;
+        NTSTATUS expect_ret = STATUS_SUCCESS;
+
+        if (i == 12) expect_ret = STATUS_CONFLICTING_ADDRESSES;
+        else if (i >= 13) expect_ret = STATUS_INVALID_PARAMETER;
+        ret = pRtlCreateUserStack( args.expect_committed, args.expect_reserved, i, 0x1000, 0x1000, &stack );
+        ok( ret == expect_ret || ret == STATUS_NO_MEMORY ||
+            (ret == STATUS_INVALID_PARAMETER_3 && expect_ret == STATUS_INVALID_PARAMETER) ||
+            broken( i == 1 && ret == STATUS_INVALID_PARAMETER_3 ), /* win7 */
+            "%u: got %x / %x\n", i, ret, expect_ret );
+        if (!ret) pRtlFreeUserStack( stack.DeallocationStack );
+        ret = pRtlCreateUserThread( GetCurrentProcess(), NULL, FALSE, i,
+                                    args.expect_reserved, args.expect_committed,
+                                    (void *)test_stack_size_thread, &args, &thread, &id );
+        ok( ret == expect_ret || ret == STATUS_NO_MEMORY ||
+            (ret == STATUS_INVALID_PARAMETER_3 && expect_ret == STATUS_INVALID_PARAMETER) ||
+            broken( i == 1 && ret == STATUS_INVALID_PARAMETER_3 ), /* win7 */
+            "%u: got %x / %x\n", i, ret, expect_ret );
+        if (!ret)
+        {
+            WaitForSingleObject( thread, INFINITE );
+            CloseHandle( thread );
+        }
+
+        if (mask <= 31) continue;
+        if (!is_win64 && !is_wow64) expect_ret = STATUS_INVALID_PARAMETER_3;
+        ret = pRtlCreateUserStack( args.expect_committed, args.expect_reserved, mask, 0x1000, 0x1000, &stack );
+        ok( ret == expect_ret || ret == STATUS_NO_MEMORY ||
+            (ret == STATUS_INVALID_PARAMETER_3 && expect_ret == STATUS_INVALID_PARAMETER),
+            "%08x: got %x / %x\n", mask, ret, expect_ret );
+        if (!ret) pRtlFreeUserStack( stack.DeallocationStack );
+        ret = pRtlCreateUserThread( GetCurrentProcess(), NULL, FALSE, mask,
+                                    args.expect_reserved, args.expect_committed,
+                                    (void *)test_stack_size_thread, &args, &thread, &id );
+        ok( ret == expect_ret || ret == STATUS_NO_MEMORY ||
+            (ret == STATUS_INVALID_PARAMETER_3 && expect_ret == STATUS_INVALID_PARAMETER),
+            "%08x: got %x / %x\n", mask, ret, expect_ret );
+        if (!ret)
+        {
+            WaitForSingleObject( thread, INFINITE );
+            CloseHandle( thread );
+        }
+    }
 }
 
 static void test_NtMapViewOfSection(void)
@@ -307,7 +634,7 @@ static void test_NtMapViewOfSection(void)
     char buffer[sizeof(data)];
     HANDLE file, mapping, process;
     void *ptr, *ptr2;
-    BOOL is_wow64, ret;
+    BOOL ret;
     DWORD status, written;
     SIZE_T size, result;
     LARGE_INTEGER offset;
@@ -732,6 +1059,16 @@ static void test_syscalls(void)
     }
     perform_relocations( ptr, delta );
     pNtClose = (void *)GetProcAddress( module, "NtClose" );
+
+    if (pRtlFindExportedRoutineByName)
+    {
+        void *func = pRtlFindExportedRoutineByName( module, "NtClose" );
+        ok( func == (void *)pNtClose, "wrong ptr %p / %p\n", func, pNtClose );
+        func = pRtlFindExportedRoutineByName( ptr, "NtClose" );
+        ok( (char *)func - (char *)pNtClose == delta, "wrong ptr %p / %p\n", func, pNtClose );
+    }
+    else win_skip( "RtlFindExportedRoutineByName not supported\n" );
+
     if (!memcmp( pNtClose, (char *)pNtClose + delta, 32 ))
     {
         pNtClose = (void *)((char *)pNtClose + delta);
@@ -776,13 +1113,16 @@ START_TEST(virtual)
     pGetEnabledXStateFeatures = (void *)GetProcAddress(mod, "GetEnabledXStateFeatures");
     mod = GetModuleHandleA("ntdll.dll");
     pRtlCreateUserStack = (void *)GetProcAddress(mod, "RtlCreateUserStack");
+    pRtlCreateUserThread = (void *)GetProcAddress(mod, "RtlCreateUserThread");
     pRtlFreeUserStack = (void *)GetProcAddress(mod, "RtlFreeUserStack");
+    pRtlFindExportedRoutineByName = (void *)GetProcAddress(mod, "RtlFindExportedRoutineByName");
     pRtlGetEnabledExtendedFeatures = (void *)GetProcAddress(mod, "RtlGetEnabledExtendedFeatures");
     pNtAllocateVirtualMemoryEx = (void *)GetProcAddress(mod, "NtAllocateVirtualMemoryEx");
 
     NtQuerySystemInformation(SystemBasicInformation, &sbi, sizeof(sbi), NULL);
     trace("system page size %#x\n", sbi.PageSize);
     page_size = sbi.PageSize;
+    if (!pIsWow64Process || !pIsWow64Process(NtCurrentProcess(), &is_wow64)) is_wow64 = FALSE;
 
     test_NtAllocateVirtualMemory();
     test_RtlCreateUserStack();

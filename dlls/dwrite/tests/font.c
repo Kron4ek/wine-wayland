@@ -587,6 +587,20 @@ static BOOL has_face_variations(IDWriteFontFace *fontface)
     return ret;
 }
 
+#define check_familymodel(a,b) _check_familymodel(a,b,__LINE__)
+static void _check_familymodel(void *iface_ptr, DWRITE_FONT_FAMILY_MODEL expected_model, unsigned int line)
+{
+    IDWriteFontCollection2 *collection;
+    DWRITE_FONT_FAMILY_MODEL model;
+
+    if (SUCCEEDED(IUnknown_QueryInterface((IUnknown *)iface_ptr, &IID_IDWriteFontCollection2, (void **)&collection)))
+    {
+        model = IDWriteFontCollection2_GetFontFamilyModel(collection);
+        ok_(__FILE__,line)(model == expected_model, "Unexpected family model %d, expected %d.\n", model, expected_model);
+        IDWriteFontCollection2_Release(collection);
+    }
+}
+
 struct test_fontenumerator
 {
     IDWriteFontFileEnumerator IDWriteFontFileEnumerator_iface;
@@ -2441,7 +2455,6 @@ static void test_system_fontcollection(void)
     IDWriteFontCollection2 *collection2;
     IDWriteFontCollection3 *collection3;
     IDWriteFactory *factory, *factory2;
-    DWRITE_FONT_FAMILY_MODEL model;
     IDWriteFontFileLoader *loader;
     IDWriteFontFamily *family;
     IDWriteFontFace *fontface;
@@ -2621,8 +2634,7 @@ static void test_system_fontcollection(void)
 todo_wine
         ok(!!event, "Expected event handle.\n");
 
-        model = IDWriteFontCollection3_GetFontFamilyModel(collection3);
-        ok(model == DWRITE_FONT_FAMILY_MODEL_WEIGHT_STRETCH_STYLE, "Unexpected model.\n");
+        check_familymodel(collection3, DWRITE_FONT_FAMILY_MODEL_WEIGHT_STRETCH_STYLE);
 
         IDWriteFontCollection3_Release(collection3);
     }
@@ -8433,31 +8445,46 @@ static void test_HasKerningPairs(void)
     ok(ref == 0, "factory not released, %u\n", ref);
 }
 
+static float get_scaled_metric(const DWRITE_GLYPH_RUN *run, float metric, const DWRITE_FONT_METRICS *m)
+{
+    return run->fontEmSize * metric / m->designUnitsPerEm;
+}
+
 static void get_expected_glyph_origins(D2D1_POINT_2F baseline_origin, const DWRITE_GLYPH_RUN *run,
         D2D1_POINT_2F *origins)
 {
+    DWRITE_GLYPH_METRICS glyph_metrics[2];
+    DWRITE_FONT_METRICS metrics;
     unsigned int i;
+    HRESULT hr;
+
+    IDWriteFontFace_GetMetrics(run->fontFace, &metrics);
+
+    hr = IDWriteFontFace_GetDesignGlyphMetrics(run->fontFace, run->glyphIndices, run->glyphCount, glyph_metrics,
+            run->isSideways);
+    ok(hr == S_OK, "Failed to get glyph metrics, hr %#x.\n", hr);
 
     if (run->bidiLevel & 1)
     {
-        DWRITE_GLYPH_METRICS glyph_metrics[2];
-        DWRITE_FONT_METRICS metrics;
         float advance;
-        HRESULT hr;
 
-        hr = IDWriteFontFace_GetDesignGlyphMetrics(run->fontFace, run->glyphIndices, run->glyphCount, glyph_metrics, FALSE);
-        ok(hr == S_OK, "Failed to get glyph metrics, hr %#x.\n", hr);
-
-        IDWriteFontFace_GetMetrics(run->fontFace, &metrics);
-
-        advance = run->fontEmSize * glyph_metrics[0].advanceWidth / metrics.designUnitsPerEm;
+        advance = get_scaled_metric(run, run->isSideways ? glyph_metrics[0].advanceHeight :
+                glyph_metrics[0].advanceWidth, &metrics);
 
         baseline_origin.x -= advance;
 
         for (i = 0; i < run->glyphCount; ++i)
         {
-            origins[i].x = baseline_origin.x - run->glyphOffsets[i].advanceOffset;
-            origins[i].y = baseline_origin.y - run->glyphOffsets[i].ascenderOffset;
+            origins[i] = baseline_origin;
+
+            if (run->isSideways)
+            {
+                origins[i].x += get_scaled_metric(run, glyph_metrics[i].verticalOriginY, &metrics);
+                origins[i].y += metrics.designUnitsPerEm / (4.0f * run->fontEmSize);
+            }
+
+            origins[i].x -= run->glyphOffsets[i].advanceOffset;
+            origins[i].y -= run->glyphOffsets[i].ascenderOffset;
 
             baseline_origin.x -= run->glyphAdvances[i];
         }
@@ -8466,8 +8493,16 @@ static void get_expected_glyph_origins(D2D1_POINT_2F baseline_origin, const DWRI
     {
         for (i = 0; i < run->glyphCount; ++i)
         {
-            origins[i].x = baseline_origin.x + run->glyphOffsets[i].advanceOffset;
-            origins[i].y = baseline_origin.y - run->glyphOffsets[i].ascenderOffset;
+            origins[i] = baseline_origin;
+
+            if (run->isSideways)
+            {
+                origins[i].x += get_scaled_metric(run, glyph_metrics[i].verticalOriginY, &metrics);
+                origins[i].y += metrics.designUnitsPerEm / (4.0f * run->fontEmSize);
+            }
+
+            origins[i].x += run->glyphOffsets[i].advanceOffset;
+            origins[i].y -= run->glyphOffsets[i].ascenderOffset;
 
             baseline_origin.x += run->glyphAdvances[i];
         }
@@ -8482,12 +8517,18 @@ static void test_ComputeGlyphOrigins(void)
         float advances[2];
         DWRITE_GLYPH_OFFSET offsets[2];
         unsigned int bidi_level;
+        unsigned int sideways;
     }
     origins_tests[] =
     {
         { { 123.0f, 321.0f }, { 10.0f, 20.0f }, { { 0 } } },
         { { 123.0f, 321.0f }, { 10.0f, 20.0f }, { { 0.3f, 0.5f }, { -0.1f, 0.9f } } },
         { { 123.0f, 321.0f }, { 10.0f, 20.0f }, { { 0 } }, 1 },
+
+        { { 123.0f, 321.0f }, { 10.0f, 20.0f }, { { 0 } }, 0, 1 },
+        { { 123.0f, 321.0f }, { 10.0f, 20.0f }, { { 0.3f, 0.5f }, { -0.1f, 0.9f } }, 0, 1 },
+        { { 123.0f, 321.0f }, { 10.0f, 20.0f }, { { 0 } }, 1, 1 },
+        { { 123.0f, 321.0f }, { 10.0f, 20.0f }, { { 0.3f, 0.5f }, { -0.1f, 0.9f } }, 1, 1 },
     };
     IDWriteFactory4 *factory;
     DWRITE_GLYPH_RUN run;
@@ -8517,7 +8558,7 @@ static void test_ComputeGlyphOrigins(void)
         run.glyphIndices = glyphs;
         run.glyphAdvances = origins_tests[i].advances;
         run.glyphOffsets = origins_tests[i].offsets;
-        run.isSideways = FALSE;
+        run.isSideways = !!origins_tests[i].sideways;
         run.bidiLevel = origins_tests[i].bidi_level;
 
         get_expected_glyph_origins(origins_tests[i].baseline_origin, &run, expected_origins);
@@ -8527,6 +8568,7 @@ static void test_ComputeGlyphOrigins(void)
         ok(hr == S_OK, "%u: failed to compute glyph origins, hr %#x.\n", i, hr);
         for (j = 0; j < run.glyphCount; ++j)
         {
+        todo_wine_if(run.isSideways)
             ok(!memcmp(&origins[j], &expected_origins[j], sizeof(origins[j])),
                     "%u: unexpected origin[%u] (%f, %f) - (%f, %f).\n", i, j, origins[j].x, origins[j].y,
                     expected_origins[j].x, expected_origins[j].y);
@@ -9423,8 +9465,8 @@ static void test_AnalyzeContainerType(void)
 static void test_fontsetbuilder(void)
 {
     IDWriteFontFaceReference *ref, *ref2, *ref3;
-    IDWriteFontFaceReference1 *ref1;
     IDWriteFontCollection1 *collection;
+    IDWriteFontFaceReference1 *ref1;
     IDWriteFontSetBuilder1 *builder1;
     IDWriteFontSetBuilder *builder;
     DWRITE_FONT_AXIS_VALUE axis_values[4];
@@ -9457,11 +9499,35 @@ static void test_fontsetbuilder(void)
         hr = IDWriteFontSetBuilder1_AddFontFile(builder1, file);
         ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
 
+        hr = IDWriteFontSetBuilder1_CreateFontSet(builder1, &fontset);
+        ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+        hr = IDWriteFactory3_CreateFontCollectionFromFontSet(factory, fontset, &collection);
+    todo_wine
+        ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+        if (SUCCEEDED(hr))
+        {
+            count = IDWriteFontCollection1_GetFontFamilyCount(collection);
+            ok(count == 1, "Unexpected family count %u.\n", count);
+            IDWriteFontCollection1_Release(collection);
+        }
+        IDWriteFontSet_Release(fontset);
+
         hr = IDWriteFontSetBuilder1_AddFontFile(builder1, file);
         ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
 
         hr = IDWriteFontSetBuilder1_CreateFontSet(builder1, &fontset);
         ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+
+        hr = IDWriteFactory3_CreateFontCollectionFromFontSet(factory, fontset, &collection);
+    todo_wine
+        ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+        if (SUCCEEDED(hr))
+        {
+            check_familymodel(collection, DWRITE_FONT_FAMILY_MODEL_WEIGHT_STRETCH_STYLE);
+            count = IDWriteFontCollection1_GetFontFamilyCount(collection);
+            ok(count == 1, "Unexpected family count %u.\n", count);
+            IDWriteFontCollection1_Release(collection);
+        }
 
         /* No attempt to eliminate duplicates. */
         count = IDWriteFontSet_GetFontCount(fontset);
@@ -10139,6 +10205,78 @@ static void test_system_font_set(void)
     IDWriteFactory3_Release(factory);
 }
 
+static void test_CreateFontCollectionFromFontSet(void)
+{
+    unsigned int index, count, refcount;
+    IDWriteFontCollection1 *collection;
+    IDWriteFontSetBuilder1 *builder;
+    DWRITE_FONT_PROPERTY props[1];
+    IDWriteFontFaceReference *ref;
+    IDWriteFactory5 *factory;
+    IDWriteFontSet *fontset;
+    IDWriteFontFile *file;
+    WCHAR *path;
+    BOOL exists;
+    HRESULT hr;
+
+    if (!(factory = create_factory_iid(&IID_IDWriteFactory5)))
+    {
+        win_skip("_CreateFontCollectionFromFontSet() is not available.\n");
+        return;
+    }
+
+    hr = IDWriteFactory5_CreateFontSetBuilder(factory, &builder);
+    ok(hr == S_OK, "Failed to create font set builder, hr %#x.\n", hr);
+
+    path = create_testfontfile(test_fontfile);
+
+    hr = IDWriteFactory5_CreateFontFileReference(factory, path, NULL, &file);
+    ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+
+    hr = IDWriteFontSetBuilder1_AddFontFile(builder, file);
+    ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+
+    /* Add same file, with explicit properties. */
+    hr = IDWriteFactory5_CreateFontFaceReference_(factory, file, 0, DWRITE_FONT_SIMULATIONS_NONE, &ref);
+    ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+    props[0].propertyId = DWRITE_FONT_PROPERTY_ID_WEIGHT_STRETCH_STYLE_FAMILY_NAME;
+    props[0].propertyValue = L"Another Font";
+    props[0].localeName = L"en-US";
+    hr = IDWriteFontSetBuilder1_AddFontFaceReference_(builder, ref, props, 1);
+todo_wine
+    ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+    IDWriteFontFaceReference_Release(ref);
+
+    hr = IDWriteFontSetBuilder1_CreateFontSet(builder, &fontset);
+    ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+
+    hr = IDWriteFactory5_CreateFontCollectionFromFontSet(factory, fontset, &collection);
+todo_wine
+    ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+
+if (SUCCEEDED(hr))
+{
+    count = IDWriteFontCollection1_GetFontFamilyCount(collection);
+    ok(count == 2, "Unexpected family count %u.\n", count);
+
+    /* Explicit fontset properties are prioritized and not replaced by actual properties from a file. */
+    exists = FALSE;
+    hr = IDWriteFontCollection1_FindFamilyName(collection, L"Another Font", &index, &exists);
+    ok(hr == S_OK, "Unexpected hr %#x.\n",hr);
+    ok(!!exists, "Unexpected return value %d.\n", exists);
+
+    IDWriteFontCollection1_Release(collection);
+}
+    IDWriteFontSet_Release(fontset);
+
+    IDWriteFontSetBuilder1_Release(builder);
+
+    IDWriteFontFile_Release(file);
+    refcount = IDWriteFactory5_Release(factory);
+    ok(!refcount, "Unexpected factory refcount %u.\n", refcount);
+    DELETE_FONTFILE(path);
+}
+
 START_TEST(font)
 {
     IDWriteFactory *factory;
@@ -10212,6 +10350,7 @@ START_TEST(font)
     test_expiration_event();
     test_family_font_set();
     test_system_font_set();
+    test_CreateFontCollectionFromFontSet();
 
     IDWriteFactory_Release(factory);
 }

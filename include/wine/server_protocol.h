@@ -110,23 +110,15 @@ typedef union
 } debug_event_t;
 
 
-enum cpu_type
-{
-    CPU_x86, CPU_x86_64, CPU_POWERPC, CPU_ARM, CPU_ARM64
-};
-typedef int client_cpu_t;
-
-
 typedef struct
 {
-    client_cpu_t     cpu;
+    unsigned int     machine;
     unsigned int     flags;
     union
     {
         struct { unsigned int eip, ebp, esp, eflags, cs, ss; } i386_regs;
         struct { unsigned __int64 rip, rbp, rsp;
                  unsigned int cs, ss, flags, __pad; } x86_64_regs;
-        struct { unsigned int iar, msr, ctr, lr, dar, dsisr, trap, __pad; } powerpc_regs;
         struct { unsigned int sp, lr, pc, cpsr; } arm_regs;
         struct { unsigned __int64 sp, pc, pstate; } arm64_regs;
     } ctl;
@@ -135,7 +127,6 @@ typedef struct
         struct { unsigned int eax, ebx, ecx, edx, esi, edi; } i386_regs;
         struct { unsigned __int64 rax,rbx, rcx, rdx, rsi, rdi,
                                   r8, r9, r10, r11, r12, r13, r14, r15; } x86_64_regs;
-        struct { unsigned int gpr[32], cr, xer; } powerpc_regs;
         struct { unsigned int r[13]; } arm_regs;
         struct { unsigned __int64 x[31]; } arm64_regs;
     } integer;
@@ -149,7 +140,6 @@ typedef struct
         struct { unsigned int ctrl, status, tag, err_off, err_sel, data_off, data_sel, cr0npx;
                  unsigned char regs[80]; } i386_regs;
         struct { struct { unsigned __int64 low, high; } fpregs[32]; } x86_64_regs;
-        struct { double fpr[32], fpscr; } powerpc_regs;
         struct { unsigned __int64 d[32]; unsigned int fpscr; } arm_regs;
         struct { struct { unsigned __int64 low, high; } q[32]; unsigned int fpcr, fpsr; } arm64_regs;
     } fp;
@@ -157,7 +147,6 @@ typedef struct
     {
         struct { unsigned int dr0, dr1, dr2, dr3, dr6, dr7; } i386_regs;
         struct { unsigned __int64 dr0, dr1, dr2, dr3, dr6, dr7; } x86_64_regs;
-        struct { unsigned int dr[8]; } powerpc_regs;
         struct { unsigned int bvr[8], bcr[8], wvr[1], wcr[1]; } arm_regs;
         struct { unsigned __int64 bvr[8], wvr[2]; unsigned int bcr[8], wcr[2]; } arm64_regs;
     } debug;
@@ -575,6 +564,7 @@ typedef union
         unsigned int     flags;
         client_ptr_t     func;
         client_ptr_t     arg;
+        mem_size_t       zero_bits;
         mem_size_t       reserve;
         mem_size_t       commit;
     } create_thread;
@@ -833,18 +823,17 @@ struct new_process_request
     obj_handle_t token;
     obj_handle_t debug;
     obj_handle_t parent_process;
-    int          inherit_all;
-    unsigned int create_flags;
+    unsigned int flags;
     int          socket_fd;
     unsigned int access;
-    client_cpu_t cpu;
+    unsigned short machine;
+    char __pad_38[2];
     data_size_t  info_size;
     data_size_t  handles_size;
     /* VARARG(objattr,object_attributes); */
     /* VARARG(handles,uints,handles_size); */
     /* VARARG(info,startup_info,info_size); */
     /* VARARG(env,unicode_str); */
-    char __pad_52[4];
 };
 struct new_process_reply
 {
@@ -932,8 +921,6 @@ struct init_first_thread_request
     client_ptr_t ldt_copy;
     int          reply_fd;
     int          wait_fd;
-    client_cpu_t cpu;
-    char __pad_60[4];
 };
 struct init_first_thread_reply
 {
@@ -942,7 +929,8 @@ struct init_first_thread_reply
     thread_id_t  tid;
     timeout_t    server_start;
     data_size_t  info_size;
-    unsigned int all_cpus;
+    /* VARARG(machines,ushorts); */
+    char __pad_28[4];
 };
 
 
@@ -1015,9 +1003,9 @@ struct get_process_info_reply
     timeout_t    end_time;
     int          exit_code;
     int          priority;
-    client_cpu_t cpu;
+    unsigned short machine;
     /* VARARG(image,pe_image_info); */
-    char __pad_60[4];
+    char __pad_58[6];
 };
 
 
@@ -3830,7 +3818,7 @@ struct get_last_input_time_reply
 struct get_key_state_request
 {
     struct request_header __header;
-    thread_id_t    tid;
+    int            async;
     int            key;
     char __pad_20[4];
 };
@@ -3846,10 +3834,8 @@ struct get_key_state_reply
 struct set_key_state_request
 {
     struct request_header __header;
-    thread_id_t    tid;
     int            async;
     /* VARARG(keystate,bytes); */
-    char __pad_20[4];
 };
 struct set_key_state_reply
 {
@@ -5389,6 +5375,24 @@ struct resume_process_reply
 };
 
 
+
+struct get_next_thread_request
+{
+    struct request_header __header;
+    obj_handle_t process;
+    obj_handle_t last;
+    unsigned int access;
+    unsigned int attributes;
+    unsigned int flags;
+};
+struct get_next_thread_reply
+{
+    struct reply_header __header;
+    obj_handle_t handle;
+    char __pad_12[4];
+};
+
+
 struct create_esync_request
 {
     struct request_header __header;
@@ -5836,6 +5840,7 @@ enum request
     REQ_terminate_job,
     REQ_suspend_process,
     REQ_resume_process,
+    REQ_get_next_thread,
     REQ_create_esync,
     REQ_open_esync,
     REQ_get_esync_fd,
@@ -6126,6 +6131,7 @@ union generic_request
     struct terminate_job_request terminate_job_request;
     struct suspend_process_request suspend_process_request;
     struct resume_process_request resume_process_request;
+    struct get_next_thread_request get_next_thread_request;
     struct create_esync_request create_esync_request;
     struct open_esync_request open_esync_request;
     struct get_esync_fd_request get_esync_fd_request;
@@ -6414,6 +6420,7 @@ union generic_reply
     struct terminate_job_reply terminate_job_reply;
     struct suspend_process_reply suspend_process_reply;
     struct resume_process_reply resume_process_reply;
+    struct get_next_thread_reply get_next_thread_reply;
     struct create_esync_reply create_esync_reply;
     struct open_esync_reply open_esync_reply;
     struct get_esync_fd_reply get_esync_fd_reply;
@@ -6428,7 +6435,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 688
+#define SERVER_PROTOCOL_VERSION 698
 
 /* ### protocol_version end ### */
 

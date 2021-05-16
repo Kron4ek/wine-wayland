@@ -4113,6 +4113,7 @@ static LRESULT LISTVIEW_MouseMove(LISTVIEW_INFO *infoPtr, WORD fwKeys, INT x, IN
 
                         /* Begin selection and capture mouse */
                         infoPtr->bMarqueeSelect = TRUE;
+                        infoPtr->marqueeRect = rect;
                         SetCapture(infoPtr->hwndSelf);
                     }
                 }
@@ -9345,6 +9346,7 @@ static LRESULT LISTVIEW_ThemeChanged(const LISTVIEW_INFO *infoPtr)
     HTHEME theme = GetWindowTheme(infoPtr->hwndSelf);
     CloseThemeData(theme);
     OpenThemeData(infoPtr->hwndSelf, themeClass);
+    InvalidateRect(infoPtr->hwndSelf, NULL, TRUE);
     return 0;
 }
 

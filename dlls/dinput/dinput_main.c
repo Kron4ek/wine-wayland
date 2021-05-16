@@ -1665,14 +1665,6 @@ static const IClassFactoryVtbl DICF_Vtbl = {
 static IClassFactoryImpl DINPUT_CF = {{&DICF_Vtbl}, 1 };
 
 /***********************************************************************
- *		DllCanUnloadNow (DINPUT.@)
- */
-HRESULT WINAPI DllCanUnloadNow(void)
-{
-    return S_FALSE;
-}
-
-/***********************************************************************
  *		DllGetClassObject (DINPUT.@)
  */
 HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
@@ -1686,22 +1678,6 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
 
     FIXME("(%s,%s,%p): no interface found.\n", debugstr_guid(rclsid), debugstr_guid(riid), ppv);
     return CLASS_E_CLASSNOTAVAILABLE;
-}
-
-/***********************************************************************
- *		DllRegisterServer (DINPUT.@)
- */
-HRESULT WINAPI DllRegisterServer(void)
-{
-    return __wine_register_resources( DINPUT_instance );
-}
-
-/***********************************************************************
- *		DllUnregisterServer (DINPUT.@)
- */
-HRESULT WINAPI DllUnregisterServer(void)
-{
-    return __wine_unregister_resources( DINPUT_instance );
 }
 
 /******************************************************************************
@@ -1861,6 +1837,7 @@ static BOOL check_hook_thread(void)
 {
     static HANDLE hook_thread;
     HMODULE module;
+    HANDLE wait_handle = NULL;
 
     EnterCriticalSection(&dinput_hook_crit);
 
@@ -1884,11 +1861,17 @@ static BOOL check_hook_thread(void)
 
         hook_thread_id = 0;
         PostThreadMessageW(tid, WM_USER+0x10, 0, 0);
-        CloseHandle(hook_thread);
+        wait_handle = hook_thread;
         hook_thread = NULL;
     }
 
     LeaveCriticalSection(&dinput_hook_crit);
+
+    if (wait_handle)
+    {
+        WaitForSingleObject(wait_handle, INFINITE);
+        CloseHandle(wait_handle);
+    }
     return hook_thread_id != 0;
 }
 

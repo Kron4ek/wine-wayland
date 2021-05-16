@@ -18,10 +18,10 @@
 
 #include "reg.h"
 
-int reg_delete(HKEY root, WCHAR *path, WCHAR *key_name, WCHAR *value_name,
-               BOOL value_empty, BOOL value_all, BOOL force)
+static int run_delete(HKEY root, WCHAR *path, WCHAR *key_name, WCHAR *value_name,
+                      BOOL value_empty, BOOL value_all, BOOL force)
 {
-    HKEY key;
+    HKEY hkey;
 
     if (!force)
     {
@@ -41,21 +41,21 @@ int reg_delete(HKEY root, WCHAR *path, WCHAR *key_name, WCHAR *value_name,
         }
     }
 
-    /* Delete subtree only if no /v* option is given */
+    /* Delete registry key if no /v* option is given */
     if (!value_name && !value_empty && !value_all)
     {
         if (RegDeleteTreeW(root, path) != ERROR_SUCCESS)
         {
-            output_message(STRING_CANNOT_FIND);
+            output_message(STRING_KEY_NONEXIST);
             return 1;
         }
         output_message(STRING_SUCCESS);
         return 0;
     }
 
-    if (RegOpenKeyW(root, path, &key) != ERROR_SUCCESS)
+    if (RegOpenKeyExW(root, path, 0, KEY_READ|KEY_SET_VALUE, &hkey))
     {
-        output_message(STRING_CANNOT_FIND);
+        output_message(STRING_KEY_NONEXIST);
         return 1;
     }
 
@@ -70,14 +70,14 @@ int reg_delete(HKEY root, WCHAR *path, WCHAR *key_name, WCHAR *value_name,
         while (1)
         {
             value_len = max_value_len;
-            rc = RegEnumValueW(key, 0, value_name, &value_len, NULL, NULL, NULL, NULL);
+            rc = RegEnumValueW(hkey, 0, value_name, &value_len, NULL, NULL, NULL, NULL);
             if (rc == ERROR_SUCCESS)
             {
-                rc = RegDeleteValueW(key, value_name);
+                rc = RegDeleteValueW(hkey, value_name);
                 if (rc != ERROR_SUCCESS)
                 {
                     free(value_name);
-                    RegCloseKey(key);
+                    RegCloseKey(hkey);
                     output_message(STRING_VALUEALL_FAILED, key_name);
                     return 1;
                 }
@@ -93,15 +93,79 @@ int reg_delete(HKEY root, WCHAR *path, WCHAR *key_name, WCHAR *value_name,
     }
     else if (value_name || value_empty)
     {
-        if (RegDeleteValueW(key, value_empty ? NULL : value_name) != ERROR_SUCCESS)
+        if (RegDeleteValueW(hkey, value_name))
         {
-            RegCloseKey(key);
-            output_message(STRING_CANNOT_FIND);
+            RegCloseKey(hkey);
+            output_message(STRING_VALUE_NONEXIST);
             return 1;
         }
     }
 
-    RegCloseKey(key);
+    RegCloseKey(hkey);
     output_message(STRING_SUCCESS);
     return 0;
+}
+
+int reg_delete(int argc, WCHAR *argvW[])
+{
+    HKEY root;
+    WCHAR *path, *key_name, *value_name = NULL;
+    BOOL value_all = FALSE, value_empty = FALSE, force = FALSE;
+    int i;
+
+    if (!parse_registry_key(argvW[2], &root, &path))
+        return 1;
+
+    for (i = 3; i < argc; i++)
+    {
+        WCHAR *str;
+
+        if (argvW[i][0] != '/' && argvW[i][0] != '-')
+            goto invalid;
+
+        str = &argvW[i][1];
+
+        if (!lstrcmpiW(str, L"va"))
+        {
+            if (value_all) goto invalid;
+            value_all = TRUE;
+            continue;
+        }
+        else if (!lstrcmpiW(str, L"ve"))
+        {
+            if (value_empty) goto invalid;
+            value_empty = TRUE;
+            continue;
+        }
+        else if (!lstrcmpiW(str, L"reg:32") || !lstrcmpiW(str, L"reg:64"))
+            continue;
+        else if (!str[0] || str[1])
+            goto invalid;
+
+        switch (towlower(*str))
+        {
+        case 'v':
+            if (value_name || !(value_name = argvW[++i]))
+                goto invalid;
+            break;
+        case 'f':
+            if (force) goto invalid;
+            force = TRUE;
+            break;
+        default:
+            goto invalid;
+        }
+    }
+
+    if ((value_name && value_empty) || (value_name && value_all) || (value_empty && value_all))
+        goto invalid;
+
+    key_name = get_long_key(root, path);
+
+    return run_delete(root, path, key_name, value_name, value_empty, value_all, force);
+
+invalid:
+    output_message(STRING_INVALID_SYNTAX);
+    output_message(STRING_FUNC_HELP, wcsupr(argvW[1]));
+    return 1;
 }

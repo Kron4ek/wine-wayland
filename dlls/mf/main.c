@@ -34,7 +34,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
 
-static HINSTANCE mf_instance;
 extern const GUID CLSID_FileSchemePlugin;
 
 struct activate_object
@@ -1048,43 +1047,6 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **obj)
     return CLASS_E_CLASSNOTAVAILABLE;
 }
 
-/******************************************************************
- *              DllCanUnloadNow (mf.@)
- */
-HRESULT WINAPI DllCanUnloadNow(void)
-{
-    return S_FALSE;
-}
-
-/***********************************************************************
- *          DllRegisterServer (mf.@)
- */
-HRESULT WINAPI DllRegisterServer(void)
-{
-    return __wine_register_resources( mf_instance );
-}
-
-/***********************************************************************
- *          DllUnregisterServer (mf.@)
- */
-HRESULT WINAPI DllUnregisterServer(void)
-{
-    return __wine_unregister_resources( mf_instance );
-}
-
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
-{
-    switch (reason)
-    {
-        case DLL_PROCESS_ATTACH:
-            mf_instance = instance;
-            DisableThreadLibraryCalls(instance);
-            break;
-    }
-
-    return TRUE;
-}
-
 static HRESULT prop_string_vector_append(PROPVARIANT *vector, unsigned int *capacity, BOOL unique, const WCHAR *str)
 {
     WCHAR *ptrW;
@@ -1459,4 +1421,23 @@ HRESULT WINAPI MFCreateSimpleTypeHandler(IMFMediaTypeHandler **handler)
     *handler = &object->IMFMediaTypeHandler_iface;
 
     return S_OK;
+}
+
+HRESULT WINAPI MFRequireProtectedEnvironment(IMFPresentationDescriptor *pd)
+{
+    BOOL selected, protected = FALSE;
+    unsigned int i = 0, value;
+    IMFStreamDescriptor *sd;
+
+    TRACE("%p.\n", pd);
+
+    while (SUCCEEDED(IMFPresentationDescriptor_GetStreamDescriptorByIndex(pd, i++, &selected, &sd)))
+    {
+        value = 0;
+        protected = SUCCEEDED(IMFStreamDescriptor_GetUINT32(sd, &MF_SD_PROTECTED, &value)) && value;
+        IMFStreamDescriptor_Release(sd);
+        if (protected) break;
+    }
+
+    return protected ? S_OK : S_FALSE;
 }

@@ -783,7 +783,7 @@ NTSTATUS WINAPI RtlCreateTimerQueue(PHANDLE NewTimerQueue)
         RtlFreeHeap(GetProcessHeap(), 0, q);
         return status;
     }
-    status = RtlCreateUserThread(GetCurrentProcess(), NULL, FALSE, NULL, 0, 0,
+    status = RtlCreateUserThread(GetCurrentProcess(), NULL, FALSE, 0, 0, 0,
                                  timer_queue_thread_proc, q, &q->thread, NULL);
     if (status != STATUS_SUCCESS)
     {
@@ -1141,7 +1141,7 @@ static NTSTATUS tp_new_worker_thread( struct threadpool *pool )
     HANDLE thread;
     NTSTATUS status;
 
-    status = RtlCreateUserThread( GetCurrentProcess(), NULL, FALSE, NULL, 0, 0,
+    status = RtlCreateUserThread( GetCurrentProcess(), NULL, FALSE, 0, 0, 0,
                                   threadpool_worker_proc, pool, &thread, NULL );
     if (status == STATUS_SUCCESS)
     {
@@ -1176,7 +1176,7 @@ static NTSTATUS tp_timerqueue_lock( struct threadpool_object *timer )
     if (!timerqueue.thread_running)
     {
         HANDLE thread;
-        status = RtlCreateUserThread( GetCurrentProcess(), NULL, FALSE, NULL, 0, 0,
+        status = RtlCreateUserThread( GetCurrentProcess(), NULL, FALSE, 0, 0, 0,
                                       timerqueue_thread_proc, NULL, &thread, NULL );
         if (status == STATUS_SUCCESS)
         {
@@ -1454,7 +1454,7 @@ static NTSTATUS tp_waitqueue_lock( struct threadpool_object *wait )
         goto out;
     }
 
-    status = RtlCreateUserThread( GetCurrentProcess(), NULL, FALSE, NULL, 0, 0,
+    status = RtlCreateUserThread( GetCurrentProcess(), NULL, FALSE, 0, 0, 0,
                                   waitqueue_thread_proc, bucket, &thread, NULL );
     if (status == STATUS_SUCCESS)
     {
@@ -1519,10 +1519,21 @@ static void CALLBACK ioqueue_thread_proc( void *param )
             ERR("NtRemoveIoCompletion failed, status %#x.\n", status);
         RtlEnterCriticalSection( &ioqueue.cs );
 
-        if (key)
-        {
-            io = (struct threadpool_object *)key;
+        io = (struct threadpool_object *)key;
 
+        if (io && io->shutdown)
+        {
+            if (iosb.u.Status != STATUS_THREADPOOL_RELEASED_DURING_OPERATION)
+            {
+                /* Skip remaining completions until the final one. */
+                continue;
+            }
+            --ioqueue.objcount;
+            TRACE( "Releasing io %p.\n", io );
+            tp_object_release( io );
+        }
+        else if (io)
+        {
             RtlEnterCriticalSection( &io->pool->cs );
 
             if (!array_reserve((void **)&io->u.io.completions, &io->u.io.completion_max,
@@ -1581,7 +1592,7 @@ static NTSTATUS tp_ioqueue_lock( struct threadpool_object *io, HANDLE file )
         HANDLE thread;
 
         if (!(status = RtlCreateUserThread( GetCurrentProcess(), NULL, FALSE,
-                NULL, 0, 0, ioqueue_thread_proc, NULL, &thread, NULL )))
+                                            0, 0, 0, ioqueue_thread_proc, NULL, &thread, NULL )))
         {
             ioqueue.thread_running = TRUE;
             NtClose( thread );
@@ -1607,18 +1618,6 @@ static NTSTATUS tp_ioqueue_lock( struct threadpool_object *io, HANDLE file )
 
     RtlLeaveCriticalSection( &ioqueue.cs );
     return status;
-}
-
-static void tp_ioqueue_unlock( struct threadpool_object *io )
-{
-    assert( io->type == TP_OBJECT_TYPE_IO );
-
-    RtlEnterCriticalSection( &ioqueue.cs );
-
-    if (!--ioqueue.objcount)
-        NtSetIoCompletion( ioqueue.port, 0, 0, STATUS_SUCCESS, 0 );
-
-    RtlLeaveCriticalSection( &ioqueue.cs );
 }
 
 /***********************************************************************
@@ -2051,8 +2050,6 @@ static void tp_object_prepare_shutdown( struct threadpool_object *object )
         tp_timerqueue_unlock( object );
     else if (object->type == TP_OBJECT_TYPE_WAIT)
         tp_waitqueue_unlock( object );
-    else if (object->type == TP_OBJECT_TYPE_IO)
-        tp_ioqueue_unlock( object );
 }
 
 /***********************************************************************
@@ -2796,9 +2793,12 @@ void WINAPI TpReleaseIoCompletion( TP_IO *io )
 
     TRACE( "%p\n", io );
 
-    tp_object_prepare_shutdown( this );
+    RtlEnterCriticalSection( &ioqueue.cs );
+
+    assert( ioqueue.objcount );
     this->shutdown = TRUE;
-    tp_object_release( this );
+    NtSetIoCompletion( ioqueue.port, (ULONG_PTR)this, 0, STATUS_THREADPOOL_RELEASED_DURING_OPERATION, 1 );
+    RtlLeaveCriticalSection( &ioqueue.cs );
 }
 
 /***********************************************************************

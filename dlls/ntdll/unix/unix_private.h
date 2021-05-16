@@ -28,20 +28,22 @@
 #include "wine/list.h"
 
 #ifdef __i386__
-static const enum cpu_type client_cpu = CPU_x86;
 static const WORD current_machine = IMAGE_FILE_MACHINE_I386;
 #elif defined(__x86_64__)
-static const enum cpu_type client_cpu = CPU_x86_64;
 static const WORD current_machine = IMAGE_FILE_MACHINE_AMD64;
 #elif defined(__arm__)
-static const enum cpu_type client_cpu = CPU_ARM;
 static const WORD current_machine = IMAGE_FILE_MACHINE_ARMNT;
 #elif defined(__aarch64__)
-static const enum cpu_type client_cpu = CPU_ARM64;
 static const WORD current_machine = IMAGE_FILE_MACHINE_ARM64;
 #endif
+extern WORD native_machine DECLSPEC_HIDDEN;
 
 static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
+
+static inline BOOL is_machine_64bit( WORD machine )
+{
+    return (machine == IMAGE_FILE_MACHINE_AMD64 || machine == IMAGE_FILE_MACHINE_ARM64);
+}
 
 struct debug_info
 {
@@ -77,16 +79,10 @@ static inline struct ntdll_thread_data *ntdll_get_thread_data(void)
 }
 
 static const SIZE_T page_size = 0x1000;
+static const SIZE_T teb_size = 0x3000;  /* TEB64 + TEB32 */
 static const SIZE_T signal_stack_mask = 0xffff;
-#ifdef _WIN64
-static const SIZE_T teb_size = 0x2000;
-static const SIZE_T teb_offset = 0;
-static const SIZE_T signal_stack_size = 0x10000 - 0x2000;
-#else
-static const SIZE_T teb_size = 0x3000;  /* TEB64 + TEB */
-static const SIZE_T teb_offset = 0x2000;
 static const SIZE_T signal_stack_size = 0x10000 - 0x3000;
-#endif
+static const LONG teb_offset = 0x2000;
 
 /* callbacks to PE ntdll from the Unix side */
 extern void     (WINAPI *pDbgUiRemoteBreakin)( void *arg ) DECLSPEC_HIDDEN;
@@ -123,12 +119,15 @@ extern const char **dll_paths DECLSPEC_HIDDEN;
 extern USHORT *uctable DECLSPEC_HIDDEN;
 extern USHORT *lctable DECLSPEC_HIDDEN;
 extern SIZE_T startup_info_size DECLSPEC_HIDDEN;
+extern BOOL is_prefix_bootstrap DECLSPEC_HIDDEN;
+extern SECTION_IMAGE_INFORMATION main_image_info DECLSPEC_HIDDEN;
 extern int main_argc DECLSPEC_HIDDEN;
 extern char **main_argv DECLSPEC_HIDDEN;
 extern char **main_envp DECLSPEC_HIDDEN;
 extern WCHAR **main_wargv DECLSPEC_HIDDEN;
 extern const WCHAR system_dir[] DECLSPEC_HIDDEN;
-extern unsigned int server_cpus DECLSPEC_HIDDEN;
+extern unsigned int supported_machines_count DECLSPEC_HIDDEN;
+extern USHORT supported_machines[8] DECLSPEC_HIDDEN;
 extern BOOL is_wow64 DECLSPEC_HIDDEN;
 extern BOOL process_exiting DECLSPEC_HIDDEN;
 extern HANDLE keyed_event DECLSPEC_HIDDEN;
@@ -142,16 +141,18 @@ extern struct ldt_copy __wine_ldt_copy DECLSPEC_HIDDEN;
 
 extern void init_environment( int argc, char *argv[], char *envp[] ) DECLSPEC_HIDDEN;
 extern void init_startup_info(void) DECLSPEC_HIDDEN;
+extern void *create_startup_info( const UNICODE_STRING *nt_image, const RTL_USER_PROCESS_PARAMETERS *params,
+                                  DWORD *info_size ) DECLSPEC_HIDDEN;
 extern DWORD ntdll_umbstowcs( const char *src, DWORD srclen, WCHAR *dst, DWORD dstlen ) DECLSPEC_HIDDEN;
 extern int ntdll_wcstoumbs( const WCHAR *src, DWORD srclen, char *dst, DWORD dstlen, BOOL strict ) DECLSPEC_HIDDEN;
 extern char **build_envp( const WCHAR *envW ) DECLSPEC_HIDDEN;
 extern NTSTATUS exec_wineloader( char **argv, int socketfd, const pe_image_info_t *pe_info ) DECLSPEC_HIDDEN;
-extern NTSTATUS load_builtin( const pe_image_info_t *image_info, const WCHAR *filename,
+extern NTSTATUS load_builtin( const pe_image_info_t *image_info, WCHAR *filename,
                               void **addr_ptr, SIZE_T *size_ptr ) DECLSPEC_HIDDEN;
 extern BOOL is_builtin_path( const UNICODE_STRING *path, WORD *machine ) DECLSPEC_HIDDEN;
 extern NTSTATUS load_main_exe( const WCHAR *name, const char *unix_name, const WCHAR *curdir, WCHAR **image,
-                               void **module, SECTION_IMAGE_INFORMATION *image_info ) DECLSPEC_HIDDEN;
-extern NTSTATUS load_start_exe( WCHAR **image, void **module, SECTION_IMAGE_INFORMATION *image_info ) DECLSPEC_HIDDEN;
+                               void **module ) DECLSPEC_HIDDEN;
+extern NTSTATUS load_start_exe( WCHAR **image, void **module ) DECLSPEC_HIDDEN;
 extern void start_server( BOOL debug ) DECLSPEC_HIDDEN;
 extern ULONG_PTR get_image_address(void) DECLSPEC_HIDDEN;
 
@@ -167,6 +168,8 @@ extern unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *
                                               apc_result_t *result ) DECLSPEC_HIDDEN;
 extern int server_get_unix_fd( HANDLE handle, unsigned int wanted_access, int *unix_fd,
                                int *needs_close, enum server_fd_type *type, unsigned int *options ) DECLSPEC_HIDDEN;
+extern void wine_server_send_fd( int fd ) DECLSPEC_HIDDEN;
+extern void process_exit_wrapper( int status ) DECLSPEC_HIDDEN;
 extern size_t server_init_process(void) DECLSPEC_HIDDEN;
 extern void server_init_process_done(void) DECLSPEC_HIDDEN;
 extern void server_init_thread( void *entry_point, BOOL *suspend ) DECLSPEC_HIDDEN;
@@ -198,8 +201,8 @@ extern TEB *virtual_alloc_first_teb(void) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_alloc_teb( TEB **ret_teb ) DECLSPEC_HIDDEN;
 extern void virtual_free_teb( TEB *teb ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_clear_tls_index( ULONG index ) DECLSPEC_HIDDEN;
-extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, SIZE_T reserve_size, SIZE_T commit_size,
-                                            SIZE_T *pthread_size ) DECLSPEC_HIDDEN;
+extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, ULONG_PTR zero_bits, SIZE_T reserve_size,
+                                            SIZE_T commit_size, SIZE_T *pthread_size ) DECLSPEC_HIDDEN;
 extern void virtual_map_user_shared_data(void) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_handle_fault( void *addr, DWORD err, void *stack ) DECLSPEC_HIDDEN;
 extern unsigned int virtual_locked_server_call( void *req_ptr ) DECLSPEC_HIDDEN;
@@ -249,8 +252,8 @@ extern NTSTATUS tape_DeviceIoControl( HANDLE device, HANDLE event, PIO_APC_ROUTI
                                       ULONG in_size, void *out_buffer, ULONG out_size ) DECLSPEC_HIDDEN;
 
 extern NTSTATUS errno_to_status( int err ) DECLSPEC_HIDDEN;
-extern NTSTATUS nt_to_unix_file_name( const UNICODE_STRING *nameW, char **unix_name_ret,
-                                      UNICODE_STRING *nt_name, UINT disposition ) DECLSPEC_HIDDEN;
+extern BOOL get_redirect( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *redir ) DECLSPEC_HIDDEN;
+extern NTSTATUS nt_to_unix_file_name( const OBJECT_ATTRIBUTES *attr, char **name_ret, UINT disposition ) DECLSPEC_HIDDEN;
 extern NTSTATUS unix_to_nt_file_name( const char *name, WCHAR **nt ) DECLSPEC_HIDDEN;
 extern NTSTATUS get_full_path( const WCHAR *name, const WCHAR *curdir, WCHAR **path ) DECLSPEC_HIDDEN;
 extern NTSTATUS open_unix_file( HANDLE *handle, const char *unix_name, ACCESS_MASK access,
@@ -297,15 +300,9 @@ static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
     while (len--) *dst++ = (unsigned char)*src++;
 }
 
-static inline IMAGE_NT_HEADERS *get_exe_nt_header(void)
-{
-    IMAGE_DOS_HEADER *module = (IMAGE_DOS_HEADER *)NtCurrentTeb()->Peb->ImageBaseAddress;
-    return (IMAGE_NT_HEADERS *)((char *)module + module->e_lfanew);
-}
-
 static inline void *get_signal_stack(void)
 {
-    return (char *)NtCurrentTeb() + teb_size - teb_offset;
+    return (void *)(((ULONG_PTR)NtCurrentTeb() & ~signal_stack_mask) + teb_size);
 }
 
 static inline void mutex_lock( pthread_mutex_t *mutex )
@@ -318,7 +315,9 @@ static inline void mutex_unlock( pthread_mutex_t *mutex )
     if (!process_exiting) pthread_mutex_unlock( mutex );
 }
 
-#ifndef _WIN64
+#ifdef _WIN64
+static inline TEB64 *NtCurrentTeb64(void) { return NULL; }
+#else
 static inline TEB64 *NtCurrentTeb64(void) { return (TEB64 *)NtCurrentTeb()->GdiBatchCount; }
 #endif
 
@@ -404,7 +403,19 @@ static inline void context_init_xstate( CONTEXT *context, void *xstate_buffer )
 }
 #endif
 
-extern enum loadorder CDECL get_load_order( const UNICODE_STRING *nt_name ) DECLSPEC_HIDDEN;
+enum loadorder
+{
+    LO_INVALID,
+    LO_DISABLED,
+    LO_NATIVE,
+    LO_BUILTIN,
+    LO_NATIVE_BUILTIN,  /* native then builtin */
+    LO_BUILTIN_NATIVE,  /* builtin then native */
+    LO_DEFAULT          /* nothing specified, use default strategy */
+};
+
+extern void set_load_order_app_name( const WCHAR *app_name ) DECLSPEC_HIDDEN;
+extern enum loadorder get_load_order( const UNICODE_STRING *nt_name ) DECLSPEC_HIDDEN;
 
 static inline size_t ntdll_wcslen( const WCHAR *str )
 {

@@ -3021,14 +3021,13 @@ DECL_HANDLER(get_thread_input)
 }
 
 
-/* retrieve queue keyboard state for a given thread */
+/* retrieve queue keyboard state for current thread or global async state */
 DECL_HANDLER(get_key_state)
 {
-    struct thread *thread;
     struct desktop *desktop;
     data_size_t size = min( 256, get_reply_max_size() );
 
-    if (!req->tid)  /* get global async key state */
+    if (req->async)  /* get global async key state */
     {
         if (!(desktop = get_thread_desktop( current, 0 ))) return;
         if (req->key >= 0)
@@ -3039,19 +3038,9 @@ DECL_HANDLER(get_key_state)
         set_reply_data( desktop->keystate, size );
         release_object( desktop );
     }
-    else
+    else if (!current->queue)
     {
         unsigned char *keystate;
-        if (!(thread = get_thread_from_id( req->tid ))) return;
-        if (thread->queue)
-        {
-            if (req->key >= 0) reply->state = thread->queue->input->keystate[req->key & 0xff];
-            set_reply_data( thread->queue->input->keystate, size );
-            release_object( thread );
-            return;
-        }
-        release_object( thread );
-
         /* fallback to desktop keystate */
         if (!(desktop = get_thread_desktop( current, 0 ))) return;
         if (req->key >= 0) reply->state = desktop->keystate[req->key & 0xff] & ~0x40;
@@ -3062,32 +3051,26 @@ DECL_HANDLER(get_key_state)
         }
         release_object( desktop );
     }
+    else
+    {
+        unsigned char *keystate = current->queue->input->keystate;
+        if (req->key >= 0) reply->state = keystate[req->key & 0xff];
+        set_reply_data( keystate, size );
+    }
 }
 
 
-/* set queue keyboard state for a given thread */
+/* set queue keyboard state for current thread */
 DECL_HANDLER(set_key_state)
 {
-    struct thread *thread;
     struct desktop *desktop;
     data_size_t size = min( 256, get_req_data_size() );
 
-    if (!req->tid)  /* set global async key state */
+    if (current->queue) memcpy( current->queue->input->keystate, get_req_data(), size );
+    if (req->async && (desktop = get_thread_desktop( current, 0 )))
     {
-        if (!(desktop = get_thread_desktop( current, 0 ))) return;
         memcpy( desktop->keystate, get_req_data(), size );
         release_object( desktop );
-    }
-    else
-    {
-        if (!(thread = get_thread_from_id( req->tid ))) return;
-        if (thread->queue) memcpy( thread->queue->input->keystate, get_req_data(), size );
-        if (req->async && (desktop = get_thread_desktop( thread, 0 )))
-        {
-            memcpy( desktop->keystate, get_req_data(), size );
-            release_object( desktop );
-        }
-        release_object( thread );
     }
 }
 

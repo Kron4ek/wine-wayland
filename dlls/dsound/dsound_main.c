@@ -92,7 +92,6 @@ const WCHAR wine_vxd_drv[] = L"winemm.vxd";
 
 /* All default settings, you most likely don't want to touch these, see wiki on UsefulRegistryKeys */
 int ds_hel_buflen = 32768 * 2;
-static HINSTANCE instance;
 
 /*
  * Get a config key from either the app-specific or the default config
@@ -213,7 +212,7 @@ static HRESULT get_mmdevice_guid(IMMDevice *device, IPropertyStore *ps,
         return hr;
     }
 
-    CLSIDFromString(pv.u.pwszVal, guid);
+    CLSIDFromString(pv.pwszVal, guid);
 
     PropVariantClear(&pv);
     IPropertyStore_Release(ps);
@@ -432,9 +431,9 @@ static BOOL send_device(IMMDevice *device, GUID *guid,
     }
 
     TRACE("Calling back with %s (%s)\n", wine_dbgstr_guid(guid),
-            wine_dbgstr_w(pv.u.pwszVal));
+            wine_dbgstr_w(pv.pwszVal));
 
-    keep_going = cb(guid, pv.u.pwszVal, wine_vxd_drv, user);
+    keep_going = cb(guid, pv.pwszVal, wine_vxd_drv, user);
 
     PropVariantClear(&pv);
     IPropertyStore_Release(ps);
@@ -760,19 +759,6 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
 }
 
 
-/*******************************************************************************
- * DllCanUnloadNow [DSOUND.4]
- * Determines whether the DLL is in use.
- *
- * RETURNS
- *    Can unload now: S_OK
- *    Cannot unload now (the DLL is still active): S_FALSE
- */
-HRESULT WINAPI DllCanUnloadNow(void)
-{
-    return S_FALSE;
-}
-
 #define INIT_GUID(guid, l, w1, w2, b1, b2, b3, b4, b5, b6, b7, b8)      \
         guid.Data1 = l; guid.Data2 = w1; guid.Data3 = w2;               \
         guid.Data4[0] = b1; guid.Data4[1] = b2; guid.Data4[2] = b3;     \
@@ -788,7 +774,6 @@ BOOL WINAPI DllMain(HINSTANCE hInstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
-        instance = hInstDLL;
         DisableThreadLibraryCalls(hInstDLL);
         /* Increase refcount on dsound by 1 */
         GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR)hInstDLL, &hInstDLL);
@@ -800,20 +785,4 @@ BOOL WINAPI DllMain(HINSTANCE hInstDLL, DWORD fdwReason, LPVOID lpvReserved)
         break;
     }
     return TRUE;
-}
-
-/***********************************************************************
- *		DllRegisterServer (DSOUND.@)
- */
-HRESULT WINAPI DllRegisterServer(void)
-{
-    return __wine_register_resources( instance );
-}
-
-/***********************************************************************
- *		DllUnregisterServer (DSOUND.@)
- */
-HRESULT WINAPI DllUnregisterServer(void)
-{
-    return __wine_unregister_resources( instance );
 }

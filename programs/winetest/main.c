@@ -135,8 +135,10 @@ static char * get_file_version(char * file_name)
             heap_free(data);
         } else
             sprintf(version, "version error %u", ERROR_OUTOFMEMORY);
-    } else
-        sprintf(version, "version not present");
+    } else if (GetLastError() == ERROR_FILE_NOT_FOUND)
+        sprintf(version, "dll is missing");
+    else
+        sprintf(version, "version not present %u", GetLastError());
 
     return version;
 }
@@ -516,7 +518,8 @@ static const char* get_test_source_file(const char* test, const char* subtest)
     static char buffer[MAX_PATH];
     int len = strlen(test);
 
-    if (len > 4 && !strcmp( test + len - 4, ".exe" ))
+    if (len > 4 && !strcmp( test + len - 4, ".exe" ) &&
+        strcmp( test, "ntoskrnl.exe" )) /* the one exception! */
     {
         len = sprintf(buffer, "programs/%s", test) - 4;
         buffer[len] = 0;
@@ -916,6 +919,7 @@ extract_test_proc (HMODULE hModule, LPCSTR lpszType, LPSTR lpszName, LONG_PTR lP
     if (test_filtered_out( lpszName, NULL ))
     {
         nr_of_skips++;
+        if (exclude_tests) xprintf ("    %s=skipped\n", dllname);
         return TRUE;
     }
     extract_test (&wine_tests[nr_of_files], tempdir, lpszName);
@@ -985,12 +989,16 @@ extract_test_proc (HMODULE hModule, LPCSTR lpszType, LPSTR lpszName, LONG_PTR lP
             break;
         case STATUS_DLL_NOT_FOUND:
             xprintf ("    %s=dll is missing\n", dllname);
+            /* or it is a side-by-side dll but the test has no manifest */
             break;
         case STATUS_ORDINAL_NOT_FOUND:
             xprintf ("    %s=dll is missing an ordinal (%s)\n", dllname, get_file_version(filename));
             break;
         case STATUS_ENTRYPOINT_NOT_FOUND:
             xprintf ("    %s=dll is missing an entrypoint (%s)\n", dllname, get_file_version(filename));
+            break;
+        case ERROR_SXS_CANT_GEN_ACTCTX:
+            xprintf ("    %s=dll is missing the requested side-by-side version\n", dllname);
             break;
         default:
             xprintf ("    %s=load error %u\n", dllname, err);

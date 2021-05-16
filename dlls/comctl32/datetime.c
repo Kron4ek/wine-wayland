@@ -1060,6 +1060,7 @@ DATETIME_Button_Command (DATETIME_INFO *infoPtr, WPARAM wParam, LPARAM lParam)
         DWORD state = SendMessageW((HWND)lParam, BM_GETCHECK, 0, 0);
         infoPtr->dateValid = (state == BST_CHECKED);
         InvalidateRect(infoPtr->hwndSelf, NULL, TRUE);
+        DATETIME_SendDateTimeChangeNotify(infoPtr);
     }
     return 0;
 }
@@ -1543,6 +1544,7 @@ static LRESULT DATETIME_ThemeChanged (DATETIME_INFO *infoPtr)
     theme = GetWindowTheme(infoPtr->hwndSelf);
     CloseThemeData(theme);
     OpenThemeData(infoPtr->hwndSelf, themeClass);
+    InvalidateRect(infoPtr->hwndSelf, NULL, TRUE);
     return 0;
 }
 

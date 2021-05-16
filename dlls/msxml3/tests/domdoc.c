@@ -46,6 +46,8 @@
 #include "wine/heap.h"
 #include "wine/test.h"
 
+#define XML_E_UNEXPECTED_ATTRIBUTE 0xC00CE56C
+
 /* undef the #define in msxml2 so that we can access all versions */
 #undef CLSID_DOMDocument
 
@@ -8522,12 +8524,31 @@ static void test_events(void)
 
 static void test_createProcessingInstruction(void)
 {
+    static const WCHAR xml1[] = L"<?xml version=\"1.0\"?>\r\n<test/>\r\n";
+    static const char xml2[] = "<?xml version=\"1.0\" encoding=\"windows-1252\"?>\r\n<test/>\r\n";
+    static const char xml2_wine[] = "<?xml version=\"1.0\" encoding=\"windows-1252\"?>\n<test/>\n";
+    static const char xml3[] = "<?xml version=\"1.0\" standalone=\"yes\"?>\r\n<test/>\r\n";
+    static const char xml3_wine[] = "<?xml version=\"1.0\" standalone=\"yes\"?>\n<test/>\n";
     IXMLDOMProcessingInstruction *pi;
     IXMLDOMDocument *doc;
+    IXMLDOMNode *node, *item;
+    IXMLDOMNamedNodeMap *node_map;
+    IXMLDOMElement *element;
     WCHAR buff[10];
+    BSTR xml, bstr;
+    VARIANT var;
     HRESULT hr;
+    IStream *stream;
+    LARGE_INTEGER off;
+    VARIANT_BOOL b;
+    HGLOBAL global;
+    char *p;
 
     doc = create_document(&IID_IXMLDOMDocument);
+
+    hr = IXMLDOMDocument_createProcessingInstruction(doc, _bstr_("xml"), _bstr_("version=\"1.0\" encoding=\"windows-1252\" dummy=\"value\""), &pi);
+todo_wine
+    ok(hr == XML_E_UNEXPECTED_ATTRIBUTE, "got 0x%08x\n", hr);
 
     /* test for BSTR handling, pass broken BSTR */
     memcpy(&buff[2], L"test", 5 * sizeof(WCHAR));
@@ -8537,6 +8558,120 @@ static void test_createProcessingInstruction(void)
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     IXMLDOMProcessingInstruction_Release(pi);
+    IXMLDOMDocument_Release(doc);
+
+    doc = create_document(&IID_IXMLDOMDocument);
+
+    hr = IXMLDOMDocument_createProcessingInstruction(doc, _bstr_("xml"), _bstr_("version=\"1.0\" encoding=\"windows-1252\""), &pi);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IXMLDOMProcessingInstruction_QueryInterface(pi, &IID_IXMLDOMNode, (void **)&node);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IXMLDOMDocument_appendChild(doc, node, NULL);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IXMLDOMNode_get_attributes(node, &node_map);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    item = (void *)0xdeadbeef;
+    hr = IXMLDOMNamedNodeMap_getNamedItem(node_map, _bstr_("xml"), &item);
+    ok(hr == S_FALSE, "got 0x%08x\n", hr);
+    ok(!item, "got %p\n", item);
+
+    item = NULL;
+    hr = IXMLDOMNamedNodeMap_getNamedItem(node_map, _bstr_("encoding"), &item);
+todo_wine
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+todo_wine
+    ok(item != NULL, "got NULL\n");
+
+if (hr == S_OK)
+{
+    hr = IXMLDOMNode_get_nodeName(item, &bstr);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(!lstrcmpW(bstr, L"encoding"), "got %s\n", wine_dbgstr_w(bstr));
+    SysFreeString(bstr);
+
+    VariantInit(&var);
+    hr = IXMLDOMNode_get_nodeValue(item, &var);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(V_VT(&var) == VT_BSTR, "got %u\n", V_VT(&var));
+    ok(!lstrcmpW(V_BSTR(&var), L"windows-1252"), "got %s\n", wine_dbgstr_w(V_BSTR(&var)));
+    VariantClear(&var);
+}
+
+    IXMLDOMNamedNodeMap_Release(node_map);
+    IXMLDOMNode_Release(node);
+    IXMLDOMProcessingInstruction_Release(pi);
+
+    hr = IXMLDOMDocument_createElement(doc, _bstr_("test"), &element);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IXMLDOMDocument_appendChild(doc, (IXMLDOMNode *)element, NULL);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    IXMLDOMElement_Release(element);
+
+    hr = IXMLDOMDocument_get_xml(doc, &xml);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+todo_wine
+    ok(!wcscmp(xml, xml1), "got %s\n", wine_dbgstr_w(xml));
+    SysFreeString(xml);
+
+    hr = CreateStreamOnHGlobal(NULL, TRUE, &stream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    V_VT(&var) = VT_UNKNOWN;
+    V_UNKNOWN(&var) = (IUnknown*)stream;
+    hr = IXMLDOMDocument_save(doc, var);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = GetHGlobalFromStream(stream, &global);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    p = GlobalLock(global);
+    ok(!memcmp(p, xml2, sizeof(xml2) - 1) || !memcmp(p, xml2_wine, sizeof(xml2_wine) - 1), "got %s\n", wine_dbgstr_a(p));
+    GlobalUnlock(global);
+
+    /* Verify the result after load+save */
+    off.QuadPart = 0;
+    hr = IStream_Seek(stream, off, STREAM_SEEK_SET, NULL);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IXMLDOMDocument_load(doc, var, &b);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(b == VARIANT_TRUE, "got %d\n", b);
+
+    off.QuadPart = 0;
+    hr = IStream_Seek(stream, off, STREAM_SEEK_SET, NULL);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = IXMLDOMDocument_save(doc, var);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = GetHGlobalFromStream(stream, &global);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    p = GlobalLock(global);
+    ok(!memcmp(p, xml2, sizeof(xml2) - 1) || !memcmp(p, xml2_wine, sizeof(xml2_wine) - 1), "got %s\n", wine_dbgstr_a(p));
+    GlobalUnlock(global);
+
+    IStream_Release(stream);
+
+    hr = IXMLDOMDocument_loadXML(doc, _bstr_("<?xml version=\"1.0\" standalone=\"yes\"?>\r\n<test/>\r\n"), &b);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok(b == VARIANT_TRUE, "got %d\n", b);
+
+    hr = CreateStreamOnHGlobal(NULL, TRUE, &stream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    V_VT(&var) = VT_UNKNOWN;
+    V_UNKNOWN(&var) = (IUnknown*)stream;
+    hr = IXMLDOMDocument_save(doc, var);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = GetHGlobalFromStream(stream, &global);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    p = GlobalLock(global);
+    ok(!memcmp(p, xml3, sizeof(xml3) - 1) || !memcmp(p, xml3_wine, sizeof(xml3_wine) - 1), "got %s\n", wine_dbgstr_a(p));
+    GlobalUnlock(global);
+
+    IStream_Release(stream);
     IXMLDOMDocument_Release(doc);
 }
 

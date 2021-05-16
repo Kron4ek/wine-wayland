@@ -660,7 +660,7 @@ static BOOL get_async_key_state( BYTE state[256] )
 
     SERVER_START_REQ( get_key_state )
     {
-        req->tid = 0;
+        req->async = 1;
         req->key = -1;
         wine_server_set_reply( req, state, 256 );
         ret = !wine_server_call( req );
@@ -680,7 +680,7 @@ static void send_keyboard_input( HWND hwnd, WORD vkey, WORD scan, DWORD flags )
     input.u.ki.time        = 0;
     input.u.ki.dwExtraInfo = 0;
 
-    __wine_send_input( hwnd, &input );
+    __wine_send_input( hwnd, &input, NULL );
 }
 
 /***********************************************************************
@@ -747,100 +747,6 @@ jboolean keyboard_event( JNIEnv *env, jobject obj, jint win, jint action, jint k
                           win, keycode, data.kbd.input.u.ki.wVk, data.kbd.input.u.ki.wScan, state );
     send_event( &data );
     return JNI_TRUE;
-}
-
-
-/***********************************************************************
- *           ANDROID_ToUnicodeEx
- */
-INT CDECL ANDROID_ToUnicodeEx( UINT virt, UINT scan, const BYTE *state,
-                               LPWSTR buf, int size, UINT flags, HKL hkl )
-{
-    WCHAR buffer[2];
-    BOOL shift = state[VK_SHIFT] & 0x80;
-    BOOL ctrl = state[VK_CONTROL] & 0x80;
-    BOOL numlock = state[VK_NUMLOCK] & 0x01;
-
-    buffer[0] = buffer[1] = 0;
-
-    if (scan & 0x8000) return 0;  /* key up */
-
-    /* FIXME: hardcoded layout */
-
-    if (!ctrl)
-    {
-        switch (virt)
-        {
-        case VK_BACK:       buffer[0] = '\b'; break;
-        case VK_OEM_1:      buffer[0] = shift ? ':' : ';'; break;
-        case VK_OEM_2:      buffer[0] = shift ? '?' : '/'; break;
-        case VK_OEM_3:      buffer[0] = shift ? '~' : '`'; break;
-        case VK_OEM_4:      buffer[0] = shift ? '{' : '['; break;
-        case VK_OEM_5:      buffer[0] = shift ? '|' : '\\'; break;
-        case VK_OEM_6:      buffer[0] = shift ? '}' : ']'; break;
-        case VK_OEM_7:      buffer[0] = shift ? '"' : '\''; break;
-        case VK_OEM_COMMA:  buffer[0] = shift ? '<' : ','; break;
-        case VK_OEM_MINUS:  buffer[0] = shift ? '_' : '-'; break;
-        case VK_OEM_PERIOD: buffer[0] = shift ? '>' : '.'; break;
-        case VK_OEM_PLUS:   buffer[0] = shift ? '+' : '='; break;
-        case VK_RETURN:     buffer[0] = '\r'; break;
-        case VK_SPACE:      buffer[0] = ' '; break;
-        case VK_TAB:        buffer[0] = '\t'; break;
-        case VK_MULTIPLY:   buffer[0] = '*'; break;
-        case VK_ADD:        buffer[0] = '+'; break;
-        case VK_SUBTRACT:   buffer[0] = '-'; break;
-        case VK_DIVIDE:     buffer[0] = '/'; break;
-        default:
-            if (virt >= '0' && virt <= '9')
-            {
-                buffer[0] = shift ? ")!@#$%^&*("[virt - '0'] : virt;
-                break;
-            }
-            if (virt >= 'A' && virt <= 'Z')
-            {
-                buffer[0] =  shift || (state[VK_CAPITAL] & 0x01) ? virt : virt + 'a' - 'A';
-                break;
-            }
-            if (virt >= VK_NUMPAD0 && virt <= VK_NUMPAD9 && numlock && !shift)
-            {
-                buffer[0] = '0' + virt - VK_NUMPAD0;
-                break;
-            }
-            if (virt == VK_DECIMAL && numlock && !shift)
-            {
-                buffer[0] = '.';
-                break;
-            }
-            break;
-        }
-    }
-    else /* Control codes */
-    {
-        if (virt >= 'A' && virt <= 'Z')
-            buffer[0] = virt - 'A' + 1;
-        else
-        {
-            switch (virt)
-            {
-            case VK_OEM_4:
-                buffer[0] = 0x1b;
-                break;
-            case VK_OEM_5:
-                buffer[0] = 0x1c;
-                break;
-            case VK_OEM_6:
-                buffer[0] = 0x1d;
-                break;
-            case VK_SUBTRACT:
-                buffer[0] = 0x1e;
-                break;
-            }
-        }
-    }
-
-    lstrcpynW( buf, buffer, size );
-    TRACE( "returning %d / %s\n", strlenW( buffer ), debugstr_wn(buf, strlenW( buffer )));
-    return strlenW( buffer );
 }
 
 
@@ -969,26 +875,6 @@ UINT CDECL ANDROID_MapVirtualKeyEx( UINT code, UINT maptype, HKL hkl )
     }
     TRACE_(key)( "returning 0x%04x\n", ret );
     return ret;
-}
-
-
-/***********************************************************************
- *           ANDROID_GetKeyboardLayout
- */
-HKL CDECL ANDROID_GetKeyboardLayout( DWORD thread_id )
-{
-    ULONG_PTR layout = GetUserDefaultLCID();
-    LANGID langid;
-    static int once;
-
-    langid = PRIMARYLANGID(LANGIDFROMLCID( layout ));
-    if (langid == LANG_CHINESE || langid == LANG_JAPANESE || langid == LANG_KOREAN)
-        layout = MAKELONG( layout, 0xe001 ); /* IME */
-    else
-        layout |= layout << 16;
-
-    if (!once++) FIXME( "returning %lx\n", layout );
-    return (HKL)layout;
 }
 
 

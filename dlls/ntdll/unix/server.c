@@ -103,7 +103,9 @@ WINE_DEFAULT_DEBUG_CHANNEL(server);
 
 static const char *server_dir;
 
-unsigned int server_cpus = 0;
+unsigned int supported_machines_count = 0;
+USHORT supported_machines[8] = { 0 };
+USHORT native_machine = 0;
 BOOL is_wow64 = FALSE;
 BOOL process_exiting = FALSE;
 
@@ -374,7 +376,7 @@ static void invoke_apc( CONTEXT *context, const user_apc_t *apc )
  * Invoke a single APC.
  *
  */
-static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
+static void invoke_system_apc( const apc_call_t *call, apc_result_t *result, BOOL self )
 {
     SIZE_T size, bits;
     void *addr;
@@ -533,7 +535,7 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
             result->map_view.size = size;
         }
         else result->map_view.status = STATUS_INVALID_PARAMETER;
-        NtClose( wine_server_ptr_handle(call->map_view.handle) );
+        if (!self) NtClose( wine_server_ptr_handle(call->map_view.handle) );
         break;
     case APC_UNMAP_VIEW:
         result->type = call->type;
@@ -550,6 +552,7 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
         CLIENT_ID id;
         HANDLE handle;
         TEB *teb;
+        ULONG_PTR zero_bits = call->create_thread.zero_bits;
         SIZE_T reserve = call->create_thread.reserve;
         SIZE_T commit = call->create_thread.commit;
         void *func = wine_server_get_ptr( call->create_thread.func );
@@ -570,7 +573,7 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
             attr->Attributes[1].ReturnLength = NULL;
             result->create_thread.status = NtCreateThreadEx( &handle, THREAD_ALL_ACCESS, NULL,
                                                              NtCurrentProcess(), func, arg,
-                                                             call->create_thread.flags, 0,
+                                                             call->create_thread.flags, zero_bits,
                                                              commit, reserve, attr );
             result->create_thread.handle = wine_server_obj_handle( handle );
             result->create_thread.pid = HandleToULong(id.UniqueProcess);
@@ -592,7 +595,7 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
                                                        &dst_handle, call->dup_handle.access,
                                                        call->dup_handle.attributes, call->dup_handle.options );
         result->dup_handle.handle = wine_server_obj_handle( dst_handle );
-        NtClose( wine_server_ptr_handle(call->dup_handle.dst_process) );
+        if (!self) NtClose( wine_server_ptr_handle(call->dup_handle.dst_process) );
         break;
     }
     case APC_BREAK_PROCESS:
@@ -676,7 +679,7 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
             SERVER_END_REQ;
 
             if (ret != STATUS_KERNEL_APC) break;
-            invoke_system_apc( &call, &result );
+            invoke_system_apc( &call, &result, FALSE );
 
             /* don't signal multiple times */
             if (size >= sizeof(select_op->signal_and_wait) && select_op->op == SELECT_SIGNAL_AND_WAIT)
@@ -774,7 +777,7 @@ unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *call, a
 
         if (self)
         {
-            invoke_system_apc( call, result );
+            invoke_system_apc( call, result, TRUE );
         }
         else
         {
@@ -799,7 +802,7 @@ unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *call, a
  *
  * Send a file descriptor to the server.
  */
-void CDECL wine_server_send_fd( int fd )
+void wine_server_send_fd( int fd )
 {
     struct send_fd data;
     struct msghdr msghdr;
@@ -1119,15 +1122,6 @@ NTSTATUS CDECL wine_server_handle_to_fd( HANDLE handle, unsigned int access, int
         if ((*unix_fd = dup(*unix_fd)) == -1) ret = STATUS_TOO_MANY_OPENED_FILES;
     }
     return ret;
-}
-
-
-/***********************************************************************
- *           wine_server_release_fd
- */
-void CDECL wine_server_release_fd( HANDLE handle, int unix_fd )
-{
-    close( unix_fd );
 }
 
 
@@ -1469,8 +1463,21 @@ static void init_teb64( TEB *teb )
     teb->WowTebOffset  = -teb_offset;
     teb64->ClientId.UniqueProcess = PtrToUlong( teb->ClientId.UniqueProcess );
     teb64->ClientId.UniqueThread  = PtrToUlong( teb->ClientId.UniqueThread );
+    teb64->WowTebOffset           = teb_offset;
 #endif
 }
+
+/***********************************************************************
+ *           process_exit_wrapper
+ *
+ * Close server socket and exit process normally.
+ */
+void process_exit_wrapper( int status )
+{
+    close( fd_socket );
+    exit( status );
+}
+
 
 /***********************************************************************
  *           server_init_process
@@ -1479,10 +1486,10 @@ static void init_teb64( TEB *teb )
  */
 size_t server_init_process(void)
 {
-    static const char *cpu_names[] = { "x86", "x86_64", "PowerPC", "ARM", "ARM64" };
     const char *arch = getenv( "WINEARCH" );
     const char *env_socket = getenv( "WINESERVERSOCKET" );
     obj_handle_t version;
+    unsigned int i;
     int ret, reply_pipe;
     struct sigaction sig_act;
     size_t info_size;
@@ -1559,42 +1566,46 @@ size_t server_init_process(void)
         req->reply_fd    = reply_pipe;
         req->wait_fd     = ntdll_get_thread_data()->wait_fd[1];
         req->debug_level = (TRACE_ON(server) != 0);
-        req->cpu         = client_cpu;
+        wine_server_set_reply( req, supported_machines, sizeof(supported_machines) );
         ret = wine_server_call( req );
         NtCurrentTeb()->ClientId.UniqueProcess = ULongToHandle(reply->pid);
         NtCurrentTeb()->ClientId.UniqueThread  = ULongToHandle(reply->tid);
         info_size         = reply->info_size;
         server_start_time = reply->server_start;
-        server_cpus       = reply->all_cpus;
+        supported_machines_count = wine_server_reply_size( reply ) / sizeof(*supported_machines);
     }
     SERVER_END_REQ;
     close( reply_pipe );
 
-#ifndef _WIN64
-    is_wow64 = (server_cpus & ((1 << CPU_x86_64) | (1 << CPU_ARM64))) != 0;
-    init_teb64( NtCurrentTeb() );
-#endif
+    if (ret) server_protocol_error( "init_first_thread failed with status %x\n", ret );
 
-    switch (ret)
+    if (!supported_machines_count)
+        fatal_error( "'%s' is a 64-bit installation, it cannot be used with a 32-bit wineserver.\n",
+                     config_dir );
+
+    native_machine = supported_machines[0];
+    if (is_machine_64bit( native_machine ))
     {
-    case STATUS_SUCCESS:
-        if (arch)
+        if (arch && !strcmp( arch, "win32" ))
+            fatal_error( "WINEARCH set to win32 but '%s' is a 64-bit installation.\n", config_dir );
+        if (!is_win64)
         {
-            if (!strcmp( arch, "win32" ) && (is_win64 || is_wow64))
-                fatal_error( "WINEARCH set to win32 but '%s' is a 64-bit installation.\n", config_dir );
-            if (!strcmp( arch, "win64" ) && !is_win64 && !is_wow64)
-                fatal_error( "WINEARCH set to win64 but '%s' is a 32-bit installation.\n", config_dir );
+            is_wow64 = TRUE;
+            init_teb64( NtCurrentTeb() );
         }
-        return info_size;
-    case STATUS_INVALID_IMAGE_WIN_64:
-        fatal_error( "'%s' is a 32-bit installation, it cannot support 64-bit applications.\n", config_dir );
-    case STATUS_NOT_SUPPORTED:
-        fatal_error( "'%s' is a 64-bit installation, it cannot be used with a 32-bit wineserver.\n", config_dir );
-    case STATUS_INVALID_IMAGE_FORMAT:
-        fatal_error( "wineserver doesn't support the %s architecture\n", cpu_names[client_cpu] );
-    default:
-        server_protocol_error( "init_first_thread failed with status %x\n", ret );
     }
+    else
+    {
+        if (is_win64)
+            fatal_error( "'%s' is a 32-bit installation, it cannot support 64-bit applications.\n", config_dir );
+        if (arch && !strcmp( arch, "win64" ))
+            fatal_error( "WINEARCH set to win64 but '%s' is a 32-bit installation.\n", config_dir );
+    }
+
+    for (i = 0; i < supported_machines_count; i++)
+        if (supported_machines[i] == current_machine) return info_size;
+
+    fatal_error( "wineserver doesn't support the %04x architecture\n", current_machine );
 }
 
 
@@ -1604,7 +1615,6 @@ size_t server_init_process(void)
 void server_init_process_done(void)
 {
     PEB *peb = NtCurrentTeb()->Peb;
-    IMAGE_NT_HEADERS *nt = get_exe_nt_header();
     void *entry;
     NTSTATUS status;
     int suspend, needs_close, unixdir;
@@ -1630,7 +1640,8 @@ void server_init_process_done(void)
 #ifdef __APPLE__
     send_server_task_port();
 #endif
-    if (nt->FileHeader.Characteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE) virtual_set_large_address_space();
+    if (main_image_info.ImageCharacteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE)
+        virtual_set_large_address_space();
 
     /* Install signal handlers; this cannot be done earlier, since we cannot
      * send exceptions to the debugger before the create process event that

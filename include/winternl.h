@@ -1472,54 +1472,57 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemCpuInformation = 1,
     SystemPerformanceInformation = 2,
     SystemTimeOfDayInformation = 3, /* was SystemTimeInformation */
-    Unknown4,
+    SystemPathInformation = 4,
     SystemProcessInformation = 5,
-    Unknown6,
-    Unknown7,
+    SystemCallCountInformation = 6,
+    SystemDeviceInformation = 7,
     SystemProcessorPerformanceInformation = 8,
-    Unknown9,
-    Unknown10,
+    SystemFlagsInformation = 9,
+    SystemCallTimeInformation = 10,
     SystemModuleInformation = 11,
-    Unknown12,
-    Unknown13,
-    Unknown14,
-    Unknown15,
+    SystemLocksInformation = 12,
+    SystemStackTraceInformation = 13,
+    SystemPagedPoolInformation = 14,
+    SystemNonPagedPoolInformation = 15,
     SystemHandleInformation = 16,
-    Unknown17,
+    SystemObjectInformation = 17,
     SystemPageFileInformation = 18,
-    Unknown19,
-    Unknown20,
-    SystemCacheInformation = 21,
-    Unknown22,
+    SystemVdmInstemulInformation = 19,
+    SystemVdmBopInformation = 20,
+    SystemFileCacheInformation = 21,
+    SystemPoolTagInformation = 22,
     SystemInterruptInformation = 23,
-    SystemDpcBehaviourInformation = 24,
+    SystemDpcBehaviorInformation = 24,
     SystemFullMemoryInformation = 25,
     SystemNotImplemented6 = 25,
-    SystemLoadImage = 26,
-    SystemUnloadImage = 27,
+    SystemLoadGdiDriverInformation = 26,
+    SystemUnloadGdiDriverInformation = 27,
     SystemTimeAdjustmentInformation = 28,
     SystemTimeAdjustment = 28,
     SystemSummaryMemoryInformation = 29,
-    SystemNotImplemented7 = 29,
-    SystemNextEventIdInformation = 30,
-    SystemNotImplemented8 = 30,
-    SystemEventIdsInformation = 31,
-    SystemCrashDumpInformation = 32,
+    SystemMirrorMemoryInformation = 30,
+    SystemPerformanceTraceInformation = 31,
+    SystemObsolete0 = 32,
     SystemExceptionInformation = 33,
     SystemCrashDumpStateInformation = 34,
     SystemKernelDebuggerInformation = 35,
     SystemContextSwitchInformation = 36,
     SystemRegistryQuotaInformation = 37,
+    SystemExtendServiceTableInformation = 38,
+    SystemPrioritySeperation = 39,
+    SystemVerifierAddDriverInformation = 40,
+    SystemVerifierRemoveDriverInformation = 41,
+    SystemProcessorIdleInformation = 42,
+    SystemLegacyDriverInformation = 43,
     SystemCurrentTimeZoneInformation = 44,
-    SystemTimeZoneInformation = 44,
     SystemLookasideInformation = 45,
-    SystemSetTimeSlipEvent = 46,
-    SystemCreateSession = 47,
-    SystemDeleteSession = 48,
-    SystemInvalidInfoClass4 = 49,
+    SystemTimeSlipNotification = 46,
+    SystemSessionCreate = 47,
+    SystemSessionDetach = 48,
+    SystemSessionInformation = 49,
     SystemRangeStartInformation = 50,
     SystemVerifierInformation = 51,
-    SystemAddVerifier = 52,
+    SystemVerifierThunkExtend = 52,
     SystemSessionProcessesInformation	= 53,
     SystemLoadGdiDriverInSystemSpace = 54,
     SystemNumaProcessorMap = 55,
@@ -1541,7 +1544,7 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemWatchdogTimerHandler = 71,
     SystemWatchdogTimerInformation = 72,
     SystemLogicalProcessorInformation = 73,
-    SystemWow64SharedInformation = 74,
+    SystemWow64SharedInformationObsolete = 74,
     SystemRegisterFirmwareTableInformationHandler = 75,
     SystemFirmwareTableInformation = 76,
     SystemModuleInformationEx = 77,
@@ -1549,11 +1552,172 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemSuperfetchInformation = 79,
     SystemMemoryListInformation = 80,
     SystemFileCacheInformationEx = 81,
+    SystemThreadPriorityClientIdInformation = 82,
+    SystemProcessorIdleCycleTimeInformation = 83,
+    SystemVerifierCancellationInformation = 84,
+    SystemProcessorPowerInformationEx = 85,
+    SystemRefTraceInformation = 86,
+    SystemSpecialPoolInformation = 87,
+    SystemProcessIdInformation = 88,
+    SystemErrorPortInformation = 89,
+    SystemBootEnvironmentInformation = 90,
+    SystemHypervisorInformation = 91,
+    SystemVerifierInformationEx = 92,
+    SystemTimeZoneInformation = 93,
+    SystemImageFileExecutionOptionsInformation = 94,
+    SystemCoverageInformation = 95,
+    SystemPrefetchPatchInformation = 96,
+    SystemVerifierFaultsInformation = 97,
+    SystemSystemPartitionInformation = 98,
+    SystemSystemDiskInformation = 99,
+    SystemProcessorPerformanceDistribution = 100,
+    SystemNumaProximityNodeInformation = 101,
     SystemDynamicTimeZoneInformation = 102,
+    SystemCodeIntegrityInformation = 103,
+    SystemProcessorMicrocodeUpdateInformation = 104,
+    SystemProcessorBrandString = 105,
+    SystemVirtualAddressInformation = 106,
     SystemLogicalProcessorInformationEx = 107,
+    SystemProcessorCycleTimeInformation = 108,
+    SystemStoreInformation = 109,
+    SystemRegistryAppendString = 110,
+    SystemAitSamplingValue = 111,
+    SystemVhdBootInformation = 112,
+    SystemCpuQuotaInformation = 113,
+    SystemNativeBasicInformation = 114,
+    SystemErrorPortTimeouts = 115,
+    SystemLowPriorityIoInformation = 116,
+    SystemTpmBootEntropyInformation = 117,
+    SystemVerifierCountersInformation = 118,
+    SystemPagedPoolInformationEx = 119,
+    SystemSystemPtesInformationEx = 120,
+    SystemNodeDistanceInformation = 121,
+    SystemAcpiAuditInformation = 122,
+    SystemBasicPerformanceInformation = 123,
+    SystemQueryPerformanceCounterInformation = 124,
+    SystemSessionBigPoolInformation = 125,
+    SystemBootGraphicsInformation = 126,
+    SystemScrubPhysicalMemoryInformation = 127,
+    SystemBadPageInformation = 128,
+    SystemProcessorProfileControlArea = 129,
+    SystemCombinePhysicalMemoryInformation = 130,
+    SystemEntropyInterruptTimingInformation = 131,
+    SystemConsoleInformation = 132,
+    SystemPlatformBinaryInformation = 133,
+    SystemPolicyInformation = 134,
+    SystemHypervisorProcessorCountInformation = 135,
+    SystemDeviceDataInformation = 136,
+    SystemDeviceDataEnumerationInformation = 137,
+    SystemMemoryTopologyInformation = 138,
+    SystemMemoryChannelInformation = 139,
+    SystemBootLogoInformation = 140,
+    SystemProcessorPerformanceInformationEx = 141,
+    SystemCriticalProcessErrorLogInformation = 142,
+    SystemSecureBootPolicyInformation = 143,
+    SystemPageFileInformationEx = 144,
+    SystemSecureBootInformation = 145,
+    SystemEntropyInterruptTimingRawInformation = 146,
+    SystemPortableWorkspaceEfiLauncherInformation = 147,
+    SystemFullProcessInformation = 148,
+    SystemKernelDebuggerInformationEx = 149,
+    SystemBootMetadataInformation = 150,
+    SystemSoftRebootInformation = 151,
+    SystemElamCertificateInformation = 152,
+    SystemOfflineDumpConfigInformation = 153,
+    SystemProcessorFeaturesInformation = 154,
+    SystemRegistryReconciliationInformation = 155,
+    SystemEdidInformation = 156,
+    SystemManufacturingInformation = 157,
+    SystemEnergyEstimationConfigInformation = 158,
+    SystemHypervisorDetailInformation = 159,
+    SystemProcessorCycleStatsInformation = 160,
+    SystemVmGenerationCountInformation = 161,
+    SystemTrustedPlatformModuleInformation = 162,
+    SystemKernelDebuggerFlags = 163,
+    SystemCodeIntegrityPolicyInformation = 164,
+    SystemIsolatedUserModeInformation = 165,
+    SystemHardwareSecurityTestInterfaceResultsInformation = 166,
+    SystemSingleModuleInformation = 167,
+    SystemAllowedCpuSetsInformation = 168,
+    SystemVsmProtectionInformation = 169,
+    SystemInterruptCpuSetsInformation = 170,
+    SystemSecureBootPolicyFullInformation = 171,
+    SystemCodeIntegrityPolicyFullInformation = 172,
+    SystemAffinitizedInterruptProcessorInformation = 173,
+    SystemRootSiloInformation = 174,
+    SystemCpuSetInformation = 175,
+    SystemCpuSetTagInformation = 176,
+    SystemWin32WerStartCallout = 177,
+    SystemSecureKernelProfileInformation = 178,
+    SystemCodeIntegrityPlatformManifestInformation = 179,
+    SystemInterruptSteeringInformation = 180,
+    SystemSupportedProcessorArchitectures = 181,
+    SystemMemoryUsageInformation = 182,
+    SystemCodeIntegrityCertificateInformation = 183,
+    SystemPhysicalMemoryInformation = 184,
+    SystemControlFlowTransition = 185,
+    SystemKernelDebuggingAllowed = 186,
+    SystemActivityModerationExeState = 187,
+    SystemActivityModerationUserSettings = 188,
+    SystemCodeIntegrityPoliciesFullInformation = 189,
+    SystemCodeIntegrityUnlockInformation = 190,
+    SystemIntegrityQuotaInformation = 191,
+    SystemFlushInformation = 192,
+    SystemProcessorIdleMaskInformation = 193,
+    SystemSecureDumpEncryptionInformation = 194,
+    SystemWriteConstraintInformation = 195,
+    SystemKernelVaShadowInformation = 196,
     SystemHypervisorSharedPageInformation = 197,
-    SystemInformationClassMax
+    SystemFirmwareBootPerformanceInformation = 198,
+    SystemCodeIntegrityVerificationInformation = 199,
+    SystemFirmwarePartitionInformation = 200,
+    SystemSpeculationControlInformation = 201,
+    SystemDmaGuardPolicyInformation = 202,
+    SystemEnclaveLaunchControlInformation = 203,
+    SystemWorkloadAllowedCpuSetsInformation = 204,
+    SystemCodeIntegrityUnlockModeInformation = 205,
+    SystemLeapSecondInformation = 206,
+    SystemFlags2Information = 207,
+    SystemSecurityModelInformation = 208,
+    SystemCodeIntegritySyntheticCacheInformation = 209,
+    SystemFeatureConfigurationInformation = 210,
+    SystemFeatureConfigurationSectionInformation = 211,
+    SystemFeatureUsageSubscriptionInformation = 212,
+    SystemSecureSpeculationControlInformation = 213,
+    SystemSpacesBootInformation = 214,
+    SystemFwRamdiskInformation = 215,
+    SystemWheaIpmiHardwareInformation = 216,
+    SystemDifSetRuleClassInformation = 217,
+    SystemDifClearRuleClassInformation = 218,
+    SystemDifApplyPluginVerificationOnDriver = 219,
+    SystemDifRemovePluginVerificationOnDriver = 220,
+    SystemShadowStackInformation = 221,
+    SystemBuildVersionInformation = 222,
+#ifdef __WINESRC__
+    SystemWineVersionInformation = 1000,
+#endif
 } SYSTEM_INFORMATION_CLASS, *PSYSTEM_INFORMATION_CLASS;
+
+typedef struct _SYSTEM_CODEINTEGRITY_INFORMATION
+{
+    ULONG Length;
+    ULONG CodeIntegrityOptions;
+} SYSTEM_CODEINTEGRITY_INFORMATION, *PSYSTEM_CODEINTEGRITY_INFORMATION;
+
+#define CODEINTEGRITY_OPTION_ENABLED                      0x0001
+#define CODEINTEGRITY_OPTION_TESTSIGN                     0x0002
+#define CODEINTEGRITY_OPTION_UMCI_ENABLED                 0x0004
+#define CODEINTEGRITY_OPTION_UMCI_AUDITMODE_ENABLED       0x0008
+#define CODEINTEGRITY_OPTION_UMCI_EXCLUSIONPATHS_ENABLED  0x0010
+#define CODEINTEGRITY_OPTION_TEST_BUILD                   0x0020
+#define CODEINTEGRITY_OPTION_PREPRODUCTION_BUILD          0x0040
+#define CODEINTEGRITY_OPTION_DEBUGMODE_ENABLED            0x0080
+#define CODEINTEGRITY_OPTION_FLIGHT_BUILD                 0x0100
+#define CODEINTEGRITY_OPTION_FLIGHTING_ENABLED            0x0200
+#define CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED            0x0400
+#define CODEINTEGRITY_OPTION_HVCI_KMCI_AUDITMODE_ENABLED  0x0800
+#define CODEINTEGRITY_OPTION_HVCI_KMCI_STRICTMODE_ENABLED 0x1000
+#define CODEINTEGRITY_OPTION_HVCI_IUM_ENABLED             0x2000
 
 typedef enum _THREADINFOCLASS {
     ThreadBasicInformation = 0,
@@ -1876,10 +2040,10 @@ typedef struct _OBJECT_TYPES_INFORMATION
 
 typedef struct _PROCESS_BASIC_INFORMATION {
 #ifdef __WINESRC__
-    DWORD_PTR ExitStatus;
-    PPEB PebBaseAddress;
-    DWORD_PTR AffinityMask;
-    DWORD_PTR BasePriority;
+    NTSTATUS  ExitStatus;
+    PEB      *PebBaseAddress;
+    ULONG_PTR AffinityMask;
+    LONG      BasePriority;
     ULONG_PTR UniqueProcessId;
     ULONG_PTR InheritedFromUniqueProcessId;
 #else
@@ -1965,11 +2129,11 @@ typedef struct _SYSTEM_BASIC_INFORMATION {
 /* System Information Class 0x01 */
 
 typedef struct _SYSTEM_CPU_INFORMATION {
-    WORD Architecture;
-    WORD Level;
-    WORD Revision;       /* combination of CPU model and stepping */
-    WORD Reserved;       /* always zero */
-    DWORD FeatureSet;    /* see bit flags below */
+    USHORT ProcessorArchitecture;
+    USHORT ProcessorLevel;
+    USHORT ProcessorRevision;
+    USHORT MaximumProcessors;
+    ULONG  ProcessorFeatureBits;
 } SYSTEM_CPU_INFORMATION, *PSYSTEM_CPU_INFORMATION;
 
 /* definitions of bits in the Feature set for the x86 processors */
@@ -3514,7 +3678,7 @@ NTSYSAPI NTSTATUS  WINAPI NtCreateSection(HANDLE*,ACCESS_MASK,const OBJECT_ATTRI
 NTSYSAPI NTSTATUS  WINAPI NtCreateSemaphore(PHANDLE,ACCESS_MASK,const OBJECT_ATTRIBUTES*,LONG,LONG);
 NTSYSAPI NTSTATUS  WINAPI NtCreateSymbolicLinkObject(PHANDLE,ACCESS_MASK,POBJECT_ATTRIBUTES,PUNICODE_STRING);
 NTSYSAPI NTSTATUS  WINAPI NtCreateThread(PHANDLE,ACCESS_MASK,POBJECT_ATTRIBUTES,HANDLE,PCLIENT_ID,PCONTEXT,PINITIAL_TEB,BOOLEAN);
-NTSYSAPI NTSTATUS  WINAPI NtCreateThreadEx(HANDLE*,ACCESS_MASK,OBJECT_ATTRIBUTES*,HANDLE,PRTL_THREAD_START_ROUTINE,void*,ULONG,SIZE_T,SIZE_T,SIZE_T,PS_ATTRIBUTE_LIST*);
+NTSYSAPI NTSTATUS  WINAPI NtCreateThreadEx(HANDLE*,ACCESS_MASK,OBJECT_ATTRIBUTES*,HANDLE,PRTL_THREAD_START_ROUTINE,void*,ULONG,ULONG_PTR,SIZE_T,SIZE_T,PS_ATTRIBUTE_LIST*);
 NTSYSAPI NTSTATUS  WINAPI NtCreateTimer(HANDLE*, ACCESS_MASK, const OBJECT_ATTRIBUTES*, TIMER_TYPE);
 NTSYSAPI NTSTATUS  WINAPI NtCreateToken(PHANDLE,ACCESS_MASK,POBJECT_ATTRIBUTES,TOKEN_TYPE,PLUID,PLARGE_INTEGER,PTOKEN_USER,PTOKEN_GROUPS,PTOKEN_PRIVILEGES,PTOKEN_OWNER,PTOKEN_PRIMARY_GROUP,PTOKEN_DEFAULT_DACL,PTOKEN_SOURCE);
 NTSYSAPI NTSTATUS  WINAPI NtCreateUserProcess(HANDLE*,HANDLE*,ACCESS_MASK,ACCESS_MASK,OBJECT_ATTRIBUTES*,OBJECT_ATTRIBUTES*,ULONG,ULONG,RTL_USER_PROCESS_PARAMETERS*,PS_CREATE_INFO*,PS_ATTRIBUTE_LIST*);
@@ -3794,7 +3958,7 @@ NTSYSAPI NTSTATUS  WINAPI RtlCreateTimer(PHANDLE, HANDLE, RTL_WAITORTIMERCALLBAC
 NTSYSAPI BOOLEAN   WINAPI RtlCreateUnicodeString(PUNICODE_STRING,LPCWSTR);
 NTSYSAPI BOOLEAN   WINAPI RtlCreateUnicodeStringFromAsciiz(PUNICODE_STRING,LPCSTR);
 NTSYSAPI NTSTATUS  WINAPI RtlCreateUserProcess(UNICODE_STRING*,ULONG,RTL_USER_PROCESS_PARAMETERS*,SECURITY_DESCRIPTOR*,SECURITY_DESCRIPTOR*,HANDLE,BOOLEAN,HANDLE,HANDLE,RTL_USER_PROCESS_INFORMATION*);
-NTSYSAPI NTSTATUS  WINAPI RtlCreateUserThread(HANDLE,SECURITY_DESCRIPTOR*,BOOLEAN,PVOID,SIZE_T,SIZE_T,PRTL_THREAD_START_ROUTINE,void*,HANDLE*,CLIENT_ID*);
+NTSYSAPI NTSTATUS  WINAPI RtlCreateUserThread(HANDLE,SECURITY_DESCRIPTOR*,BOOLEAN,ULONG,SIZE_T,SIZE_T,PRTL_THREAD_START_ROUTINE,void*,HANDLE*,CLIENT_ID*);
 NTSYSAPI NTSTATUS  WINAPI RtlCreateUserStack(SIZE_T,SIZE_T,ULONG,SIZE_T,SIZE_T,INITIAL_TEB*);
 NTSYSAPI NTSTATUS  WINAPI RtlCustomCPToUnicodeN(CPTABLEINFO*,WCHAR*,DWORD,DWORD*,const char*,DWORD);
 NTSYSAPI void      WINAPI RtlDeactivateActivationContext(DWORD,ULONG_PTR);
@@ -3849,6 +4013,7 @@ NTSYSAPI NTSTATUS  WINAPI RtlFindCharInUnicodeString(int,const UNICODE_STRING*,c
 NTSYSAPI ULONG     WINAPI RtlFindClearBits(PCRTL_BITMAP,ULONG,ULONG);
 NTSYSAPI ULONG     WINAPI RtlFindClearBitsAndSet(PRTL_BITMAP,ULONG,ULONG);
 NTSYSAPI ULONG     WINAPI RtlFindClearRuns(PCRTL_BITMAP,PRTL_BITMAP_RUN,ULONG,BOOLEAN);
+NTSYSAPI void *    WINAPI RtlFindExportedRoutineByName(HMODULE,const char*);
 NTSYSAPI ULONG     WINAPI RtlFindLastBackwardRunSet(PCRTL_BITMAP,ULONG,PULONG);
 NTSYSAPI ULONG     WINAPI RtlFindLastBackwardRunClear(PCRTL_BITMAP,ULONG,PULONG);
 NTSYSAPI CCHAR     WINAPI RtlFindLeastSignificantBit(ULONGLONG);
@@ -4088,10 +4253,13 @@ NTSYSAPI void      WINAPI RtlWakeConditionVariable(RTL_CONDITION_VARIABLE *);
 NTSYSAPI NTSTATUS  WINAPI RtlWalkHeap(HANDLE,PVOID);
 NTSYSAPI NTSTATUS  WINAPI RtlWow64EnableFsRedirection(BOOLEAN);
 NTSYSAPI NTSTATUS  WINAPI RtlWow64EnableFsRedirectionEx(ULONG,ULONG*);
+NTSYSAPI USHORT    WINAPI RtlWow64GetCurrentMachine(void);
+NTSYSAPI NTSTATUS  WINAPI RtlWow64GetProcessMachines(HANDLE,USHORT*,USHORT*);
 #ifdef __x86_64__
 NTSYSAPI NTSTATUS  WINAPI RtlWow64GetThreadContext(HANDLE, WOW64_CONTEXT *);
 NTSYSAPI NTSTATUS  WINAPI RtlWow64SetThreadContext(HANDLE, const WOW64_CONTEXT *);
 #endif
+NTSYSAPI NTSTATUS  WINAPI RtlWow64IsWowGuestMachineSupported(USHORT,BOOLEAN*);
 NTSYSAPI NTSTATUS  WINAPI RtlWriteRegistryValue(ULONG,PCWSTR,PCWSTR,ULONG,PVOID,ULONG);
 NTSYSAPI NTSTATUS  WINAPI RtlZombifyActivationContext(HANDLE);
 NTSYSAPI NTSTATUS  WINAPI RtlpNtCreateKey(PHANDLE,ACCESS_MASK,const OBJECT_ATTRIBUTES*,ULONG,const UNICODE_STRING*,ULONG,PULONG);

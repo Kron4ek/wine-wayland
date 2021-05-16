@@ -38,42 +38,11 @@
 #include "dxva2api.h"
 
 #include "wine/debug.h"
-#include "wine/heap.h"
 #include "wine/list.h"
 
 #include "mf_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
-
-static HINSTANCE mfinstance;
-
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
-{
-    switch (reason)
-    {
-        case DLL_PROCESS_ATTACH:
-            mfinstance = instance;
-            DisableThreadLibraryCalls(instance);
-            break;
-    }
-
-    return TRUE;
-}
-
-HRESULT WINAPI DllCanUnloadNow(void)
-{
-    return S_FALSE;
-}
-
-HRESULT WINAPI DllRegisterServer(void)
-{
-    return __wine_register_resources( mfinstance );
-}
-
-HRESULT WINAPI DllUnregisterServer(void)
-{
-    return __wine_unregister_resources( mfinstance );
-}
 
 struct stream_response
 {
@@ -263,7 +232,7 @@ static ULONG WINAPI source_reader_async_command_Release(IUnknown *iface)
     {
         if (command->op == SOURCE_READER_ASYNC_SEEK)
             PropVariantClear(&command->u.seek.position);
-        heap_free(command);
+        free(command);
     }
 
     return refcount;
@@ -280,7 +249,7 @@ static HRESULT source_reader_create_async_op(enum source_reader_async_op op, str
 {
     struct source_reader_async_command *command;
 
-    if (!(command = heap_alloc_zero(sizeof(*command))))
+    if (!(command = calloc(1, sizeof(*command))))
         return E_OUTOFMEMORY;
 
     command->IUnknown_iface.lpVtbl = &source_reader_async_command_vtbl;
@@ -443,12 +412,14 @@ static void source_reader_set_sa_response(struct source_reader *reader, struct s
     }
 }
 
-static void source_reader_queue_response(struct source_reader *reader, struct media_stream *stream, HRESULT status,
+static HRESULT source_reader_queue_response(struct source_reader *reader, struct media_stream *stream, HRESULT status,
         DWORD stream_flags, LONGLONG timestamp, IMFSample *sample)
 {
     struct stream_response *response;
 
-    response = heap_alloc_zero(sizeof(*response));
+    if (!(response = calloc(1, sizeof(*response))))
+        return E_OUTOFMEMORY;
+
     response->status = status;
     response->stream_index = stream->index;
     response->stream_flags = stream_flags;
@@ -467,6 +438,8 @@ static void source_reader_queue_response(struct source_reader *reader, struct me
     stream->responses++;
 
     source_reader_response_ready(reader, response);
+
+    return S_OK;
 }
 
 static HRESULT source_reader_request_sample(struct source_reader *reader, struct media_stream *stream)
@@ -667,7 +640,7 @@ static HRESULT source_reader_pull_stream_samples(struct source_reader *reader, s
     {
         memset(&out_buffer, 0, sizeof(out_buffer));
 
-        if (!(stream_info.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES))
+        if (!(stream_info.dwFlags & (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES | MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES)))
         {
             if (FAILED(hr = MFCreateSample(&out_buffer.pSample)))
                 break;
@@ -717,8 +690,7 @@ static HRESULT source_reader_process_sample(struct source_reader *reader, struct
         if (FAILED(IMFSample_GetSampleTime(sample, &timestamp)))
             WARN("Sample time wasn't set.\n");
 
-        source_reader_queue_response(reader, stream, S_OK, 0, timestamp, sample);
-        return S_OK;
+        return source_reader_queue_response(reader, stream, S_OK, 0, timestamp, sample);
     }
 
     /* It's assumed that decoder has 1 input and 1 output, both id's are 0. */
@@ -973,7 +945,7 @@ static void source_reader_release_response(struct stream_response *response)
 {
     if (response->sample)
         IMFSample_Release(response->sample);
-    heap_free(response);
+    free(response);
 }
 
 static HRESULT source_reader_get_stream_selection(const struct source_reader *reader, DWORD index, BOOL *selected)
@@ -1395,10 +1367,10 @@ static ULONG WINAPI src_reader_Release(IMFSourceReader *iface)
                 IMFVideoSampleAllocatorEx_Release(stream->allocator);
         }
         source_reader_release_responses(reader, NULL);
-        heap_free(reader->streams);
+        free(reader->streams);
         MFUnlockWorkQueue(reader->queue);
         DeleteCriticalSection(&reader->cs);
-        heap_free(reader);
+        free(reader);
     }
 
     return refcount;
@@ -1606,7 +1578,7 @@ static HRESULT source_reader_set_compatible_media_type(struct source_reader *rea
         return MF_E_INVALIDMEDIATYPE;
 
     /* No need for a decoder or type change. */
-    if (flags & MF_MEDIATYPE_EQUAL_FORMAT_TYPES)
+    if (flags & MF_MEDIATYPE_EQUAL_FORMAT_DATA)
         return S_OK;
 
     if (FAILED(hr = source_reader_get_source_type_handler(reader, index, &type_handler)))
@@ -1614,7 +1586,7 @@ static HRESULT source_reader_set_compatible_media_type(struct source_reader *rea
 
     while (!type_set && IMFMediaTypeHandler_GetMediaTypeByIndex(type_handler, i++, &native_type) == S_OK)
     {
-        static const DWORD compare_flags = MF_MEDIATYPE_EQUAL_MAJOR_TYPES | MF_MEDIATYPE_EQUAL_FORMAT_TYPES;
+        static const DWORD compare_flags = MF_MEDIATYPE_EQUAL_MAJOR_TYPES | MF_MEDIATYPE_EQUAL_FORMAT_DATA;
 
         if (SUCCEEDED(IMFMediaType_IsEqual(native_type, type, &flags)) && (flags & compare_flags) == compare_flags)
         {
@@ -2287,7 +2259,7 @@ static HRESULT create_source_reader_from_source(IMFMediaSource *source, IMFAttri
     unsigned int i;
     HRESULT hr;
 
-    object = heap_alloc_zero(sizeof(*object));
+    object = calloc(1, sizeof(*object));
     if (!object)
         return E_OUTOFMEMORY;
 
@@ -2311,7 +2283,7 @@ static HRESULT create_source_reader_from_source(IMFMediaSource *source, IMFAttri
     if (FAILED(hr = IMFPresentationDescriptor_GetStreamDescriptorCount(object->descriptor, &object->stream_count)))
         goto failed;
 
-    if (!(object->streams = heap_alloc_zero(object->stream_count * sizeof(*object->streams))))
+    if (!(object->streams = calloc(object->stream_count, sizeof(*object->streams))))
     {
         hr = E_OUTOFMEMORY;
         goto failed;

@@ -301,6 +301,7 @@ SOURCES = \
 	fontsub.h \
 	fusion.idl \
 	gameux.idl \
+	gamingtcui.h \
 	gdiplus.h \
 	gdipluscolor.h \
 	gdipluscolormatrix.h \
@@ -529,6 +530,7 @@ SOURCES = \
 	nserror.h \
 	nspapi.h \
 	ntddcdrm.h \
+	ntddkbd.h \
 	ntddmou.h \
 	ntddndis.h \
 	ntddscsi.h \
@@ -741,6 +743,7 @@ SOURCES = \
 	wimgapi.h \
 	winapifamily.h \
 	winbase.h \
+	winber.h \
 	wincodec.idl \
 	wincodecsdk.idl \
 	wincon.h \
@@ -755,6 +758,7 @@ SOURCES = \
 	windows.gaming.input.idl \
 	windows.globalization.idl \
 	windows.h \
+	windows.media.devices.idl \
 	windows.media.speechsynthesis.idl \
 	windows.system.idl \
 	windows.system.userprofile.idl \
@@ -835,6 +839,8 @@ SOURCES = \
 	wtypes.idl \
 	wuapi.idl \
 	x3daudio.h \
+	xact.h \
+	xact2wb.h \
 	xact3.h \
 	xact3wb.h \
 	xapo.idl \

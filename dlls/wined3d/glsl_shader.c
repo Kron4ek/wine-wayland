@@ -419,7 +419,7 @@ static void shader_glsl_add_version_declaration(struct wined3d_string_buffer *bu
     shader_addline(buffer, "#version %u\n", shader_glsl_get_version(gl_info));
 }
 
-unsigned int shader_glsl_full_ffp_varyings(const struct wined3d_gl_info *gl_info)
+static unsigned int shader_glsl_full_ffp_varyings(const struct wined3d_gl_info *gl_info)
 {
     /* On core profile we have to also count diffuse and specular colours and
      * the fog coordinate. */
@@ -13000,13 +13000,20 @@ static BOOL glsl_blitter_supported(enum wined3d_blit_op blit_op, const struct wi
     const struct wined3d_resource *dst_resource = &dst_texture->t.resource;
     const struct wined3d_format *src_format = src_resource->format;
     const struct wined3d_format *dst_format = dst_resource->format;
+    bool src_ds, dst_ds;
     BOOL decompress;
 
     if (blit_op == WINED3D_BLIT_OP_RAW_BLIT && dst_format->id == src_format->id)
     {
-        if (dst_format->depth_size || dst_format->stencil_size)
+        src_ds = src_format->depth_size || src_format->stencil_size;
+        dst_ds = dst_format->depth_size || dst_format->stencil_size;
+        /* We could in principle support raw depth/stencil <-> colour blits as
+         * well in some cases, but note that typeless formats like e.g.
+         * R16_TYPELESS may use a normalised GL format for depth/stencil
+         * resources, and a floating-point format for colour resources, */
+        if (src_ds && dst_ds)
             blit_op = WINED3D_BLIT_OP_DEPTH_BLIT;
-        else
+        else if (!src_ds && !dst_ds)
             blit_op = WINED3D_BLIT_OP_COLOR_BLIT;
     }
 
@@ -13067,7 +13074,8 @@ static DWORD glsl_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_bli
         struct wined3d_context *context, struct wined3d_texture *src_texture, unsigned int src_sub_resource_idx,
         DWORD src_location, const RECT *src_rect, struct wined3d_texture *dst_texture,
         unsigned int dst_sub_resource_idx, DWORD dst_location, const RECT *dst_rect,
-        const struct wined3d_color_key *colour_key, enum wined3d_texture_filter_type filter)
+        const struct wined3d_color_key *colour_key, enum wined3d_texture_filter_type filter,
+        const struct wined3d_format *resolve_format)
 {
     struct wined3d_texture_gl *src_texture_gl = wined3d_texture_gl(src_texture);
     struct wined3d_texture_gl *dst_texture_gl = wined3d_texture_gl(dst_texture);
@@ -13083,11 +13091,12 @@ static DWORD glsl_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_bli
     GLint location;
     RECT s, d;
 
-    TRACE("blitter %p, op %#x, context %p, src_texture %p, src_sub_resource_idx %u, src_location %s, src_rect %s, "
-            "dst_texture %p, dst_sub_resource_idx %u, dst_location %s, dst_rect %s, colour_key %p, filter %s.\n",
+    TRACE("blitter %p, op %#x, context %p, src_texture %p, src_sub_resource_idx %u, src_location %s, "
+            "src_rect %s, dst_texture %p, dst_sub_resource_idx %u, dst_location %s, dst_rect %s, "
+            "colour_key %p, filter %s, resolve format %p.\n",
             blitter, op, context, src_texture, src_sub_resource_idx, wined3d_debug_location(src_location),
             wine_dbgstr_rect(src_rect), dst_texture, dst_sub_resource_idx, wined3d_debug_location(dst_location),
-            wine_dbgstr_rect(dst_rect), colour_key, debug_d3dtexturefiltertype(filter));
+            wine_dbgstr_rect(dst_rect), colour_key, debug_d3dtexturefiltertype(filter), resolve_format);
 
     if (!glsl_blitter_supported(op, context, src_texture_gl, src_location, dst_texture_gl, dst_location))
     {
@@ -13099,7 +13108,8 @@ static DWORD glsl_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_bli
 
         TRACE("Forwarding to blitter %p.\n", next);
         return next->ops->blitter_blit(next, op, context, src_texture, src_sub_resource_idx, src_location,
-                src_rect, dst_texture, dst_sub_resource_idx, dst_location, dst_rect, colour_key, filter);
+                src_rect, dst_texture, dst_sub_resource_idx, dst_location, dst_rect, colour_key, filter,
+                resolve_format);
     }
 
     glsl_blitter = CONTAINING_RECORD(blitter, struct wined3d_glsl_blitter, blitter);

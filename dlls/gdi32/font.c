@@ -2685,7 +2685,9 @@ static UINT get_font_type( const NEWTEXTMETRICEXW *ntm )
 static BOOL get_face_enum_data( struct gdi_font_face *face, ENUMLOGFONTEXW *elf, NEWTEXTMETRICEXW *ntm )
 {
     struct gdi_font *font;
-    LOGFONTW lf = { .lfHeight = 100 };
+    LOGFONTW lf = { .lfHeight = -4096 /* preferable EM Square size */ };
+
+    if (!face->scalable) lf.lfHeight = 0;
 
     if (!(font = create_gdi_font( face, NULL, &lf ))) return FALSE;
 
@@ -2695,12 +2697,44 @@ static BOOL get_face_enum_data( struct gdi_font_face *face, ENUMLOGFONTEXW *elf,
         return FALSE;
     }
 
+    if (font->scalable && -lf.lfHeight % font->otm.otmEMSquare != 0)
+    {
+        /* reload with the original EM Square size */
+        lf.lfHeight = -font->otm.otmEMSquare;
+        free_gdi_font( font );
+
+        if (!(font = create_gdi_font( face, NULL, &lf ))) return FALSE;
+        if (!font_funcs->load_font( font ))
+        {
+            free_gdi_font( font );
+            return FALSE;
+        }
+    }
+
     if (font_funcs->set_outline_text_metrics( font ))
     {
-        memcpy( &ntm->ntmTm, &font->otm.otmTextMetrics, sizeof(TEXTMETRICW) );
+        static const DWORD ntm_ppem = 32;
+        UINT cell_height;
+
+#define TM font->otm.otmTextMetrics
+#define SCALE_NTM(value) (MulDiv( ntm->ntmTm.tmHeight, (value), TM.tmHeight ))
+        cell_height = TM.tmHeight / ( -lf.lfHeight / font->otm.otmEMSquare );
+        ntm->ntmTm.tmHeight = MulDiv( ntm_ppem, cell_height, font->otm.otmEMSquare );
+        ntm->ntmTm.tmAscent = SCALE_NTM( TM.tmAscent );
+        ntm->ntmTm.tmDescent = ntm->ntmTm.tmHeight - ntm->ntmTm.tmAscent;
+        ntm->ntmTm.tmInternalLeading = SCALE_NTM( TM.tmInternalLeading );
+        ntm->ntmTm.tmExternalLeading = SCALE_NTM( TM.tmExternalLeading );
+        ntm->ntmTm.tmAveCharWidth = SCALE_NTM( TM.tmAveCharWidth );
+        ntm->ntmTm.tmMaxCharWidth = SCALE_NTM( TM.tmMaxCharWidth );
+
+        memcpy((char *)&ntm->ntmTm + offsetof( TEXTMETRICW, tmWeight ),
+               (const char *)&TM + offsetof( TEXTMETRICW, tmWeight ),
+               sizeof(TEXTMETRICW) - offsetof( TEXTMETRICW, tmWeight ));
         ntm->ntmTm.ntmSizeEM = font->otm.otmEMSquare;
-        ntm->ntmTm.ntmCellHeight = font->ntmCellHeight;
+        ntm->ntmTm.ntmCellHeight = cell_height;
         ntm->ntmTm.ntmAvgWidth = font->ntmAvgWidth;
+#undef SCALE_NTM
+#undef TM
     }
     else if (font_funcs->set_bitmap_text_metrics( font ))
     {
@@ -2784,7 +2818,7 @@ static BOOL enum_face_charsets( const struct gdi_font_family *family, struct gdi
 
     for (i = 0; i < count; i++)
     {
-        if (!face->scalable && face->fs.fsCsb[0] == 0)  /* OEM bitmap */
+        if (face->fs.fsCsb[0] == 0)  /* OEM */
         {
             elf.elfLogFont.lfCharSet = ntm.ntmTm.tmCharSet = OEM_CHARSET;
             load_script_name( IDS_OEM_DOS - IDS_FIRST_SCRIPT, elf.elfScript );
@@ -3975,10 +4009,13 @@ static void init_font_options(void)
        This looks roughly similar to Windows Native with the same registry value.
        MS GDI seems to be rasterizing the outline at a different rate than FreeType. */
     gamma = 1000 * gamma / 1400;
-    for (i = 0; i < 256; i++)
+    if (gamma != 1000)
     {
-        font_gamma_ramp.encode[i] = pow( i / 255., 1000. / gamma ) * 255. + .5;
-        font_gamma_ramp.decode[i] = pow( i / 255., gamma / 1000. ) * 255. + .5;
+        for (i = 0; i < 256; i++)
+        {
+            font_gamma_ramp.encode[i] = pow( i / 255., 1000. / gamma ) * 255. + .5;
+            font_gamma_ramp.decode[i] = pow( i / 255., gamma / 1000. ) * 255. + .5;
+        }
     }
     font_gamma_ramp.gamma = gamma;
     TRACE("gamma %d\n", font_gamma_ramp.gamma);

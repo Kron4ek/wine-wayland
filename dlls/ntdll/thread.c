@@ -150,7 +150,7 @@ void WINAPI RtlUserThreadStart( PRTL_THREAD_START_ROUTINE entry, void *arg )
  *              RtlCreateUserThread   (NTDLL.@)
  */
 NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
-                                     BOOLEAN suspended, PVOID stack_addr,
+                                     BOOLEAN suspended, ULONG zero_bits,
                                      SIZE_T stack_reserve, SIZE_T stack_commit,
                                      PRTL_THREAD_START_ROUTINE start, void *param,
                                      HANDLE *handle_ptr, CLIENT_ID *id )
@@ -181,7 +181,7 @@ NTSTATUS WINAPI RtlCreateUserThread( HANDLE process, SECURITY_DESCRIPTOR *descr,
     if (actctx) flags |= THREAD_CREATE_FLAGS_CREATE_SUSPENDED;
 
     status = NtCreateThreadEx( &handle, THREAD_ALL_ACCESS, &attr, process, start, param,
-                               flags, 0, stack_commit, stack_reserve, attr_list );
+                               flags, zero_bits, stack_commit, stack_reserve, attr_list );
     if (!status)
     {
         if (actctx)
@@ -241,7 +241,7 @@ TEB_ACTIVE_FRAME * WINAPI RtlGetFrame(void)
  ***********************************************************************/
 
 
-static GLOBAL_FLS_DATA fls_data;
+static GLOBAL_FLS_DATA fls_data = { { NULL }, { &fls_data.fls_list_head, &fls_data.fls_list_head } };
 
 static RTL_CRITICAL_SECTION fls_section;
 static RTL_CRITICAL_SECTION_DEBUG fls_critsect_debug =
@@ -253,11 +253,6 @@ static RTL_CRITICAL_SECTION_DEBUG fls_critsect_debug =
 static RTL_CRITICAL_SECTION fls_section = { &fls_critsect_debug, -1, 0, 0, 0, 0 };
 
 #define MAX_FLS_DATA_COUNT 0xff0
-
-void init_global_fls_data(void)
-{
-    InitializeListHead( &fls_data.fls_list_head );
-}
 
 static void lock_fls_data(void)
 {

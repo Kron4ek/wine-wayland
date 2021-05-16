@@ -620,7 +620,7 @@ DWORD WINAPI GetActiveProcessorCount(WORD group)
 {
     DWORD cpus = system_info.NumberOfProcessors;
 
-    FIXME("semi-stub, returning %u\n", cpus);
+    FIXME("(0x%x): semi-stub, returning %u\n", group, cpus);
     return cpus;
 }
 
@@ -631,8 +631,17 @@ DWORD WINAPI GetMaximumProcessorCount(WORD group)
 {
     DWORD cpus = system_info.NumberOfProcessors;
 
-    FIXME("semi-stub, returning %u\n", cpus);
+    FIXME("(0x%x): semi-stub, returning %u\n", group, cpus);
     return cpus;
+}
+
+/***********************************************************************
+ *           GetMaximumProcessorGroupCount (KERNEL32.@)
+ */
+DWORD WINAPI GetMaximumProcessorGroupCount(void)
+{
+    FIXME("semi-stub, always returning 1\n");
+    return 1;
 }
 
 /***********************************************************************

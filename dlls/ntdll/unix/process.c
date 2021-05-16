@@ -58,7 +58,9 @@
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winternl.h"
+#include "winioctl.h"
 #include "unix_private.h"
+#include "wine/condrv.h"
 #include "wine/exception.h"
 #include "wine/server.h"
 #include "wine/debug.h"
@@ -70,24 +72,7 @@ static ULONG execute_flags = MEM_EXECUTE_OPTION_DISABLE | (sizeof(void *) > size
                                                            MEM_EXECUTE_OPTION_DISABLE_THUNK_EMULATION |
                                                            MEM_EXECUTE_OPTION_PERMANENT : 0);
 
-static const char * const cpu_names[] = { "x86", "x86_64", "PowerPC", "ARM", "ARM64" };
-
 static UINT process_error_mode;
-
-static client_cpu_t get_machine_cpu( pe_image_info_t *pe_info )
-{
-    switch (pe_info->machine)
-    {
-    case IMAGE_FILE_MACHINE_I386:
-        if ((is_win64 || is_wow64) && (pe_info->image_flags & IMAGE_FLAGS_ComPlusNativeReady))
-            return CPU_x86_64;
-        return CPU_x86;
-    case IMAGE_FILE_MACHINE_AMD64: return CPU_x86_64;
-    case IMAGE_FILE_MACHINE_ARMNT: return CPU_ARM;
-    case IMAGE_FILE_MACHINE_ARM64: return CPU_ARM64;
-    default: return 0;
-    }
-}
 
 static char **build_argv( const UNICODE_STRING *cmdline, int reserved )
 {
@@ -153,74 +138,6 @@ static char **build_argv( const UNICODE_STRING *cmdline, int reserved )
     argv[argc++] = arg;
     argv[argc] = NULL;
     return argv;
-}
-
-
-static inline const WCHAR *get_params_string( const RTL_USER_PROCESS_PARAMETERS *params,
-                                              const UNICODE_STRING *str )
-{
-    if (params->Flags & PROCESS_PARAMS_FLAG_NORMALIZED) return str->Buffer;
-    return (const WCHAR *)((const char *)params + (UINT_PTR)str->Buffer);
-}
-
-static inline DWORD append_string( void **ptr, const RTL_USER_PROCESS_PARAMETERS *params,
-                                   const UNICODE_STRING *str )
-{
-    const WCHAR *buffer = get_params_string( params, str );
-    memcpy( *ptr, buffer, str->Length );
-    *ptr = (WCHAR *)*ptr + str->Length / sizeof(WCHAR);
-    return str->Length;
-}
-
-/***********************************************************************
- *           create_startup_info
- */
-static startup_info_t *create_startup_info( const RTL_USER_PROCESS_PARAMETERS *params, DWORD *info_size )
-{
-    startup_info_t *info;
-    DWORD size;
-    void *ptr;
-
-    size = sizeof(*info);
-    size += params->CurrentDirectory.DosPath.Length;
-    size += params->DllPath.Length;
-    size += params->ImagePathName.Length;
-    size += params->CommandLine.Length;
-    size += params->WindowTitle.Length;
-    size += params->Desktop.Length;
-    size += params->ShellInfo.Length;
-    size += params->RuntimeInfo.Length;
-    size = (size + 1) & ~1;
-    *info_size = size;
-
-    if (!(info = calloc( size, 1 ))) return NULL;
-
-    info->debug_flags   = params->DebugFlags;
-    info->console_flags = params->ConsoleFlags;
-    info->console       = wine_server_obj_handle( params->ConsoleHandle );
-    info->hstdin        = wine_server_obj_handle( params->hStdInput );
-    info->hstdout       = wine_server_obj_handle( params->hStdOutput );
-    info->hstderr       = wine_server_obj_handle( params->hStdError );
-    info->x             = params->dwX;
-    info->y             = params->dwY;
-    info->xsize         = params->dwXSize;
-    info->ysize         = params->dwYSize;
-    info->xchars        = params->dwXCountChars;
-    info->ychars        = params->dwYCountChars;
-    info->attribute     = params->dwFillAttribute;
-    info->flags         = params->dwFlags;
-    info->show          = params->wShowWindow;
-
-    ptr = info + 1;
-    info->curdir_len = append_string( &ptr, params, &params->CurrentDirectory.DosPath );
-    info->dllpath_len = append_string( &ptr, params, &params->DllPath );
-    info->imagepath_len = append_string( &ptr, params, &params->ImagePathName );
-    info->cmdline_len = append_string( &ptr, params, &params->CommandLine );
-    info->title_len = append_string( &ptr, params, &params->WindowTitle );
-    info->desktop_len = append_string( &ptr, params, &params->Desktop );
-    info->shellinfo_len = append_string( &ptr, params, &params->ShellInfo );
-    info->runtime_len = append_string( &ptr, params, &params->RuntimeInfo );
-    return info;
 }
 
 
@@ -331,22 +248,26 @@ static BOOL get_so_file_info( HANDLE handle, pe_image_info_t *info )
 /***********************************************************************
  *           get_pe_file_info
  */
-static NTSTATUS get_pe_file_info( UNICODE_STRING *path, HANDLE *handle, pe_image_info_t *info )
+static NTSTATUS get_pe_file_info( OBJECT_ATTRIBUTES *attr, HANDLE *handle, pe_image_info_t *info )
 {
     NTSTATUS status;
     HANDLE mapping;
-    OBJECT_ATTRIBUTES attr;
-    IO_STATUS_BLOCK io;
+    char *unix_name;
 
     *handle = 0;
     memset( info, 0, sizeof(*info) );
-    InitializeObjectAttributes( &attr, path, OBJ_CASE_INSENSITIVE, 0, 0 );
-    if ((status = NtOpenFile( handle, GENERIC_READ, &attr, &io,
-                              FILE_SHARE_READ | FILE_SHARE_DELETE, FILE_SYNCHRONOUS_IO_NONALERT )))
+    if (!(status = nt_to_unix_file_name( attr, &unix_name, FILE_OPEN )))
     {
-        if (is_builtin_path( path, &info->machine ))
+        status = open_unix_file( handle, unix_name, GENERIC_READ, attr, 0,
+                                 FILE_SHARE_READ | FILE_SHARE_DELETE,
+                                 FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0 );
+        free( unix_name );
+    }
+    if (status)
+    {
+        if (is_builtin_path( attr->ObjectName, &info->machine ))
         {
-            TRACE( "assuming %04x builtin for %s\n", info->machine, debugstr_us(path));
+            TRACE( "assuming %04x builtin for %s\n", info->machine, debugstr_us(attr->ObjectName));
             return STATUS_SUCCESS;
         }
         return status;
@@ -365,6 +286,7 @@ static NTSTATUS get_pe_file_info( UNICODE_STRING *path, HANDLE *handle, pe_image
         }
         SERVER_END_REQ;
         NtClose( mapping );
+        if (info->image_charact & IMAGE_FILE_DLL) return STATUS_INVALID_IMAGE_FORMAT;
     }
     else if (status == STATUS_INVALID_IMAGE_NOT_MZ)
     {
@@ -467,9 +389,20 @@ static void set_stdio_fd( int stdin_fd, int stdout_fd )
         if (stdout_fd == -1) stdout_fd = fd;
     }
 
-    dup2( stdin_fd, 0 );
-    dup2( stdout_fd, 1 );
+    if (stdin_fd != 0) dup2( stdin_fd, 0 );
+    if (stdout_fd != 1) dup2( stdout_fd, 1 );
     if (fd != -1) close( fd );
+}
+
+
+/***********************************************************************
+ *           is_unix_console_handle
+ */
+static BOOL is_unix_console_handle( HANDLE handle )
+{
+    IO_STATUS_BLOCK io;
+    return !NtDeviceIoControlFile( handle, NULL, NULL, NULL, &io, IOCTL_CONDRV_IS_UNIX,
+                                   NULL, 0, NULL, 0 );
 }
 
 
@@ -484,8 +417,13 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
     pid_t pid;
     char **argv;
 
-    wine_server_handle_to_fd( params->hStdInput, FILE_READ_DATA, &stdin_fd, NULL );
-    wine_server_handle_to_fd( params->hStdOutput, FILE_WRITE_DATA, &stdout_fd, NULL );
+    if (wine_server_handle_to_fd( params->hStdInput, FILE_READ_DATA, &stdin_fd, NULL ) &&
+        isatty(0) && is_unix_console_handle( params->hStdInput ))
+        stdin_fd = 0;
+
+    if (wine_server_handle_to_fd( params->hStdOutput, FILE_WRITE_DATA, &stdout_fd, NULL ) &&
+        isatty(1) && is_unix_console_handle( params->hStdOutput ))
+        stdout_fd = 1;
 
     if (!(pid = fork()))  /* child */
     {
@@ -500,8 +438,8 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
             }
             else set_stdio_fd( stdin_fd, stdout_fd );
 
-            if (stdin_fd != -1) close( stdin_fd );
-            if (stdout_fd != -1) close( stdout_fd );
+            if (stdin_fd != -1 && stdin_fd != 0) close( stdin_fd );
+            if (stdout_fd != -1 && stdout_fd != 1) close( stdout_fd );
 
             if (winedebug) putenv( winedebug );
             if (unixdir != -1)
@@ -528,8 +466,8 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
     }
     else status = STATUS_NO_MEMORY;
 
-    if (stdin_fd != -1) close( stdin_fd );
-    if (stdout_fd != -1) close( stdout_fd );
+    if (stdin_fd != -1 && stdin_fd != 0) close( stdin_fd );
+    if (stdout_fd != -1 && stdout_fd != 1) close( stdout_fd );
     return status;
 }
 
@@ -539,7 +477,7 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
  *
  * Fork and exec a new Unix binary, checking for errors.
  */
-static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
+static NTSTATUS fork_and_exec( OBJECT_ATTRIBUTES *attr, int unixdir,
                                const RTL_USER_PROCESS_PARAMETERS *params )
 {
     pid_t pid;
@@ -548,7 +486,7 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
     char *unix_name;
     NTSTATUS status;
 
-    status = nt_to_unix_file_name( path, &unix_name, NULL, FILE_OPEN );
+    status = nt_to_unix_file_name( attr, &unix_name, FILE_OPEN );
     if (status) return status;
 
 #ifdef HAVE_PIPE2
@@ -564,8 +502,13 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
         fcntl( fd[1], F_SETFD, FD_CLOEXEC );
     }
 
-    wine_server_handle_to_fd( params->hStdInput, FILE_READ_DATA, &stdin_fd, NULL );
-    wine_server_handle_to_fd( params->hStdOutput, FILE_WRITE_DATA, &stdout_fd, NULL );
+    if (wine_server_handle_to_fd( params->hStdInput, FILE_READ_DATA, &stdin_fd, NULL ) &&
+        isatty(0) && is_unix_console_handle( params->hStdInput ))
+        stdin_fd = 0;
+
+    if (wine_server_handle_to_fd( params->hStdOutput, FILE_WRITE_DATA, &stdout_fd, NULL ) &&
+        isatty(1) && is_unix_console_handle( params->hStdOutput ))
+        stdout_fd = 1;
 
     if (!(pid = fork()))  /* child */
     {
@@ -574,7 +517,7 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
             close( fd[0] );
 
             if (params->ConsoleFlags ||
-                params->ConsoleHandle == (HANDLE)1 /* KERNEL32_CONSOLE_ALLOC */ ||
+                params->ConsoleHandle == CONSOLE_HANDLE_ALLOC ||
                 (params->hStdInput == INVALID_HANDLE_VALUE && params->hStdOutput == INVALID_HANDLE_VALUE))
             {
                 setsid();
@@ -582,8 +525,8 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
             }
             else set_stdio_fd( stdin_fd, stdout_fd );
 
-            if (stdin_fd != -1) close( stdin_fd );
-            if (stdout_fd != -1) close( stdout_fd );
+            if (stdin_fd != -1 && stdin_fd != 0) close( stdin_fd );
+            if (stdout_fd != -1 && stdout_fd != 1) close( stdout_fd );
 
             /* Reset signals that we previously set to SIG_IGN */
             signal( SIGPIPE, SIG_DFL );
@@ -630,8 +573,8 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
     else status = STATUS_NO_MEMORY;
 
     close( fd[0] );
-    if (stdin_fd != -1) close( stdin_fd );
-    if (stdout_fd != -1) close( stdout_fd );
+    if (stdin_fd != -1 && stdin_fd != 0) close( stdin_fd );
+    if (stdout_fd != -1 && stdout_fd != 1) close( stdout_fd );
 done:
     free( unix_name );
     return status;
@@ -668,7 +611,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
                                      OBJECT_ATTRIBUTES *process_attr, OBJECT_ATTRIBUTES *thread_attr,
                                      ULONG process_flags, ULONG thread_flags,
                                      RTL_USER_PROCESS_PARAMETERS *params, PS_CREATE_INFO *info,
-                                     PS_ATTRIBUTE_LIST *attr )
+                                     PS_ATTRIBUTE_LIST *ps_attr )
 {
     NTSTATUS status;
     BOOL success = FALSE;
@@ -682,37 +625,37 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
     pe_image_info_t pe_info;
     CLIENT_ID id;
     HANDLE parent = 0, debug = 0, token = 0;
-    UNICODE_STRING path = {0};
-    OBJECT_ATTRIBUTES empty_attr = { sizeof(empty_attr) };
-    SIZE_T i, attr_count = (attr->TotalLength - sizeof(attr->TotalLength)) / sizeof(PS_ATTRIBUTE);
+    UNICODE_STRING redir, path = {0};
+    OBJECT_ATTRIBUTES attr, empty_attr = { sizeof(empty_attr) };
+    SIZE_T i, attr_count = (ps_attr->TotalLength - sizeof(ps_attr->TotalLength)) / sizeof(PS_ATTRIBUTE);
     const PS_ATTRIBUTE *handles_attr = NULL;
     data_size_t handles_size;
     obj_handle_t *handles;
 
     for (i = 0; i < attr_count; i++)
     {
-        switch (attr->Attributes[i].Attribute)
+        switch (ps_attr->Attributes[i].Attribute)
         {
         case PS_ATTRIBUTE_PARENT_PROCESS:
-            parent = attr->Attributes[i].ValuePtr;
+            parent = ps_attr->Attributes[i].ValuePtr;
             break;
         case PS_ATTRIBUTE_DEBUG_PORT:
-            debug = attr->Attributes[i].ValuePtr;
+            debug = ps_attr->Attributes[i].ValuePtr;
             break;
         case PS_ATTRIBUTE_IMAGE_NAME:
-            path.Length = attr->Attributes[i].Size;
-            path.Buffer = attr->Attributes[i].ValuePtr;
+            path.Length = ps_attr->Attributes[i].Size;
+            path.Buffer = ps_attr->Attributes[i].ValuePtr;
             break;
         case PS_ATTRIBUTE_TOKEN:
-            token = attr->Attributes[i].ValuePtr;
+            token = ps_attr->Attributes[i].ValuePtr;
             break;
         case PS_ATTRIBUTE_HANDLE_LIST:
             if (process_flags & PROCESS_CREATE_FLAGS_INHERIT_HANDLES)
-                handles_attr = &attr->Attributes[i];
+                handles_attr = &ps_attr->Attributes[i];
             break;
         default:
-            if (attr->Attributes[i].Attribute & PS_ATTRIBUTE_INPUT)
-                FIXME( "unhandled input attribute %lx\n", attr->Attributes[i].Attribute );
+            if (ps_attr->Attributes[i].Attribute & PS_ATTRIBUTE_INPUT)
+                FIXME( "unhandled input attribute %lx\n", ps_attr->Attributes[i].Attribute );
             break;
         }
     }
@@ -723,16 +666,20 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
 
     unixdir = get_unix_curdir( params );
 
-    if ((status = get_pe_file_info( &path, &file_handle, &pe_info )))
+    InitializeObjectAttributes( &attr, &path, OBJ_CASE_INSENSITIVE, 0, 0 );
+    get_redirect( &attr, &redir );
+
+    if ((status = get_pe_file_info( &attr, &file_handle, &pe_info )))
     {
-        if (status == STATUS_INVALID_IMAGE_NOT_MZ && !fork_and_exec( &path, unixdir, params ))
+        if (status == STATUS_INVALID_IMAGE_NOT_MZ && !fork_and_exec( &attr, unixdir, params ))
         {
             memset( info, 0, sizeof(*info) );
+            free( redir.Buffer );
             return STATUS_SUCCESS;
         }
         goto done;
     }
-    if (!(startup_info = create_startup_info( params, &startup_info_size ))) goto done;
+    if (!(startup_info = create_startup_info( attr.ObjectName, params, &startup_info_size ))) goto done;
     env_size = get_env_size( params, &winedebug );
 
     if ((status = alloc_object_attributes( process_attr, &objattr, &attr_len ))) goto done;
@@ -770,11 +717,9 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
         req->token          = wine_server_obj_handle( token );
         req->debug          = wine_server_obj_handle( debug );
         req->parent_process = wine_server_obj_handle( parent );
-        req->inherit_all    = !!(process_flags & PROCESS_CREATE_FLAGS_INHERIT_HANDLES);
-        req->create_flags   = params->DebugFlags; /* hack: creation flags stored in DebugFlags for now */
+        req->flags          = process_flags;
         req->socket_fd      = socketfd[1];
         req->access         = process_access;
-        req->cpu            = get_machine_cpu( &pe_info );
         req->info_size      = startup_info_size;
         req->handles_size   = handles_size;
         wine_server_add_data( req, objattr, attr_len );
@@ -800,8 +745,8 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
             ERR( "64-bit application %s not supported in 32-bit prefix\n", debugstr_us(&path) );
             break;
         case STATUS_INVALID_IMAGE_FORMAT:
-            ERR( "%s not supported on this installation (%s binary)\n",
-                 debugstr_us(&path), cpu_names[get_machine_cpu(&pe_info)] );
+            ERR( "%s not supported on this installation (machine %04x)\n",
+                 debugstr_us(&path), pe_info.machine );
             break;
         }
         goto done;
@@ -859,28 +804,28 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
 
     for (i = 0; i < attr_count; i++)
     {
-        switch (attr->Attributes[i].Attribute)
+        switch (ps_attr->Attributes[i].Attribute)
         {
         case PS_ATTRIBUTE_CLIENT_ID:
         {
-            SIZE_T size = min( attr->Attributes[i].Size, sizeof(id) );
-            memcpy( attr->Attributes[i].ValuePtr, &id, size );
-            if (attr->Attributes[i].ReturnLength) *attr->Attributes[i].ReturnLength = size;
+            SIZE_T size = min( ps_attr->Attributes[i].Size, sizeof(id) );
+            memcpy( ps_attr->Attributes[i].ValuePtr, &id, size );
+            if (ps_attr->Attributes[i].ReturnLength) *ps_attr->Attributes[i].ReturnLength = size;
             break;
         }
         case PS_ATTRIBUTE_IMAGE_INFO:
         {
             SECTION_IMAGE_INFORMATION info;
-            SIZE_T size = min( attr->Attributes[i].Size, sizeof(info) );
+            SIZE_T size = min( ps_attr->Attributes[i].Size, sizeof(info) );
             virtual_fill_image_information( &pe_info, &info );
-            memcpy( attr->Attributes[i].ValuePtr, &info, size );
-            if (attr->Attributes[i].ReturnLength) *attr->Attributes[i].ReturnLength = size;
+            memcpy( ps_attr->Attributes[i].ValuePtr, &info, size );
+            if (ps_attr->Attributes[i].ReturnLength) *ps_attr->Attributes[i].ReturnLength = size;
             break;
         }
         case PS_ATTRIBUTE_TEB_ADDRESS:
         default:
-            if (!(attr->Attributes[i].Attribute & PS_ATTRIBUTE_INPUT))
-                FIXME( "unhandled output attribute %lx\n", attr->Attributes[i].Attribute );
+            if (!(ps_attr->Attributes[i].Attribute & PS_ATTRIBUTE_INPUT))
+                FIXME( "unhandled output attribute %lx\n", ps_attr->Attributes[i].Attribute );
             break;
         }
     }
@@ -898,6 +843,7 @@ done:
     if (unixdir != -1) close( unixdir );
     free( startup_info );
     free( winedebug );
+    free( redir.Buffer );
     return status;
 }
 
@@ -1312,13 +1258,12 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
             ULONG_PTR val = 0;
 
             if (handle == GetCurrentProcess()) val = is_wow64;
-            else if (server_cpus & ((1 << CPU_x86_64) | (1 << CPU_ARM64)))
+            else if (is_win64 || is_wow64)
             {
                 SERVER_START_REQ( get_process_info )
                 {
                     req->handle = wine_server_obj_handle( handle );
-                    if (!(ret = wine_server_call( req )))
-                        val = (reply->cpu != CPU_x86_64 && reply->cpu != CPU_ARM64);
+                    if (!(ret = wine_server_call( req ))) val = (reply->machine != native_machine);
                 }
                 SERVER_END_REQ;
             }

@@ -255,6 +255,7 @@ struct test_source
     IMFMediaEventQueue *event_queue;
     IMFPresentationDescriptor *pd;
     struct test_media_stream *streams[TEST_SOURCE_NUM_STREAMS];
+    unsigned stream_count;
     enum source_state state;
     CRITICAL_SECTION cs;
 };
@@ -352,7 +353,7 @@ static HRESULT WINAPI test_source_CreatePresentationDescriptor(IMFMediaSource *i
     }
     else
     {
-        for (i = 0; i < ARRAY_SIZE(source->streams); ++i)
+        for (i = 0; i < source->stream_count; ++i)
         {
             hr = MFCreateMediaType(&media_type);
             ok(hr == S_OK, "Failed to create media type, hr %#x.\n", hr);
@@ -361,6 +362,8 @@ static HRESULT WINAPI test_source_CreatePresentationDescriptor(IMFMediaSource *i
             ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
             hr = IMFMediaType_SetGUID(media_type, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
             ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+            hr = IMFMediaType_SetUINT32(media_type, &MF_MT_AUDIO_BITS_PER_SAMPLE, 32);
+            ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
 
             hr = MFCreateStreamDescriptor(i, 1, &media_type, &sds[i]);
             ok(hr == S_OK, "Failed to create stream descriptor, hr %#x.\n", hr);
@@ -368,9 +371,9 @@ static HRESULT WINAPI test_source_CreatePresentationDescriptor(IMFMediaSource *i
             IMFMediaType_Release(media_type);
         }
 
-        hr = MFCreatePresentationDescriptor(ARRAY_SIZE(sds), sds, &source->pd);
+        hr = MFCreatePresentationDescriptor(source->stream_count, sds, &source->pd);
         ok(hr == S_OK, "Failed to create presentation descriptor, hr %#x.\n", hr);
-        for (i = 0; i < ARRAY_SIZE(sds); ++i)
+        for (i = 0; i < source->stream_count; ++i)
             IMFStreamDescriptor_Release(sds[i]);
 
         *pd = source->pd;
@@ -413,7 +416,7 @@ static HRESULT WINAPI test_source_Start(IMFMediaSource *iface, IMFPresentationDe
     hr = IMFMediaEventQueue_QueueEventParamVar(source->event_queue, event_type, &GUID_NULL, S_OK, NULL);
     ok(hr == S_OK, "Failed to queue event, hr %#x.\n", hr);
 
-    for (i = 0; i < ARRAY_SIZE(source->streams); ++i)
+    for (i = 0; i < source->stream_count; ++i)
     {
         if (!is_stream_selected(pd, i))
             continue;
@@ -501,7 +504,7 @@ static struct test_media_stream *create_test_stream(DWORD stream_index, IMFMedia
     return stream;
 }
 
-static IMFMediaSource *create_test_source(int stream_num)
+static IMFMediaSource *create_test_source(int stream_count)
 {
     struct test_source *source;
     int i;
@@ -509,9 +512,10 @@ static IMFMediaSource *create_test_source(int stream_num)
     source = heap_alloc_zero(sizeof(*source));
     source->IMFMediaSource_iface.lpVtbl = &test_source_vtbl;
     source->refcount = 1;
+    source->stream_count = stream_count;
     MFCreateEventQueue(&source->event_queue);
     InitializeCriticalSection(&source->cs);
-    for (i = 0; i < stream_num; ++i)
+    for (i = 0; i < source->stream_count; ++i)
         source->streams[i] = create_test_stream(i, &source->IMFMediaSource_iface);
 
     return &source->IMFMediaSource_iface;
@@ -895,6 +899,7 @@ static void test_source_reader_from_media_source(void)
     struct async_callback *callback;
     IMFSourceReader *reader;
     IMFMediaSource *source;
+    IMFMediaType *media_type;
     HRESULT hr;
     DWORD actual_index, stream_flags;
     IMFSample *sample;
@@ -1037,6 +1042,54 @@ static void test_source_reader_from_media_source(void)
     ok(timestamp == 0, "Unexpected timestamp.\n");
     ok(!sample, "Expected sample object.\n");
 
+    IMFSourceReader_Release(reader);
+    IMFMediaSource_Release(source);
+
+    /* Request a non-native bit depth. */
+    source = create_test_source(1);
+    ok(!!source, "Failed to create test source.\n");
+
+    hr = MFCreateSourceReaderFromMediaSource(source, NULL, &reader);
+    ok(hr == S_OK, "Failed to create source reader, hr %#x.\n", hr);
+
+    hr = MFCreateMediaType(&media_type);
+    ok(hr == S_OK, "Failed to create media type, hr %#x.\n", hr);
+    hr = IMFMediaType_SetGUID(media_type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+    hr = IMFMediaType_SetGUID(media_type, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+    hr = IMFMediaType_SetUINT32(media_type, &MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+    hr = IMFSourceReader_SetCurrentMediaType(reader, 0, NULL, media_type);
+    ok(hr == MF_E_TOPO_CODEC_NOT_FOUND, "Unexpected success setting current media type, hr %#x.\n", hr);
+
+    IMFMediaType_Release(media_type);
+
+    hr = MFCreateMediaType(&media_type);
+    ok(hr == S_OK, "Failed to create media type, hr %#x.\n", hr);
+    hr = IMFMediaType_SetGUID(media_type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+    hr = IMFMediaType_SetGUID(media_type, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+    hr = IMFMediaType_SetUINT32(media_type, &MF_MT_AUDIO_BITS_PER_SAMPLE, 32);
+    ok(hr == S_OK, "Failed to set attribute, hr %#x.\n", hr);
+
+    hr = IMFSourceReader_SetCurrentMediaType(reader, 0, NULL, media_type);
+    ok(hr == S_OK, "Failed to set current media type, hr %#x.\n", hr);
+
+    hr = IMFSourceReader_SetStreamSelection(reader, 0, TRUE);
+    ok(hr == S_OK, "Failed to select a stream, hr %#x.\n", hr);
+
+    hr = IMFSourceReader_ReadSample(reader, 0, 0, &actual_index, &stream_flags, &timestamp, &sample);
+    ok(hr == S_OK, "Failed to get a sample, hr %#x.\n", hr);
+    ok(actual_index == 0, "Unexpected stream index %u\n", actual_index);
+    ok(!stream_flags, "Unexpected stream flags %#x.\n", stream_flags);
+    ok(timestamp == 123, "Unexpected timestamp.\n");
+    ok(!!sample, "Expected sample object.\n");
+    IMFSample_Release(sample);
+
+    IMFMediaType_Release(media_type);
     IMFSourceReader_Release(reader);
     IMFMediaSource_Release(source);
 

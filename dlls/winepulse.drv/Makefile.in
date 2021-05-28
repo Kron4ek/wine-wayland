@@ -4,4 +4,6 @@ EXTRALIBS = $(PULSE_LIBS) $(PTHREAD_LIBS)
 EXTRAINCL = $(PULSE_CFLAGS)
 
 C_SRCS = \
-	mmdevdrv.c
+	mmdevdrv.c \
+	mult.c \
+	pulse.c

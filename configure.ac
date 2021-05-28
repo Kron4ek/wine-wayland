@@ -2675,12 +2675,6 @@ AC_CHECK_FUNCS(\
 	asinhf \
 	atanh \
 	atanhf \
-	cbrt \
-	cbrtf \
-	erf \
-	erfc \
-	erfcf \
-	erff \
 	exp2 \
 	exp2f \
 	expm1 \
@@ -2689,28 +2683,12 @@ AC_CHECK_FUNCS(\
 	fmaf \
 	lgamma \
 	lgammaf \
-	llrint \
-	llrintf \
 	log1p \
 	log1pf \
 	log2 \
 	log2f \
-	lrint \
-	lrintf \
-	nearbyint \
-	nearbyintf \
-	nexttoward \
-	nexttowardf \
-	remainder \
-	remainderf \
-	remquo \
-	remquof \
-	rint \
-	rintf \
 	tgamma \
-	tgammaf \
-	trunc \
-	truncf
+	tgammaf
 )
 LIBS="$ac_save_LIBS"
 
@@ -3336,7 +3314,6 @@ WINE_CONFIG_MAKEFILE(dlls/glu32)
 WINE_CONFIG_MAKEFILE(dlls/gphoto2.ds)
 WINE_CONFIG_MAKEFILE(dlls/gpkcsp)
 WINE_CONFIG_MAKEFILE(dlls/hal)
-WINE_CONFIG_MAKEFILE(dlls/hhctrl.ocx)
 WINE_CONFIG_MAKEFILE(dlls/hid)
 WINE_CONFIG_MAKEFILE(dlls/hid/tests)
 WINE_CONFIG_MAKEFILE(dlls/hidclass.sys)
@@ -3377,8 +3354,6 @@ WINE_CONFIG_MAKEFILE(dlls/itircl)
 WINE_CONFIG_MAKEFILE(dlls/itss)
 WINE_CONFIG_MAKEFILE(dlls/itss/tests)
 WINE_CONFIG_MAKEFILE(dlls/joy.cpl)
-WINE_CONFIG_MAKEFILE(dlls/jscript)
-WINE_CONFIG_MAKEFILE(dlls/jscript/tests)
 WINE_CONFIG_MAKEFILE(dlls/jsproxy)
 WINE_CONFIG_MAKEFILE(dlls/jsproxy/tests)
 WINE_CONFIG_MAKEFILE(dlls/kerberos)
@@ -3970,7 +3945,6 @@ WINE_CONFIG_MAKEFILE(programs/dism)
 WINE_CONFIG_MAKEFILE(programs/dplaysvr)
 WINE_CONFIG_MAKEFILE(programs/dpnsvr)
 WINE_CONFIG_MAKEFILE(programs/dpvsetup)
-WINE_CONFIG_MAKEFILE(programs/dxdiag)
 WINE_CONFIG_MAKEFILE(programs/eject)
 WINE_CONFIG_MAKEFILE(programs/expand)
 WINE_CONFIG_MAKEFILE(programs/explorer)
@@ -3981,11 +3955,9 @@ WINE_CONFIG_MAKEFILE(programs/find/tests)
 WINE_CONFIG_MAKEFILE(programs/findstr)
 WINE_CONFIG_MAKEFILE(programs/fsutil)
 WINE_CONFIG_MAKEFILE(programs/fsutil/tests)
-WINE_CONFIG_MAKEFILE(programs/hh)
 WINE_CONFIG_MAKEFILE(programs/hostname)
 WINE_CONFIG_MAKEFILE(programs/icacls)
 WINE_CONFIG_MAKEFILE(programs/icinfo)
-WINE_CONFIG_MAKEFILE(programs/iexplore)
 WINE_CONFIG_MAKEFILE(programs/ipconfig)
 WINE_CONFIG_MAKEFILE(programs/lodctr)
 WINE_CONFIG_MAKEFILE(programs/mofcomp)
@@ -4001,7 +3973,6 @@ WINE_CONFIG_MAKEFILE(programs/notepad)
 WINE_CONFIG_MAKEFILE(programs/oleview)
 WINE_CONFIG_MAKEFILE(programs/ping)
 WINE_CONFIG_MAKEFILE(programs/plugplay)
-WINE_CONFIG_MAKEFILE(programs/powershell)
 WINE_CONFIG_MAKEFILE(programs/presentationfontcache)
 WINE_CONFIG_MAKEFILE(programs/progman)
 WINE_CONFIG_MAKEFILE(programs/reg)
@@ -4043,10 +4014,8 @@ WINE_CONFIG_MAKEFILE(programs/wineboot)
 WINE_CONFIG_MAKEFILE(programs/winebrowser)
 WINE_CONFIG_MAKEFILE(programs/winecfg)
 WINE_CONFIG_MAKEFILE(programs/wineconsole)
-WINE_CONFIG_MAKEFILE(programs/winedbg)
 WINE_CONFIG_MAKEFILE(programs/winedevice)
 WINE_CONFIG_MAKEFILE(programs/winefile)
-WINE_CONFIG_MAKEFILE(programs/winemenubuilder)
 WINE_CONFIG_MAKEFILE(programs/winemine)
 WINE_CONFIG_MAKEFILE(programs/winemsibuilder)
 WINE_CONFIG_MAKEFILE(programs/winepath)
@@ -4059,7 +4028,6 @@ WINE_CONFIG_MAKEFILE(programs/winoldap.mod16,enable_win16)
 WINE_CONFIG_MAKEFILE(programs/winver)
 WINE_CONFIG_MAKEFILE(programs/wmic)
 WINE_CONFIG_MAKEFILE(programs/wmplayer)
-WINE_CONFIG_MAKEFILE(programs/wordpad)
 WINE_CONFIG_MAKEFILE(programs/write)
 WINE_CONFIG_MAKEFILE(programs/wscript)
 WINE_CONFIG_MAKEFILE(programs/wscript/tests)
@@ -4169,7 +4137,6 @@ programs/regsvr32/regsvr32 \
 programs/wineboot/wineboot \
 programs/winecfg/winecfg \
 programs/wineconsole/wineconsole \
-programs/winedbg/winedbg \
 programs/winefile/winefile \
 programs/winemine/winemine \
 programs/winepath/winepath \

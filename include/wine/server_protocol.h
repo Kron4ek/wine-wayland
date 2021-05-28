@@ -262,30 +262,40 @@ struct hw_msg_source
     unsigned int    origin;
 };
 
+union rawinput
+{
+    int type;
+    struct
+    {
+        int            type;
+        unsigned int   message;
+        unsigned short vkey;
+        unsigned short scan;
+    } kbd;
+    struct
+    {
+        int            type;
+        int            x;
+        int            y;
+        unsigned int   data;
+    } mouse;
+    struct
+    {
+        int            type;
+        unsigned int   device;
+        unsigned int   param;
+        unsigned short usage_page;
+        unsigned short usage;
+    } hid;
+};
+
 struct hardware_msg_data
 {
     lparam_t             info;
     unsigned int         hw_id;
     unsigned int         flags;
     struct hw_msg_source source;
-    union
-    {
-        int type;
-        struct
-        {
-            int            type;
-            unsigned int   message;
-            unsigned short vkey;
-            unsigned short scan;
-        } kbd;
-        struct
-        {
-            int            type;
-            int            x;
-            int            y;
-            unsigned int   data;
-        } mouse;
-    } rawinput;
+    union rawinput       rawinput;
 };
 
 struct callback_msg_data
@@ -330,6 +340,7 @@ typedef union
         int            type;
         unsigned int   msg;
         lparam_t       lparam;
+        union rawinput rawinput;
     } hw;
 } hw_input_t;
 
@@ -830,10 +841,13 @@ struct new_process_request
     char __pad_38[2];
     data_size_t  info_size;
     data_size_t  handles_size;
+    data_size_t  jobs_size;
     /* VARARG(objattr,object_attributes); */
     /* VARARG(handles,uints,handles_size); */
+    /* VARARG(jobs,uints,jobs_size); */
     /* VARARG(info,startup_info,info_size); */
     /* VARARG(env,unicode_str); */
+    char __pad_52[4];
 };
 struct new_process_reply
 {
@@ -899,6 +913,9 @@ struct init_process_done_request
 {
     struct request_header __header;
     char __pad_12[4];
+    client_ptr_t teb;
+    client_ptr_t peb;
+    client_ptr_t ldt_copy;
 };
 struct init_process_done_reply
 {
@@ -916,9 +933,6 @@ struct init_first_thread_request
     int          unix_pid;
     int          unix_tid;
     int          debug_level;
-    client_ptr_t teb;
-    client_ptr_t peb;
-    client_ptr_t ldt_copy;
     int          reply_fd;
     int          wait_fd;
 };
@@ -6435,7 +6449,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 698
+#define SERVER_PROTOCOL_VERSION 702
 
 /* ### protocol_version end ### */
 

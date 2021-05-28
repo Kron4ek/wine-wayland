@@ -561,7 +561,6 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
     }
     else if (pollfd[user].fd == -1)
     {
-        if (pollfd[user].events) return;  /* stopped waiting on it, don't restart */
         ctl = EPOLL_CTL_ADD;
     }
     else
@@ -670,7 +669,6 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
     }
     else if (pollfd[user].fd == -1)
     {
-        if (pollfd[user].events) return;  /* stopped waiting on it, don't restart */
         ev[0].flags |= EV_ADD | ((events & POLLIN) ? EV_ENABLE : EV_DISABLE);
         ev[1].flags |= EV_ADD | ((events & POLLOUT) ? EV_ENABLE : EV_DISABLE);
     }
@@ -779,7 +777,6 @@ static inline void set_fd_epoll_events( struct fd *fd, int user, int events )
     }
     else if (pollfd[user].fd == -1)
     {
-        if (pollfd[user].events) return;  /* stopped waiting on it, don't restart */
         ret = port_associate( port_fd, PORT_SOURCE_FD, fd->unix_fd, events, (void *)user );
     }
     else
@@ -1662,7 +1659,7 @@ void set_fd_events( struct fd *fd, int events )
         pollfd[user].events = POLLERR;
         pollfd[user].revents = 0;
     }
-    else if (pollfd[user].fd != -1 || !pollfd[user].events)
+    else
     {
         pollfd[user].fd = fd->unix_fd;
         pollfd[user].events = events;

@@ -449,6 +449,14 @@ typedef enum _MFWaveFormatExConvertFlags
     MFWaveFormatExConvertFlag_ForceExtensible = 1,
 } MFWaveFormatExConvertFlags;
 
+typedef enum _MFVideoRotationFormat
+{
+    MFVideoRotationFormat_0 = 0,
+    MFVideoRotationFormat_90 = 90,
+    MFVideoRotationFormat_180 = 180,
+    MFVideoRotationFormat_270 = 270
+} MFVideoRotationFormat;
+
 enum _MFT_ENUM_FLAG
 {
     MFT_ENUM_FLAG_SYNCMFT                         = 0x00000001,
@@ -552,6 +560,7 @@ HRESULT WINAPI MFTEnumEx(GUID category, UINT32 flags, const MFT_REGISTER_TYPE_IN
                          UINT32 *pcount);
 HRESULT WINAPI MFInitAttributesFromBlob(IMFAttributes *attributes, const UINT8 *buffer, UINT size);
 HRESULT WINAPI MFInitMediaTypeFromWaveFormatEx(IMFMediaType *mediatype, const WAVEFORMATEX *format, UINT32 size);
+HRESULT WINAPI MFInitVideoFormat_RGB(MFVIDEOFORMAT *format, DWORD width, DWORD height, DWORD d3dformat);
 HRESULT WINAPI MFInvokeCallback(IMFAsyncResult *result);
 LONGLONG WINAPI MFllMulDiv(LONGLONG val, LONGLONG num, LONGLONG denom, LONGLONG factor);
 HRESULT WINAPI MFLockDXGIDeviceManager(UINT *token, IMFDXGIDeviceManager **manager);

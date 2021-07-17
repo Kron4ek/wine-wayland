@@ -230,6 +230,7 @@ file_type get_file_type(const char* filename)
 
     if (cnt == sizeof(res_sig) && !memcmp(buf, res_sig, sizeof(res_sig))) return file_res;
     if (strendswith(filename, ".o")) return file_obj;
+    if (strendswith(filename, ".obj")) return file_obj;
     if (strendswith(filename, ".a")) return file_arh;
     if (strendswith(filename, ".res")) return file_res;
     if (strendswith(filename, ".so")) return file_so;
@@ -271,39 +272,39 @@ static char* try_lib_path(const char* dir, const char* pre,
 }
 
 static file_type guess_lib_type(enum target_platform platform, const char* dir,
-                                const char* library, const char *suffix, char** file)
+                                const char* library, const char *prefix, const char *suffix, char** file)
 {
     if (platform != PLATFORM_WINDOWS && platform != PLATFORM_MINGW && platform != PLATFORM_CYGWIN)
     {
         /* Unix shared object */
-        if ((*file = try_lib_path(dir, "lib", library, ".so", file_so)))
+        if ((*file = try_lib_path(dir, prefix, library, ".so", file_so)))
             return file_so;
 
         /* Mach-O (Darwin/Mac OS X) Dynamic Library behaves mostly like .so */
-        if ((*file = try_lib_path(dir, "lib", library, ".dylib", file_so)))
+        if ((*file = try_lib_path(dir, prefix, library, ".dylib", file_so)))
             return file_so;
 
         /* Windows DLL */
-        if ((*file = try_lib_path(dir, "lib", library, ".def", file_def)))
+        if ((*file = try_lib_path(dir, prefix, library, ".def", file_def)))
             return file_dll;
     }
 
     /* static archives */
-    if ((*file = try_lib_path(dir, "lib", library, suffix, file_arh)))
+    if ((*file = try_lib_path(dir, prefix, library, suffix, file_arh)))
 	return file_arh;
 
     return file_na;
 }
 
 file_type get_lib_type(enum target_platform platform, strarray* path, const char *library,
-                       const char *suffix, char** file)
+                       const char *prefix, const char *suffix, char** file)
 {
     unsigned int i;
 
     if (!suffix) suffix = ".a";
     for (i = 0; i < path->size; i++)
     {
-        file_type type = guess_lib_type(platform, path->base[i], library, suffix, file);
+        file_type type = guess_lib_type(platform, path->base[i], library, prefix, suffix, file);
 	if (type != file_na) return type;
     }
     return file_na;

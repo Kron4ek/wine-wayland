@@ -4360,28 +4360,15 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
     case FileEndOfFileInformation:
         if (len >= sizeof(FILE_END_OF_FILE_INFORMATION))
         {
-            struct stat st;
             const FILE_END_OF_FILE_INFORMATION *info = ptr;
 
-            if ((io->u.Status = server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL )))
-                return io->u.Status;
-
-            /* first try normal truncate */
-            if (ftruncate( fd, (off_t)info->EndOfFile.QuadPart ) != -1) break;
-
-            /* now check for the need to extend the file */
-            if (fstat( fd, &st ) != -1 && (off_t)info->EndOfFile.QuadPart > st.st_size)
+            SERVER_START_REQ( set_fd_eof_info )
             {
-                static const char zero;
-
-                /* extend the file one byte beyond the requested size and then truncate it */
-                /* this should work around ftruncate implementations that can't extend files */
-                if (pwrite( fd, &zero, 1, (off_t)info->EndOfFile.QuadPart ) != -1 &&
-                    ftruncate( fd, (off_t)info->EndOfFile.QuadPart ) != -1) break;
+                req->handle   = wine_server_obj_handle( handle );
+                req->eof      = info->EndOfFile.QuadPart;
+                io->u.Status  = wine_server_call( req );
             }
-            io->u.Status = errno_to_status( errno );
-
-            if (needs_close) close( fd );
+            SERVER_END_REQ;
         }
         else io->u.Status = STATUS_INVALID_PARAMETER_3;
         break;
@@ -4610,15 +4597,6 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
  *                  Asynchronous file I/O                              *
  */
 
-typedef NTSTATUS async_callback_t( void *user, IO_STATUS_BLOCK *io, NTSTATUS status );
-
-struct async_fileio
-{
-    async_callback_t    *callback; /* must be the first field */
-    struct async_fileio *next;
-    HANDLE               handle;
-};
-
 struct async_fileio_read
 {
     struct async_fileio io;
@@ -4654,7 +4632,7 @@ struct async_irp
 
 static struct async_fileio *fileio_freelist;
 
-static void release_fileio( struct async_fileio *io )
+void release_fileio( struct async_fileio *io )
 {
     for (;;)
     {
@@ -4664,7 +4642,7 @@ static void release_fileio( struct async_fileio *io )
     }
 }
 
-static struct async_fileio *alloc_fileio( DWORD size, async_callback_t callback, HANDLE handle )
+struct async_fileio *alloc_fileio( DWORD size, async_callback_t callback, HANDLE handle )
 {
     /* first free remaining previous fileinfos */
     struct async_fileio *io = InterlockedExchangePointer( (void **)&fileio_freelist, NULL );
@@ -4697,10 +4675,9 @@ static async_data_t server_async( HANDLE handle, struct async_fileio *user, HAND
     return async;
 }
 
-static NTSTATUS wait_async( HANDLE handle, BOOL alertable, IO_STATUS_BLOCK *io )
+static NTSTATUS wait_async( HANDLE handle, BOOL alertable )
 {
-    if (NtWaitForSingleObject( handle, alertable, NULL )) return STATUS_PENDING;
-    return io->u.Status;
+    return NtWaitForSingleObject( handle, alertable, NULL );
 }
 
 /* callback for irp async I/O completion */
@@ -4861,7 +4838,7 @@ static NTSTATUS server_read_file( HANDLE handle, HANDLE event, PIO_APC_ROUTINE a
 
     if (status != STATUS_PENDING) free( async );
 
-    if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT), io );
+    if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT) );
     return status;
 }
 
@@ -4899,7 +4876,7 @@ static NTSTATUS server_write_file( HANDLE handle, HANDLE event, PIO_APC_ROUTINE 
 
     if (status != STATUS_PENDING) free( async );
 
-    if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT), io );
+    if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT) );
     return status;
 }
 
@@ -4944,7 +4921,7 @@ static NTSTATUS server_ioctl_file( HANDLE handle, HANDLE event,
 
     if (status != STATUS_PENDING) free( async );
 
-    if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT), io );
+    if (wait_handle) status = wait_async( wait_handle, (options & FILE_SYNCHRONOUS_IO_ALERT) );
     return status;
 }
 
@@ -5109,7 +5086,7 @@ static NTSTATUS register_async_file_read( HANDLE handle, HANDLE event,
     return status;
 }
 
-static void add_completion( HANDLE handle, ULONG_PTR value, NTSTATUS status, ULONG info, BOOL async )
+void add_completion( HANDLE handle, ULONG_PTR value, NTSTATUS status, ULONG info, BOOL async )
 {
     SERVER_START_REQ( add_fd_completion )
     {
@@ -5739,6 +5716,10 @@ NTSTATUS WINAPI NtDeviceIoControlFile( HANDLE handle, HANDLE event, PIO_APC_ROUT
 
     switch (device)
     {
+    case FILE_DEVICE_BEEP:
+    case FILE_DEVICE_NETWORK:
+        status = sock_ioctl( handle, event, apc, apc_context, io, code, in_buffer, in_size, out_buffer, out_size );
+        break;
     case FILE_DEVICE_DISK:
     case FILE_DEVICE_CD_ROM:
     case FILE_DEVICE_DVD:
@@ -5937,7 +5918,7 @@ NTSTATUS WINAPI NtFlushBuffersFile( HANDLE handle, IO_STATUS_BLOCK *io )
 
         if (ret != STATUS_PENDING) free( async );
 
-        if (wait_handle) ret = wait_async( wait_handle, FALSE, io );
+        if (wait_handle) ret = wait_async( wait_handle, FALSE );
     }
 
     if (needs_close) close( fd );
@@ -6436,7 +6417,7 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
         }
         SERVER_END_REQ;
         if (status != STATUS_PENDING) free( async );
-        if (wait_handle) status = wait_async( wait_handle, FALSE, io );
+        if (wait_handle) status = wait_async( wait_handle, FALSE );
         return status;
     }
     else if (io->u.Status) return io->u.Status;
@@ -6791,7 +6772,7 @@ NTSTATUS WINAPI NtQueryObject( HANDLE handle, OBJECT_INFORMATION_CLASS info_clas
 
         /* not a file, treat as a generic object */
 
-        SERVER_START_REQ( get_object_info )
+        SERVER_START_REQ( get_object_name )
         {
             req->handle = wine_server_obj_handle( handle );
             if (len > sizeof(*p)) wine_server_set_reply( req, p + 1, len - sizeof(*p) );

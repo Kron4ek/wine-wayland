@@ -568,6 +568,84 @@ static void decompress_bc1(const BYTE *src, BYTE *dst, unsigned int src_row_pitc
             dst_slice_pitch, width, height, depth, WINED3DFMT_BC1_UNORM);
 }
 
+static void build_rgtc_colour_table(uint8_t red0, uint8_t red1, uint8_t colour_table[8])
+{
+    unsigned int i;
+
+    colour_table[0] = red0;
+    colour_table[1] = red1;
+    if (red0 <= red1)
+    {
+        for (i = 0; i < 4; ++i)
+        {
+            colour_table[i + 2] = ((8 - 2 * i) * red0 + (2 + 2 * i) * red1 + 5) / 10;
+        }
+        colour_table[6] = 0x00;
+        colour_table[7] = 0xff;
+    }
+    else
+    {
+        for (i = 0; i < 6; ++i)
+        {
+            colour_table[i + 2] = ((12 - 2 * i) * red0 + (2 + 2 * i) * red1 + 7) / 14;
+        }
+    }
+}
+
+static void decompress_rgtc_block(const uint8_t *src, uint8_t *dst,
+        unsigned int width, unsigned int height, unsigned int dst_row_pitch)
+{
+    const uint64_t *s = (const uint64_t *)src;
+    uint8_t red0, red1, red_idx;
+    uint8_t colour_table[8];
+    unsigned int x, y;
+    uint32_t *dst_row;
+    uint64_t bits;
+
+    red0 = s[0] & 0xff;
+    red1 = (s[0] >> 8) & 0xff;
+    bits = s[0] >> 16;
+    build_rgtc_colour_table(red0, red1, colour_table);
+
+    for (y = 0; y < height; ++y)
+    {
+        dst_row = (uint32_t *)&dst[y * dst_row_pitch];
+        for (x = 0; x < width; ++x)
+        {
+            red_idx = (bits >> (y * 12 + x * 3)) & 0x7;
+            /* Decompressing to bgra32 is perhaps not ideal for RGTC formats.
+             * It's convenient though. */
+            dst_row[x] = 0xff000000 | (colour_table[red_idx] << 16);
+        }
+    }
+}
+
+static void decompress_bc4(const uint8_t *src, uint8_t *dst, unsigned int src_row_pitch,
+        unsigned int src_slice_pitch, unsigned int dst_row_pitch, unsigned int dst_slice_pitch,
+        unsigned int width, unsigned int height, unsigned int depth)
+{
+    unsigned int block_w, block_h, x, y, z;
+    const uint8_t *src_row, *src_slice;
+    uint8_t *dst_row, *dst_slice;
+
+    for (z = 0; z < depth; ++z)
+    {
+        src_slice = &src[z * src_slice_pitch];
+        dst_slice = &dst[z * dst_slice_pitch];
+        for (y = 0; y < height; y += 4)
+        {
+            src_row = &src_slice[(y / 4) * src_row_pitch];
+            dst_row = &dst_slice[y * dst_row_pitch];
+            for (x = 0; x < width; x += 4)
+            {
+                block_w = min(width - x, 4);
+                block_h = min(height - y, 4);
+                decompress_rgtc_block(&src_row[(x / 4) * 8], &dst_row[x * 4], block_w, block_h, dst_row_pitch);
+            }
+        }
+    }
+}
+
 static const struct wined3d_format_decompress_info
 {
     enum wined3d_format_id id;
@@ -585,6 +663,7 @@ format_decompress_info[] =
     {WINED3DFMT_BC1_UNORM, decompress_bc1},
     {WINED3DFMT_BC2_UNORM, decompress_bc2},
     {WINED3DFMT_BC3_UNORM, decompress_bc3},
+    {WINED3DFMT_BC4_UNORM, decompress_bc4},
 };
 
 struct wined3d_format_block_info
@@ -3683,8 +3762,6 @@ static void apply_format_fixups(struct wined3d_adapter *adapter, struct wined3d_
     format->f.flags[WINED3D_GL_RES_TYPE_TEX_3D] &= ~WINED3DFMT_FLAG_TEXTURE;
     format = get_format_gl_internal(adapter, WINED3DFMT_ATI2N);
     format->f.flags[WINED3D_GL_RES_TYPE_TEX_3D] &= ~WINED3DFMT_FLAG_TEXTURE;
-    format = get_format_gl_internal(adapter, WINED3DFMT_BC4_UNORM);
-    format->f.flags[WINED3D_GL_RES_TYPE_TEX_3D] &= ~WINED3DFMT_FLAG_TEXTURE;
     format = get_format_gl_internal(adapter, WINED3DFMT_BC4_SNORM);
     format->f.flags[WINED3D_GL_RES_TYPE_TEX_3D] &= ~WINED3DFMT_FLAG_TEXTURE;
     format = get_format_gl_internal(adapter, WINED3DFMT_BC5_UNORM);
@@ -5803,6 +5880,18 @@ BOOL wined3d_get_primary_adapter_luid(LUID *luid)
     return TRUE;
 }
 
+uint32_t wined3d_format_pack(const struct wined3d_format *format, const struct wined3d_uvec4 *value)
+{
+    uint32_t p = 0;
+
+    p |= (value->x & wined3d_mask_from_size(format->red_size)) << format->red_offset;
+    p |= (value->y & wined3d_mask_from_size(format->green_size)) << format->green_offset;
+    p |= (value->z & wined3d_mask_from_size(format->blue_size)) << format->blue_offset;
+    p |= (value->w & wined3d_mask_from_size(format->alpha_size)) << format->alpha_offset;
+
+    return p;
+}
+
 /* Note: It's the caller's responsibility to ensure values can be expressed
  * in the requested format. UNORM formats for example can only express values
  * in the range 0.0f -> 1.0f. */
@@ -5902,7 +5991,7 @@ DWORD wined3d_format_convert_from_float(const struct wined3d_format *format, con
 
 static float color_to_float(DWORD color, DWORD size, DWORD offset)
 {
-    DWORD mask = size < 32 ? (1u << size) - 1 : ~0u;
+    uint32_t mask = wined3d_mask_from_size(size);
 
     if (!size)
         return 1.0f;
@@ -5938,10 +6027,10 @@ void wined3d_format_get_float_color_key(const struct wined3d_format *format,
         case WINED3DFMT_R8G8B8X8_UNORM:
         case WINED3DFMT_R16G16_UNORM:
         case WINED3DFMT_B10G10R10A2_UNORM:
-            slop.r = 0.5f / ((1u << format->red_size) - 1);
-            slop.g = 0.5f / ((1u << format->green_size) - 1);
-            slop.b = 0.5f / ((1u << format->blue_size) - 1);
-            slop.a = 0.5f / ((1u << format->alpha_size) - 1);
+            slop.r = 0.5f / wined3d_mask_from_size(format->red_size);
+            slop.g = 0.5f / wined3d_mask_from_size(format->green_size);
+            slop.b = 0.5f / wined3d_mask_from_size(format->blue_size);
+            slop.a = 0.5f / wined3d_mask_from_size(format->alpha_size);
 
             float_colors[0].r = color_to_float(key->color_space_low_value, format->red_size, format->red_offset)
                     - slop.r;
@@ -6053,7 +6142,7 @@ void multiply_matrix(struct wined3d_matrix *dst, const struct wined3d_matrix *sr
     *dst = tmp;
 }
 
-void gen_ffp_frag_op(const struct wined3d_context *context, const struct wined3d_state *state,
+void wined3d_ffp_get_fs_settings(const struct wined3d_context *context, const struct wined3d_state *state,
         struct ffp_frag_settings *settings, BOOL ignore_textype)
 {
 #define ARG1 0x01

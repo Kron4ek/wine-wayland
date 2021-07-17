@@ -26,7 +26,6 @@
 #include "audioclient.h"
 
 #include "wine/debug.h"
-#include "wine/heap.h"
 #include "wine/list.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(mfplat);
@@ -121,7 +120,7 @@ static void release_pending_object(struct queued_object *object)
             PropVariantClear(&object->u.marker.context);
             break;
     }
-    heap_free(object);
+    free(object);
 }
 
 static struct audio_renderer *impl_from_IMFMediaSink(IMFMediaSink *iface)
@@ -279,7 +278,7 @@ static ULONG WINAPI audio_renderer_sink_Release(IMFMediaSink *iface)
         audio_renderer_release_audio_client(renderer);
         CloseHandle(renderer->buffer_ready_event);
         DeleteCriticalSection(&renderer->cs);
-        heap_free(renderer);
+        free(renderer);
     }
 
     return refcount;
@@ -1332,7 +1331,7 @@ static HRESULT stream_queue_sample(struct audio_renderer *renderer, IMFSample *s
 {
     struct queued_object *object;
 
-    if (!(object = heap_alloc_zero(sizeof(*object))))
+    if (!(object = calloc(1, sizeof(*object))))
         return E_OUTOFMEMORY;
 
     object->type = OBJECT_TYPE_SAMPLE;
@@ -1372,7 +1371,7 @@ static HRESULT stream_place_marker(struct audio_renderer *renderer, MFSTREAMSINK
     struct queued_object *marker;
     HRESULT hr = S_OK;
 
-    if (!(marker = heap_alloc_zero(sizeof(*marker))))
+    if (!(marker = calloc(1, sizeof(*marker))))
         return E_OUTOFMEMORY;
 
     marker->type = OBJECT_TYPE_MARKER;
@@ -1752,7 +1751,7 @@ static HRESULT WINAPI audio_renderer_render_callback_GetParameters(IMFAsyncCallb
 
 static void audio_renderer_render(struct audio_renderer *renderer, IMFAsyncResult *result)
 {
-    unsigned int src_frames, dst_frames, max_frames, src_len;
+    unsigned int src_frames, dst_frames, max_frames, pad_frames, src_len;
     struct queued_object *obj, *obj2;
     BOOL keep_sample = FALSE;
     IMFMediaBuffer *buffer;
@@ -1776,20 +1775,24 @@ static void audio_renderer_render(struct audio_renderer *renderer, IMFAsyncResul
                     {
                         if (SUCCEEDED(IAudioClient_GetBufferSize(renderer->audio_client, &max_frames)))
                         {
-                            src_frames -= obj->u.sample.frame_offset;
-                            dst_frames = min(src_frames, max_frames);
-
-                            if (SUCCEEDED(hr = IAudioRenderClient_GetBuffer(renderer->audio_render_client, dst_frames, &dst)))
+                            if (SUCCEEDED(IAudioClient_GetCurrentPadding(renderer->audio_client, &pad_frames)))
                             {
-                                memcpy(dst, src + obj->u.sample.frame_offset * renderer->frame_size,
-                                        dst_frames * renderer->frame_size);
+                                max_frames -= pad_frames;
+                                src_frames -= obj->u.sample.frame_offset;
+                                dst_frames = min(src_frames, max_frames);
 
-                                IAudioRenderClient_ReleaseBuffer(renderer->audio_render_client, dst_frames, 0);
+                                if (SUCCEEDED(hr = IAudioRenderClient_GetBuffer(renderer->audio_render_client, dst_frames, &dst)))
+                                {
+                                    memcpy(dst, src + obj->u.sample.frame_offset * renderer->frame_size,
+                                            dst_frames * renderer->frame_size);
 
-                                obj->u.sample.frame_offset += dst_frames;
+                                    IAudioRenderClient_ReleaseBuffer(renderer->audio_render_client, dst_frames, 0);
+
+                                    obj->u.sample.frame_offset += dst_frames;
+                                }
+
+                                keep_sample = FAILED(hr) || src_frames > max_frames;
                             }
-
-                            keep_sample = FAILED(hr) || src_frames > max_frames;
                         }
                     }
                     IMFMediaBuffer_Unlock(buffer);
@@ -1843,7 +1846,7 @@ static HRESULT sar_create_object(IMFAttributes *attributes, void *user_context, 
 
     TRACE("%p, %p, %p.\n", attributes, user_context, obj);
 
-    if (!(renderer = heap_alloc_zero(sizeof(*renderer))))
+    if (!(renderer = calloc(1, sizeof(*renderer))))
         return E_OUTOFMEMORY;
 
     renderer->IMFMediaSink_iface.lpVtbl = &audio_renderer_sink_vtbl;

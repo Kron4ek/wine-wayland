@@ -89,6 +89,7 @@ extern struct fd *get_fd_object_for_mapping( struct fd *fd, unsigned int access,
 extern void *get_fd_user( struct fd *fd );
 extern void set_fd_user( struct fd *fd, const struct fd_ops *ops, struct object *user );
 extern unsigned int get_fd_options( struct fd *fd );
+extern unsigned int get_fd_comp_flags( struct fd *fd );
 extern int is_fd_overlapped( struct fd *fd );
 extern int get_unix_fd( struct fd *fd );
 extern int is_same_file_fd( struct fd *fd1, struct fd *fd2 );
@@ -169,6 +170,7 @@ extern int is_file_executable( const char *name );
 
 struct memory_view;
 
+extern int grow_file( int unix_fd, file_pos_t new_size );
 extern struct memory_view *find_mapped_view( struct process *process, client_ptr_t base );
 extern struct memory_view *get_exe_view( struct process *process );
 extern struct file *get_view_file( const struct memory_view *view, unsigned int access, unsigned int sharing );
@@ -233,7 +235,6 @@ extern void fd_copy_completion( struct fd *src, struct fd *dst );
 extern struct iosb *create_iosb( const void *in_data, data_size_t in_size, data_size_t out_size );
 extern struct iosb *async_get_iosb( struct async *async );
 extern struct thread *async_get_thread( struct async *async );
-extern int async_is_blocking( struct async *async );
 extern struct async *find_pending_async( struct async_queue *queue );
 extern void cancel_process_asyncs( struct process *process );
 

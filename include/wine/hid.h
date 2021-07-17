@@ -21,24 +21,57 @@
 #ifndef __WINE_PARSE_H
 #define __WINE_PARSE_H
 
-#define HID_MAGIC 0x8491759
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
+#include "windef.h"
+#include "winbase.h"
+#include "winternl.h"
+#include "hidusage.h"
+#include "ddk/hidpi.h"
 
-typedef enum __WINE_ELEMENT_TYPE {
-    UnknownElement = 0,
-    ButtonElement,
-    ValueElement,
-} WINE_ELEMENT_TYPE;
+#define HID_MAGIC 0x8491759
 
 typedef struct __WINE_ELEMENT
 {
-    WINE_ELEMENT_TYPE ElementType;
     UINT  valueStartBit;
     UINT  bitCount;
-    union {
-        HIDP_VALUE_CAPS value;
-        HIDP_BUTTON_CAPS button;
-    } caps;
+    HIDP_VALUE_CAPS caps;
 } WINE_HID_ELEMENT;
+
+struct hid_value_caps
+{
+    USAGE   usage_page;
+    USAGE   usage_min;
+    USAGE   usage_max;
+    USHORT  data_index_min;
+    USHORT  data_index_max;
+    USHORT  string_min;
+    USHORT  string_max;
+    USHORT  designator_min;
+    USHORT  designator_max;
+    BOOLEAN is_range;
+    BOOLEAN is_string_range;
+    BOOLEAN is_designator_range;
+    UCHAR   report_id;
+    USHORT  link_collection;
+    USAGE   link_usage_page;
+    USAGE   link_usage;
+    USHORT  bit_field;
+    USHORT  bit_size;
+    USHORT  report_count;
+    ULONG   start_bit;
+    LONG    logical_min;
+    LONG    logical_max;
+    LONG    physical_min;
+    LONG    physical_max;
+    ULONG   units;
+    ULONG   units_exp;
+};
+
+#define HID_VALUE_CAPS_IS_ABSOLUTE(x) (((x)->bit_field & 0x04) == 0)
+#define HID_VALUE_CAPS_HAS_NULL(x) (((x)->bit_field & 0x40) != 0)
+#define HID_VALUE_CAPS_IS_ARRAY(c) (((c)->bit_field & 2) == 0)
+#define HID_VALUE_CAPS_IS_BUTTON(c) ((c)->bit_size == 1 || HID_VALUE_CAPS_IS_ARRAY(c))
 
 typedef struct __WINE_HID_REPORT
 {
@@ -48,28 +81,19 @@ typedef struct __WINE_HID_REPORT
     DWORD elementIdx;
 } WINE_HID_REPORT;
 
-typedef struct __WINE_HID_LINK_COLLECTION_NODE {
-    USAGE  LinkUsage;
-    USAGE  LinkUsagePage;
-    USHORT Parent;
-    USHORT NumberOfChildren;
-    USHORT NextSibling;
-    USHORT FirstChild;
-    BYTE   CollectionType;
-    BYTE   IsAlias;
-} WINE_HID_LINK_COLLECTION_NODE;
-
 typedef struct __WINE_HIDP_PREPARSED_DATA
 {
     DWORD magic;
     DWORD dwSize;
     HIDP_CAPS caps;
+    HIDP_CAPS new_caps;
 
     DWORD elementOffset;
-    DWORD nodesOffset;
     DWORD reportCount[3];
     BYTE reportIdx[3][256];
 
+    DWORD value_caps_offset;
+    USHORT value_caps_count[3];
     WINE_HID_REPORT reports[1];
 } WINE_HIDP_PREPARSED_DATA, *PWINE_HIDP_PREPARSED_DATA;
 
@@ -77,6 +101,10 @@ typedef struct __WINE_HIDP_PREPARSED_DATA
 #define HID_OUTPUT_REPORTS(d) ((d)->reports + (d)->reportCount[0])
 #define HID_FEATURE_REPORTS(d) ((d)->reports + (d)->reportCount[0] + (d)->reportCount[1])
 #define HID_ELEMS(d) ((WINE_HID_ELEMENT*)((BYTE*)(d) + (d)->elementOffset))
-#define HID_NODES(d) ((WINE_HID_LINK_COLLECTION_NODE*)((BYTE*)(d) + (d)->nodesOffset))
+
+#define HID_INPUT_VALUE_CAPS(d) ((struct hid_value_caps*)((char *)(d) + (d)->value_caps_offset))
+#define HID_OUTPUT_VALUE_CAPS(d) (HID_INPUT_VALUE_CAPS(d) + (d)->value_caps_count[0])
+#define HID_FEATURE_VALUE_CAPS(d) (HID_OUTPUT_VALUE_CAPS(d) + (d)->value_caps_count[1])
+#define HID_COLLECTION_VALUE_CAPS(d) (HID_FEATURE_VALUE_CAPS(d) + (d)->value_caps_count[2])
 
 #endif /* __WINE_PARSE_H */

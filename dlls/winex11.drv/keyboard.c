@@ -1432,7 +1432,7 @@ X11DRV_KEYBOARD_DetectLayout( Display *display )
   KeySym keysym = 0;
   const char (*lkey)[MAIN_LEN][4];
   unsigned max_seq = 0;
-  int max_score = 0, ismatch = 0;
+  int max_score = INT_MIN, ismatch = 0;
   char ckey[256][4];
 
   syms = keysyms_per_keycode;
@@ -1505,7 +1505,7 @@ X11DRV_KEYBOARD_DetectLayout( Display *display )
           char str[5];
           for (i = 0; i < 4; i++) str[i] = ckey[keyc][i] ? ckey[keyc][i] : ' ';
           str[4] = 0;
-          TRACE_(key)("mismatch for keycode %u, got %s\n", keyc, str);
+          TRACE_(key)("mismatch for keycode %u, got %s\n", keyc, debugstr_a(str));
           mismatch++;
           score -= syms;
 	}

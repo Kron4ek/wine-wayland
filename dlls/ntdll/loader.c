@@ -72,13 +72,14 @@ typedef void  (CALLBACK *LDRENUMPROC)(LDR_DATA_TABLE_ENTRY *, void *, BOOLEAN *)
 
 void (FASTCALL *pBaseThreadInitThunk)(DWORD,LPTHREAD_START_ROUTINE,void *) = NULL;
 
+static DWORD (WINAPI *pCtrlRoutine)(void *);
+
 const struct unix_funcs *unix_funcs = NULL;
 
 /* windows directory */
 const WCHAR windows_dir[] = L"C:\\windows";
 /* system directory with trailing backslash */
 const WCHAR system_dir[] = L"C:\\windows\\system32\\";
-const WCHAR syswow64_dir[] = L"C:\\windows\\syswow64\\";
 
 HMODULE kernel32_handle = 0;
 
@@ -2674,9 +2675,21 @@ static NTSTATUS find_builtin_without_file( const WCHAR *name, UNICODE_STRING *ne
 
     if (!get_env_var( L"WINEBUILDDIR", 20 + 2 * wcslen(name), new_name ))
     {
+        len = new_name->Length;
         RtlAppendUnicodeToString( new_name, L"\\dlls\\" );
         RtlAppendUnicodeToString( new_name, name );
         if ((ext = wcsrchr( name, '.' )) && !wcscmp( ext, L".dll" )) new_name->Length -= 4 * sizeof(WCHAR);
+        RtlAppendUnicodeToString( new_name, L"\\" );
+        RtlAppendUnicodeToString( new_name, name );
+        status = open_dll_file( new_name, pwm, mapping, image_info, id );
+        if (status != STATUS_DLL_NOT_FOUND) goto done;
+        RtlAppendUnicodeToString( new_name, L".fake" );
+        status = open_dll_file( new_name, pwm, mapping, image_info, id );
+        if (status != STATUS_DLL_NOT_FOUND) goto done;
+
+        new_name->Length = len;
+        RtlAppendUnicodeToString( new_name, L"\\programs\\" );
+        RtlAppendUnicodeToString( new_name, name );
         RtlAppendUnicodeToString( new_name, L"\\" );
         RtlAppendUnicodeToString( new_name, name );
         status = open_dll_file( new_name, pwm, mapping, image_info, id );
@@ -2829,12 +2842,6 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname, con
                 status = STATUS_SUCCESS;
                 goto done;
             }
-            /* 16-bit files can't be loaded from the prefix */
-            if (libname[0] && libname[1] && !wcscmp( libname + wcslen(libname) - 2, L"16" ))
-            {
-                status = find_builtin_without_file( libname, nt_name, pwm, mapping, image_info, id );
-                goto done;
-            }
         }
     }
 
@@ -2842,6 +2849,10 @@ static NTSTATUS find_dll_file( const WCHAR *load_path, const WCHAR *libname, con
         status = search_dll_file( load_path, libname, nt_name, pwm, mapping, image_info, id );
     else if (!(status = RtlDosPathNameToNtPathName_U_WithStatus( libname, nt_name, NULL, NULL )))
         status = open_dll_file( nt_name, pwm, mapping, image_info, id );
+
+    /* 16-bit files can't be loaded from the prefix */
+    if (status && libname[0] && libname[1] && !wcscmp( libname + wcslen(libname) - 2, L"16" ) && !contains_path( libname ))
+        status = find_builtin_without_file( libname, nt_name, pwm, mapping, image_info, id );
 
     if (status == STATUS_IMAGE_MACHINE_TYPE_MISMATCH) status = STATUS_INVALID_IMAGE_FORMAT;
 
@@ -2941,6 +2952,17 @@ NTSTATUS __cdecl __wine_init_unix_lib( HMODULE module, DWORD reason, const void 
     return ret;
 }
 
+
+/***********************************************************************
+ *              __wine_ctrl_routine
+ */
+NTSTATUS WINAPI __wine_ctrl_routine( void *arg )
+{
+    DWORD ret = 0;
+
+    if (pCtrlRoutine && NtCurrentTeb()->Peb->ProcessParameters->ConsoleHandle) ret = pCtrlRoutine( arg );
+    RtlExitUserThread( ret );
+}
 
 /******************************************************************
  *		LdrLoadDll (NTDLL.@)
@@ -3401,7 +3423,7 @@ void WINAPI LdrShutdownThread(void)
     if (wm->ldr.TlsIndex != -1) call_tls_callbacks( wm->ldr.DllBase, DLL_THREAD_DETACH );
 
     RtlAcquirePebLock();
-    RemoveEntryList( &NtCurrentTeb()->TlsLinks );
+    if (NtCurrentTeb()->TlsLinks.Flink) RemoveEntryList( &NtCurrentTeb()->TlsLinks );
     if ((pointers = NtCurrentTeb()->ThreadLocalStoragePointer))
     {
         for (i = 0; i < tls_module_count; i++) RtlFreeHeap( GetProcessHeap(), 0, pointers[i] );
@@ -3695,12 +3717,10 @@ static void init_wow64(void)
 
     if (!NtCurrentTeb64()) return;
     peb64 = UlongToPtr( NtCurrentTeb64()->Peb );
-    peb64->ImageBaseAddress = PtrToUlong( peb->ImageBaseAddress );
     peb64->OSMajorVersion   = peb->OSMajorVersion;
     peb64->OSMinorVersion   = peb->OSMinorVersion;
     peb64->OSBuildNumber    = peb->OSBuildNumber;
     peb64->OSPlatformId     = peb->OSPlatformId;
-    peb64->SessionId        = peb->SessionId;
 
     map_wow64cpu();
 }
@@ -3778,6 +3798,8 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR 
             MESSAGE( "wine: could not find BaseThreadInitThunk in kernel32.dll, status %x\n", status );
             NtTerminateProcess( GetCurrentProcess(), status );
         }
+        RtlInitAnsiString( &func_name, "CtrlRoutine" );
+        LdrGetProcedureAddress( kernel32_handle, &func_name, 0, (void **)&pCtrlRoutine );
 
         actctx_init();
         if (wm->ldr.Flags & LDR_COR_ILONLY)

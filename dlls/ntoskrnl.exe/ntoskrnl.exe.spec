@@ -567,7 +567,7 @@
 @ stub KeI386SetGdtSelector
 @ stub KeIcacheFlushCount
 @ stdcall KeInitializeApc(ptr ptr long ptr ptr ptr long ptr)
-@ stub KeInitializeDeviceQueue
+@ stdcall KeInitializeDeviceQueue(ptr)
 @ stdcall KeInitializeDpc(ptr ptr ptr)
 @ stdcall KeInitializeEvent(ptr long long)
 @ stub KeInitializeInterrupt
@@ -575,11 +575,11 @@
 @ stdcall KeInitializeMutex(ptr long)
 @ stub KeInitializeQueue
 @ stdcall KeInitializeSemaphore(ptr long long)
-@ stdcall KeInitializeSpinLock(ptr)
+@ stdcall KeInitializeSpinLock(ptr) NTOSKRNL_KeInitializeSpinLock
 @ stdcall KeInitializeTimer(ptr)
 @ stdcall KeInitializeTimerEx(ptr long)
 @ stub KeInsertByKeyDeviceQueue
-@ stub KeInsertDeviceQueue
+@ stdcall KeInsertDeviceQueue(ptr ptr)
 @ stub KeInsertHeadQueue
 @ stdcall KeInsertQueue(ptr ptr)
 @ stub KeInsertQueueApc
@@ -617,7 +617,7 @@
 @ stdcall KeReleaseSpinLockFromDpcLevel(ptr)
 @ stub KeRemoveByKeyDeviceQueue
 @ stub KeRemoveByKeyDeviceQueueIfBusy
-@ stub KeRemoveDeviceQueue
+@ stdcall KeRemoveDeviceQueue(ptr)
 @ stub KeRemoveEntryDeviceQueue
 @ stub KeRemoveQueue
 @ stub KeRemoveQueueDpc
@@ -1436,7 +1436,7 @@
 @ stdcall -private ZwOpenEvent(ptr long ptr) NtOpenEvent
 @ stdcall ZwOpenFile(ptr long ptr ptr long long) NtOpenFile
 @ stdcall -private ZwOpenJobObject(ptr long ptr) NtOpenJobObject
-@ stdcall -private ZwOpenKey(ptr long ptr) NtOpenKey
+@ stdcall ZwOpenKey(ptr long ptr) NtOpenKey
 @ stdcall -private ZwOpenKeyEx(ptr long ptr long) NtOpenKeyEx
 @ stdcall -private ZwOpenKeyTransacted(ptr long ptr long) NtOpenKeyTransacted
 @ stdcall -private ZwOpenKeyTransactedEx(ptr long ptr long long) NtOpenKeyTransactedEx
@@ -1476,7 +1476,7 @@
 @ stdcall -private ZwQuerySystemInformation(long ptr long ptr) NtQuerySystemInformation
 @ stdcall -private ZwQuerySystemInformationEx(long ptr long ptr long ptr) NtQuerySystemInformationEx
 @ stdcall -private ZwQueryTimerResolution(ptr ptr ptr) NtQueryTimerResolution
-@ stdcall -private ZwQueryValueKey(long ptr long ptr long ptr) NtQueryValueKey
+@ stdcall ZwQueryValueKey(long ptr long ptr long ptr) NtQueryValueKey
 @ stdcall -private ZwQueryVirtualMemory(long ptr long ptr long ptr) NtQueryVirtualMemory
 @ stdcall -private ZwQueryVolumeInformationFile(long ptr ptr long long) NtQueryVolumeInformationFile
 @ stdcall -private ZwReadFile(long long ptr ptr ptr ptr long ptr ptr) NtReadFile

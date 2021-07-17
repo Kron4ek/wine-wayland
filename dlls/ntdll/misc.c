@@ -335,7 +335,7 @@ ULONG WINAPI EtwEventActivityIdControl(ULONG code, GUID *guid)
  */
 BOOLEAN WINAPI EtwEventProviderEnabled( REGHANDLE handle, UCHAR level, ULONGLONG keyword )
 {
-    FIXME("%s, %u, %s: stub\n", wine_dbgstr_longlong(handle), level, wine_dbgstr_longlong(keyword));
+    WARN("%s, %u, %s: stub\n", wine_dbgstr_longlong(handle), level, wine_dbgstr_longlong(keyword));
     return FALSE;
 }
 
@@ -345,7 +345,7 @@ BOOLEAN WINAPI EtwEventProviderEnabled( REGHANDLE handle, UCHAR level, ULONGLONG
 ULONG WINAPI EtwEventRegister( LPCGUID provider, PENABLECALLBACK callback, PVOID context,
                 PREGHANDLE handle )
 {
-    FIXME("(%s, %p, %p, %p) stub.\n", debugstr_guid(provider), callback, context, handle);
+    WARN("(%s, %p, %p, %p) stub.\n", debugstr_guid(provider), callback, context, handle);
 
     if (!handle) return ERROR_INVALID_PARAMETER;
 
@@ -358,7 +358,7 @@ ULONG WINAPI EtwEventRegister( LPCGUID provider, PENABLECALLBACK callback, PVOID
  */
 ULONG WINAPI EtwEventUnregister( REGHANDLE handle )
 {
-    FIXME("(%s) stub.\n", wine_dbgstr_longlong(handle));
+    WARN("(%s) stub.\n", wine_dbgstr_longlong(handle));
     return ERROR_SUCCESS;
 }
 
@@ -418,7 +418,7 @@ ULONG WINAPI EtwRegisterTraceGuidsW( WMIDPREQUEST RequestAddress,
                 TRACE_GUID_REGISTRATION *TraceGuidReg, const WCHAR *MofImagePath,
                 const WCHAR *MofResourceName, TRACEHANDLE *RegistrationHandle )
 {
-    FIXME("(%p, %p, %s, %u, %p, %s, %s, %p): stub\n", RequestAddress, RequestContext,
+    WARN("(%p, %p, %s, %u, %p, %s, %s, %p): stub\n", RequestAddress, RequestContext,
           debugstr_guid(ControlGuid), GuidCount, TraceGuidReg, debugstr_w(MofImagePath),
           debugstr_w(MofResourceName), RegistrationHandle);
 
@@ -443,7 +443,7 @@ ULONG WINAPI EtwRegisterTraceGuidsA( WMIDPREQUEST RequestAddress,
                 TRACE_GUID_REGISTRATION *TraceGuidReg, const char *MofImagePath,
                 const char *MofResourceName, TRACEHANDLE *RegistrationHandle )
 {
-    FIXME("(%p, %p, %s, %u, %p, %s, %s, %p): stub\n", RequestAddress, RequestContext,
+    WARN("(%p, %p, %s, %u, %p, %s, %s, %p): stub\n", RequestAddress, RequestContext,
           debugstr_guid(ControlGuid), GuidCount, TraceGuidReg, debugstr_a(MofImagePath),
           debugstr_a(MofResourceName), RegistrationHandle);
     return ERROR_SUCCESS;
@@ -457,7 +457,7 @@ ULONG WINAPI EtwUnregisterTraceGuids( TRACEHANDLE RegistrationHandle )
     if (!RegistrationHandle)
          return ERROR_INVALID_PARAMETER;
 
-    FIXME("%s: stub\n", wine_dbgstr_longlong(RegistrationHandle));
+    WARN("%s: stub\n", wine_dbgstr_longlong(RegistrationHandle));
     return ERROR_SUCCESS;
 }
 
@@ -466,7 +466,7 @@ ULONG WINAPI EtwUnregisterTraceGuids( TRACEHANDLE RegistrationHandle )
  */
 BOOLEAN WINAPI EtwEventEnabled( REGHANDLE handle, const EVENT_DESCRIPTOR *descriptor )
 {
-    FIXME("(%s, %p): stub\n", wine_dbgstr_longlong(handle), descriptor);
+    WARN("(%s, %p): stub\n", wine_dbgstr_longlong(handle), descriptor);
     return FALSE;
 }
 

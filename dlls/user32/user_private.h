@@ -28,6 +28,7 @@
 #include "winuser.h"
 #include "winreg.h"
 #include "winternl.h"
+#include "hidusage.h"
 #include "wine/heap.h"
 
 #define GET_WORD(ptr)  (*(const WORD *)(ptr))
@@ -233,12 +234,14 @@ static inline BOOL is_broadcast( HWND hwnd )
 }
 
 extern HMODULE user32_module DECLSPEC_HIDDEN;
+extern BOOL enable_mouse_in_pointer DECLSPEC_HIDDEN;
 
 struct dce;
 struct tagWND;
 
 struct hardware_msg_data;
 extern BOOL rawinput_from_hardware_message(RAWINPUT *rawinput, const struct hardware_msg_data *msg_data);
+extern BOOL rawinput_device_get_usages(HANDLE handle, USAGE *usage_page, USAGE *usage);
 extern struct rawinput_thread_data *rawinput_thread_data(void);
 
 extern void keyboard_init(void) DECLSPEC_HIDDEN;

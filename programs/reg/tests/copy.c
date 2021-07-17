@@ -126,64 +126,61 @@ static void test_copy_empty_key(void)
 {
     DWORD r;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
-
-    add_key(HKEY_CURRENT_USER, COPY_SRC, NULL);
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, NULL);
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
 
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC "\\ HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
 
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE "\\ /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
 
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC "\\ HKCU\\" KEY_BASE "\\ /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /s /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", empty_key_test, 0), "compare_export() failed\n");
 }
 
 static void test_copy_simple_data(void)
@@ -191,13 +188,10 @@ static void test_copy_simple_data(void)
     HKEY hkey;
     DWORD r, dword;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
-
-    add_key(HKEY_CURRENT_USER, COPY_SRC, &hkey);
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, &hkey);
 
     dword = 0x100;
     add_value(hkey, "DWORD", REG_DWORD, &dword, sizeof(dword));
@@ -206,54 +200,54 @@ static void test_copy_simple_data(void)
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
 
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC "\\ HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
 
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE "\\ /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
 
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC "\\ HKCU\\" KEY_BASE "\\ /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
 
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /s /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
 }
 
 static void test_copy_complex_data(void)
@@ -261,44 +255,41 @@ static void test_copy_complex_data(void)
     HKEY hkey, subkey;
     DWORD r, dword;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
-
-    add_key(HKEY_CURRENT_USER, COPY_SRC, &hkey);
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, &hkey);
 
     dword = 0x100;
     add_value(hkey, "DWORD", REG_DWORD, &dword, sizeof(dword));
     add_value(hkey, "String", REG_SZ, "Your text here...", 18);
 
-    add_key(hkey, "Subkey1", &subkey);
+    add_key(hkey, "Subkey1", 0, &subkey);
     add_value(subkey, "Binary", REG_BINARY, "\x11\x22\x33\x44", 4);
     add_value(subkey, "Undefined hex", 0x100, "%PATH%", 7);
     close_key(subkey);
 
-    add_key(hkey, "Subkey2a", &subkey);
+    add_key(hkey, "Subkey2a", 0, &subkey);
     add_value(subkey, "double\"quote", REG_SZ, "\"Hello, World!\"", 16);
     dword = 0x8;
     add_value(subkey, "single'quote", REG_DWORD, &dword, sizeof(dword));
     close_key(subkey);
 
-    add_key(hkey, "Subkey2a\\Subkey2b", &subkey);
+    add_key(hkey, "Subkey2a\\Subkey2b", 0, &subkey);
     add_value(subkey, NULL, REG_SZ, "Default value name", 19);
     add_value(subkey, "Multiple strings", REG_MULTI_SZ, "Line1\0Line2\0Line3\0", 19);
     close_key(subkey);
 
-    add_key(hkey, "Subkey3a", &subkey);
+    add_key(hkey, "Subkey3a", 0, &subkey);
     add_value(subkey, "Backslash", REG_SZ, "Use \\\\ to escape a backslash", 29);
     close_key(subkey);
 
-    add_key(hkey, "Subkey3a\\Subkey3b\\Subkey3c", &subkey);
+    add_key(hkey, "Subkey3a\\Subkey3b\\Subkey3c", 0, &subkey);
     add_value(subkey, "String expansion", REG_EXPAND_SZ, "%HOME%\\%PATH%", 14);
     add_value(subkey, "Zero data type", REG_NONE, "Value", 6);
     close_key(subkey);
 
-    add_key(hkey, "Subkey4", &subkey);
+    add_key(hkey, "Subkey4", 0, &subkey);
     dword = 0x12345678;
     add_value(subkey, NULL, REG_DWORD, &dword, sizeof(dword));
     add_value(subkey, "43981", 0xabcd, "Value", 6);
@@ -308,21 +299,21 @@ static void test_copy_complex_data(void)
 
     /* Copy values only */
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKEY_CURRENT_USER\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", simple_data_test, 0), "compare_export() failed\n");
 
     /* Copy subkeys and values */
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /s /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKEY_CURRENT_USER\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", complex_data_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", complex_data_test, 0), "compare_export() failed\n");
 }
 
 static void test_copy_key_order(void)
@@ -330,24 +321,21 @@ static void test_copy_key_order(void)
     HKEY hkey;
     DWORD r;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
-
-    add_key(HKEY_CURRENT_USER, COPY_SRC, &hkey);
-    add_key(hkey, "Subkey2", NULL);
-    add_key(hkey, "Subkey1", NULL);
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, &hkey);
+    add_key(hkey, "Subkey2", 0, NULL);
+    add_key(hkey, "Subkey1", 0, NULL);
     close_key(hkey);
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /s /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", key_order_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", key_order_test, 0), "compare_export() failed\n");
 }
 
 static void test_copy_value_order(void)
@@ -355,24 +343,21 @@ static void test_copy_value_order(void)
     HKEY hkey;
     DWORD r;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
-
-    add_key(HKEY_CURRENT_USER, COPY_SRC, &hkey);
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, &hkey);
     add_value(hkey, "Value 2", REG_SZ, "I was added first!", 19);
     add_value(hkey, "Value 1", REG_SZ, "I was added second!", 20);
     close_key(hkey);
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", value_order_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", value_order_test, TODO_REG_COMPARE), "compare_export() failed\n");
 }
 
 static void test_copy_hex_data(void)
@@ -380,14 +365,11 @@ static void test_copy_hex_data(void)
     HKEY hkey;
     DWORD r;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
-
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     /* Try copying empty hex values */
-    add_key(HKEY_CURRENT_USER, COPY_SRC, &hkey);
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, &hkey);
     add_value(hkey, "Wine1a", REG_NONE, NULL, 0);
     add_value(hkey, "Wine1b", REG_SZ, NULL, 0);
     add_value(hkey, "Wine1c", REG_EXPAND_SZ, NULL, 0);
@@ -399,15 +381,15 @@ static void test_copy_hex_data(void)
     close_key(hkey);
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", empty_hex_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", empty_hex_test, 0), "compare_export() failed\n");
 
-    delete_key(HKEY_CURRENT_USER, COPY_SRC);
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     /* Try copying after importing alternative registry data types */
     test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
@@ -418,15 +400,15 @@ static void test_copy_hex_data(void)
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", empty_hex_test2, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", empty_hex_test2, 0), "compare_export() failed\n");
 
-    delete_key(HKEY_CURRENT_USER, COPY_SRC);
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     /* Try copying more complex hex data */
     test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
@@ -437,23 +419,20 @@ static void test_copy_hex_data(void)
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKEY_CURRENT_USER\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", hex_types_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", hex_types_test, 0), "compare_export() failed\n");
 }
 
 static void test_copy_embedded_null_values(void)
 {
     DWORD r;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
-
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     test_import_wstr("\xef\xbb\xbfWindows Registry Editor Version 5.00\n\n"
                      "[HKEY_CURRENT_USER\\" COPY_SRC "]\n"
@@ -469,12 +448,12 @@ static void test_copy_embedded_null_values(void)
     ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKEY_CURRENT_USER\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", embedded_null_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", embedded_null_test, 0), "compare_export() failed\n");
 }
 
 static void test_copy_slashes(void)
@@ -482,25 +461,22 @@ static void test_copy_slashes(void)
     HKEY hkey;
     DWORD r;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
-
-    add_key(HKEY_CURRENT_USER, COPY_SRC, &hkey);
-    add_key(hkey, "https://winehq.org", NULL);
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, &hkey);
+    add_key(hkey, "https://winehq.org", 0, NULL);
     add_value(hkey, "count/up", REG_SZ, "one/two/three", 14);
     add_value(hkey, "\\foo\\bar", REG_SZ, "", 1);
     close_key(hkey);
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /s /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", slashes_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", slashes_test, TODO_REG_COMPARE), "compare_export() failed\n");
 }
 
 static void test_copy_escaped_null_values(void)
@@ -508,13 +484,10 @@ static void test_copy_escaped_null_values(void)
     HKEY hkey;
     DWORD r;
 
-    delete_tree(HKEY_CURRENT_USER, COPY_SRC);
-    verify_key_nonexist(HKEY_CURRENT_USER, COPY_SRC);
+    delete_tree(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_tree(HKEY_CURRENT_USER, KEY_BASE, 0);
 
-    delete_tree(HKEY_CURRENT_USER, KEY_BASE);
-    verify_key_nonexist(HKEY_CURRENT_USER, KEY_BASE);
-
-    add_key(HKEY_CURRENT_USER, COPY_SRC, &hkey);
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, &hkey);
     add_value(hkey, "Wine5a", REG_SZ, "\\0", 3);
     add_value(hkey, "Wine5b", REG_SZ, "\\0\\0", 5);
     add_value(hkey, "Wine5c", REG_SZ, "Value1\\0", 9);
@@ -524,15 +497,95 @@ static void test_copy_escaped_null_values(void)
     close_key(hkey);
 
     run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine verify_key(HKEY_CURRENT_USER, KEY_BASE);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 
     run_reg_exe("reg export HKCU\\" KEY_BASE " file.reg /y", &r);
-    todo_wine ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
-    todo_wine ok(compare_export("file.reg", escaped_null_test, 0), "compare_export() failed\n");
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    ok(compare_export("file.reg", escaped_null_test, 0), "compare_export() failed\n");
 
-    delete_key(HKEY_CURRENT_USER, COPY_SRC);
-    todo_wine delete_key(HKEY_CURRENT_USER, KEY_BASE);
+    delete_key(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
+}
+
+static void test_copy_key_class(void)
+{
+    HKEY hkey;
+    LONG rc;
+    char class[] = "class";
+    char buf[16];
+    DWORD buf_size, r;
+
+    rc = RegCreateKeyExA(HKEY_CURRENT_USER, COPY_SRC, 0, class, REG_OPTION_NON_VOLATILE,
+                         KEY_READ|KEY_WRITE, NULL, &hkey, NULL);
+    ok(rc == ERROR_SUCCESS, "RegCreateKeyExA failed: got %d, expected 0\n", rc);
+
+    add_value(hkey, "String", REG_SZ, "Data", 5);
+
+    buf_size = sizeof(buf);
+
+    rc = RegQueryInfoKeyA(hkey, buf, &buf_size, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    ok(rc == ERROR_SUCCESS, "RegQueryInfoKeyA failed: got %d, expected 0\n", rc);
+    ok(!strcmp(buf, "class"), "Incorrect key class set; got '%s', expected '%s'\n", buf, class);
+
+    RegCloseKey(hkey);
+
+    run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+    verify_key(HKEY_CURRENT_USER, KEY_BASE, 0);
+
+    open_key(HKEY_CURRENT_USER, KEY_BASE, 0, &hkey);
+    verify_reg(hkey, "String", REG_SZ, "Data", 5, 0);
+
+    memset(buf, 0, sizeof(buf));
+    buf_size = sizeof(buf);
+
+    rc = RegQueryInfoKeyA(hkey, buf, &buf_size, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    ok(rc == ERROR_SUCCESS, "RegQueryInfoKeyA failed: got %d, expected 0\n", rc);
+    ok(strlen(buf) == 0, "Key class should not exist\n");
+
+    RegCloseKey(hkey);
+
+    delete_key(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
+}
+
+static void test_copy_overwrite(void)
+{
+    HKEY hkey;
+    DWORD r, dword;
+
+    add_key(HKEY_CURRENT_USER, COPY_SRC, 0, &hkey);
+    add_value(hkey, "Wine1", REG_SZ, "def", 4);
+    dword = 0x5;
+    add_value(hkey, "Wine2", REG_DWORD, &dword, sizeof(dword));
+    add_value(hkey, "Wine3", REG_BINARY, "\x11\x22\x33\x44", 4);
+    add_value(hkey, "Wine4", REG_MULTI_SZ, "Line1\0Line2\0Line3\0", 19);
+    close_key(hkey);
+
+    add_key(HKEY_CURRENT_USER, KEY_BASE, 0, &hkey);
+    add_value(hkey, "Wine1", REG_SZ, "abc", 4);
+    verify_reg_nonexist(hkey, "Wine2");
+    add_value(hkey, "Wine3", REG_EXPAND_SZ, "%HOME%\\%PATH%", 14);
+    dword = 0x1;
+    add_value(hkey, "Wine4", REG_DWORD, &dword, sizeof(dword));
+    add_value(hkey, NULL, REG_SZ, "Constant value", 15);
+    close_key(hkey);
+
+    run_reg_exe("reg copy HKCU\\" COPY_SRC " HKCU\\" KEY_BASE " /f", &r);
+    ok(r == REG_EXIT_SUCCESS, "got exit code %d, expected 0\n", r);
+
+    open_key(HKEY_CURRENT_USER, KEY_BASE, 0, &hkey);
+    verify_reg(hkey, "Wine1", REG_SZ, "def", 4, 0);
+    dword = 0x5;
+    verify_reg(hkey, "Wine2", REG_DWORD, &dword, sizeof(dword), 0);
+    verify_reg(hkey, "Wine3", REG_BINARY, "\x11\x22\x33\x44", 4, 0);
+    verify_reg(hkey, "Wine4", REG_MULTI_SZ, "Line1\0Line2\0Line3\0", 19, 0);
+    verify_reg(hkey, NULL, REG_SZ, "Constant value", 15, 0);
+    close_key(hkey);
+
+    delete_key(HKEY_CURRENT_USER, COPY_SRC, 0);
+    delete_key(HKEY_CURRENT_USER, KEY_BASE, 0);
 }
 
 START_TEST(copy)
@@ -554,4 +607,6 @@ START_TEST(copy)
     test_copy_embedded_null_values();
     test_copy_slashes();
     test_copy_escaped_null_values();
+    test_copy_key_class();
+    test_copy_overwrite();
 }

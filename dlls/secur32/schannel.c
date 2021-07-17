@@ -759,9 +759,8 @@ static char * CDECL schan_get_buffer(const struct schan_transport *t, struct sch
  *      *buff_len > 0 indicates that some data was read.  May be less than
  *          what was requested, in which case the caller should call again if/
  *          when they want more.
- *  EAGAIN when no data could be read without blocking
+ *  -1 when no data could be read without blocking
  *  another errno-style error value on failure
- *
  */
 static int CDECL schan_pull(struct schan_transport *t, void *buff, size_t *buff_len)
 {
@@ -774,7 +773,7 @@ static int CDECL schan_pull(struct schan_transport *t, void *buff, size_t *buff_
 
     b = schan_get_buffer(t, &t->in, &local_len);
     if (!b)
-        return EAGAIN;
+        return -1;
 
     memcpy(buff, b, local_len);
     t->in.offset += local_len;
@@ -797,10 +796,9 @@ static int CDECL schan_pull(struct schan_transport *t, void *buff, size_t *buff_
  *  0 on success
  *      *buff_len will be > 0 indicating how much data was written.  May be less
  *          than what was requested, in which case the caller should call again
-            if/when they want to write more.
- *  EAGAIN when no data could be written without blocking
+ *          if/when they want to write more.
+ * -1 when no data could be written without blocking
  *  another errno-style error value on failure
- *
  */
 static int CDECL schan_push(struct schan_transport *t, const void *buff, size_t *buff_len)
 {
@@ -813,7 +811,7 @@ static int CDECL schan_push(struct schan_transport *t, const void *buff, size_t 
 
     b = schan_get_buffer(t, &t->out, &local_len);
     if (!b)
-        return EAGAIN;
+        return -1;
 
     memcpy(b, buff, local_len);
     t->out.offset += local_len;
@@ -879,11 +877,6 @@ static void dump_buffer_desc(SecBufferDesc *desc)
 static inline SIZE_T read_record_size(const BYTE *buf, SIZE_T header_size)
 {
     return (buf[header_size - 2] << 8) | buf[header_size - 1];
-}
-
-static inline BOOL is_dtls_context(const struct schan_context *ctx)
-{
-    return (ctx->header_size == HEADER_SIZE_DTLS);
 }
 
 /***********************************************************************
@@ -1013,7 +1006,7 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextW(
                 return SEC_E_INCOMPLETE_MESSAGE;
             }
         }
-        else if (!is_dtls_context(ctx)) return SEC_E_INCOMPLETE_MESSAGE;
+        else return SEC_E_INCOMPLETE_MESSAGE;
 
         TRACE("Using expected_size %lu.\n", expected_size);
     }

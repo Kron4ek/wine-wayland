@@ -412,7 +412,7 @@
 @ stdcall -syscall NtTerminateJobObject(long long)
 @ stdcall -syscall NtTerminateProcess(long long)
 @ stdcall -syscall NtTerminateThread(long long)
-@ stub NtTestAlert
+@ stdcall -syscall NtTestAlert()
 # @ stub NtTraceEvent
 # @ stub NtTranslateFilePath
 @ stdcall -syscall NtUnloadDriver(ptr)
@@ -430,6 +430,9 @@
 @ stdcall -syscall NtWaitForSingleObject(long long ptr)
 @ stub NtWaitHighEventPair
 @ stub NtWaitLowEventPair
+@ stdcall -syscall -arch=win32 NtWow64AllocateVirtualMemory64(long ptr int64 ptr long long)
+@ stdcall -syscall -arch=win32 NtWow64ReadVirtualMemory64(long int64 ptr int64 ptr)
+@ stdcall -syscall -arch=win32 NtWow64WriteVirtualMemory64(long int64 ptr int64 ptr)
 @ stdcall -syscall NtWriteFile(long long ptr ptr ptr ptr long ptr ptr)
 @ stdcall -syscall NtWriteFileGather(long long ptr ptr ptr ptr long ptr ptr)
 @ stub NtWriteRequestData
@@ -527,6 +530,7 @@
 @ stub RtlConvertUiListToApiList
 @ stdcall -arch=win32 -ret64 RtlConvertUlongToLargeInteger(long)
 # @ stub RtlConvertVariantToProperty
+@ stdcall RtlCopyContext(ptr long ptr)
 @ stdcall RtlCopyExtendedContext(ptr long ptr)
 @ stdcall RtlCopyLuid(ptr ptr)
 @ stdcall RtlCopyLuidAndAttributesArray(long ptr ptr)
@@ -1071,9 +1075,11 @@
 @ stdcall RtlWow64EnableFsRedirection(long)
 @ stdcall RtlWow64EnableFsRedirectionEx(long ptr)
 @ stdcall -arch=win64 RtlWow64GetCpuAreaInfo(ptr long ptr)
+@ stdcall -arch=win64 RtlWow64GetCurrentCpuArea(ptr ptr ptr)
 @ stdcall RtlWow64GetCurrentMachine()
 @ stdcall RtlWow64GetProcessMachines(long ptr ptr)
 @ stdcall -arch=win64 RtlWow64GetThreadContext(long ptr)
+@ stdcall -arch=win64 RtlWow64GetThreadSelectorEntry(long ptr long ptr)
 @ stdcall RtlWow64IsWowGuestMachineSupported(long ptr)
 @ stdcall -arch=win64 RtlWow64SetThreadContext(long ptr)
 @ stub RtlWriteMemoryStream
@@ -1223,7 +1229,7 @@
 # @ stub ZwEnumerateSystemEnvironmentValuesEx
 @ stdcall -private -syscall ZwEnumerateValueKey(long long long ptr long ptr) NtEnumerateValueKey
 @ stub ZwExtendSection
-# @ stub ZwFilterToken
+@ stdcall -private -syscall ZwFilterToken(long long ptr ptr ptr ptr) NtFilterToken
 @ stdcall -private -syscall ZwFindAtom(ptr long ptr) NtFindAtom
 @ stdcall -private -syscall ZwFlushBuffersFile(long ptr) NtFlushBuffersFile
 @ stdcall -private -syscall ZwFlushInstructionCache(long ptr long) NtFlushInstructionCache
@@ -1425,7 +1431,7 @@
 @ stdcall -private -syscall ZwTerminateJobObject(long long) NtTerminateJobObject
 @ stdcall -private -syscall ZwTerminateProcess(long long) NtTerminateProcess
 @ stdcall -private -syscall ZwTerminateThread(long long) NtTerminateThread
-@ stub ZwTestAlert
+@ stdcall -private -syscall ZwTestAlert() NtTestAlert
 # @ stub ZwTraceEvent
 # @ stub ZwTranslateFilePath
 @ stdcall -private -syscall ZwUnloadDriver(ptr) NtUnloadDriver
@@ -1443,6 +1449,9 @@
 @ stdcall -private -syscall ZwWaitForSingleObject(long long ptr) NtWaitForSingleObject
 @ stub ZwWaitHighEventPair
 @ stub ZwWaitLowEventPair
+@ stdcall -syscall -arch=win32 ZwWow64AllocateVirtualMemory64(long ptr int64 ptr long long) NtWow64AllocateVirtualMemory64
+@ stdcall -syscall -arch=win32 ZwWow64ReadVirtualMemory64(long int64 ptr int64 ptr) NtWow64ReadVirtualMemory64
+@ stdcall -syscall -arch=win32 ZwWow64WriteVirtualMemory64(long int64 ptr int64 ptr) NtWow64WriteVirtualMemory64
 @ stdcall -private -syscall ZwWriteFile(long long ptr ptr ptr ptr long ptr ptr) NtWriteFile
 @ stdcall -private -syscall ZwWriteFileGather(long long ptr ptr ptr ptr long ptr ptr) NtWriteFileGather
 @ stub ZwWriteRequestData
@@ -1610,22 +1619,21 @@
 @ cdecl -syscall -norelay wine_server_call(ptr)
 @ cdecl -syscall wine_server_fd_to_handle(long long long ptr)
 @ cdecl -syscall wine_server_handle_to_fd(long long ptr ptr)
-@ cdecl -syscall __wine_make_process_system()
 
 # Unix interface
+@ cdecl -syscall __wine_unix_call(int64 long ptr)
 @ cdecl __wine_set_unix_funcs(long ptr)
 @ cdecl __wine_init_unix_lib(long long ptr ptr)
+@ stdcall __wine_ctrl_routine(ptr)
 @ extern __wine_syscall_dispatcher
 @ extern -arch=i386 __wine_ldt_copy
 
 # Debugging
+@ stdcall -syscall -norelay __wine_dbg_write(ptr long)
 @ cdecl -norelay __wine_dbg_get_channel_flags(ptr)
 @ cdecl -norelay __wine_dbg_header(long long str)
 @ cdecl -norelay __wine_dbg_output(str)
 @ cdecl -norelay __wine_dbg_strdup(str)
-
-# Virtual memory
-@ cdecl -syscall __wine_locked_recvmsg(long ptr long)
 
 # Version
 @ cdecl wine_get_version()

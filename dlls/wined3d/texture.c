@@ -1297,7 +1297,7 @@ void wined3d_texture_gl_bind(struct wined3d_texture_gl *texture_gl,
 
     if (texture_gl->t.flags & WINED3D_TEXTURE_COND_NP2)
     {
-        /* Conditinal non power of two textures use a different clamping
+        /* Conditional non power of two textures use a different clamping
          * default. If we're using the GL_WINE_normalized_texrect partial
          * driver emulation, we're dealing with a GL_TEXTURE_2D texture which
          * has the address mode set to repeat - something that prevents us
@@ -1651,46 +1651,6 @@ void * CDECL wined3d_texture_get_parent(const struct wined3d_texture *texture)
     TRACE("texture %p.\n", texture);
 
     return texture->resource.parent;
-}
-
-HRESULT wined3d_texture_check_box_dimensions(const struct wined3d_texture *texture,
-        unsigned int level, const struct wined3d_box *box)
-{
-    const struct wined3d_format *format = texture->resource.format;
-    unsigned int width_mask, height_mask, width, height, depth;
-
-    width = wined3d_texture_get_level_width(texture, level);
-    height = wined3d_texture_get_level_height(texture, level);
-    depth = wined3d_texture_get_level_depth(texture, level);
-
-    if (box->left >= box->right || box->right > width
-            || box->top >= box->bottom || box->bottom > height
-            || box->front >= box->back || box->back > depth)
-    {
-        WARN("Box %s is invalid.\n", debug_box(box));
-        return WINEDDERR_INVALIDRECT;
-    }
-
-    if (texture->resource.format_flags & WINED3DFMT_FLAG_BLOCKS)
-    {
-        /* This assumes power of two block sizes, but NPOT block sizes would
-         * be silly anyway.
-         *
-         * This also assumes that the format's block depth is 1. */
-        width_mask = format->block_width - 1;
-        height_mask = format->block_height - 1;
-
-        if ((box->left & width_mask) || (box->top & height_mask)
-                || (box->right & width_mask && box->right != width)
-                || (box->bottom & height_mask && box->bottom != height))
-        {
-            WARN("Box %s is misaligned for %ux%u blocks.\n",
-                    debug_box(box), format->block_width, format->block_height);
-            return WINED3DERR_INVALIDCALL;
-        }
-    }
-
-    return WINED3D_OK;
 }
 
 void CDECL wined3d_texture_get_pitch(const struct wined3d_texture *texture,
@@ -2250,7 +2210,7 @@ HRESULT CDECL wined3d_texture_add_dirty_region(struct wined3d_texture *texture,
         return WINED3DERR_INVALIDCALL;
     }
 
-    if (dirty_region && FAILED(wined3d_texture_check_box_dimensions(texture, 0, dirty_region)))
+    if (dirty_region && FAILED(wined3d_resource_check_box_dimensions(&texture->resource, 0, dirty_region)))
     {
         WARN("Invalid dirty_region %s specified.\n", debug_box(dirty_region));
         return WINED3DERR_INVALIDCALL;
@@ -3506,13 +3466,39 @@ static void texture_resource_unload(struct wined3d_resource *resource)
     resource_unload(&texture->resource);
 }
 
+static HRESULT texture_resource_sub_resource_get_desc(struct wined3d_resource *resource,
+        unsigned int sub_resource_idx, struct wined3d_sub_resource_desc *desc)
+{
+    const struct wined3d_texture *texture = texture_from_resource(resource);
+
+    return wined3d_texture_get_sub_resource_desc(texture, sub_resource_idx, desc);
+}
+
+static void texture_resource_sub_resource_get_map_pitch(struct wined3d_resource *resource,
+        unsigned int sub_resource_idx, unsigned int *row_pitch, unsigned int *slice_pitch)
+{
+    const struct wined3d_texture *texture = texture_from_resource(resource);
+    unsigned int level = sub_resource_idx % texture->level_count;
+
+    if (resource->format_flags & WINED3DFMT_FLAG_BROKEN_PITCH)
+    {
+        *row_pitch = wined3d_texture_get_level_width(texture, level) * resource->format->byte_count;
+        *slice_pitch = wined3d_texture_get_level_height(texture, level) * (*row_pitch);
+    }
+    else
+    {
+        wined3d_texture_get_pitch(texture, level, row_pitch, slice_pitch);
+    }
+}
+
 static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resource, unsigned int sub_resource_idx,
-        struct wined3d_map_desc *map_desc, const struct wined3d_box *box, DWORD flags)
+        void **map_ptr, const struct wined3d_box *box, DWORD flags)
 {
     const struct wined3d_format *format = resource->format;
     struct wined3d_texture_sub_resource *sub_resource;
     struct wined3d_device *device = resource->device;
     unsigned int fmt_flags = resource->format_flags;
+    unsigned int row_pitch, slice_pitch;
     struct wined3d_context *context;
     struct wined3d_texture *texture;
     struct wined3d_bo_address data;
@@ -3520,21 +3506,13 @@ static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resour
     BYTE *base_memory;
     BOOL ret;
 
-    TRACE("resource %p, sub_resource_idx %u, map_desc %p, box %s, flags %#x.\n",
-            resource, sub_resource_idx, map_desc, debug_box(box), flags);
+    TRACE("resource %p, sub_resource_idx %u, map_ptr %p, box %s, flags %#x.\n",
+            resource, sub_resource_idx, map_ptr, debug_box(box), flags);
 
     texture = texture_from_resource(resource);
-    if (!(sub_resource = wined3d_texture_get_sub_resource(texture, sub_resource_idx)))
-        return E_INVALIDARG;
+    sub_resource = wined3d_texture_get_sub_resource(texture, sub_resource_idx);
 
     texture_level = sub_resource_idx % texture->level_count;
-    if (box && FAILED(wined3d_texture_check_box_dimensions(texture, texture_level, box)))
-    {
-        WARN("Map box is invalid.\n");
-        if (((fmt_flags & WINED3DFMT_FLAG_BLOCKS) && !(resource->access & WINED3D_RESOURCE_ACCESS_CPU))
-                || resource->type != WINED3D_RTYPE_TEXTURE_2D)
-            return WINED3DERR_INVALIDCALL;
-    }
 
     if (texture->flags & WINED3D_TEXTURE_DC_IN_USE)
     {
@@ -3587,56 +3565,37 @@ static HRESULT texture_resource_sub_resource_map(struct wined3d_resource *resour
 
     context_release(context);
 
-    if (fmt_flags & WINED3DFMT_FLAG_BROKEN_PITCH)
-    {
-        map_desc->row_pitch = wined3d_texture_get_level_width(texture, texture_level) * format->byte_count;
-        map_desc->slice_pitch = wined3d_texture_get_level_height(texture, texture_level) * map_desc->row_pitch;
-    }
-    else
-    {
-        wined3d_texture_get_pitch(texture, texture_level, &map_desc->row_pitch, &map_desc->slice_pitch);
-    }
+    texture_resource_sub_resource_get_map_pitch(resource, sub_resource_idx, &row_pitch, &slice_pitch);
 
-    if (!box)
+    if ((fmt_flags & (WINED3DFMT_FLAG_BLOCKS | WINED3DFMT_FLAG_BROKEN_PITCH)) == WINED3DFMT_FLAG_BLOCKS)
     {
-        map_desc->data = base_memory;
+        /* Compressed textures are block based, so calculate the offset of
+         * the block that contains the top-left pixel of the mapped box. */
+        *map_ptr = base_memory
+                + (box->front * slice_pitch)
+                + ((box->top / format->block_height) * row_pitch)
+                + ((box->left / format->block_width) * format->block_byte_count);
     }
     else
     {
-        if ((fmt_flags & (WINED3DFMT_FLAG_BLOCKS | WINED3DFMT_FLAG_BROKEN_PITCH)) == WINED3DFMT_FLAG_BLOCKS)
-        {
-            /* Compressed textures are block based, so calculate the offset of
-             * the block that contains the top-left pixel of the mapped box. */
-            map_desc->data = base_memory
-                    + (box->front * map_desc->slice_pitch)
-                    + ((box->top / format->block_height) * map_desc->row_pitch)
-                    + ((box->left / format->block_width) * format->block_byte_count);
-        }
-        else
-        {
-            map_desc->data = base_memory
-                    + (box->front * map_desc->slice_pitch)
-                    + (box->top * map_desc->row_pitch)
-                    + (box->left * format->byte_count);
-        }
+        *map_ptr = base_memory
+                + (box->front * slice_pitch)
+                + (box->top * row_pitch)
+                + (box->left * format->byte_count);
     }
 
     if (texture->swapchain && texture->swapchain->front_buffer == texture)
     {
         RECT *r = &texture->swapchain->front_buffer_update;
 
-        if (!box)
-            SetRect(r, 0, 0, resource->width, resource->height);
-        else
-            SetRect(r, box->left, box->top, box->right, box->bottom);
+        SetRect(r, box->left, box->top, box->right, box->bottom);
         TRACE("Mapped front buffer %s.\n", wine_dbgstr_rect(r));
     }
 
     ++resource->map_count;
     ++sub_resource->map_count;
 
-    TRACE("Returning memory %p, row pitch %u, slice pitch %u.\n",
-            map_desc->data, map_desc->row_pitch, map_desc->slice_pitch);
+    TRACE("Returning memory %p.\n", *map_ptr);
 
     return WINED3D_OK;
 }
@@ -3692,6 +3651,8 @@ static const struct wined3d_resource_ops texture_resource_ops =
     texture_resource_decref,
     texture_resource_preload,
     texture_resource_unload,
+    texture_resource_sub_resource_get_desc,
+    texture_resource_sub_resource_get_map_pitch,
     texture_resource_sub_resource_map,
     texture_resource_sub_resource_unmap,
 };
@@ -4016,12 +3977,10 @@ HRESULT CDECL wined3d_device_context_blt(struct wined3d_device_context *context,
             && filter != WINED3D_TEXF_LINEAR)
         return WINED3DERR_INVALIDCALL;
 
-    if (FAILED(hr = wined3d_texture_check_box_dimensions(dst_texture,
-            dst_sub_resource_idx % dst_texture->level_count, &dst_box)))
+    if (FAILED(hr = wined3d_resource_check_box_dimensions(&dst_texture->resource, dst_sub_resource_idx, &dst_box)))
         return hr;
 
-    if (FAILED(hr = wined3d_texture_check_box_dimensions(src_texture,
-            src_sub_resource_idx % src_texture->level_count, &src_box)))
+    if (FAILED(hr = wined3d_resource_check_box_dimensions(&src_texture->resource, src_sub_resource_idx, &src_box)))
         return hr;
 
     if (dst_texture->sub_resources[dst_sub_resource_idx].map_count
@@ -4391,7 +4350,7 @@ HRESULT CDECL wined3d_texture_create(struct wined3d_device *device, const struct
         for (i = 0; i < sub_count; ++i)
         {
             wined3d_texture_get_level_box(*texture, i % (*texture)->level_count, &box);
-            device->cs->c.ops->update_sub_resource(&device->cs->c, &(*texture)->resource,
+            wined3d_device_context_emit_update_sub_resource(&device->cs->c, &(*texture)->resource,
                     i, &box, data[i].data, data[i].row_pitch, data[i].slice_pitch);
         }
     }
@@ -5013,7 +4972,7 @@ static void wined3d_texture_vk_download_data(struct wined3d_context *context,
     wined3d_context_vk_wait_command_buffer(context_vk, src_texture_vk->image.command_buffer_id);
 
     staging_bo_addr.buffer_object = (uintptr_t)&staging_bo;
-    staging_bo_addr.addr = (uint8_t *)NULL;
+    staging_bo_addr.addr = NULL;
     if (!(map_ptr = wined3d_context_map_bo_address(context, &staging_bo_addr,
             sub_resource->size, WINED3D_MAP_READ)))
     {
@@ -5139,7 +5098,7 @@ BOOL wined3d_texture_vk_prepare_texture(struct wined3d_texture_vk *texture_vk,
         vk_usage |= VK_IMAGE_USAGE_STORAGE_BIT;
 
     texture_vk->layout = VK_IMAGE_LAYOUT_GENERAL;
-    if (wined3d_popcount(resource->bind_flags == 1))
+    if (wined3d_popcount(resource->bind_flags) == 1)
     {
         switch (resource->bind_flags)
         {

@@ -1169,7 +1169,7 @@ void wined3d_device_uninit_3d(struct wined3d_device *device)
         wined3d_texture_decref(texture);
     }
 
-    wined3d_cs_emit_reset_state(device->cs);
+    wined3d_device_context_emit_reset_state(&device->cs->c, false);
     state_cleanup(state);
 
     wine_rb_clear(&device->samplers, device_free_sampler, NULL);
@@ -1649,6 +1649,15 @@ void CDECL wined3d_device_context_get_scissor_rects(const struct wined3d_device_
         *rect_count = state->scissor_rect_count;
 }
 
+void CDECL wined3d_device_context_reset_state(struct wined3d_device_context *context)
+{
+    TRACE("context %p.\n", context);
+
+    state_cleanup(context->state);
+    wined3d_state_reset(context->state, &context->device->adapter->d3d_info);
+    wined3d_device_context_emit_reset_state(context, true);
+}
+
 void CDECL wined3d_device_context_set_state(struct wined3d_device_context *context, struct wined3d_state *state)
 {
     const struct wined3d_light_info *light;
@@ -1741,7 +1750,8 @@ void CDECL wined3d_device_context_set_state(struct wined3d_device_context *conte
 
     for (i = 0; i < WINED3D_HIGHEST_TRANSFORM_STATE + 1; ++i)
     {
-        wined3d_device_context_emit_set_transform(context, i, state->transforms + i);
+        if (context->device->state_table[STATE_TRANSFORM(i)].representative)
+            wined3d_device_context_emit_set_transform(context, i, state->transforms + i);
     }
 
     for (i = 0; i < WINED3D_MAX_CLIP_DISTANCES; ++i)
@@ -1765,7 +1775,8 @@ void CDECL wined3d_device_context_set_state(struct wined3d_device_context *conte
 
     for (i = 0; i < WINEHIGHEST_RENDER_STATE + 1; ++i)
     {
-        wined3d_device_context_emit_set_render_state(context, i, state->render_states[i]);
+        if (context->device->state_table[STATE_RENDER(i)].representative)
+            wined3d_device_context_emit_set_render_state(context, i, state->render_states[i]);
     }
 
     wined3d_device_context_emit_set_blend_state(context, state->blend_state, &state->blend_factor, state->sample_mask);
@@ -1985,7 +1996,7 @@ void CDECL wined3d_device_context_set_shader_resource_view(struct wined3d_device
     if (view == prev)
         return;
 
-    if (view && (wined3d_is_srv_rtv_bound(view)
+    if (view && (wined3d_is_srv_rtv_bound(state, view)
             || ((dsv = state->fb.depth_stencil)
             && dsv->resource == view->resource && wined3d_dsv_srv_conflict(dsv, view->format))))
     {
@@ -2064,22 +2075,31 @@ void CDECL wined3d_device_context_set_unordered_access_view(struct wined3d_devic
 static void wined3d_device_context_unbind_srv_for_rtv(struct wined3d_device_context *context,
         const struct wined3d_rendertarget_view *view, BOOL dsv)
 {
-    struct wined3d_state *state = context->state;
+    const struct wined3d_state *state = context->state;
+    const struct wined3d_resource *resource;
 
-    if (view && wined3d_is_rtv_srv_bound(view))
+    if (!view)
+        return;
+    resource = view->resource;
+
+    if (resource->srv_bind_count_device)
     {
-        const struct wined3d_resource *resource = view->resource;
         const struct wined3d_shader_resource_view *srv;
         unsigned int i, j;
 
-        WARN("Application sets bound resource as render target.\n");
-
         for (i = 0; i < WINED3D_SHADER_TYPE_COUNT; ++i)
+        {
             for (j = 0; j < MAX_SHADER_RESOURCE_VIEWS; ++j)
+            {
                 if ((srv = state->shader_resource_view[i][j]) && srv->resource == resource
-                        && ((!dsv && wined3d_is_srv_rtv_bound(srv))
+                        && ((!dsv && wined3d_is_srv_rtv_bound(state, srv))
                         || (dsv && wined3d_dsv_srv_conflict(view, srv->format))))
+                {
+                    WARN("Application sets bound resource as render target.\n");
                     wined3d_device_context_set_shader_resource_view(context, i, j, NULL);
+                }
+            }
+        }
     }
 }
 
@@ -4590,7 +4610,7 @@ HRESULT CDECL wined3d_device_context_copy_sub_resource_region(struct wined3d_dev
             wined3d_box_set(&b, 0, 0, min(src_w, dst_w), min(src_h, dst_h), 0, min(src_d, dst_d));
             src_box = &b;
         }
-        else if (FAILED(wined3d_texture_check_box_dimensions(src_texture, src_level, src_box)))
+        else if (FAILED(wined3d_resource_check_box_dimensions(src_resource, src_sub_resource_idx, src_box)))
         {
             WARN("Invalid source box %s.\n", debug_box(src_box));
             return WINED3DERR_INVALIDCALL;
@@ -4613,8 +4633,7 @@ HRESULT CDECL wined3d_device_context_copy_sub_resource_region(struct wined3d_dev
                     dst_y + (src_row_count * dst_resource->format->block_height),
                     dst_z, dst_z + (src_box->back - src_box->front));
         }
-        if (FAILED(wined3d_texture_check_box_dimensions(dst_texture,
-                dst_sub_resource_idx % dst_texture->level_count, &dst_box)))
+        if (FAILED(wined3d_resource_check_box_dimensions(dst_resource, dst_sub_resource_idx, &dst_box)))
         {
             WARN("Invalid destination box %s.\n", debug_box(&dst_box));
             return WINED3DERR_INVALIDCALL;
@@ -4631,7 +4650,7 @@ void CDECL wined3d_device_context_update_sub_resource(struct wined3d_device_cont
         struct wined3d_resource *resource, unsigned int sub_resource_idx, const struct wined3d_box *box,
         const void *data, unsigned int row_pitch, unsigned int depth_pitch, unsigned int flags)
 {
-    unsigned int width, height, depth;
+    struct wined3d_sub_resource_desc desc;
     struct wined3d_box b;
 
     TRACE("context %p, resource %p, sub_resource_idx %u, box %s, data %p, row_pitch %u, depth_pitch %u, flags %#x.\n",
@@ -4646,49 +4665,24 @@ void CDECL wined3d_device_context_update_sub_resource(struct wined3d_device_cont
         return;
     }
 
-    if (resource->type == WINED3D_RTYPE_BUFFER)
-    {
-        if (sub_resource_idx > 0)
-        {
-            WARN("Invalid sub_resource_idx %u.\n", sub_resource_idx);
-            return;
-        }
-
-        width = resource->size;
-        height = 1;
-        depth = 1;
-    }
-    else
-    {
-        struct wined3d_texture *texture = texture_from_resource(resource);
-        unsigned int level;
-
-        if (sub_resource_idx >= texture->level_count * texture->layer_count)
-        {
-            WARN("Invalid sub_resource_idx %u.\n", sub_resource_idx);
-            return;
-        }
-
-        level = sub_resource_idx % texture->level_count;
-        width = wined3d_texture_get_level_width(texture, level);
-        height = wined3d_texture_get_level_height(texture, level);
-        depth = wined3d_texture_get_level_depth(texture, level);
-    }
+    if (FAILED(wined3d_resource_get_sub_resource_desc(resource, sub_resource_idx, &desc)))
+        return;
 
     if (!box)
     {
-        wined3d_box_set(&b, 0, 0, width, height, 0, depth);
+        wined3d_box_set(&b, 0, 0, desc.width, desc.height, 0, desc.depth);
         box = &b;
     }
-    else if (box->left >= box->right || box->right > width
-            || box->top >= box->bottom || box->bottom > height
-            || box->front >= box->back || box->back > depth)
+    else if (box->left >= box->right || box->right > desc.width
+            || box->top >= box->bottom || box->bottom > desc.height
+            || box->front >= box->back || box->back > desc.depth)
     {
         WARN("Invalid box %s specified.\n", debug_box(box));
         return;
     }
 
-    context->ops->update_sub_resource(context, resource, sub_resource_idx, box, data, row_pitch, depth_pitch);
+    wined3d_device_context_emit_update_sub_resource(context, resource,
+            sub_resource_idx, box, data, row_pitch, depth_pitch);
 }
 
 void CDECL wined3d_device_context_resolve_sub_resource(struct wined3d_device_context *context,
@@ -4768,11 +4762,9 @@ HRESULT CDECL wined3d_device_context_clear_rendertarget_view(struct wined3d_devi
     else
     {
         struct wined3d_box b = {rect->left, rect->top, rect->right, rect->bottom, 0, 1};
-        struct wined3d_texture *texture = texture_from_resource(view->resource);
         HRESULT hr;
 
-        if (FAILED(hr = wined3d_texture_check_box_dimensions(texture,
-                view->sub_resource_idx % texture->level_count, &b)))
+        if (FAILED(hr = wined3d_resource_check_box_dimensions(resource, view->sub_resource_idx, &b)))
             return hr;
     }
 
@@ -4781,12 +4773,26 @@ HRESULT CDECL wined3d_device_context_clear_rendertarget_view(struct wined3d_devi
     return WINED3D_OK;
 }
 
+void CDECL wined3d_device_context_clear_uav_float(struct wined3d_device_context *context,
+        struct wined3d_unordered_access_view *view, const struct wined3d_vec4 *clear_value)
+{
+    TRACE("context %p, view %p, clear_value %s.\n", context, view, debug_vec4(clear_value));
+
+    if (!(view->format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & (WINED3DFMT_FLAG_FLOAT | WINED3DFMT_FLAG_NORMALISED)))
+    {
+        WARN("Not supported for view format %s.\n", debug_d3dformat(view->format->id));
+        return;
+    }
+
+    wined3d_device_context_emit_clear_uav(context, view, (const struct wined3d_uvec4 *)clear_value, true);
+}
+
 void CDECL wined3d_device_context_clear_uav_uint(struct wined3d_device_context *context,
         struct wined3d_unordered_access_view *view, const struct wined3d_uvec4 *clear_value)
 {
     TRACE("context %p, view %p, clear_value %s.\n", context, view, debug_uvec4(clear_value));
 
-    wined3d_device_context_emit_clear_uav_uint(context, view, clear_value);
+    wined3d_device_context_emit_clear_uav(context, view, clear_value, false);
 }
 
 static unsigned int sanitise_map_flags(const struct wined3d_resource *resource, unsigned int flags)
@@ -4828,6 +4834,10 @@ HRESULT CDECL wined3d_device_context_map(struct wined3d_device_context *context,
         struct wined3d_resource *resource, unsigned int sub_resource_idx,
         struct wined3d_map_desc *map_desc, const struct wined3d_box *box, unsigned int flags)
 {
+    struct wined3d_sub_resource_desc desc;
+    struct wined3d_box b;
+    HRESULT hr;
+
     TRACE("context %p, resource %p, sub_resource_idx %u, map_desc %p, box %s, flags %#x.\n",
             context, resource, sub_resource_idx, map_desc, debug_box(box), flags);
 
@@ -4851,7 +4861,30 @@ HRESULT CDECL wined3d_device_context_map(struct wined3d_device_context *context,
 
     flags = sanitise_map_flags(resource, flags);
 
-    return context->ops->map(context, resource, sub_resource_idx, map_desc, box, flags);
+    if (FAILED(wined3d_resource_get_sub_resource_desc(resource, sub_resource_idx, &desc)))
+        return E_INVALIDARG;
+
+    if (!box)
+    {
+        wined3d_box_set(&b, 0, 0, desc.width, desc.height, 0, desc.depth);
+        box = &b;
+    }
+    else if (FAILED(wined3d_resource_check_box_dimensions(resource, sub_resource_idx, box)))
+    {
+        WARN("Map box is invalid.\n");
+
+        if (resource->type != WINED3D_RTYPE_BUFFER && resource->type != WINED3D_RTYPE_TEXTURE_2D)
+            return WINED3DERR_INVALIDCALL;
+
+        if ((resource->format_flags & WINED3DFMT_FLAG_BLOCKS) && !(resource->access & WINED3D_RESOURCE_ACCESS_CPU))
+            return WINED3DERR_INVALIDCALL;
+    }
+
+    if (SUCCEEDED(hr = wined3d_device_context_emit_map(context, resource,
+            sub_resource_idx, &map_desc->data, box, flags)))
+        wined3d_resource_get_sub_resource_map_pitch(resource, sub_resource_idx,
+                &map_desc->row_pitch, &map_desc->slice_pitch);
+    return hr;
 }
 
 HRESULT CDECL wined3d_device_context_unmap(struct wined3d_device_context *context,
@@ -4859,7 +4892,7 @@ HRESULT CDECL wined3d_device_context_unmap(struct wined3d_device_context *contex
 {
     TRACE("context %p, resource %p, sub_resource_idx %u.\n", context, resource, sub_resource_idx);
 
-    return context->ops->unmap(context, resource, sub_resource_idx);
+    return wined3d_device_context_emit_unmap(context, resource, sub_resource_idx);
 }
 
 void CDECL wined3d_device_context_issue_query(struct wined3d_device_context *context,
@@ -4868,6 +4901,14 @@ void CDECL wined3d_device_context_issue_query(struct wined3d_device_context *con
     TRACE("context %p, query %p, flags %#x.\n", context, query, flags);
 
     context->ops->issue_query(context, query, flags);
+}
+
+void CDECL wined3d_device_context_execute_command_list(struct wined3d_device_context *context,
+        struct wined3d_command_list *list, bool restore_state)
+{
+    TRACE("context %p, list %p, restore_state %d.\n", context, list, restore_state);
+
+    context->ops->execute_command_list(context, list, restore_state);
 }
 
 struct wined3d_rendertarget_view * CDECL wined3d_device_context_get_rendertarget_view(
@@ -5408,7 +5449,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     if (reset_state)
     {
         TRACE("Resetting state.\n");
-        wined3d_cs_emit_reset_state(device->cs);
+        wined3d_device_context_emit_reset_state(&device->cs->c, false);
         state_cleanup(state);
 
         LIST_FOR_EACH_ENTRY_SAFE(resource, cursor, &device->resources, struct wined3d_resource, resource_list_entry)
@@ -5495,7 +5536,7 @@ void device_resource_add(struct wined3d_device *device, struct wined3d_resource 
 {
     TRACE("device %p, resource %p.\n", device, resource);
 
-    wined3d_not_from_cs(device->cs);
+    wined3d_not_from_cs(device);
 
     list_add_head(&device->resources, &resource->resource_list_entry);
 }
@@ -5504,7 +5545,7 @@ static void device_resource_remove(struct wined3d_device *device, struct wined3d
 {
     TRACE("device %p, resource %p.\n", device, resource);
 
-    wined3d_not_from_cs(device->cs);
+    wined3d_not_from_cs(device);
 
     list_remove(&resource->resource_list_entry);
 }

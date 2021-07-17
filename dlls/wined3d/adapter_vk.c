@@ -1007,6 +1007,7 @@ static void adapter_vk_copy_bo_address(struct wined3d_context *context,
     struct wined3d_bo_vk staging_bo, *src_bo, *dst_bo;
     VkAccessFlags src_access_mask, dst_access_mask;
     VkBufferMemoryBarrier vk_barrier[2];
+    DWORD map_flags = WINED3D_MAP_WRITE;
     struct wined3d_bo_address staging;
     VkCommandBuffer vk_command_buffer;
     struct wined3d_range range;
@@ -1015,6 +1016,9 @@ static void adapter_vk_copy_bo_address(struct wined3d_context *context,
 
     src_bo = (struct wined3d_bo_vk *)src->buffer_object;
     dst_bo = (struct wined3d_bo_vk *)dst->buffer_object;
+
+    if (dst_bo && !dst->addr && size == dst_bo->size)
+        map_flags |= WINED3D_MAP_DISCARD;
 
     if (src_bo && dst_bo)
     {
@@ -1092,8 +1096,8 @@ static void adapter_vk_copy_bo_address(struct wined3d_context *context,
         return;
     }
 
-    if (dst_bo && (dst_bo->command_buffer_id > context_vk->completed_command_buffer_id
-            || !(dst_bo->memory_type & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)))
+    if (dst_bo && (!(dst_bo->memory_type & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) || (!(map_flags & WINED3D_MAP_DISCARD)
+            && dst_bo->command_buffer_id > context_vk->completed_command_buffer_id)))
     {
         if (!(wined3d_context_vk_create_bo(context_vk, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &staging_bo)))
@@ -1113,7 +1117,7 @@ static void adapter_vk_copy_bo_address(struct wined3d_context *context,
     }
 
     src_ptr = adapter_vk_map_bo_address(context, src, size, WINED3D_MAP_READ);
-    dst_ptr = adapter_vk_map_bo_address(context, dst, size, WINED3D_MAP_WRITE);
+    dst_ptr = adapter_vk_map_bo_address(context, dst, size, map_flags);
 
     memcpy(dst_ptr, src_ptr, size);
 
@@ -1744,12 +1748,12 @@ static void adapter_vk_dispatch_compute(struct wined3d_device *device,
 }
 
 static void adapter_vk_clear_uav(struct wined3d_context *context,
-        struct wined3d_unordered_access_view *view, const struct wined3d_uvec4 *clear_value)
+        struct wined3d_unordered_access_view *view, const struct wined3d_uvec4 *clear_value, bool fp)
 {
     TRACE("context %p, view %p, clear_value %s.\n", context, view, debug_uvec4(clear_value));
 
-    wined3d_unordered_access_view_vk_clear_uint(wined3d_unordered_access_view_vk(view),
-            clear_value, wined3d_context_vk(context));
+    wined3d_unordered_access_view_vk_clear(wined3d_unordered_access_view_vk(view),
+            clear_value, wined3d_context_vk(context), fp);
 }
 
 static void adapter_vk_generate_mipmap(struct wined3d_context *context, struct wined3d_shader_resource_view *view)

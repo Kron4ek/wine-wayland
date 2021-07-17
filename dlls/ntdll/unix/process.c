@@ -894,10 +894,11 @@ void fill_vm_counters( VM_COUNTERS_EX *pvmi, int unix_pid )
 {
 #if defined(MACH_TASK_BASIC_INFO)
     struct mach_task_basic_info info;
+    mach_msg_type_number_t infoCount;
 
     if (unix_pid != -1) return; /* FIXME: Retrieve information for other processes. */
 
-    mach_msg_type_number_t infoCount = MACH_TASK_BASIC_INFO_COUNT;
+    infoCount = MACH_TASK_BASIC_INFO_COUNT;
     if(task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &infoCount) == KERN_SUCCESS)
     {
         pvmi->VirtualSize = info.resident_size + info.virtual_size;
@@ -986,7 +987,6 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
     UNIMPLEMENTED_INFO_CLASS(ProcessWx86Information);
     UNIMPLEMENTED_INFO_CLASS(ProcessPriorityBoost);
     UNIMPLEMENTED_INFO_CLASS(ProcessDeviceMap);
-    UNIMPLEMENTED_INFO_CLASS(ProcessSessionInformation);
     UNIMPLEMENTED_INFO_CLASS(ProcessForegroundInformation);
     UNIMPLEMENTED_INFO_CLASS(ProcessLUIDDeviceMapsEnabled);
     UNIMPLEMENTED_INFO_CLASS(ProcessBreakOnTermination);
@@ -1271,6 +1271,21 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
         else ret = STATUS_INFO_LENGTH_MISMATCH;
         break;
 
+    case ProcessSessionInformation:
+        len = sizeof(DWORD);
+        if (size == len)
+        {
+            SERVER_START_REQ(get_process_info)
+            {
+                req->handle = wine_server_obj_handle( handle );
+                if (!(ret = wine_server_call( req )))
+                    *(DWORD *)info = reply->session_id;
+            }
+            SERVER_END_REQ;
+        }
+        else ret = STATUS_INFO_LENGTH_MISMATCH;
+        break;
+
     case ProcessWow64Information:
         len = sizeof(ULONG_PTR);
         if (size != len) ret = STATUS_INFO_LENGTH_MISMATCH;
@@ -1485,6 +1500,17 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class, 
         break;
     }
 
+    case ProcessWineMakeProcessSystem:
+        if (size != sizeof(HANDLE *)) return STATUS_INFO_LENGTH_MISMATCH;
+        SERVER_START_REQ( make_process_system )
+        {
+            req->handle = wine_server_obj_handle( handle );
+            if (!(ret = wine_server_call( req )))
+                *(HANDLE *)info = wine_server_ptr_handle( reply->event );
+        }
+        SERVER_END_REQ;
+        return ret;
+
     default:
         FIXME( "(%p,0x%08x,%p,0x%08x) stub\n", handle, class, info, size );
         ret = STATUS_NOT_IMPLEMENTED;
@@ -1601,25 +1627,6 @@ NTSTATUS WINAPI NtDebugContinue( HANDLE handle, CLIENT_ID *client, NTSTATUS stat
         req->tid    = HandleToULong( client->UniqueThread );
         req->status = status;
         ret = wine_server_call( req );
-    }
-    SERVER_END_REQ;
-    return ret;
-}
-
-
-/***********************************************************************
- *           __wine_make_process_system   (NTDLL.@)
- *
- * Mark the current process as a system process.
- * Returns the event that is signaled when all non-system processes have exited.
- */
-HANDLE CDECL __wine_make_process_system(void)
-{
-    HANDLE ret = 0;
-
-    SERVER_START_REQ( make_process_system )
-    {
-        if (!wine_server_call( req )) ret = wine_server_ptr_handle( reply->event );
     }
     SERVER_END_REQ;
     return ret;

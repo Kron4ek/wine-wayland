@@ -170,6 +170,11 @@ static ULONG WINAPI source_async_command_Release(IUnknown *iface)
     {
         if (command->op == SOURCE_ASYNC_START)
             PropVariantClear(&command->u.start.position);
+        else if (command->op == SOURCE_ASYNC_REQUEST_SAMPLE)
+        {
+            if (command->u.request_sample.token)
+                IUnknown_Release(command->u.request_sample.token);
+        }
         free(command);
     }
 
@@ -467,8 +472,6 @@ static void wait_on_sample(struct media_stream *stream, IUnknown *token)
 
             case WG_PARSER_EVENT_EOS:
                 stream->eos = TRUE;
-                if (token)
-                    IUnknown_Release(token);
                 IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEEndOfStream, &GUID_NULL, S_OK, &empty_var);
                 dispatch_end_of_presentation(stream->parent_source);
                 return;
@@ -832,7 +835,7 @@ static HRESULT media_stream_init_desc(struct media_stream *stream)
             type_count = 1;
     }
 
-    assert(type_count < ARRAY_SIZE(stream_types));
+    assert(type_count <= ARRAY_SIZE(stream_types));
 
     if (!type_count)
     {
@@ -933,7 +936,7 @@ static HRESULT WINAPI media_source_rate_support_GetSlowestRate(IMFRateSupport *i
 {
     TRACE("%p, %d, %d, %p.\n", iface, direction, thin, rate);
 
-    *rate = direction == MFRATE_FORWARD ? 1.0f : -1.0f;
+    *rate = 0.0f;
 
     return S_OK;
 }
@@ -942,21 +945,20 @@ static HRESULT WINAPI media_source_rate_support_GetFastestRate(IMFRateSupport *i
 {
     TRACE("%p, %d, %d, %p.\n", iface, direction, thin, rate);
 
-    *rate = direction == MFRATE_FORWARD ? 1.0f : -1.0f;
+    *rate = direction == MFRATE_FORWARD ? 1e6f : -1e6f;
 
     return S_OK;
 }
 
-static HRESULT WINAPI media_source_rate_support_IsRateSupported(IMFRateSupport *iface, BOOL thin, float rate, float *nearest_support_rate)
+static HRESULT WINAPI media_source_rate_support_IsRateSupported(IMFRateSupport *iface, BOOL thin, float rate,
+        float *nearest_rate)
 {
-    const float supported_rate = rate >= 0.0f ? 1.0f : -1.0f;
+    TRACE("%p, %d, %f, %p.\n", iface, thin, rate, nearest_rate);
 
-    TRACE("%p, %d, %f, %p.\n", iface, thin, rate, nearest_support_rate);
+    if (nearest_rate)
+        *nearest_rate = rate;
 
-    if (nearest_support_rate)
-        *nearest_support_rate = supported_rate;
-
-    return rate == supported_rate ? S_OK : MF_E_UNSUPPORTED_RATE;
+    return rate >= -1e6f && rate <= 1e6f ? S_OK : MF_E_UNSUPPORTED_RATE;
 }
 
 static const IMFRateSupportVtbl media_source_rate_support_vtbl =

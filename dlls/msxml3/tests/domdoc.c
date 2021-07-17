@@ -2205,6 +2205,8 @@ static void test_domnode( void )
 
     if (element)
     {
+        IXMLDOMNamedNodeMap *attributes;
+
         owner = NULL;
         r = IXMLDOMElement_get_ownerDocument( element, &owner );
         ok( r == S_OK, "get_ownerDocument return code\n");
@@ -2283,6 +2285,29 @@ static void test_domnode( void )
         ok( map != NULL, "should be attributes\n");
 
         EXPECT_CHILDREN(element);
+
+        r = IXMLDOMElement_get_childNodes( element, &list );
+        ok( r == S_OK, "Expected S_OK, ret %08x\n", r );
+        r = IXMLDOMNodeList_nextNode( list, &node ); /* <bs> */
+        ok( r == S_OK, "Expected S_OK, ret %08x\n", r );
+        IXMLDOMNode_Release( node );
+        r = IXMLDOMNodeList_nextNode( list, &node ); /* <pr> */
+        ok( r == S_OK, "Expected S_OK, ret %08x\n", r );
+        IXMLDOMNode_Release( node );
+        r = IXMLDOMNodeList_nextNode( list, &node ); /* <empty> */
+        ok( r == S_OK, "Expected S_OK, ret %08x\n", r );
+        r = IXMLDOMNode_get_attributes( node, &attributes );
+        ok( r == S_OK, "Expected S_OK, ret %08x\n", r );
+        next = (IXMLDOMNode*)0xdeadbeef;
+        r = IXMLDOMNamedNodeMap_nextNode( attributes, &next );
+        ok( r == S_FALSE, "Expected S_FALSE, ret %08x\n", r );
+        ok( next == NULL, "Expected NULL, ret %p\n", next );
+        IXMLDOMNamedNodeMap_Release( attributes );
+        IXMLDOMNode_Release( node );
+        node = NULL;
+        next = NULL;
+        IXMLDOMNodeList_Release( list );
+        list = NULL;
     }
     else
         ok( FALSE, "no element\n");
@@ -8579,13 +8604,9 @@ todo_wine
 
     item = NULL;
     hr = IXMLDOMNamedNodeMap_getNamedItem(node_map, _bstr_("encoding"), &item);
-todo_wine
     ok(hr == S_OK, "got 0x%08x\n", hr);
-todo_wine
     ok(item != NULL, "got NULL\n");
 
-if (hr == S_OK)
-{
     hr = IXMLDOMNode_get_nodeName(item, &bstr);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok(!lstrcmpW(bstr, L"encoding"), "got %s\n", wine_dbgstr_w(bstr));
@@ -8597,7 +8618,6 @@ if (hr == S_OK)
     ok(V_VT(&var) == VT_BSTR, "got %u\n", V_VT(&var));
     ok(!lstrcmpW(V_BSTR(&var), L"windows-1252"), "got %s\n", wine_dbgstr_w(V_BSTR(&var)));
     VariantClear(&var);
-}
 
     IXMLDOMNamedNodeMap_Release(node_map);
     IXMLDOMNode_Release(node);
@@ -9240,6 +9260,13 @@ static void test_insertBefore(void)
     doc = create_document(&IID_IXMLDOMDocument);
     doc3 = create_document(&IID_IXMLDOMDocument);
 
+    /* NULL to document */
+    V_VT(&v) = VT_NULL;
+    node = (void*)0xdeadbeef;
+    hr = IXMLDOMDocument_insertBefore(doc, NULL, v, &node);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+    ok(node == (void*)0xdeadbeef, "got %p\n", node);
+
     /* document to document */
     V_VT(&v) = VT_NULL;
     node = (void*)0xdeadbeef;
@@ -9408,6 +9435,13 @@ static void test_insertBefore(void)
     EXPECT_NO_CHILDREN(elem3);
 
     todo_wine EXPECT_REF(elem2, 2);
+
+    /* NULL to element */
+    V_VT(&v) = VT_NULL;
+    node = (void*)0xdeadbeef;
+    hr = IXMLDOMElement_insertBefore(elem1, NULL, v, &node);
+    ok(hr == E_INVALIDARG, "got 0x%08x\n", hr);
+    ok(node == (void*)0xdeadbeef, "got %p\n", node);
 
     /* document to element */
     V_VT(&v) = VT_DISPATCH;

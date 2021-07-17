@@ -172,11 +172,9 @@ DECL_HANDLER(get_file_info);
 DECL_HANDLER(get_volume_info);
 DECL_HANDLER(lock_file);
 DECL_HANDLER(unlock_file);
-DECL_HANDLER(set_socket_event);
-DECL_HANDLER(get_socket_event);
-DECL_HANDLER(get_socket_info);
-DECL_HANDLER(enable_socket_event);
-DECL_HANDLER(set_socket_deferred);
+DECL_HANDLER(recv_socket);
+DECL_HANDLER(poll_socket);
+DECL_HANDLER(send_socket);
 DECL_HANDLER(get_next_console_request);
 DECL_HANDLER(read_directory_changes);
 DECL_HANDLER(read_change);
@@ -348,6 +346,7 @@ DECL_HANDLER(create_symlink);
 DECL_HANDLER(open_symlink);
 DECL_HANDLER(query_symlink);
 DECL_HANDLER(get_object_info);
+DECL_HANDLER(get_object_name);
 DECL_HANDLER(get_object_type);
 DECL_HANDLER(get_object_types);
 DECL_HANDLER(allocate_locally_unique_id);
@@ -373,6 +372,7 @@ DECL_HANDLER(add_fd_completion);
 DECL_HANDLER(set_fd_completion_mode);
 DECL_HANDLER(set_fd_disp_info);
 DECL_HANDLER(set_fd_name_info);
+DECL_HANDLER(set_fd_eof_info);
 DECL_HANDLER(get_window_layered_info);
 DECL_HANDLER(set_window_layered_info);
 DECL_HANDLER(alloc_user_handle);
@@ -462,11 +462,9 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_get_volume_info,
     (req_handler)req_lock_file,
     (req_handler)req_unlock_file,
-    (req_handler)req_set_socket_event,
-    (req_handler)req_get_socket_event,
-    (req_handler)req_get_socket_info,
-    (req_handler)req_enable_socket_event,
-    (req_handler)req_set_socket_deferred,
+    (req_handler)req_recv_socket,
+    (req_handler)req_poll_socket,
+    (req_handler)req_send_socket,
     (req_handler)req_get_next_console_request,
     (req_handler)req_read_directory_changes,
     (req_handler)req_read_change,
@@ -638,6 +636,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_open_symlink,
     (req_handler)req_query_symlink,
     (req_handler)req_get_object_info,
+    (req_handler)req_get_object_name,
     (req_handler)req_get_object_type,
     (req_handler)req_get_object_types,
     (req_handler)req_allocate_locally_unique_id,
@@ -663,6 +662,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_set_fd_completion_mode,
     (req_handler)req_set_fd_disp_info,
     (req_handler)req_set_fd_name_info,
+    (req_handler)req_set_fd_eof_info,
     (req_handler)req_get_window_layered_info,
     (req_handler)req_set_window_layered_info,
     (req_handler)req_alloc_user_handle,
@@ -707,7 +707,7 @@ C_ASSERT( sizeof(client_ptr_t) == 8 );
 C_ASSERT( sizeof(data_size_t) == 4 );
 C_ASSERT( sizeof(file_pos_t) == 8 );
 C_ASSERT( sizeof(generic_map_t) == 16 );
-C_ASSERT( sizeof(hw_input_t) == 32 );
+C_ASSERT( sizeof(hw_input_t) == 40 );
 C_ASSERT( sizeof(int) == 4 );
 C_ASSERT( sizeof(ioctl_code_t) == 4 );
 C_ASSERT( sizeof(irp_params_t) == 32 );
@@ -772,7 +772,8 @@ C_ASSERT( sizeof(struct init_first_thread_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct init_first_thread_reply, pid) == 8 );
 C_ASSERT( FIELD_OFFSET(struct init_first_thread_reply, tid) == 12 );
 C_ASSERT( FIELD_OFFSET(struct init_first_thread_reply, server_start) == 16 );
-C_ASSERT( FIELD_OFFSET(struct init_first_thread_reply, info_size) == 24 );
+C_ASSERT( FIELD_OFFSET(struct init_first_thread_reply, session_id) == 24 );
+C_ASSERT( FIELD_OFFSET(struct init_first_thread_reply, info_size) == 28 );
 C_ASSERT( sizeof(struct init_first_thread_reply) == 32 );
 C_ASSERT( FIELD_OFFSET(struct init_thread_request, unix_tid) == 12 );
 C_ASSERT( FIELD_OFFSET(struct init_thread_request, reply_fd) == 16 );
@@ -780,10 +781,8 @@ C_ASSERT( FIELD_OFFSET(struct init_thread_request, wait_fd) == 20 );
 C_ASSERT( FIELD_OFFSET(struct init_thread_request, teb) == 24 );
 C_ASSERT( FIELD_OFFSET(struct init_thread_request, entry) == 32 );
 C_ASSERT( sizeof(struct init_thread_request) == 40 );
-C_ASSERT( FIELD_OFFSET(struct init_thread_reply, pid) == 8 );
-C_ASSERT( FIELD_OFFSET(struct init_thread_reply, tid) == 12 );
-C_ASSERT( FIELD_OFFSET(struct init_thread_reply, suspend) == 16 );
-C_ASSERT( sizeof(struct init_thread_reply) == 24 );
+C_ASSERT( FIELD_OFFSET(struct init_thread_reply, suspend) == 8 );
+C_ASSERT( sizeof(struct init_thread_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct terminate_process_request, handle) == 12 );
 C_ASSERT( FIELD_OFFSET(struct terminate_process_request, exit_code) == 16 );
 C_ASSERT( sizeof(struct terminate_process_request) == 24 );
@@ -802,9 +801,10 @@ C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, affinity) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, peb) == 24 );
 C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, start_time) == 32 );
 C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, end_time) == 40 );
-C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, exit_code) == 48 );
-C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, priority) == 52 );
-C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, machine) == 56 );
+C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, session_id) == 48 );
+C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, exit_code) == 52 );
+C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, priority) == 56 );
+C_ASSERT( FIELD_OFFSET(struct get_process_info_reply, machine) == 60 );
 C_ASSERT( sizeof(struct get_process_info_reply) == 64 );
 C_ASSERT( FIELD_OFFSET(struct get_process_debug_info_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_process_debug_info_request) == 16 );
@@ -1056,34 +1056,27 @@ C_ASSERT( FIELD_OFFSET(struct unlock_file_request, handle) == 12 );
 C_ASSERT( FIELD_OFFSET(struct unlock_file_request, offset) == 16 );
 C_ASSERT( FIELD_OFFSET(struct unlock_file_request, count) == 24 );
 C_ASSERT( sizeof(struct unlock_file_request) == 32 );
-C_ASSERT( FIELD_OFFSET(struct set_socket_event_request, handle) == 12 );
-C_ASSERT( FIELD_OFFSET(struct set_socket_event_request, mask) == 16 );
-C_ASSERT( FIELD_OFFSET(struct set_socket_event_request, event) == 20 );
-C_ASSERT( FIELD_OFFSET(struct set_socket_event_request, window) == 24 );
-C_ASSERT( FIELD_OFFSET(struct set_socket_event_request, msg) == 28 );
-C_ASSERT( sizeof(struct set_socket_event_request) == 32 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_event_request, handle) == 12 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_event_request, service) == 16 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_event_request, c_event) == 20 );
-C_ASSERT( sizeof(struct get_socket_event_request) == 24 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_event_reply, mask) == 8 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_event_reply, pmask) == 12 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_event_reply, state) == 16 );
-C_ASSERT( sizeof(struct get_socket_event_reply) == 24 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_info_request, handle) == 12 );
-C_ASSERT( sizeof(struct get_socket_info_request) == 16 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_info_reply, family) == 8 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_info_reply, type) == 12 );
-C_ASSERT( FIELD_OFFSET(struct get_socket_info_reply, protocol) == 16 );
-C_ASSERT( sizeof(struct get_socket_info_reply) == 24 );
-C_ASSERT( FIELD_OFFSET(struct enable_socket_event_request, handle) == 12 );
-C_ASSERT( FIELD_OFFSET(struct enable_socket_event_request, mask) == 16 );
-C_ASSERT( FIELD_OFFSET(struct enable_socket_event_request, sstate) == 20 );
-C_ASSERT( FIELD_OFFSET(struct enable_socket_event_request, cstate) == 24 );
-C_ASSERT( sizeof(struct enable_socket_event_request) == 32 );
-C_ASSERT( FIELD_OFFSET(struct set_socket_deferred_request, handle) == 12 );
-C_ASSERT( FIELD_OFFSET(struct set_socket_deferred_request, deferred) == 16 );
-C_ASSERT( sizeof(struct set_socket_deferred_request) == 24 );
+C_ASSERT( FIELD_OFFSET(struct recv_socket_request, oob) == 12 );
+C_ASSERT( FIELD_OFFSET(struct recv_socket_request, async) == 16 );
+C_ASSERT( FIELD_OFFSET(struct recv_socket_request, status) == 56 );
+C_ASSERT( FIELD_OFFSET(struct recv_socket_request, total) == 60 );
+C_ASSERT( sizeof(struct recv_socket_request) == 64 );
+C_ASSERT( FIELD_OFFSET(struct recv_socket_reply, wait) == 8 );
+C_ASSERT( FIELD_OFFSET(struct recv_socket_reply, options) == 12 );
+C_ASSERT( sizeof(struct recv_socket_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct poll_socket_request, async) == 16 );
+C_ASSERT( FIELD_OFFSET(struct poll_socket_request, timeout) == 56 );
+C_ASSERT( sizeof(struct poll_socket_request) == 64 );
+C_ASSERT( FIELD_OFFSET(struct poll_socket_reply, wait) == 8 );
+C_ASSERT( FIELD_OFFSET(struct poll_socket_reply, options) == 12 );
+C_ASSERT( sizeof(struct poll_socket_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct send_socket_request, async) == 16 );
+C_ASSERT( FIELD_OFFSET(struct send_socket_request, status) == 56 );
+C_ASSERT( FIELD_OFFSET(struct send_socket_request, total) == 60 );
+C_ASSERT( sizeof(struct send_socket_request) == 64 );
+C_ASSERT( FIELD_OFFSET(struct send_socket_reply, wait) == 8 );
+C_ASSERT( FIELD_OFFSET(struct send_socket_reply, options) == 12 );
+C_ASSERT( sizeof(struct send_socket_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, handle) == 12 );
 C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, signal) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_next_console_request_request, read) == 20 );
@@ -1284,8 +1277,10 @@ C_ASSERT( FIELD_OFFSET(struct get_timer_info_reply, when) == 8 );
 C_ASSERT( FIELD_OFFSET(struct get_timer_info_reply, signaled) == 16 );
 C_ASSERT( sizeof(struct get_timer_info_reply) == 24 );
 C_ASSERT( FIELD_OFFSET(struct get_thread_context_request, handle) == 12 );
-C_ASSERT( FIELD_OFFSET(struct get_thread_context_request, flags) == 16 );
-C_ASSERT( sizeof(struct get_thread_context_request) == 24 );
+C_ASSERT( FIELD_OFFSET(struct get_thread_context_request, context) == 16 );
+C_ASSERT( FIELD_OFFSET(struct get_thread_context_request, flags) == 20 );
+C_ASSERT( FIELD_OFFSET(struct get_thread_context_request, machine) == 24 );
+C_ASSERT( sizeof(struct get_thread_context_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct get_thread_context_reply, self) == 8 );
 C_ASSERT( FIELD_OFFSET(struct get_thread_context_reply, handle) == 12 );
 C_ASSERT( sizeof(struct get_thread_context_reply) == 16 );
@@ -1348,8 +1343,8 @@ C_ASSERT( FIELD_OFFSET(struct post_quit_message_request, exit_code) == 12 );
 C_ASSERT( sizeof(struct post_quit_message_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct send_hardware_message_request, win) == 12 );
 C_ASSERT( FIELD_OFFSET(struct send_hardware_message_request, input) == 16 );
-C_ASSERT( FIELD_OFFSET(struct send_hardware_message_request, flags) == 48 );
-C_ASSERT( sizeof(struct send_hardware_message_request) == 56 );
+C_ASSERT( FIELD_OFFSET(struct send_hardware_message_request, flags) == 56 );
+C_ASSERT( sizeof(struct send_hardware_message_request) == 64 );
 C_ASSERT( FIELD_OFFSET(struct send_hardware_message_reply, wait) == 8 );
 C_ASSERT( FIELD_OFFSET(struct send_hardware_message_reply, prev_x) == 12 );
 C_ASSERT( FIELD_OFFSET(struct send_hardware_message_reply, prev_y) == 16 );
@@ -2047,8 +2042,11 @@ C_ASSERT( sizeof(struct get_object_info_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_object_info_reply, access) == 8 );
 C_ASSERT( FIELD_OFFSET(struct get_object_info_reply, ref_count) == 12 );
 C_ASSERT( FIELD_OFFSET(struct get_object_info_reply, handle_count) == 16 );
-C_ASSERT( FIELD_OFFSET(struct get_object_info_reply, total) == 20 );
 C_ASSERT( sizeof(struct get_object_info_reply) == 24 );
+C_ASSERT( FIELD_OFFSET(struct get_object_name_request, handle) == 12 );
+C_ASSERT( sizeof(struct get_object_name_request) == 16 );
+C_ASSERT( FIELD_OFFSET(struct get_object_name_reply, total) == 8 );
+C_ASSERT( sizeof(struct get_object_name_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_object_type_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_object_type_request) == 16 );
 C_ASSERT( sizeof(struct get_object_type_reply) == 8 );
@@ -2102,6 +2100,7 @@ C_ASSERT( FIELD_OFFSET(struct get_kernel_object_handle_request, access) == 24 );
 C_ASSERT( sizeof(struct get_kernel_object_handle_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct get_kernel_object_handle_reply, handle) == 8 );
 C_ASSERT( sizeof(struct get_kernel_object_handle_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct make_process_system_request, handle) == 12 );
 C_ASSERT( sizeof(struct make_process_system_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct make_process_system_reply, event) == 8 );
 C_ASSERT( sizeof(struct make_process_system_reply) == 16 );
@@ -2109,11 +2108,12 @@ C_ASSERT( FIELD_OFFSET(struct get_token_info_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_token_info_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, token_id) == 8 );
 C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, modified_id) == 16 );
-C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, primary) == 24 );
-C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, impersonation_level) == 28 );
-C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, elevation) == 32 );
-C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, group_count) == 36 );
-C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, privilege_count) == 40 );
+C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, session_id) == 24 );
+C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, primary) == 28 );
+C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, impersonation_level) == 32 );
+C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, elevation) == 36 );
+C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, group_count) == 40 );
+C_ASSERT( FIELD_OFFSET(struct get_token_info_reply, privilege_count) == 44 );
 C_ASSERT( sizeof(struct get_token_info_reply) == 48 );
 C_ASSERT( FIELD_OFFSET(struct create_linked_token_request, handle) == 12 );
 C_ASSERT( sizeof(struct create_linked_token_request) == 16 );
@@ -2169,6 +2169,9 @@ C_ASSERT( FIELD_OFFSET(struct set_fd_name_info_request, namelen) == 20 );
 C_ASSERT( FIELD_OFFSET(struct set_fd_name_info_request, link) == 24 );
 C_ASSERT( FIELD_OFFSET(struct set_fd_name_info_request, replace) == 28 );
 C_ASSERT( sizeof(struct set_fd_name_info_request) == 32 );
+C_ASSERT( FIELD_OFFSET(struct set_fd_eof_info_request, handle) == 12 );
+C_ASSERT( FIELD_OFFSET(struct set_fd_eof_info_request, eof) == 16 );
+C_ASSERT( sizeof(struct set_fd_eof_info_request) == 24 );
 C_ASSERT( FIELD_OFFSET(struct get_window_layered_info_request, handle) == 12 );
 C_ASSERT( sizeof(struct get_window_layered_info_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct get_window_layered_info_reply, color_key) == 8 );

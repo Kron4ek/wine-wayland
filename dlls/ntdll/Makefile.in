@@ -59,6 +59,7 @@ C_SRCS = \
 	unix/signal_x86_64.c \
 	unix/esync.c \
 	unix/fsync.c \
+	unix/socket.c \
 	unix/sync.c \
 	unix/system.c \
 	unix/tape.c \

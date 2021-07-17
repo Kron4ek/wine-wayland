@@ -232,88 +232,6 @@ int global_output_height = 0;
 
 
 
-/*
-#define KEY_RESERVED		0
-
-
-
-
-#define KEY_MUTE		113
-#define KEY_VOLUMEDOWN		114
-#define KEY_VOLUMEUP		115
-#define KEY_POWER		116	/ SC System Power Down /
-#define KEY_KPEQUAL		117
-#define KEY_KPPLUSMINUS		118
-#define KEY_PAUSE		119
-#define KEY_SCALE		120	/ AL Compiz Scale (Expose) /
-
-#define KEY_KPCOMMA		121
-#define KEY_HANGEUL		122
-#define KEY_HANGUEL		KEY_HANGEUL
-#define KEY_HANJA		123
-#define KEY_YEN			124
-#define KEY_LEFTMETA		125
-#define KEY_RIGHTMETA		126
-#define KEY_COMPOSE		127
-
-#define KEY_STOP		128	/ AC Stop /
-#define KEY_AGAIN		129
-#define KEY_PROPS		130	/ AC Properties /
-#define KEY_UNDO		131	/ AC Undo /
-#define KEY_FRONT		132
-#define KEY_COPY		133	/ AC Copy /
-#define KEY_OPEN		134	/ AC Open /
-#define KEY_PASTE		135	/ AC Paste /
-#define KEY_FIND		136	/ AC Search /
-#define KEY_CUT			137	/ AC Cut /
-#define KEY_HELP		138	/ AL Integrated Help Center /
-#define KEY_MENU		139	/ Menu (show menu) /
-#define KEY_CALC		140	/ AL Calculator /
-#define KEY_SETUP		141
-#define KEY_SLEEP		142	/ SC System Sleep /
-#define KEY_WAKEUP		143	/ System Wake Up /
-#define KEY_FILE		144	/ AL Local Machine Browser /
-#define KEY_SENDFILE		145
-#define KEY_DELETEFILE		146
-#define KEY_XFER		147
-#define KEY_PROG1		148
-#define KEY_PROG2		149
-#define KEY_WWW			150	/ AL Internet Browser /
-#define KEY_MSDOS		151
-#define KEY_COFFEE		152	/ AL Terminal Lock/Screensaver /
-#define KEY_SCREENLOCK		KEY_COFFEE
-#define KEY_ROTATE_DISPLAY	153	/ Display orientation for e.g. tablets /
-#define KEY_DIRECTION		KEY_ROTATE_DISPLAY
-#define KEY_CYCLEWINDOWS	154
-#define KEY_MAIL		155
-#define KEY_BOOKMARKS		156	/ AC Bookmarks /
-#define KEY_COMPUTER		157
-#define KEY_BACK		158	/ AC Back /
-#define KEY_FORWARD		159	/ AC Forward /
-#define KEY_CLOSECD		160
-#define KEY_EJECTCD		161
-#define KEY_EJECTCLOSECD	162
-#define KEY_NEXTSONG		163
-#define KEY_PLAYPAUSE		164
-#define KEY_PREVIOUSSONG	165
-#define KEY_STOPCD		166
-#define KEY_RECORD		167
-#define KEY_REWIND		168
-#define KEY_PHONE		169	/ Media Select Telephone /
-#define KEY_ISO			170
-#define KEY_CONFIG		171	/ AL Consumer Control Configuration /
-#define KEY_HOMEPAGE		172	/ AC Home /
-#define KEY_REFRESH		173	/ AC Refresh /
-#define KEY_EXIT		174	/ AC Exit /
-#define KEY_MOVE		175
-#define KEY_EDIT		176
-#define KEY_SCROLLUP		177
-#define KEY_SCROLLDOWN		178
-#define KEY_KPLEFTPAREN		179
-#define KEY_KPRIGHTPAREN	180
-#define KEY_NEW			181	/ AC New /
-#define KEY_REDO		182	/ AC Redo/Repeat /
-*/
 
 //Wayland keyboard arrays
 //https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
@@ -1821,7 +1739,7 @@ void wayland_pointer_motion_cb(void *data,
 
   GetWindowRect(hwnd, &rect);
 
-  TRACE("Motion x y %d %d %s hwnd %p pointer %p \n", wl_fixed_to_int(sx), wl_fixed_to_int(sy), wine_dbgstr_rect( &rect ), hwnd, pointer);
+  //TRACE("Motion x y %d %d %s hwnd %p pointer %p \n", wl_fixed_to_int(sx), wl_fixed_to_int(sy), wine_dbgstr_rect( &rect ), hwnd, pointer);
 
 
   global_input.u.mi.dx = global_input.u.mi.dx + rect.left;
@@ -1860,8 +1778,8 @@ void wayland_pointer_motion_cb(void *data,
 
 
 }
-HWND global_hwnd_clicked = NULL;
-int global_hwnd_popup_mode = 0;
+
+
 
 void wayland_pointer_button_cb_vulkan(void *data,
 		struct wl_pointer *pointer, uint32_t serial, uint32_t time, uint32_t button,
@@ -2002,12 +1920,10 @@ void wayland_pointer_button_cb(void *data,
 	case BTN_LEFT:
     if(state == WL_POINTER_BUTTON_STATE_PRESSED) {
       input.u.mi.dwFlags  |= MOUSEEVENTF_LEFTDOWN;
-      global_hwnd_clicked = global_update_hwnd;
       global_gdi_lb_hold = 1;     
     } else if(state == WL_POINTER_BUTTON_STATE_RELEASED) {
       input.u.mi.dwFlags |= MOUSEEVENTF_LEFTUP;
       global_gdi_lb_hold = 0;
-      
     }
 		break;
 
@@ -2036,16 +1952,15 @@ void wayland_pointer_button_cb(void *data,
   hwnd = global_update_hwnd;
   RECT rect;
 
-    //MapWindowPoints( global_update_hwnd, 0, (POINT *)&rect, 2 );
-  GetWindowRect(global_hwnd_clicked, &rect);
+  //MapWindowPoints( global_update_hwnd, 0, (POINT *)&rect, 2 );
+  GetWindowRect(global_update_hwnd, &rect);
 
-  //TRACE("Click x y %d %d %s \n", input.u.mi.dx, input.u.mi.dy, wine_dbgstr_rect( &rect ));
-
+  TRACE("Click x y %d %d %s \n", input.u.mi.dx, input.u.mi.dy, wine_dbgstr_rect( &rect ));
+  
   input.u.mi.dx = input.u.mi.dx + rect.left;
   input.u.mi.dy = input.u.mi.dy + rect.top;
   
-
-  //TRACE("Click x y %d %d %s \n", input.u.mi.dx, input.u.mi.dy, wine_dbgstr_rect( &rect ));
+  TRACE("Click x y %d %d %s \n", input.u.mi.dx, input.u.mi.dy, wine_dbgstr_rect( &rect ));
 
 
 
@@ -2064,9 +1979,6 @@ void wayland_pointer_button_cb(void *data,
     req->input.mouse.info  = 0;
 
     wine_server_call( req );
-
-
-
   }
   SERVER_END_REQ;
 
@@ -4579,13 +4491,14 @@ void CDECL WAYLANDDRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_f
  */
 LRESULT CDECL WAYLANDDRV_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam)
 {
+  
   struct gdi_win_data *hwnd_data;
   WPARAM command = wparam & 0xfff0;
   
   hwnd_data = get_win_data( hwnd );
   
   if(!hwnd_data) {
-    return;
+    return -1;
   }
 
   if (command == SC_MOVE)

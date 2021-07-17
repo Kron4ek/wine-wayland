@@ -172,7 +172,7 @@ typedef struct
     } ext;                       /* selected by SERVER_CTX_EXTENDED_REGISTERS */
     union
     {
-        struct { struct { unsigned __int64 low, high; } ymm_high[16]; } ymm_high_regs;
+        struct { struct { unsigned __int64 low, high; } ymm_high[16]; } regs;
     } ymm;                       /* selected by SERVER_CTX_YMM_REGISTERS */
 } context_t;
 
@@ -302,12 +302,16 @@ union rawinput
         unsigned int   param;   /* rawinput message param */
         unsigned short usage_page;/* HID usage page */
         unsigned short usage;   /* HID usage */
+        unsigned int   count;   /* HID report count */
+        unsigned int   length;  /* HID report length */
     } hid;
 };
 
 struct hardware_msg_data
 {
     lparam_t             info;      /* extra info */
+    data_size_t          size;      /* size of hardware message data */
+    int                  __pad;
     unsigned int         hw_id;     /* unique id */
     unsigned int         flags;     /* hook flags */
     struct hw_msg_source source;    /* message source */
@@ -471,7 +475,6 @@ enum apc_type
 {
     APC_NONE,
     APC_USER,
-    APC_TIMER,
     APC_ASYNC_IO,
     APC_VIRTUAL_ALLOC,
     APC_VIRTUAL_FREE,
@@ -487,24 +490,12 @@ enum apc_type
     APC_BREAK_PROCESS
 };
 
-typedef union
+typedef struct
 {
-    enum apc_type type;
-    struct
-    {
-        enum apc_type    type;     /* APC_USER */
-        int              __pad;
-        client_ptr_t     func;     /* void (__stdcall *func)(ULONG_PTR,ULONG_PTR,ULONG_PTR); */
-        apc_param_t      args[3];  /* arguments for user function */
-    } user;
-    struct
-    {
-        enum apc_type    type;     /* APC_TIMER */
-        int              __pad;
-        client_ptr_t     func;     /* void (__stdcall *func)(void*, unsigned int, unsigned int); */
-        abstime_t        time;     /* time of expiration */
-        client_ptr_t     arg;      /* user argument */
-    } timer;
+    enum apc_type    type;     /* APC_USER */
+    int              __pad;
+    client_ptr_t     func;     /* void (__stdcall *func)(ULONG_PTR,ULONG_PTR,ULONG_PTR); */
+    apc_param_t      args[3];  /* arguments for user function */
 } user_apc_t;
 
 typedef union
@@ -920,6 +911,7 @@ typedef struct
     process_id_t pid;          /* process id of the new thread's process */
     thread_id_t  tid;          /* thread id of the new thread */
     timeout_t    server_start; /* server start time */
+    unsigned int session_id;   /* process session id */
     data_size_t  info_size;    /* total size of startup info */
     VARARG(machines,ushorts);  /* array of supported machines */
 @END
@@ -933,8 +925,6 @@ typedef struct
     client_ptr_t teb;          /* TEB of new thread (in thread address space) */
     client_ptr_t entry;        /* entry point (in thread address space) */
 @REPLY
-    process_id_t pid;          /* process id of the new thread's process */
-    thread_id_t  tid;          /* thread id of the new thread */
     int          suspend;      /* is thread suspended? */
 @END
 
@@ -967,6 +957,7 @@ typedef struct
     client_ptr_t peb;              /* PEB address in process address space */
     timeout_t    start_time;       /* process start time */
     timeout_t    end_time;         /* process end time */
+    unsigned int session_id;       /* process session id */
     int          exit_code;        /* process exit code */
     int          priority;         /* priority class */
     unsigned short machine;        /* process architecture */
@@ -1165,11 +1156,11 @@ typedef struct
     obj_handle_t prev_apc;     /* handle to previous APC */
     VARARG(result,apc_result); /* result of previous APC */
     VARARG(data,select_op,size); /* operation-specific data */
-    VARARG(context,context);   /* suspend context */
+    VARARG(contexts,contexts);   /* suspend context(s) */
 @REPLY
     apc_call_t   call;         /* APC call arguments */
     obj_handle_t apc_handle;   /* handle to next APC */
-    VARARG(context,context);   /* suspend context */
+    VARARG(contexts,contexts); /* suspend context(s) */
 @END
 #define SELECT_ALERTABLE     1
 #define SELECT_INTERRUPTIBLE 2
@@ -1432,50 +1423,50 @@ enum server_fd_type
 @END
 
 
-/* Set socket event parameters */
-@REQ(set_socket_event)
-    obj_handle_t  handle;        /* handle to the socket */
-    unsigned int  mask;          /* event mask */
-    obj_handle_t  event;         /* event object */
-    user_handle_t window;        /* window to send the message to */
-    unsigned int  msg;           /* message to send */
-@END
-
-
-/* Get socket event parameters */
-@REQ(get_socket_event)
-    obj_handle_t handle;        /* handle to the socket */
-    int          service;       /* clear pending? */
-    obj_handle_t c_event;       /* event to clear */
+/* Perform a recv on a socket */
+@REQ(recv_socket)
+    int          oob;           /* are we receiving OOB data? */
+    async_data_t async;         /* async I/O parameters */
+    unsigned int status;        /* status of initial call */
+    unsigned int total;         /* number of bytes already read */
 @REPLY
-    unsigned int mask;          /* event mask */
-    unsigned int pmask;         /* pending events */
-    unsigned int state;         /* status bits */
-    VARARG(errors,ints);        /* event errors */
+    obj_handle_t wait;          /* handle to wait on for blocking recv */
+    unsigned int options;       /* device open options */
 @END
 
 
-/* Get socket info */
-@REQ(get_socket_info)
-    obj_handle_t handle;        /* handle to the socket */
+struct poll_socket_input
+{
+    obj_handle_t socket;        /* socket handle */
+    int flags;                  /* events to poll for */
+};
+
+struct poll_socket_output
+{
+    int flags;                  /* events signaled */
+    unsigned int status;        /* socket status */
+};
+
+/* Perform an async poll on a socket */
+@REQ(poll_socket)
+    async_data_t async;         /* async I/O parameters */
+    timeout_t    timeout;       /* timeout */
+    VARARG(sockets,poll_socket_input); /* list of sockets to poll */
 @REPLY
-    int family;                 /* family, see socket manpage */
-    int type;                   /* type, see socket manpage */
-    int protocol;               /* protocol, see socket manpage */
+    obj_handle_t wait;          /* handle to wait on for blocking poll */
+    unsigned int options;       /* file open options */
+    VARARG(sockets,poll_socket_output); /* data returned */
 @END
 
 
-/* Re-enable pending socket events */
-@REQ(enable_socket_event)
-    obj_handle_t handle;        /* handle to the socket */
-    unsigned int mask;          /* events to re-enable */
-    unsigned int sstate;        /* status bits to set */
-    unsigned int cstate;        /* status bits to clear */
-@END
-
-@REQ(set_socket_deferred)
-    obj_handle_t handle;        /* handle to the socket */
-    obj_handle_t deferred;      /* handle to the socket for which accept() is deferred */
+/* Perform a send on a socket */
+@REQ(send_socket)
+    async_data_t async;         /* async I/O parameters */
+    unsigned int status;        /* status of initial call */
+    unsigned int total;         /* number of bytes already sent */
+@REPLY
+    obj_handle_t wait;          /* handle to wait on for blocking send */
+    unsigned int options;       /* device open options */
 @END
 
 
@@ -1618,9 +1609,9 @@ struct process_info
     int             priority;
     process_id_t    pid;
     process_id_t    parent_pid;
+    unsigned int    session_id;
     int             handle_count;
     int             unix_pid;
-    int             __pad;
     /* VARARG(name,unicode_str,name_len); */
     /* VARARG(threads,struct thread_info,thread_count); */
 };
@@ -1891,19 +1882,21 @@ struct process_info
 
 /* Retrieve the current context of a thread */
 @REQ(get_thread_context)
-    obj_handle_t handle;       /* thread or context handle */
+    obj_handle_t handle;       /* thread handle */
+    obj_handle_t context;      /* context handle */
     unsigned int flags;        /* context flags */
+    unsigned short machine;    /* context architecture */
 @REPLY
     int          self;         /* was it a handle to the current thread? */
     obj_handle_t handle;       /* pending context handle */
-    VARARG(context,context);   /* thread context */
+    VARARG(contexts,contexts); /* thread context(s) */
 @END
 
 
 /* Set the current context of a thread */
 @REQ(set_thread_context)
     obj_handle_t handle;       /* thread handle */
-    VARARG(context,context);   /* thread context */
+    VARARG(contexts,contexts); /* thread context(s) */
 @REPLY
     int          self;         /* was it a handle to the current thread? */
 @END
@@ -2032,6 +2025,7 @@ enum message_type
     user_handle_t   win;       /* window handle */
     hw_input_t      input;     /* input data */
     unsigned int    flags;     /* flags (see below) */
+    VARARG(report,bytes);      /* HID report data */
 @REPLY
     int             wait;      /* do we need to wait for a reply? */
     int             prev_x;    /* previous cursor position */
@@ -3307,6 +3301,13 @@ struct handle_info
     unsigned int   access;        /* granted access mask */
     unsigned int   ref_count;     /* object ref count */
     unsigned int   handle_count;  /* object handle count */
+@END
+
+
+/* Query the full name of an object */
+@REQ(get_object_name)
+    obj_handle_t   handle;        /* handle to the object */
+@REPLY
     data_size_t    total;         /* total needed size for name */
     VARARG(name,unicode_str);     /* object name */
 @END
@@ -3419,6 +3420,7 @@ struct handle_info
 
 /* Make the current process a system process */
 @REQ(make_process_system)
+    obj_handle_t handle;          /* handle to the process */
 @REPLY
     obj_handle_t event;           /* event signaled when all user processes have exited */
 @END
@@ -3430,6 +3432,7 @@ struct handle_info
 @REPLY
     luid_t         token_id;      /* locally-unique identifier of the token */
     luid_t         modified_id;   /* locally-unique identifier of the modified version of the token */
+    unsigned int   session_id;    /* token session id */
     int            primary;       /* is the token primary or impersonation? */
     int            impersonation_level; /* level of impersonation */
     int            elevation;     /* elevation type */
@@ -3537,6 +3540,13 @@ struct handle_info
     int          replace;         /* replace an existing file? */
     VARARG(name,unicode_str,namelen); /* NT name */
     VARARG(filename,string);      /* new file name */
+@END
+
+
+/* set fd eof information */
+@REQ(set_fd_eof_info)
+    obj_handle_t handle;        /* handle to a file or directory */
+    file_pos_t   eof;           /* offset of eof of file */
 @END
 
 

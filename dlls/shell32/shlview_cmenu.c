@@ -1134,17 +1134,67 @@ static void DoNewFolder(ContextMenu *This, IShellView *view)
     }
 }
 
-static BOOL DoPaste(ContextMenu *This)
+static HRESULT paste_pidls(ContextMenu *This, ITEMIDLIST **pidls, UINT count)
 {
-	BOOL bSuccess = TRUE;
+    IShellFolder *psfDesktop;
+    UINT i;
+    HRESULT hr = S_OK;
+
+    /* bind to the source shellfolder */
+    hr = SHGetDesktopFolder(&psfDesktop);
+    if (FAILED(hr))
+        return hr;
+
+    for (i = 0; SUCCEEDED(hr) && i < count; i++) {
+        ITEMIDLIST *pidl_dir = NULL;
+        ITEMIDLIST *pidl_item;
+        IShellFolder *psfFrom = NULL;
+
+        pidl_dir = ILClone(pidls[i]);
+        ILRemoveLastID(pidl_dir);
+        pidl_item = ILFindLastID(pidls[i]);
+        hr = IShellFolder_BindToObject(psfDesktop, pidl_dir, NULL, &IID_IShellFolder, (LPVOID*)&psfFrom);
+
+        if (psfFrom)
+        {
+            /* get source and destination shellfolder */
+            ISFHelper *psfhlpdst, *psfhlpsrc;
+            hr = IShellFolder_QueryInterface(This->parent, &IID_ISFHelper, (void**)&psfhlpdst);
+            if (SUCCEEDED(hr))
+                hr = IShellFolder_QueryInterface(psfFrom, &IID_ISFHelper, (void**)&psfhlpsrc);
+
+            /* do the copy/move */
+            if (psfhlpdst && psfhlpsrc)
+            {
+                hr = ISFHelper_CopyItems(psfhlpdst, psfFrom, 1, (LPCITEMIDLIST*)&pidl_item);
+                /* FIXME handle move
+                ISFHelper_DeleteItems(psfhlpsrc, 1, &pidl_item);
+                */
+            }
+            if(psfhlpdst) ISFHelper_Release(psfhlpdst);
+            if(psfhlpsrc) ISFHelper_Release(psfhlpsrc);
+            IShellFolder_Release(psfFrom);
+        }
+        SHFree(pidl_dir);
+    }
+
+    IShellFolder_Release(psfDesktop);
+    return hr;
+}
+
+static HRESULT DoPaste(ContextMenu *This)
+{
 	IDataObject * pda;
+	HRESULT hr;
 
 	TRACE("\n");
 
-	if(SUCCEEDED(OleGetClipboard(&pda)))
+	hr = OleGetClipboard(&pda);
+	if(SUCCEEDED(hr))
 	{
 	  STGMEDIUM medium;
 	  FORMATETC formatetc;
+	  HRESULT format_hr;
 
 	  TRACE("pda=%p\n", pda);
 
@@ -1152,72 +1202,74 @@ static BOOL DoPaste(ContextMenu *This)
 	  InitFormatEtc(formatetc, RegisterClipboardFormatW(CFSTR_SHELLIDLISTW), TYMED_HGLOBAL);
 
 	  /* Get the pidls from IDataObject */
-	  if(SUCCEEDED(IDataObject_GetData(pda,&formatetc,&medium)))
-          {
+	  format_hr = IDataObject_GetData(pda,&formatetc,&medium);
+	  if(SUCCEEDED(format_hr))
+	  {
 	    LPITEMIDLIST * apidl;
 	    LPITEMIDLIST pidl;
-	    IShellFolder *psfFrom = NULL, *psfDesktop;
-	    int i;
 
 	    LPIDA lpcida = GlobalLock(medium.u.hGlobal);
 	    TRACE("cida=%p\n", lpcida);
-
-	    apidl = _ILCopyCidaToaPidl(&pidl, lpcida);
-
-	    for (i = 0; bSuccess && i < lpcida->cidl; i++) {
-	      ITEMIDLIST *apidl_dir = NULL;
-	      ITEMIDLIST *apidl_item;
-
-	      psfFrom = NULL;
-	      /* bind to the source shellfolder */
-	      SHGetDesktopFolder(&psfDesktop);
-	      if(psfDesktop)
+	    if(lpcida)
+	    {
+	      apidl = _ILCopyCidaToaPidl(&pidl, lpcida);
+	      if (apidl)
 	      {
-	        apidl_dir = ILClone(apidl[i]);
-	        ILRemoveLastID(apidl_dir);
-	        apidl_item = ILFindLastID(apidl[i]);
-	        IShellFolder_BindToObject(psfDesktop, apidl_dir, NULL, &IID_IShellFolder, (LPVOID*)&psfFrom);
-	        IShellFolder_Release(psfDesktop);
-	      }
-
-	      if (psfFrom)
-	      {
-	        /* get source and destination shellfolder */
-	        ISFHelper *psfhlpdst, *psfhlpsrc;
-	        IShellFolder_QueryInterface(This->parent, &IID_ISFHelper, (void**)&psfhlpdst);
-	        IShellFolder_QueryInterface(psfFrom, &IID_ISFHelper, (void**)&psfhlpsrc);
-
-	        /* do the copy/move */
-	        if (psfhlpdst && psfhlpsrc)
-	        {
-	          HRESULT hr = ISFHelper_CopyItems(psfhlpdst, psfFrom, 1, (LPCITEMIDLIST*)&apidl_item);
-	          if (FAILED(hr))
-	            bSuccess = FALSE;
-		  /* FIXME handle move
-		  ISFHelper_DeleteItems(psfhlpsrc, 1, &apidl_item);
-	          */
-	        }
-	        if(psfhlpdst) ISFHelper_Release(psfhlpdst);
-	        if(psfhlpsrc) ISFHelper_Release(psfhlpsrc);
-	        IShellFolder_Release(psfFrom);
+	        hr = paste_pidls(This, apidl, lpcida->cidl);
+	        _ILFreeaPidl(apidl, lpcida->cidl);
+	        SHFree(pidl);
 	      }
 	      else
-	        bSuccess = FALSE;
-	      SHFree(apidl_dir);
+	        hr = HRESULT_FROM_WIN32(GetLastError());
+	      GlobalUnlock(medium.u.hGlobal);
 	    }
-
-	    _ILFreeaPidl(apidl, lpcida->cidl);
-	    SHFree(pidl);
-
-	    /* release the medium*/
+	    else
+	      hr = HRESULT_FROM_WIN32(GetLastError());
 	    ReleaseStgMedium(&medium);
 	  }
-	  else
-	    bSuccess = FALSE;
+
+	  if(FAILED(format_hr))
+	  {
+	    InitFormatEtc(formatetc, CF_HDROP, TYMED_HGLOBAL);
+	    format_hr = IDataObject_GetData(pda,&formatetc,&medium);
+	    if(SUCCEEDED(format_hr))
+	    {
+	      WCHAR path[MAX_PATH];
+	      UINT i, count;
+	      ITEMIDLIST **pidls;
+
+	      TRACE("CF_HDROP=%p\n", medium.u.hGlobal);
+	      count = DragQueryFileW(medium.u.hGlobal, -1, NULL, 0);
+	      pidls = SHAlloc(count*sizeof(ITEMIDLIST**));
+	      if (pidls)
+	      {
+	        for (i = 0; i < count; i++)
+	        {
+	          DragQueryFileW(medium.u.hGlobal, i, path, ARRAY_SIZE(path));
+	          if ((pidls[i] = ILCreateFromPathW(path)) == NULL)
+	          {
+	            hr = E_FAIL;
+	            break;
+	          }
+	        }
+	        if (SUCCEEDED(hr))
+	          hr = paste_pidls(This, pidls, count);
+	        _ILFreeaPidl(pidls, count);
+	      }
+	      else
+	        hr = HRESULT_FROM_WIN32(GetLastError());
+	      ReleaseStgMedium(&medium);
+	    }
+	  }
+
+	  if (FAILED(format_hr))
+	  {
+	    ERR("there are no supported and retrievable clipboard formats\n");
+	    hr = format_hr;
+	  }
+
 	  IDataObject_Release(pda);
 	}
-	else
-	  bSuccess = FALSE;
 #if 0
 	HGLOBAL  hMem;
 
@@ -1242,7 +1294,7 @@ static BOOL DoPaste(ContextMenu *This)
 	}
 	CloseClipboard();
 #endif
-	return bSuccess;
+	return hr;
 }
 
 static HRESULT WINAPI BackgroundMenu_InvokeCommand(

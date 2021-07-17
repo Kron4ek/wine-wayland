@@ -321,6 +321,11 @@ static void add_job_process( struct job *job, struct process *process )
         }
         else
         {
+            if (job->total_processes)
+            {
+                set_error( STATUS_ACCESS_DENIED );
+                return;
+            }
             /* transfer reference. */
             job->parent = process->job;
             list_add_tail( &job->parent->child_job_list, &job->parent_job_entry );
@@ -671,7 +676,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     if (!parent)
     {
         process->handles = alloc_handle_table( process, 0 );
-        process->token = token_create_admin( TokenElevationTypeFull );
+        process->token = token_create_admin( TRUE, -1, TokenElevationTypeFull, default_session_id );
         process->affinity = ~0;
     }
     else
@@ -693,6 +698,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
         process->affinity = parent->affinity;
     }
     if (!process->handles || !process->token) goto error;
+    process->session_id = token_get_session_id( process->token );
 
     /* Assign a high security label to the token. The default would be medium
      * but Wine provides admin access to all applications right now so high
@@ -1118,7 +1124,7 @@ int set_process_debug_flag( struct process *process, int flag )
     char data = (flag != 0);
     client_ptr_t peb32 = 0;
 
-    if (!is_machine_64bit( process->machine ) && is_machine_64bit( supported_machines[0] ))
+    if (!is_machine_64bit( process->machine ) && is_machine_64bit( native_machine ))
         peb32 = process->peb + 0x1000;
 
     /* BeingDebugged flag is the byte at offset 2 in the PEB */
@@ -1485,6 +1491,7 @@ DECL_HANDLER(get_process_info)
         reply->peb              = process->peb;
         reply->start_time       = process->start_time;
         reply->end_time         = process->end_time;
+        reply->session_id       = process->session_id;
         reply->machine          = process->machine;
         if (get_reply_max_size())
         {
@@ -1670,7 +1677,7 @@ DECL_HANDLER(get_process_idle_event)
 /* make the current process a system process */
 DECL_HANDLER(make_process_system)
 {
-    struct process *process = current->process;
+    struct process *process;
     struct thread *thread;
 
     if (!shutdown_event)
@@ -1679,8 +1686,13 @@ DECL_HANDLER(make_process_system)
         release_object( shutdown_event );
     }
 
+    if (!(process = get_process_from_handle( req->handle, PROCESS_SET_INFORMATION ))) return;
+
     if (!(reply->event = alloc_handle( current->process, shutdown_event, SYNCHRONIZE, 0 )))
+    {
+        release_object( process );
         return;
+    }
 
     if (!process->is_system)
     {
@@ -1690,6 +1702,7 @@ DECL_HANDLER(make_process_system)
         if (!--user_processes && !shutdown_stage && master_socket_timeout != TIMEOUT_INFINITE)
             shutdown_timeout = add_timeout_user( master_socket_timeout, server_shutdown_timeout, NULL );
     }
+    release_object( process );
 }
 
 /* create a new job object */
@@ -1896,6 +1909,7 @@ DECL_HANDLER(list_processes)
         process_info->priority = process->priority;
         process_info->pid = process->id;
         process_info->parent_pid = process->parent_id;
+        process_info->session_id = process->session_id;
         process_info->handle_count = get_handle_table_count(process);
         process_info->unix_pid = process->unix_pid;
         pos += sizeof(*process_info);

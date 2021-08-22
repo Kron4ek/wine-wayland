@@ -33,7 +33,7 @@
 #include "wingdi.h"
 #include "winuser.h"
 
-#include "gdi_private.h"
+#include "ntgdi_private.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(palette);
@@ -55,16 +55,10 @@ static BOOL PALETTE_DeleteObject( HGDIOBJ handle );
 
 static const struct gdi_obj_funcs palette_funcs =
 {
-    PALETTE_GetObject,        /* pGetObjectA */
     PALETTE_GetObject,        /* pGetObjectW */
     PALETTE_UnrealizeObject,  /* pUnrealizeObject */
     PALETTE_DeleteObject      /* pDeleteObject */
 };
-
-/* Pointers to USER implementation of SelectPalette/RealizePalette */
-/* they will be patched by USER on startup */
-HPALETTE (WINAPI *pfnSelectPalette)(HDC hdc, HPALETTE hpal, WORD bkgnd ) = GDISelectPalette;
-UINT (WINAPI *pfnRealizePalette)(HDC hdc) = GDIRealizePalette;
 
 static UINT SystemPaletteUse = SYSPAL_STATIC;  /* currently not considered */
 
@@ -129,7 +123,7 @@ HPALETTE WINAPI CreatePalette(
         return 0;
     }
     memcpy( palettePtr->entries, palette->palPalEntry, size );
-    if (!(hpalette = alloc_gdi_handle( &palettePtr->obj, OBJ_PAL, &palette_funcs )))
+    if (!(hpalette = alloc_gdi_handle( &palettePtr->obj, NTGDI_OBJ_PAL, &palette_funcs )))
     {
         HeapFree( GetProcessHeap(), 0, palettePtr->entries );
         HeapFree( GetProcessHeap(), 0, palettePtr );
@@ -194,7 +188,7 @@ UINT WINAPI GetPaletteEntries(
 
     TRACE("hpal = %p, count=%i\n", hpalette, count );
 
-    palPtr = GDI_GetObjPtr( hpalette, OBJ_PAL );
+    palPtr = GDI_GetObjPtr( hpalette, NTGDI_OBJ_PAL );
     if (!palPtr) return 0;
 
     /* NOTE: not documented but test show this to be the case */
@@ -240,7 +234,7 @@ UINT WINAPI SetPaletteEntries(
 
     hpalette = get_full_gdi_handle( hpalette );
     if (hpalette == GetStockObject(DEFAULT_PALETTE)) return 0;
-    palPtr = GDI_GetObjPtr( hpalette, OBJ_PAL );
+    palPtr = GDI_GetObjPtr( hpalette, NTGDI_OBJ_PAL );
     if (!palPtr) return 0;
 
     numEntries = palPtr->count;
@@ -270,7 +264,7 @@ BOOL WINAPI ResizePalette(
     HPALETTE hPal, /* [in] Handle of logical palette */
     UINT cEntries) /* [in] Number of entries in logical palette */
 {
-    PALETTEOBJ * palPtr = GDI_GetObjPtr( hPal, OBJ_PAL );
+    PALETTEOBJ * palPtr = GDI_GetObjPtr( hPal, NTGDI_OBJ_PAL );
     PALETTEENTRY *entries;
 
     if( !palPtr ) return FALSE;
@@ -318,7 +312,7 @@ BOOL WINAPI AnimatePalette(
         UINT pal_entries;
         const PALETTEENTRY *pptr = PaletteColors;
 
-        palPtr = GDI_GetObjPtr( hPal, OBJ_PAL );
+        palPtr = GDI_GetObjPtr( hPal, NTGDI_OBJ_PAL );
         if (!palPtr) return FALSE;
 
         pal_entries = palPtr->count;
@@ -473,7 +467,7 @@ UINT WINAPI GetNearestPaletteIndex(
     HPALETTE hpalette, /* [in] Handle of logical color palette */
     COLORREF color)      /* [in] Color to be matched */
 {
-    PALETTEOBJ* palObj = GDI_GetObjPtr( hpalette, OBJ_PAL );
+    PALETTEOBJ* palObj = GDI_GetObjPtr( hpalette, NTGDI_OBJ_PAL );
     UINT index  = 0;
 
     if( palObj )
@@ -563,7 +557,7 @@ COLORREF WINAPI GetNearestColor(
  */
 static INT PALETTE_GetObject( HGDIOBJ handle, INT count, LPVOID buffer )
 {
-    PALETTEOBJ *palette = GDI_GetObjPtr( handle, OBJ_PAL );
+    PALETTEOBJ *palette = GDI_GetObjPtr( handle, NTGDI_OBJ_PAL );
 
     if (!palette) return 0;
 
@@ -583,7 +577,7 @@ static INT PALETTE_GetObject( HGDIOBJ handle, INT count, LPVOID buffer )
  */
 static BOOL PALETTE_UnrealizeObject( HGDIOBJ handle )
 {
-    PALETTEOBJ *palette = GDI_GetObjPtr( handle, OBJ_PAL );
+    PALETTEOBJ *palette = GDI_GetObjPtr( handle, NTGDI_OBJ_PAL );
 
     if (palette)
     {
@@ -633,14 +627,9 @@ HPALETTE WINAPI GDISelectPalette( HDC hdc, HPALETTE hpal, WORD wBkg)
     }
     if ((dc = get_dc_ptr( hdc )))
     {
-        PHYSDEV physdev = GET_DC_PHYSDEV( dc, pSelectPalette );
         ret = dc->hPalette;
-        if (physdev->funcs->pSelectPalette( physdev, hpal, FALSE ))
-        {
-            dc->hPalette = hpal;
-            if (!wBkg) hPrimaryPalette = hpal;
-        }
-        else ret = 0;
+        dc->hPalette = hpal;
+        if (!wBkg) hPrimaryPalette = hpal;
         release_dc_ptr( dc );
     }
     return ret;
@@ -667,7 +656,7 @@ UINT WINAPI GDIRealizePalette( HDC hdc )
     else if (InterlockedExchangePointer( (void **)&hLastRealizedPalette, dc->hPalette ) != dc->hPalette)
     {
         PHYSDEV physdev = GET_DC_PHYSDEV( dc, pRealizePalette );
-        PALETTEOBJ *palPtr = GDI_GetObjPtr( dc->hPalette, OBJ_PAL );
+        PALETTEOBJ *palPtr = GDI_GetObjPtr( dc->hPalette, NTGDI_OBJ_PAL );
         if (palPtr)
         {
             realized = physdev->funcs->pRealizePalette( physdev, dc->hPalette,
@@ -681,40 +670,6 @@ UINT WINAPI GDIRealizePalette( HDC hdc )
     release_dc_ptr( dc );
     TRACE("   realized %i colors.\n", realized );
     return realized;
-}
-
-
-/***********************************************************************
- * SelectPalette [GDI32.@]
- *
- * Selects logical palette into DC.
- *
- * RETURNS
- *    Success: Previous logical palette
- *    Failure: NULL
- */
-HPALETTE WINAPI SelectPalette(
-    HDC hDC,               /* [in] Handle of device context */
-    HPALETTE hPal,         /* [in] Handle of logical color palette */
-    BOOL bForceBackground) /* [in] Foreground/background mode */
-{
-    return pfnSelectPalette( hDC, hPal, bForceBackground );
-}
-
-
-/***********************************************************************
- * RealizePalette [GDI32.@]
- *
- * Maps palette entries to system palette.
- *
- * RETURNS
- *    Success: Number of entries in logical palette
- *    Failure: GDI_ERROR
- */
-UINT WINAPI RealizePalette(
-    HDC hDC) /* [in] Handle of device context */
-{
-    return pfnRealizePalette( hDC );
 }
 
 

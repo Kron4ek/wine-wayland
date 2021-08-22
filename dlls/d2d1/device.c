@@ -139,7 +139,6 @@ static void d2d_device_context_draw(struct d2d_device_context *render_target, en
 
     ID3D11Device1_GetImmediateContext1(device, &context);
     ID3D11DeviceContext1_SwapDeviceContextState(context, render_target->d3d_state, &prev_state);
-    ID3D11DeviceContext1_ClearState(context);
 
     ID3D11DeviceContext1_IASetInputLayout(context, shape_resources->il);
     ID3D11DeviceContext1_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1886,14 +1885,21 @@ static HRESULT STDMETHODCALLTYPE d2d_device_context_CreateBitmapFromDxgiSurface(
 static HRESULT STDMETHODCALLTYPE d2d_device_context_CreateEffect(ID2D1DeviceContext *iface,
         REFCLSID effect_id, ID2D1Effect **effect)
 {
+    struct d2d_device_context *context = impl_from_ID2D1DeviceContext(iface);
     struct d2d_effect *object;
+    HRESULT hr;
 
     FIXME("iface %p, effect_id %s, effect %p stub!\n", iface, debugstr_guid(effect_id), effect);
 
     if (!(object = heap_alloc_zero(sizeof(*object))))
         return E_OUTOFMEMORY;
 
-    d2d_effect_init(object);
+    if (FAILED(hr = d2d_effect_init(object, context->factory, effect_id)))
+    {
+        WARN("Failed to initialize effect, hr %#x.\n", hr);
+        heap_free(object);
+        return hr;
+    }
 
     TRACE("Created effect %p.\n", object);
     *effect = &object->ID2D1Effect_iface;

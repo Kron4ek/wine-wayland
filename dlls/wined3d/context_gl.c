@@ -3759,10 +3759,10 @@ static void context_gl_load_shader_resources(struct wined3d_context_gl *context_
 
         for (j = 0; j < WINED3D_MAX_CBS; ++j)
         {
-            if (!state->cb[i][j])
+            if (!state->cb[i][j].buffer)
                 continue;
 
-            buffer_gl = wined3d_buffer_gl(state->cb[i][j]);
+            buffer_gl = wined3d_buffer_gl(state->cb[i][j].buffer);
             wined3d_buffer_load(&buffer_gl->b, &context_gl->c, state);
             wined3d_context_gl_reference_bo(context_gl, &buffer_gl->bo);
             if (!buffer_gl->bo_user.valid)
@@ -3944,10 +3944,11 @@ static BOOL context_apply_draw_state(struct wined3d_context *context,
             unsigned int state_id = base + wined3d_bit_scan(&dirty_mask);
 
             state_table[state_id].apply(context, state, state_id);
-            context->dirty_graphics_states[i] &= ~(1u << (state_id - base));
         }
         base += sizeof(dirty_mask) * CHAR_BIT;
     }
+
+    memset(context->dirty_graphics_states, 0, sizeof(context->dirty_graphics_states));
 
     if (context->shader_update_mask & ~(1u << WINED3D_SHADER_TYPE_COMPUTE))
     {

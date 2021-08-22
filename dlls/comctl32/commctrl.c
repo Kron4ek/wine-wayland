@@ -72,6 +72,7 @@
 #define NO_SHLWAPI_STREAM
 #include "shlwapi.h"
 #include "comctl32.h"
+#include "uxtheme.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(commctrl);
@@ -207,15 +208,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
             TRACKBAR_Register ();
             TREEVIEW_Register ();
             UPDOWN_Register ();
-
-            /* subclass user32 controls */
-            THEMING_Initialize ();
             break;
 
 	case DLL_PROCESS_DETACH:
             if (lpvReserved) break;
-            /* clean up subclassing */
-            THEMING_Uninitialize();
 
             /* unregister all common control classes */
             ANIMATE_Unregister ();

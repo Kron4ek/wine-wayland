@@ -74,6 +74,8 @@ void (FASTCALL *pBaseThreadInitThunk)(DWORD,LPTHREAD_START_ROUTINE,void *) = NUL
 
 static DWORD (WINAPI *pCtrlRoutine)(void *);
 
+SYSTEM_DLL_INIT_BLOCK LdrSystemDllInitBlock = { 0xf0 };
+
 const struct unix_funcs *unix_funcs = NULL;
 
 /* windows directory */
@@ -1336,6 +1338,31 @@ static void call_tls_callbacks( HMODULE module, UINT reason )
     }
 }
 
+
+/*************************************************************************
+ *              init_builtin_dll
+ */
+static void init_builtin_dll( HMODULE module )
+{
+    void *buffer[16];
+    void (**funcs)(int, char **, char **) = (void *)buffer;
+    SIZE_T i, size;
+    NTSTATUS status;
+
+    status = NtQueryVirtualMemory( GetCurrentProcess(), module, MemoryWineImageInitFuncs,
+                                   buffer, sizeof(buffer), &size );
+    if (status == STATUS_BUFFER_TOO_SMALL)
+    {
+        if (!(funcs = RtlAllocateHeap( GetProcessHeap(), 0, size ))) return;
+        status = NtQueryVirtualMemory( GetCurrentProcess(), module, MemoryWineImageInitFuncs,
+                                       funcs, size, &size );
+    }
+    if (!status) for (i = 0; i < size / sizeof(*funcs); i++) funcs[i]( 0, NULL, NULL );
+
+    if ((void *)funcs != (void *)buffer) RtlFreeHeap( GetProcessHeap(), 0, funcs );
+}
+
+
 /*************************************************************************
  *              MODULE_InitDLL
  */
@@ -1352,7 +1379,7 @@ static NTSTATUS MODULE_InitDLL( WINE_MODREF *wm, UINT reason, LPVOID lpReserved 
     if (wm->ldr.Flags & LDR_DONT_RESOLVE_REFS) return STATUS_SUCCESS;
     if (wm->ldr.TlsIndex != -1) call_tls_callbacks( wm->ldr.DllBase, reason );
     if (wm->ldr.Flags & LDR_WINE_INTERNAL && reason == DLL_PROCESS_ATTACH)
-        unix_funcs->init_builtin_dll( wm->ldr.DllBase );
+        init_builtin_dll( wm->ldr.DllBase );
     if (!entry) return STATUS_SUCCESS;
 
     if (TRACE_ON(relay))
@@ -3117,10 +3144,10 @@ IMAGE_BASE_RELOCATION * WINAPI LdrProcessRelocationBlock( void *page, UINT count
  *		LdrQueryProcessModuleInformation
  *
  */
-NTSTATUS WINAPI LdrQueryProcessModuleInformation(PSYSTEM_MODULE_INFORMATION smi, 
+NTSTATUS WINAPI LdrQueryProcessModuleInformation(RTL_PROCESS_MODULES *smi,
                                                  ULONG buf_size, ULONG* req_size)
 {
-    SYSTEM_MODULE*      sm = &smi->Modules[0];
+    RTL_PROCESS_MODULE_INFORMATION *sm = &smi->Modules[0];
     ULONG               size = sizeof(ULONG);
     NTSTATUS            nts = STATUS_SUCCESS;
     ANSI_STRING         str;
@@ -3635,7 +3662,6 @@ static void load_global_options(void)
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING name_str, val_str;
     HANDLE hkey;
-    ULONG value;
 
     RtlInitUnicodeString( &name_str, L"WINEBOOTSTRAPMODE" );
     val_str.MaximumLength = 0;
@@ -3651,35 +3677,48 @@ static void load_global_options(void)
 
     if (!NtOpenKey( &hkey, KEY_QUERY_VALUE, &attr ))
     {
-        query_dword_option( hkey, L"GlobalFlag", &NtCurrentTeb()->Peb->NtGlobalFlag );
         query_dword_option( hkey, L"SafeProcessSearchMode", &path_safe_mode );
         query_dword_option( hkey, L"SafeDllSearchMode", &dll_safe_mode );
-
-        if (!query_dword_option( hkey, L"CriticalSectionTimeout", &value ))
-            NtCurrentTeb()->Peb->CriticalSectionTimeout.QuadPart = (ULONGLONG)value * -10000000;
-
-        if (!query_dword_option( hkey, L"HeapSegmentReserve", &value ))
-            NtCurrentTeb()->Peb->HeapSegmentReserve = value;
-
-        if (!query_dword_option( hkey, L"HeapSegmentCommit", &value ))
-            NtCurrentTeb()->Peb->HeapSegmentCommit = value;
-
-        if (!query_dword_option( hkey, L"HeapDeCommitTotalFreeThreshold", &value ))
-            NtCurrentTeb()->Peb->HeapDeCommitTotalFreeThreshold = value;
-
-        if (!query_dword_option( hkey, L"HeapDeCommitFreeBlockThreshold", &value ))
-            NtCurrentTeb()->Peb->HeapDeCommitFreeBlockThreshold = value;
-
         NtClose( hkey );
     }
-    LdrQueryImageFileExecutionOptions( &NtCurrentTeb()->Peb->ProcessParameters->ImagePathName,
-                                       L"GlobalFlag", REG_DWORD, &NtCurrentTeb()->Peb->NtGlobalFlag,
-                                       sizeof(DWORD), NULL );
-    heap_set_debug_flags( GetProcessHeap() );
 }
 
 
-#ifndef _WIN64
+
+#ifdef _WIN64
+
+static void (WINAPI *pWow64LdrpInitialize)( CONTEXT *ctx );
+
+static void init_wow64( CONTEXT *context )
+{
+    if (!imports_fixup_done)
+    {
+        HMODULE wow64;
+        WINE_MODREF *wm;
+        NTSTATUS status;
+        static const WCHAR wow64_path[] = L"C:\\windows\\system32\\wow64.dll";
+
+        if ((status = load_dll( NULL, wow64_path, NULL, 0, &wm )))
+        {
+            ERR( "could not load %s, status %x\n", debugstr_w(wow64_path), status );
+            NtTerminateProcess( GetCurrentProcess(), status );
+        }
+        wow64 = wm->ldr.DllBase;
+#define GET_PTR(name) \
+        if (!(p ## name = RtlFindExportedRoutineByName( wow64, #name ))) ERR( "failed to load %s\n", #name )
+
+        GET_PTR( Wow64LdrpInitialize );
+#undef GET_PTR
+        imports_fixup_done = TRUE;
+    }
+
+    RtlLeaveCriticalSection( &loader_section );
+    pWow64LdrpInitialize( context );
+}
+
+
+#else
+
 void *Wow64Transition = NULL;
 
 static void map_wow64cpu(void)
@@ -3710,22 +3749,45 @@ static void map_wow64cpu(void)
     NtClose( file );
 }
 
-static void init_wow64(void)
+static void init_wow64( CONTEXT *context )
 {
     PEB *peb = NtCurrentTeb()->Peb;
-    PEB64 *peb64;
+    PEB64 *peb64 = UlongToPtr( NtCurrentTeb64()->Peb );
 
-    if (!NtCurrentTeb64()) return;
-    peb64 = UlongToPtr( NtCurrentTeb64()->Peb );
+    if (Wow64Transition) return;  /* already initialized */
+
     peb64->OSMajorVersion   = peb->OSMajorVersion;
     peb64->OSMinorVersion   = peb->OSMinorVersion;
     peb64->OSBuildNumber    = peb->OSBuildNumber;
     peb64->OSPlatformId     = peb->OSPlatformId;
 
+#define SET_INIT_BLOCK(func) LdrSystemDllInitBlock.p ## func = PtrToUlong( &func )
+    SET_INIT_BLOCK( KiUserApcDispatcher );
+    SET_INIT_BLOCK( KiUserExceptionDispatcher );
+    SET_INIT_BLOCK( LdrInitializeThunk );
+    SET_INIT_BLOCK( LdrSystemDllInitBlock );
+    SET_INIT_BLOCK( RtlUserThreadStart );
+    /* SET_INIT_BLOCK( KiUserCallbackDispatcher ); */
+    /* SET_INIT_BLOCK( RtlpQueryProcessDebugInformationRemote ); */
+    /* SET_INIT_BLOCK( RtlpFreezeTimeBias ); */
+    /* LdrSystemDllInitBlock.ntdll_handle */
+#undef SET_INIT_BLOCK
+
     map_wow64cpu();
 }
 #endif
 
+
+/* release some address space once dlls are loaded*/
+static void release_address_space(void)
+{
+#ifndef _WIN64
+    void *addr = (void *)1;
+    SIZE_T size = 0;
+
+    NtFreeVirtualMemory( GetCurrentProcess(), &addr, &size, MEM_RELEASE );
+#endif
+}
 
 /******************************************************************
  *		LdrInitializeThunk (NTDLL.@)
@@ -3777,13 +3839,13 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR 
         init_user_process_params();
         load_global_options();
         version_init();
-#ifndef _WIN64
-        init_wow64();
-#endif
+
         wm = build_main_module();
         wm->ldr.LoadCount = -1;
 
         build_ntdll_module();
+
+        if (NtCurrentTeb()->WowTebOffset) init_wow64( context );
 
         if ((status = load_dll( NULL, L"kernel32.dll", NULL, 0, &kernel32 )) != STATUS_SUCCESS)
         {
@@ -3817,6 +3879,10 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR 
     }
     else wm = get_modref( NtCurrentTeb()->Peb->ImageBaseAddress );
 
+#ifdef _WIN64
+    if (NtCurrentTeb()->WowTebOffset) init_wow64( context );
+#endif
+
     RtlAcquirePebLock();
     InsertHeadList( &tls_links, &NtCurrentTeb()->TlsLinks );
     RtlReleasePebLock();
@@ -3849,9 +3915,9 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR 
                 NtTerminateProcess( GetCurrentProcess(), status );
             }
         }
-        unix_funcs->virtual_release_address_space();
+        release_address_space();
         if (wm->ldr.TlsIndex != -1) call_tls_callbacks( wm->ldr.DllBase, DLL_PROCESS_ATTACH );
-        if (wm->ldr.Flags & LDR_WINE_INTERNAL) unix_funcs->init_builtin_dll( wm->ldr.DllBase );
+        if (wm->ldr.Flags & LDR_WINE_INTERNAL) init_builtin_dll( wm->ldr.DllBase );
         if (wm->ldr.ActivationContext) RtlDeactivateActivationContext( 0, cookie );
         process_breakpoint();
     }

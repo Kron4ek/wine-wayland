@@ -606,17 +606,19 @@ static ULONG get_full_path_helper(LPCWSTR name, LPWSTR buffer, ULONG size)
         {
             char *unix_name;
             WCHAR *nt_str;
-            SIZE_T buflen;
+            ULONG buflen;
             NTSTATUS status;
             UNICODE_STRING str;
+            OBJECT_ATTRIBUTES attr;
 
             nt_str = RtlAllocateHeap( GetProcessHeap(), 0, (wcslen(name) + 9) * sizeof(WCHAR) );
             wcscpy( nt_str, L"\\??\\unix" );
             wcscat( nt_str, name );
             RtlInitUnicodeString( &str, nt_str );
+            InitializeObjectAttributes( &attr, &str, 0, 0, NULL );
             buflen = 3 * wcslen(name) + 1;
             unix_name = RtlAllocateHeap( GetProcessHeap(), 0, buflen );
-            status = wine_nt_to_unix_file_name( &str, unix_name, &buflen, FILE_OPEN_IF );
+            status = wine_nt_to_unix_file_name( &attr, unix_name, &buflen, FILE_OPEN_IF );
             if (!status || status == STATUS_NO_SUCH_FILE)
             {
                 buflen = wcslen(name) + 9;
@@ -767,6 +769,25 @@ DWORD WINAPI RtlGetLongestNtPathLength(void)
 {
     return MAX_NT_PATH_LENGTH;
 }
+
+
+/******************************************************************
+ *             RtlDoesFileExists_U   (NTDLL.@)
+ */
+BOOLEAN WINAPI RtlDoesFileExists_U(LPCWSTR file_name)
+{
+    UNICODE_STRING nt_name;
+    FILE_BASIC_INFORMATION basic_info;
+    OBJECT_ATTRIBUTES attr;
+    NTSTATUS status;
+
+    if (!RtlDosPathNameToNtPathName_U( file_name, &nt_name, NULL, NULL )) return FALSE;
+    InitializeObjectAttributes( &attr, &nt_name, OBJ_CASE_INSENSITIVE, 0, NULL );
+    status = NtQueryAttributesFile(&attr, &basic_info);
+    RtlFreeUnicodeString( &nt_name );
+    return !status;
+}
+
 
 /******************************************************************
  *             RtlIsNameLegalDOS8Dot3   (NTDLL.@)

@@ -280,6 +280,8 @@ static void test_dc_layout(void)
 
     ret = GetMapMode( hdc );
     ok(ret == MM_ANISOTROPIC, "expected MM_ANISOTROPIC, got %d\n", ret);
+    ret = pGetLayout( hdc );
+    ok(ret == LAYOUT_RTL, "got %x\n", ret);
     expect_viewport_ext(hdc, 1, 1);
     expect_window_ext(hdc, 1, 1);
     expect_world_transform(hdc, 1.0, 1.0);
@@ -383,6 +385,7 @@ static void test_dc_layout(void)
 static void test_modify_world_transform(void)
 {
     HDC hdc = GetDC(0);
+    XFORM xform, xform2;
     int ret;
 
     ret = SetGraphicsMode(hdc, GM_ADVANCED);
@@ -396,6 +399,27 @@ static void test_modify_world_transform(void)
 
     ret = ModifyWorldTransform(hdc, NULL, MWT_RIGHTMULTIPLY);
     ok(!ret, "ret = %d\n", ret);
+
+    xform.eM11 = 2;
+    xform.eM12 = 0;
+    xform.eM21 = 0;
+    xform.eM22 = 1;
+    xform.eDx = xform.eDy = 0;
+    ret = ModifyWorldTransform(hdc, &xform, 4);
+    ok(ret, "ModifyWorldTransform failed\n");
+
+    memset(&xform2, 0xcc, sizeof(xform2));
+    ret = GetWorldTransform(hdc, &xform2);
+    ok(ret, "GetWorldTransform failed\n");
+    ok(!memcmp(&xform, &xform2, sizeof(xform)), "unexpected xform\n");
+
+    xform.eM11 = 1;
+    xform.eM12 = 1;
+    xform.eM21 = 1;
+    xform.eM22 = 1;
+    xform.eDx = xform.eDy = 0;
+    ret = ModifyWorldTransform(hdc, &xform, 4);
+    ok(!ret, "ModifyWorldTransform succeeded\n");
 
     ReleaseDC(0, hdc);
 }

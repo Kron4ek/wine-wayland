@@ -31,7 +31,7 @@
 #include "winnls.h"
 #include "winternl.h"
 #include "winreg.h"
-#include "gdi_private.h"
+#include "ntgdi_private.h"
 #include "resource.h"
 #include "wine/exception.h"
 #include "wine/heap.h"
@@ -180,13 +180,11 @@ static inline WCHAR *strdupW( const WCHAR *p )
     return ret;
 }
 
-static INT FONT_GetObjectA( HGDIOBJ handle, INT count, LPVOID buffer );
 static INT FONT_GetObjectW( HGDIOBJ handle, INT count, LPVOID buffer );
 static BOOL FONT_DeleteObject( HGDIOBJ handle );
 
 static const struct gdi_obj_funcs fontobj_funcs =
 {
-    FONT_GetObjectA,    /* pGetObjectA */
     FONT_GetObjectW,    /* pGetObjectW */
     NULL,               /* pUnrealizeObject */
     FONT_DeleteObject   /* pDeleteObject */
@@ -3179,7 +3177,7 @@ static BOOL CDECL font_GetFontRealizationInfo( PHYSDEV dev, void *ptr )
     info->instance_id = physdev->font->handle;
     if (info->size == sizeof(*info))
     {
-        info->unk = 0;
+        info->file_count = 1;
         info->face_index = physdev->font->face_index;
         info->simulations = 0;
         if (physdev->font->fake_bold) info->simulations |= 0x1;
@@ -3761,7 +3759,7 @@ static HFONT CDECL font_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
                lf.lfWeight, lf.lfPitchAndFamily, lf.lfCharSet, lf.lfOrientation,
                lf.lfEscapement );
 
-        if (dc->GraphicsMode == GM_ADVANCED)
+        if (dc->attr->graphics_mode == GM_ADVANCED)
         {
             memcpy( &dcmat, &dc->xformWorld2Vport, sizeof(FMAT2) );
             /* try to avoid not necessary glyph transformations */
@@ -3836,11 +3834,9 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pEndPath */
     font_EnumFonts,                 /* pEnumFonts */
     NULL,                           /* pEnumICMProfiles */
-    NULL,                           /* pExcludeClipRect */
     NULL,                           /* pExtDeviceMode */
     NULL,                           /* pExtEscape */
     NULL,                           /* pExtFloodFill */
-    NULL,                           /* pExtSelectClipRgn */
     NULL,                           /* pExtTextOut */
     NULL,                           /* pFillPath */
     NULL,                           /* pFillRgn */
@@ -3873,14 +3869,9 @@ const struct gdi_dc_funcs font_driver =
     font_GetTextFace,               /* pGetTextFace */
     font_GetTextMetrics,            /* pGetTextMetrics */
     NULL,                           /* pGradientFill */
-    NULL,                           /* pIntersectClipRect */
     NULL,                           /* pInvertRgn */
     NULL,                           /* pLineTo */
-    NULL,                           /* pModifyWorldTransform */
     NULL,                           /* pMoveTo */
-    NULL,                           /* pOffsetClipRgn */
-    NULL,                           /* pOffsetViewportOrg */
-    NULL,                           /* pOffsetWindowOrg */
     NULL,                           /* pPaintRgn */
     NULL,                           /* pPatBlt */
     NULL,                           /* pPie */
@@ -3889,8 +3880,6 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pPolyDraw */
     NULL,                           /* pPolyPolygon */
     NULL,                           /* pPolyPolyline */
-    NULL,                           /* pPolygon */
-    NULL,                           /* pPolyline */
     NULL,                           /* pPolylineTo */
     NULL,                           /* pPutImage */
     NULL,                           /* pRealizeDefaultPalette */
@@ -3899,41 +3888,20 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pResetDC */
     NULL,                           /* pRestoreDC */
     NULL,                           /* pRoundRect */
-    NULL,                           /* pSaveDC */
-    NULL,                           /* pScaleViewportExt */
-    NULL,                           /* pScaleWindowExt */
     NULL,                           /* pSelectBitmap */
     NULL,                           /* pSelectBrush */
     NULL,                           /* pSelectClipPath */
     font_SelectFont,                /* pSelectFont */
-    NULL,                           /* pSelectPalette */
     NULL,                           /* pSelectPen */
-    NULL,                           /* pSetArcDirection */
     NULL,                           /* pSetBkColor */
-    NULL,                           /* pSetBkMode */
     NULL,                           /* pSetBoundsRect */
     NULL,                           /* pSetDCBrushColor */
     NULL,                           /* pSetDCPenColor */
     NULL,                           /* pSetDIBitsToDevice */
     NULL,                           /* pSetDeviceClipping */
     NULL,                           /* pSetDeviceGammaRamp */
-    NULL,                           /* pSetLayout */
-    NULL,                           /* pSetMapMode */
-    NULL,                           /* pSetMapperFlags */
     NULL,                           /* pSetPixel */
-    NULL,                           /* pSetPolyFillMode */
-    NULL,                           /* pSetROP2 */
-    NULL,                           /* pSetRelAbs */
-    NULL,                           /* pSetStretchBltMode */
-    NULL,                           /* pSetTextAlign */
-    NULL,                           /* pSetTextCharacterExtra */
     NULL,                           /* pSetTextColor */
-    NULL,                           /* pSetTextJustification */
-    NULL,                           /* pSetViewportExt */
-    NULL,                           /* pSetViewportOrg */
-    NULL,                           /* pSetWindowExt */
-    NULL,                           /* pSetWindowOrg */
-    NULL,                           /* pSetWorldTransform */
     NULL,                           /* pStartDoc */
     NULL,                           /* pStartPage */
     NULL,                           /* pStretchBlt */
@@ -4235,9 +4203,9 @@ static UINT get_text_charset_info(DC *dc, FONTSIGNATURE *fs, DWORD flags)
 }
 
 /***********************************************************************
- *           GetTextCharsetInfo    (GDI32.@)
+ *           NtGdiGetTextCharsetInfo    (win32u.@)
  */
-UINT WINAPI GetTextCharsetInfo(HDC hdc, FONTSIGNATURE *fs, DWORD flags)
+UINT WINAPI NtGdiGetTextCharsetInfo( HDC hdc, FONTSIGNATURE *fs, DWORD flags )
 {
     UINT ret = DEFAULT_CHARSET;
     DC *dc = get_dc_ptr(hdc);
@@ -4320,7 +4288,7 @@ HFONT WINAPI CreateFontIndirectExW( const ENUMLOGFONTEXDVW *penumex )
 
     fontPtr->logfont = *plf;
 
-    if (!(hFont = alloc_gdi_handle( &fontPtr->obj, OBJ_FONT, &fontobj_funcs )))
+    if (!(hFont = alloc_gdi_handle( &fontPtr->obj, NTGDI_OBJ_FONT, &fontobj_funcs )))
     {
         HeapFree( GetProcessHeap(), 0, fontPtr );
         return 0;
@@ -4568,31 +4536,11 @@ HGDIOBJ WINAPI NtGdiSelectFont( HDC hdc, HGDIOBJ handle )
 
 
 /***********************************************************************
- *           FONT_GetObjectA
- */
-static INT FONT_GetObjectA( HGDIOBJ handle, INT count, LPVOID buffer )
-{
-    FONTOBJ *font = GDI_GetObjPtr( handle, OBJ_FONT );
-    LOGFONTA lfA;
-
-    if (!font) return 0;
-    if (buffer)
-    {
-        FONT_LogFontWToA( &font->logfont, &lfA );
-        if (count > sizeof(lfA)) count = sizeof(lfA);
-        memcpy( buffer, &lfA, count );
-    }
-    else count = sizeof(lfA);
-    GDI_ReleaseObj( handle );
-    return count;
-}
-
-/***********************************************************************
  *           FONT_GetObjectW
  */
 static INT FONT_GetObjectW( HGDIOBJ handle, INT count, LPVOID buffer )
 {
-    FONTOBJ *font = GDI_GetObjPtr( handle, OBJ_FONT );
+    FONTOBJ *font = GDI_GetObjPtr( handle, NTGDI_OBJ_FONT );
 
     if (!font) return 0;
     if (buffer)
@@ -4772,72 +4720,30 @@ INT WINAPI EnumFontsW( HDC hDC, LPCWSTR lpName, FONTENUMPROCW efproc,
 
 
 /***********************************************************************
- *           GetTextCharacterExtra    (GDI32.@)
+ *           NtGdiSetTextJustification    (win32u.@)
  */
-INT WINAPI GetTextCharacterExtra( HDC hdc )
+BOOL WINAPI NtGdiSetTextJustification( HDC hdc, INT extra, INT breaks )
 {
-    INT ret;
-    DC *dc = get_dc_ptr( hdc );
-    if (!dc) return 0x80000000;
-    ret = dc->charExtra;
-    release_dc_ptr( dc );
-    return ret;
-}
+    DC *dc;
 
+    if (!(dc = get_dc_ptr( hdc ))) return FALSE;
 
-/***********************************************************************
- *           SetTextCharacterExtra    (GDI32.@)
- */
-INT WINAPI SetTextCharacterExtra( HDC hdc, INT extra )
-{
-    INT ret = 0x80000000;
-    DC * dc = get_dc_ptr( hdc );
-
-    if (dc)
+    extra = abs( (extra * dc->attr->vport_ext.cx + dc->attr->wnd_ext.cx / 2) /
+                 dc->attr->wnd_ext.cx );
+    if (!extra) breaks = 0;
+    if (breaks)
     {
-        PHYSDEV physdev = GET_DC_PHYSDEV( dc, pSetTextCharacterExtra );
-        extra = physdev->funcs->pSetTextCharacterExtra( physdev, extra );
-        if (extra != 0x80000000)
-        {
-            ret = dc->charExtra;
-            dc->charExtra = extra;
-        }
-        release_dc_ptr( dc );
+        dc->breakExtra = extra / breaks;
+        dc->breakRem   = extra - (breaks * dc->breakExtra);
     }
-    return ret;
-}
-
-
-/***********************************************************************
- *           SetTextJustification    (GDI32.@)
- */
-BOOL WINAPI SetTextJustification( HDC hdc, INT extra, INT breaks )
-{
-    BOOL ret;
-    PHYSDEV physdev;
-    DC * dc = get_dc_ptr( hdc );
-
-    if (!dc) return FALSE;
-
-    physdev = GET_DC_PHYSDEV( dc, pSetTextJustification );
-    ret = physdev->funcs->pSetTextJustification( physdev, extra, breaks );
-    if (ret)
+    else
     {
-        extra = abs((extra * dc->vport_ext.cx + dc->wnd_ext.cx / 2) / dc->wnd_ext.cx);
-        if (!extra) breaks = 0;
-        if (breaks)
-        {
-            dc->breakExtra = extra / breaks;
-            dc->breakRem   = extra - (breaks * dc->breakExtra);
-        }
-        else
-        {
-            dc->breakExtra = 0;
-            dc->breakRem   = 0;
-        }
+        dc->breakExtra = 0;
+        dc->breakRem   = 0;
     }
+
     release_dc_ptr( dc );
-    return ret;
+    return TRUE;
 }
 
 
@@ -4984,14 +4890,15 @@ BOOL WINAPI GetTextExtentExPointI( HDC hdc, const WORD *indices, INT count, INT 
         {
             for (i = 0; i < count; i++)
             {
-                unsigned int dx = abs( INTERNAL_XDSTOWS( dc, pos[i] )) + (i + 1) * dc->charExtra;
+                unsigned int dx = abs( INTERNAL_XDSTOWS( dc, pos[i] )) +
+                    (i + 1) * dc->attr->char_extra;
                 if (nfit && dx > (unsigned int)max_ext) break;
                 if (dxs) dxs[i] = dx;
             }
             if (nfit) *nfit = i;
         }
 
-        size->cx = abs( INTERNAL_XDSTOWS( dc, size->cx )) + count * dc->charExtra;
+        size->cx = abs( INTERNAL_XDSTOWS( dc, size->cx )) + count * dc->attr->char_extra;
         size->cy = abs( INTERNAL_YDSTOWS( dc, size->cy ));
     }
 
@@ -5121,14 +5028,15 @@ BOOL WINAPI GetTextExtentExPointW( HDC hdc, LPCWSTR str, INT count, INT max_ext,
         {
             for (i = 0; i < count; i++)
             {
-                unsigned int dx = abs( INTERNAL_XDSTOWS( dc, pos[i] )) + (i + 1) * dc->charExtra;
+                unsigned int dx = abs( INTERNAL_XDSTOWS( dc, pos[i] )) +
+                    (i + 1) * dc->attr->char_extra;
                 if (nfit && dx > (unsigned int)max_ext) break;
 		if (dxs) dxs[i] = dx;
             }
             if (nfit) *nfit = i;
         }
 
-        size->cx = abs( INTERNAL_XDSTOWS( dc, size->cx )) + count * dc->charExtra;
+        size->cx = abs( INTERNAL_XDSTOWS( dc, size->cx )) + count * dc->attr->char_extra;
         size->cy = abs( INTERNAL_YDSTOWS( dc, size->cy ));
     }
 
@@ -5718,13 +5626,13 @@ BOOL CDECL nulldrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags, const RECT
     if (flags & ETO_OPAQUE)
     {
         RECT rc = *rect;
-        HBRUSH brush = CreateSolidBrush( GetNearestColor( dev->hdc, dc->backgroundColor ) );
+        HBRUSH brush = CreateSolidBrush( GetNearestColor( dev->hdc, dc->attr->background_color ) );
 
         if (brush)
         {
             orig = NtGdiSelectBrush( dev->hdc, brush );
             dp_to_lp( dc, (POINT *)&rc, 2 );
-            PatBlt( dev->hdc, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, PATCOPY );
+            NtGdiPatBlt( dev->hdc, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, PATCOPY );
             NtGdiSelectBrush( dev->hdc, orig );
             DeleteObject( brush );
         }
@@ -5810,7 +5718,7 @@ BOOL CDECL nulldrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags, const RECT
         }
     }
 
-    pen = CreatePen( PS_SOLID, 1, dc->textColor );
+    pen = CreatePen( PS_SOLID, 1, dc->attr->text_color );
     orig = NtGdiSelectPen( dev->hdc, pen );
 
     for (i = 0; i < count; i++)
@@ -5919,7 +5827,7 @@ static inline int get_line_width( DC *dc, int metric_size )
 }
 
 /***********************************************************************
- *           ExtTextOutW    (GDI32.@)
+ *           NtGdiExtTextOutW    (win32u.@)
  *
  * Draws text using the currently selected font, background color, and text color.
  * 
@@ -5948,8 +5856,8 @@ static inline int get_line_width( DC *dc, int metric_size )
  *    Success: TRUE
  *    Failure: FALSE
  */
-BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags,
-                         const RECT *lprect, LPCWSTR str, UINT count, const INT *lpDx )
+BOOL WINAPI NtGdiExtTextOutW( HDC hdc, INT x, INT y, UINT flags, const RECT *lprect,
+                              const WCHAR *str, UINT count, const INT *lpDx, DWORD cp )
 {
     BOOL ret = FALSE;
     LPWSTR reordered_str = (LPWSTR)str;
@@ -5973,9 +5881,9 @@ BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags,
     if (!dc) return FALSE;
     if (count > INT_MAX) return FALSE;
 
-    align = dc->textAlign;
+    align = dc->attr->text_align;
     breakRem = dc->breakRem;
-    layout = dc->layout;
+    layout = dc->attr->layout;
 
     if (quietfixme == 0 && flags & (ETO_NUMERICSLOCAL | ETO_NUMERICSLATIN))
     {
@@ -6022,11 +5930,12 @@ BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags,
 
     TRACE("%p, %d, %d, %08x, %s, %s, %d, %p)\n", hdc, x, y, flags,
           wine_dbgstr_rect(lprect), debugstr_wn(str, count), count, lpDx);
-    TRACE("align = %x bkmode = %x mapmode = %x\n", align, dc->backgroundMode, dc->MapMode);
+    TRACE("align = %x bkmode = %x mapmode = %x\n", align, dc->attr->background_mode,
+          dc->attr->map_mode);
 
     if(align & TA_UPDATECP)
     {
-        pt = dc->cur_pos;
+        pt = dc->attr->cur_pos;
         x = pt.x;
         y = pt.y;
     }
@@ -6037,7 +5946,7 @@ BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags,
     if(!(tm.tmPitchAndFamily & TMPF_VECTOR)) /* Non-scalable fonts shouldn't be rotated */
         lf.lfEscapement = 0;
 
-    if ((dc->GraphicsMode == GM_COMPATIBLE) &&
+    if ((dc->attr->graphics_mode == GM_COMPATIBLE) &&
         (dc->vport2WorldValid && dc->xformWorld2Vport.eM11 * dc->xformWorld2Vport.eM22 < 0))
     {
         lf.lfEscapement = -lf.lfEscapement;
@@ -6138,7 +6047,7 @@ BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags,
             desired[1].x -= desired[0].x;
             desired[1].y -= desired[0].y;
 
-            if (dc->GraphicsMode == GM_COMPATIBLE)
+            if (dc->attr->graphics_mode == GM_COMPATIBLE)
             {
                 if (dc->vport2WorldValid && dc->xformWorld2Vport.eM11 < 0)
                     desired[1].x = -desired[1].x;
@@ -6168,7 +6077,7 @@ BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags,
         desired[1].x -= desired[0].x;
         desired[1].y -= desired[0].y;
 
-        if (dc->GraphicsMode == GM_COMPATIBLE)
+        if (dc->attr->graphics_mode == GM_COMPATIBLE)
         {
             if (dc->vport2WorldValid && dc->xformWorld2Vport.eM11 < 0)
                 desired[1].x = -desired[1].x;
@@ -6226,7 +6135,7 @@ BOOL WINAPI ExtTextOutW( HDC hdc, INT x, INT y, UINT flags,
         break;
     }
 
-    if (dc->backgroundMode != TRANSPARENT)
+    if (dc->attr->background_mode != TRANSPARENT)
     {
         if(!((flags & ETO_CLIPPED) && (flags & ETO_OPAQUE)))
         {
@@ -6265,7 +6174,7 @@ done:
         OUTLINETEXTMETRICW* otm = NULL;
         POINT pts[5];
         HPEN hpen = NtGdiSelectPen(hdc, GetStockObject(NULL_PEN));
-        HBRUSH hbrush = CreateSolidBrush(dc->textColor);
+        HBRUSH hbrush = CreateSolidBrush( dc->attr->text_color );
 
         hbrush = NtGdiSelectBrush(hdc, hbrush);
 
@@ -6292,6 +6201,7 @@ done:
 
         if (lf.lfUnderline)
         {
+            const UINT cnt = 5;
             pts[0].x = x - (underlinePos + underlineWidth / 2) * sinEsc;
             pts[0].y = y - (underlinePos + underlineWidth / 2) * cosEsc;
             pts[1].x = x + width.x - (underlinePos + underlineWidth / 2) * sinEsc;
@@ -6303,11 +6213,12 @@ done:
             pts[4].x = pts[0].x;
             pts[4].y = pts[0].y;
             dp_to_lp(dc, pts, 5);
-            Polygon(hdc, pts, 5);
+            NtGdiPolyPolyDraw( hdc, pts, &cnt, 1, NtGdiPolyPolygon );
         }
 
         if (lf.lfStrikeOut)
         {
+            const UINT cnt = 5;
             pts[0].x = x - (strikeoutPos + strikeoutWidth / 2) * sinEsc;
             pts[0].y = y - (strikeoutPos + strikeoutWidth / 2) * cosEsc;
             pts[1].x = x + width.x - (strikeoutPos + strikeoutWidth / 2) * sinEsc;
@@ -6319,7 +6230,7 @@ done:
             pts[4].x = pts[0].x;
             pts[4].y = pts[0].y;
             dp_to_lp(dc, pts, 5);
-            Polygon(hdc, pts, 5);
+            NtGdiPolyPolyDraw( hdc, pts, &cnt, 1, NtGdiPolyPolygon );
         }
 
         NtGdiSelectPen(hdc, hpen);
@@ -6383,28 +6294,6 @@ BOOL WINAPI PolyTextOutW( HDC hdc, const POLYTEXTW *pptxt, INT cStrings )
     return TRUE;
 }
 
-
-/***********************************************************************
- *           SetMapperFlags    (GDI32.@)
- */
-DWORD WINAPI SetMapperFlags( HDC hdc, DWORD flags )
-{
-    DC *dc = get_dc_ptr( hdc );
-    DWORD ret = GDI_ERROR;
-
-    if (dc)
-    {
-        PHYSDEV physdev = GET_DC_PHYSDEV( dc, pSetMapperFlags );
-        flags = physdev->funcs->pSetMapperFlags( physdev, flags );
-        if (flags != GDI_ERROR)
-        {
-            ret = dc->mapperFlags;
-            dc->mapperFlags = flags;
-        }
-        release_dc_ptr( dc );
-    }
-    return ret;
-}
 
 /***********************************************************************
  *          GetAspectRatioFilterEx  (GDI32.@)
@@ -7086,7 +6975,7 @@ DWORD WINAPI GetFontLanguageInfo(HDC hdc)
 
 	DWORD result=0;
 
-	GetTextCharsetInfo( hdc, &fontsig, 0 );
+	NtGdiGetTextCharsetInfo( hdc, &fontsig, 0 );
 	/* We detect each flag we return using a bitmask on the Codepage Bitfields */
 
 	if( (fontsig.fsCsb[0]&GCP_DBCS_MASK)!=0 )
@@ -8192,7 +8081,7 @@ BOOL WINAPI GetFontResourceInfoW( LPCWSTR str, LPDWORD size, PVOID buffer, DWORD
 UINT WINAPI GetTextCharset(HDC hdc)
 {
     /* MSDN docs say this is equivalent */
-    return GetTextCharsetInfo(hdc, NULL, 0);
+    return NtGdiGetTextCharsetInfo( hdc, NULL, 0 );
 }
 
 /***********************************************************************
@@ -8333,7 +8222,7 @@ BOOL WINAPI FontIsLinked(HDC hdc)
  */
 BOOL WINAPI GetFontRealizationInfo(HDC hdc, struct font_realization_info *info)
 {
-    BOOL is_v0 = info->size == FIELD_OFFSET(struct font_realization_info, unk);
+    BOOL is_v0 = info->size == FIELD_OFFSET(struct font_realization_info, file_count);
     PHYSDEV dev;
     BOOL ret;
     DC *dc;
@@ -8363,7 +8252,7 @@ BOOL WINAPI GetRasterizerCaps( LPRASTERIZER_STATUS lprs, UINT cbNumBytes)
 /*************************************************************************
  *             GetFontFileData   (GDI32.@)
  */
-BOOL WINAPI GetFontFileData( DWORD instance_id, DWORD unknown, UINT64 offset, void *buff, DWORD buff_size )
+BOOL WINAPI GetFontFileData( DWORD instance_id, DWORD file_index, UINT64 offset, void *buff, DWORD buff_size )
 {
     struct gdi_font *font;
     DWORD tag = 0, size;
@@ -8395,7 +8284,7 @@ struct font_fileinfo
 /*************************************************************************
  *             GetFontFileInfo   (GDI32.@)
  */
-BOOL WINAPI GetFontFileInfo( DWORD instance_id, DWORD unknown, struct font_fileinfo *info,
+BOOL WINAPI GetFontFileInfo( DWORD instance_id, DWORD file_index, struct font_fileinfo *info,
                              SIZE_T size, SIZE_T *needed )
 {
     SIZE_T required_size = 0;

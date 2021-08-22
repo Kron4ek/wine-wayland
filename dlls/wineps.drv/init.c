@@ -798,11 +798,9 @@ static const struct gdi_dc_funcs psdrv_funcs =
     NULL,                               /* pEndPath */
     PSDRV_EnumFonts,                    /* pEnumFonts */
     NULL,                               /* pEnumICMProfiles */
-    NULL,                               /* pExcludeClipRect */
     PSDRV_ExtDeviceMode,                /* pExtDeviceMode */
     PSDRV_ExtEscape,                    /* pExtEscape */
     NULL,                               /* pExtFloodFill */
-    NULL,                               /* pExtSelectClipRgn */
     PSDRV_ExtTextOut,                   /* pExtTextOut */
     PSDRV_FillPath,                     /* pFillPath */
     NULL,                               /* pFillRgn */
@@ -835,14 +833,9 @@ static const struct gdi_dc_funcs psdrv_funcs =
     NULL,                               /* pGetTextFace */
     PSDRV_GetTextMetrics,               /* pGetTextMetrics */
     NULL,                               /* pGradientFill */
-    NULL,                               /* pIntersectClipRect */
     NULL,                               /* pInvertRgn */
     PSDRV_LineTo,                       /* pLineTo */
-    NULL,                               /* pModifyWorldTransform */
     NULL,                               /* pMoveTo */
-    NULL,                               /* pOffsetClipRgn */
-    NULL,                               /* pOffsetViewportOrg */
-    NULL,                               /* pOffsetWindowOrg */
     PSDRV_PaintRgn,                     /* pPaintRgn */
     PSDRV_PatBlt,                       /* pPatBlt */
     PSDRV_Pie,                          /* pPie */
@@ -851,8 +844,6 @@ static const struct gdi_dc_funcs psdrv_funcs =
     NULL,                               /* pPolyDraw */
     PSDRV_PolyPolygon,                  /* pPolyPolygon */
     PSDRV_PolyPolyline,                 /* pPolyPolyline */
-    NULL,                               /* pPolygon */
-    NULL,                               /* pPolyline */
     NULL,                               /* pPolylineTo */
     PSDRV_PutImage,                     /* pPutImage */
     NULL,                               /* pRealizeDefaultPalette */
@@ -861,41 +852,20 @@ static const struct gdi_dc_funcs psdrv_funcs =
     PSDRV_ResetDC,                      /* pResetDC */
     NULL,                               /* pRestoreDC */
     PSDRV_RoundRect,                    /* pRoundRect */
-    NULL,                               /* pSaveDC */
-    NULL,                               /* pScaleViewportExt */
-    NULL,                               /* pScaleWindowExt */
     NULL,                               /* pSelectBitmap */
     PSDRV_SelectBrush,                  /* pSelectBrush */
     NULL,                               /* pSelectClipPath */
     PSDRV_SelectFont,                   /* pSelectFont */
-    NULL,                               /* pSelectPalette */
     PSDRV_SelectPen,                    /* pSelectPen */
-    NULL,                               /* pSetArcDirection */
     PSDRV_SetBkColor,                   /* pSetBkColor */
-    NULL,                               /* pSetBkMode */
     NULL,                               /* pSetBoundsRect */
     PSDRV_SetDCBrushColor,              /* pSetDCBrushColor */
     PSDRV_SetDCPenColor,                /* pSetDCPenColor */
     NULL,                               /* pSetDIBitsToDevice */
     NULL,                               /* pSetDeviceClipping */
     NULL,                               /* pSetDeviceGammaRamp */
-    NULL,                               /* pSetLayout */
-    NULL,                               /* pSetMapMode */
-    NULL,                               /* pSetMapperFlags */
     PSDRV_SetPixel,                     /* pSetPixel */
-    NULL,                               /* pSetPolyFillMode */
-    NULL,                               /* pSetROP2 */
-    NULL,                               /* pSetRelAbs */
-    NULL,                               /* pSetStretchBltMode */
-    NULL,                               /* pSetTextAlign */
-    NULL,                               /* pSetTextCharacterExtra */
     PSDRV_SetTextColor,                 /* pSetTextColor */
-    NULL,                               /* pSetTextJustification */
-    NULL,                               /* pSetViewportExt */
-    NULL,                               /* pSetViewportOrg */
-    NULL,                               /* pSetWindowExt */
-    NULL,                               /* pSetWindowOrg */
-    NULL,                               /* pSetWorldTransform */
     PSDRV_StartDoc,                     /* pStartDoc */
     PSDRV_StartPage,                    /* pStartPage */
     NULL,                               /* pStretchBlt */

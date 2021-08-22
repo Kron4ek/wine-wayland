@@ -170,6 +170,8 @@ case $host in
       host_cpu="x86_64"
       notice_platform="64-bit "
       TARGETFLAGS="$TARGETFLAGS -m64"
+      enable_wow64=${enable_wow64:-yes}
+      enable_wow64win=${enable_wow64win:-yes}
       enable_wow64cpu=${enable_wow64cpu:-yes}
     fi
     ;;
@@ -215,6 +217,8 @@ case $host in
         [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>]], [[void func(__builtin_ms_va_list *args);]])],
                       [wine_cv_builtin_ms_va_list=yes],[wine_cv_builtin_ms_va_list=no])])
     test $wine_cv_builtin_ms_va_list != no || AC_MSG_ERROR([You need clang >= 5.0 to build Wine for arm64.])
+    enable_wow64=${enable_wow64:-yes}
+    enable_wow64win=${enable_wow64win:-yes}
     ;;
   i[[3456789]]86*)
     enable_win16=${enable_win16:-yes}
@@ -225,6 +229,8 @@ esac
 dnl enable_win16 defaults to yes on x86, to no on other CPUs
 enable_win16=${enable_win16:-no}
 enable_win64=${enable_win64:-no}
+enable_wow64=${enable_wow64:-no}
+enable_wow64win=${enable_wow64win:-no}
 enable_wow64cpu=${enable_wow64cpu:-no}
 
 dnl Disable winetest too if tests are disabled
@@ -935,7 +941,7 @@ case $host_os in
       WINEPRELOADER_LDFLAGS="-static -nostartfiles -nodefaultlibs -Wl,-Ttext=0x7d400000"
 
       case $host_cpu in
-        *i[[3456789]]86* | x86_64 | *aarch64*)
+        *i[[3456789]]86* | x86_64 | *aarch64* | arm*)
           WINE_TRY_CFLAGS([-Wl,-Ttext-segment=0x7bc00000],
                           [case $host_os in
                            freebsd* | kfreebsd*-gnu) WINELOADER_LDFLAGS="$WINELOADER_LDFLAGS -Wl,-Ttext-segment=0x60000000" ;;
@@ -2157,7 +2163,7 @@ esac
 case $host_os in
   linux*)
     case $host_cpu in
-      *i[[3456789]]86*|x86_64*|*aarch64*)
+      *i[[3456789]]86*|x86_64*|*aarch64*|arm*)
         test "$wine_binary" = wine || WINE_IGNORE_FILE("loader/wine-preloader")
         WINELOADER_PROGRAMS="$WINELOADER_PROGRAMS $wine_binary-preloader"
         ;;
@@ -2202,6 +2208,7 @@ AC_CHECK_FUNCS(\
 	setprogname \
 	sigprocmask \
 	symlink \
+	sysinfo \
 	tcdrain \
 	thr_kill2
 )
@@ -2553,6 +2560,13 @@ AC_CHECK_MEMBERS([struct icmpstat.icps_outhist],,,
 #include <netinet/icmp_var.h>
 #endif])
 
+dnl Check for struct in6_pktinfo
+AC_CHECK_MEMBERS([struct in6_pktinfo.ipi6_addr],,,
+[#ifdef HAVE_NETINET_IN_H
+#define _GNU_SOURCE
+#include <netinet/in.h>
+#endif])
+
 dnl Check for struct ipstat
 AC_CHECK_MEMBERS([struct ipstat.ips_total],,,
 [#ifdef HAVE_SYS_TYPES_H
@@ -2735,7 +2749,6 @@ WINE_CONFIG_MAKEFILE(dlls/acledit)
 WINE_CONFIG_MAKEFILE(dlls/aclui)
 WINE_CONFIG_MAKEFILE(dlls/activeds.tlb)
 WINE_CONFIG_MAKEFILE(dlls/activeds)
-WINE_CONFIG_MAKEFILE(dlls/actxprxy)
 WINE_CONFIG_MAKEFILE(dlls/adsiid)
 WINE_CONFIG_MAKEFILE(dlls/adsldp)
 WINE_CONFIG_MAKEFILE(dlls/adsldpc)
@@ -2758,6 +2771,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-comm-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l1-2-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l2-1-0)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l3-2-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-crt-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-crt-l2-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-datetime-l1-1-0)
@@ -2770,6 +2784,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-errorhandling-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-errorhandling-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-errorhandling-l1-1-2)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-errorhandling-l1-1-3)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-featurestaging-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-fibers-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-fibers-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-ansi-l2-1-0)
@@ -2795,6 +2810,7 @@ WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-job-l2-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-2)
+WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-5)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-private-l1-1-1)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-largeinteger-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-1-0)
@@ -3026,9 +3042,6 @@ WINE_CONFIG_MAKEFILE(dlls/d3d10)
 WINE_CONFIG_MAKEFILE(dlls/d3d10_1)
 WINE_CONFIG_MAKEFILE(dlls/d3d10core)
 WINE_CONFIG_MAKEFILE(dlls/d3d11)
-WINE_CONFIG_MAKEFILE(dlls/d3d12)
-WINE_CONFIG_MAKEFILE(dlls/d3d8)
-WINE_CONFIG_MAKEFILE(dlls/d3d8thk)
 WINE_CONFIG_MAKEFILE(dlls/d3d9)
 WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_33)
 WINE_CONFIG_MAKEFILE(dlls/d3dcompiler_34)
@@ -3130,6 +3143,7 @@ WINE_CONFIG_MAKEFILE(dlls/dxdiagn)
 WINE_CONFIG_MAKEFILE(dlls/dxerr9)
 WINE_CONFIG_MAKEFILE(dlls/dxgi)
 WINE_CONFIG_MAKEFILE(dlls/dxguid)
+WINE_CONFIG_MAKEFILE(dlls/dxtrans)
 WINE_CONFIG_MAKEFILE(dlls/dxva2)
 WINE_CONFIG_MAKEFILE(dlls/esent)
 WINE_CONFIG_MAKEFILE(dlls/evr)
@@ -3294,8 +3308,6 @@ WINE_CONFIG_MAKEFILE(dlls/msdrm)
 WINE_CONFIG_MAKEFILE(dlls/msftedit)
 WINE_CONFIG_MAKEFILE(dlls/msg711.acm)
 WINE_CONFIG_MAKEFILE(dlls/msgsm32.acm)
-WINE_CONFIG_MAKEFILE(dlls/mshtml.tlb)
-WINE_CONFIG_MAKEFILE(dlls/mshtml)
 WINE_CONFIG_MAKEFILE(dlls/msi)
 WINE_CONFIG_MAKEFILE(dlls/msident)
 WINE_CONFIG_MAKEFILE(dlls/msimg32)
@@ -3360,7 +3372,6 @@ WINE_CONFIG_MAKEFILE(dlls/netutils)
 WINE_CONFIG_MAKEFILE(dlls/newdev)
 WINE_CONFIG_MAKEFILE(dlls/ninput)
 WINE_CONFIG_MAKEFILE(dlls/normaliz)
-WINE_CONFIG_MAKEFILE(dlls/npmshtml)
 WINE_CONFIG_MAKEFILE(dlls/npptools)
 WINE_CONFIG_MAKEFILE(dlls/nsi)
 WINE_CONFIG_MAKEFILE(dlls/nsiproxy.sys)
@@ -3594,7 +3605,9 @@ WINE_CONFIG_MAKEFILE(dlls/wmphoto)
 WINE_CONFIG_MAKEFILE(dlls/wmvcore)
 WINE_CONFIG_MAKEFILE(dlls/wnaspi32)
 WINE_CONFIG_MAKEFILE(dlls/wow32,enable_win16)
+WINE_CONFIG_MAKEFILE(dlls/wow64)
 WINE_CONFIG_MAKEFILE(dlls/wow64cpu)
+WINE_CONFIG_MAKEFILE(dlls/wow64win)
 WINE_CONFIG_MAKEFILE(dlls/wpc)
 WINE_CONFIG_MAKEFILE(dlls/wpcap)
 WINE_CONFIG_MAKEFILE(dlls/ws2_32)
@@ -3670,9 +3683,7 @@ WINE_CONFIG_MAKEFILE(programs/dism)
 WINE_CONFIG_MAKEFILE(programs/dplaysvr)
 WINE_CONFIG_MAKEFILE(programs/dpnsvr)
 WINE_CONFIG_MAKEFILE(programs/dpvsetup)
-WINE_CONFIG_MAKEFILE(programs/eject)
 WINE_CONFIG_MAKEFILE(programs/expand)
-WINE_CONFIG_MAKEFILE(programs/explorer)
 WINE_CONFIG_MAKEFILE(programs/extrac32)
 WINE_CONFIG_MAKEFILE(programs/fc)
 WINE_CONFIG_MAKEFILE(programs/find)
@@ -3705,13 +3716,10 @@ WINE_CONFIG_MAKEFILE(programs/rpcss)
 WINE_CONFIG_MAKEFILE(programs/rundll.exe16,enable_win16)
 WINE_CONFIG_MAKEFILE(programs/rundll32)
 WINE_CONFIG_MAKEFILE(programs/sc)
-WINE_CONFIG_MAKEFILE(programs/schtasks)
 WINE_CONFIG_MAKEFILE(programs/sdbinst)
 WINE_CONFIG_MAKEFILE(programs/secedit)
 WINE_CONFIG_MAKEFILE(programs/servicemodelreg)
 WINE_CONFIG_MAKEFILE(programs/services)
-WINE_CONFIG_MAKEFILE(programs/shutdown)
-WINE_CONFIG_MAKEFILE(programs/spoolsv)
 WINE_CONFIG_MAKEFILE(programs/start)
 WINE_CONFIG_MAKEFILE(programs/subst)
 WINE_CONFIG_MAKEFILE(programs/svchost)
@@ -3723,7 +3731,6 @@ WINE_CONFIG_MAKEFILE(programs/unlodctr)
 WINE_CONFIG_MAKEFILE(programs/view)
 WINE_CONFIG_MAKEFILE(programs/wevtutil)
 WINE_CONFIG_MAKEFILE(programs/where)
-WINE_CONFIG_MAKEFILE(programs/whoami)
 WINE_CONFIG_MAKEFILE(programs/wineboot)
 WINE_CONFIG_MAKEFILE(programs/winebrowser)
 WINE_CONFIG_MAKEFILE(programs/winecfg)
@@ -3739,7 +3746,6 @@ WINE_CONFIG_MAKEFILE(programs/winmgmt)
 WINE_CONFIG_MAKEFILE(programs/winoldap.mod16,enable_win16)
 WINE_CONFIG_MAKEFILE(programs/winver)
 WINE_CONFIG_MAKEFILE(programs/wmic)
-WINE_CONFIG_MAKEFILE(programs/wmplayer)
 WINE_CONFIG_MAKEFILE(programs/write)
 WINE_CONFIG_MAKEFILE(programs/wscript)
 WINE_CONFIG_MAKEFILE(programs/wuauserv)

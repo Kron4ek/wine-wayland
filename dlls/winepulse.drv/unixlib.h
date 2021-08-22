@@ -17,6 +17,7 @@
  */
 
 #include "wine/list.h"
+#include "wine/unixlib.h"
 
 struct pulse_stream;
 
@@ -187,6 +188,8 @@ struct is_started_params
 
 enum unix_funcs
 {
+    process_attach,
+    process_detach,
     main_loop,
     create_stream,
     release_stream,

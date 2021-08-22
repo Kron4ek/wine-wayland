@@ -20,7 +20,7 @@
 
 #include <assert.h>
 
-#include "gdi_private.h"
+#include "ntgdi_private.h"
 #include "dibdrv.h"
 
 #include "wine/debug.h"
@@ -1011,8 +1011,8 @@ DWORD CDECL dibdrv_PutImage( PHYSDEV dev, HRGN clip, BITMAPINFO *info,
 
     if (clip && pdev->clip)
     {
-        tmp_rgn = CreateRectRgn( 0, 0, 0, 0 );
-        CombineRgn( tmp_rgn, clip, pdev->clip, RGN_AND );
+        tmp_rgn = NtGdiCreateRectRgn( 0, 0, 0, 0 );
+        NtGdiCombineRgn( tmp_rgn, clip, pdev->clip, RGN_AND );
         clip = tmp_rgn;
     }
     else if (!clip) clip = pdev->clip;
@@ -1030,7 +1030,7 @@ DWORD CDECL dibdrv_PutImage( PHYSDEV dev, HRGN clip, BITMAPINFO *info,
         }
         else
             ret = execute_rop( pdev, &dst->visrect, &src_dib, &src->visrect, &clipped_rects,
-                               &dc->brush_org, rop );
+                               &dc->attr->brush_org, rop );
         free_clipped_rects( &clipped_rects );
     }
     free_dib_info( &src_dib );

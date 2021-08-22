@@ -26,7 +26,7 @@
 #include "winbase.h"
 #include "wingdi.h"
 #include "winnls.h"
-#include "gdi_private.h"
+#include "ntgdi_private.h"
 #include "enhmfdrv/enhmetafiledrv.h"
 #include "wine/debug.h"
 
@@ -37,31 +37,29 @@ static BOOL CDECL EMFDRV_DeleteDC( PHYSDEV dev );
 static const struct gdi_dc_funcs emfdrv_driver =
 {
     NULL,                            /* pAbortDoc */
-    EMFDRV_AbortPath,                /* pAbortPath */
+    NULL,                            /* pAbortPath */
     EMFDRV_AlphaBlend,               /* pAlphaBlend */
-    EMFDRV_AngleArc,                 /* pAngleArc */
+    NULL,                            /* pAngleArc */
     EMFDRV_Arc,                      /* pArc */
     EMFDRV_ArcTo,                    /* pArcTo */
-    EMFDRV_BeginPath,                /* pBeginPath */
+    NULL,                            /* pBeginPath */
     NULL,                            /* pBlendImage */
-    EMFDRV_Chord,                    /* pChord */
-    EMFDRV_CloseFigure,              /* pCloseFigure */
+    NULL,                            /* pChord */
+    NULL,                            /* pCloseFigure */
     NULL,                            /* pCreateCompatibleDC */
     NULL,                            /* pCreateDC */
     EMFDRV_DeleteDC,                 /* pDeleteDC */
-    EMFDRV_DeleteObject,             /* pDeleteObject */
+    NULL,                            /* pDeleteObject */
     NULL,                            /* pDeviceCapabilities */
     EMFDRV_Ellipse,                  /* pEllipse */
     NULL,                            /* pEndDoc */
     NULL,                            /* pEndPage */
-    EMFDRV_EndPath,                  /* pEndPath */
+    NULL,                            /* pEndPath */
     NULL,                            /* pEnumFonts */
     NULL,                            /* pEnumICMProfiles */
-    EMFDRV_ExcludeClipRect,          /* pExcludeClipRect */
     NULL,                            /* pExtDeviceMode */
     NULL,                            /* pExtEscape */
-    EMFDRV_ExtFloodFill,             /* pExtFloodFill */
-    EMFDRV_ExtSelectClipRgn,         /* pExtSelectClipRgn */
+    NULL,                            /* pExtFloodFill */
     EMFDRV_ExtTextOut,               /* pExtTextOut */
     EMFDRV_FillPath,                 /* pFillPath */
     EMFDRV_FillRgn,                  /* pFillRgn */
@@ -94,15 +92,10 @@ static const struct gdi_dc_funcs emfdrv_driver =
     NULL,                            /* pGetTextFace */
     NULL,                            /* pGetTextMetrics */
     EMFDRV_GradientFill,             /* pGradientFill */
-    EMFDRV_IntersectClipRect,        /* pIntersectClipRect */
     EMFDRV_InvertRgn,                /* pInvertRgn */
     EMFDRV_LineTo,                   /* pLineTo */
-    EMFDRV_ModifyWorldTransform,     /* pModifyWorldTransform */
-    EMFDRV_MoveTo,                   /* pMoveTo */
-    EMFDRV_OffsetClipRgn,            /* pOffsetClipRgn */
-    EMFDRV_OffsetViewportOrgEx,      /* pOffsetViewportOrgEx */
-    EMFDRV_OffsetWindowOrgEx,        /* pOffsetWindowOrgEx */
-    EMFDRV_PaintRgn,                 /* pPaintRgn */
+    NULL,                            /* pMoveTo */
+    NULL,                            /* pPaintRgn */
     EMFDRV_PatBlt,                   /* pPatBlt */
     EMFDRV_Pie,                      /* pPie */
     EMFDRV_PolyBezier,               /* pPolyBezier */
@@ -110,8 +103,6 @@ static const struct gdi_dc_funcs emfdrv_driver =
     EMFDRV_PolyDraw,                 /* pPolyDraw */
     EMFDRV_PolyPolygon,              /* pPolyPolygon */
     EMFDRV_PolyPolyline,             /* pPolyPolyline */
-    EMFDRV_Polygon,                  /* pPolygon */
-    EMFDRV_Polyline,                 /* pPolyline */
     EMFDRV_PolylineTo,               /* pPolylineTo */
     NULL,                            /* pPutImage */
     NULL,                            /* pRealizeDefaultPalette */
@@ -120,44 +111,23 @@ static const struct gdi_dc_funcs emfdrv_driver =
     NULL,                            /* pResetDC */
     EMFDRV_RestoreDC,                /* pRestoreDC */
     EMFDRV_RoundRect,                /* pRoundRect */
-    EMFDRV_SaveDC,                   /* pSaveDC */
-    EMFDRV_ScaleViewportExtEx,       /* pScaleViewportExtEx */
-    EMFDRV_ScaleWindowExtEx,         /* pScaleWindowExtEx */
     EMFDRV_SelectBitmap,             /* pSelectBitmap */
-    EMFDRV_SelectBrush,              /* pSelectBrush */
+    NULL,                            /* pSelectBrush */
     EMFDRV_SelectClipPath,           /* pSelectClipPath */
     EMFDRV_SelectFont,               /* pSelectFont */
-    EMFDRV_SelectPalette,            /* pSelectPalette */
-    EMFDRV_SelectPen,                /* pSelectPen */
-    EMFDRV_SetArcDirection,          /* pSetArcDirection */
+    NULL,                            /* pSelectPen */
     EMFDRV_SetBkColor,               /* pSetBkColor */
-    EMFDRV_SetBkMode,                /* pSetBkMode */
     NULL,                            /* pSetBoundsRect */
     EMFDRV_SetDCBrushColor,          /* pSetDCBrushColor*/
     EMFDRV_SetDCPenColor,            /* pSetDCPenColor*/
     EMFDRV_SetDIBitsToDevice,        /* pSetDIBitsToDevice */
     NULL,                            /* pSetDeviceClipping */
     NULL,                            /* pSetDeviceGammaRamp */
-    EMFDRV_SetLayout,                /* pSetLayout */
-    EMFDRV_SetMapMode,               /* pSetMapMode */
-    EMFDRV_SetMapperFlags,           /* pSetMapperFlags */
     EMFDRV_SetPixel,                 /* pSetPixel */
-    EMFDRV_SetPolyFillMode,          /* pSetPolyFillMode */
-    EMFDRV_SetROP2,                  /* pSetROP2 */
-    NULL,                            /* pSetRelAbs */
-    EMFDRV_SetStretchBltMode,        /* pSetStretchBltMode */
-    EMFDRV_SetTextAlign,             /* pSetTextAlign */
-    NULL,                            /* pSetTextCharacterExtra */
     EMFDRV_SetTextColor,             /* pSetTextColor */
-    EMFDRV_SetTextJustification,     /* pSetTextJustification */ 
-    EMFDRV_SetViewportExtEx,         /* pSetViewportExtEx */
-    EMFDRV_SetViewportOrgEx,         /* pSetViewportOrgEx */
-    EMFDRV_SetWindowExtEx,           /* pSetWindowExtEx */
-    EMFDRV_SetWindowOrgEx,           /* pSetWindowOrgEx */
-    EMFDRV_SetWorldTransform,        /* pSetWorldTransform */
     NULL,                            /* pStartDoc */
     NULL,                            /* pStartPage */
-    EMFDRV_StretchBlt,               /* pStretchBlt */
+    NULL,                            /* pStretchBlt */
     EMFDRV_StretchDIBits,            /* pStretchDIBits */
     EMFDRV_StrokeAndFillPath,        /* pStrokeAndFillPath */
     EMFDRV_StrokePath,               /* pStrokePath */
@@ -335,13 +305,14 @@ HDC WINAPI CreateEnhMetaFileW(
 
     TRACE("(%p %s %s %s)\n", hdc, debugstr_w(filename), wine_dbgstr_rect(rect), debugstr_w(description) );
 
-    if (!(dc = alloc_dc_ptr( OBJ_ENHMETADC ))) return 0;
+    if (!(dc = alloc_dc_ptr( NTGDI_OBJ_ENHMETADC ))) return 0;
 
     physDev = HeapAlloc(GetProcessHeap(),0,sizeof(*physDev));
     if (!physDev) {
         free_dc_ptr( dc );
         return 0;
     }
+    dc->attr->emf = physDev;
     if(description) { /* App name\0Title\0\0 */
         length = lstrlenW(description);
 	length += lstrlenW(description + length + 1);
@@ -365,7 +336,6 @@ HDC WINAPI CreateEnhMetaFileW(
     physDev->dc_brush = 0;
     physDev->dc_pen = 0;
     physDev->restoring = 0;
-    physDev->modifying_transform = 0;
     physDev->path = FALSE;
 
     if (hdc)  /* if no ref, use current display */
@@ -380,7 +350,7 @@ HDC WINAPI CreateEnhMetaFileW(
 
     if (!hdc) DeleteDC( ref_dc );
 
-    SetVirtualResolution(physDev->dev.hdc, 0, 0, 0, 0);
+    NtGdiSetVirtualResolution(physDev->dev.hdc, 0, 0, 0, 0);
 
     physDev->emh->iType = EMR_HEADER;
     physDev->emh->nSize = size;

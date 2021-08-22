@@ -1081,6 +1081,7 @@ typedef struct _TEB64
 
 /* reserved TEB64 TLS slots for Wow64 */
 #define WOW64_TLS_CPURESERVED  1
+#define WOW64_TLS_TEMPLIST     3
 #define WOW64_TLS_FILESYSREDIR 8
 
 
@@ -1471,6 +1472,13 @@ typedef struct _FILE_IO_COMPLETION_NOTIFICATION_INFORMATION {
 #define FILE_SKIP_COMPLETION_PORT_ON_SUCCESS 0x1
 #define FILE_SKIP_SET_EVENT_ON_HANDLE        0x2
 #define FILE_SKIP_SET_USER_EVENT_ON_FAST_IO  0x4
+
+typedef struct _PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION
+{
+    ULONG  Version;
+    ULONG  Reserved;
+    VOID  *Callback;
+} PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION, *PPROCESS_INSTRUMENTATION_CALLBACK_INFORMATION;
 
 typedef enum _FSINFOCLASS {
     FileFsVolumeInformation = 1,
@@ -1899,10 +1907,22 @@ typedef enum _WINSTATIONINFOCLASS {
 
 typedef enum _MEMORY_INFORMATION_CLASS {
     MemoryBasicInformation,
-    MemoryWorkingSetList,
-    MemorySectionName,
-    MemoryBasicVlmInformation,
-    MemoryWorkingSetExInformation
+    MemoryWorkingSetInformation,
+    MemoryMappedFilenameInformation,
+    MemoryRegionInformation,
+    MemoryWorkingSetExInformation,
+    MemorySharedCommitInformation,
+    MemoryImageInformation,
+    MemoryRegionInformationEx,
+    MemoryPrivilegedBasicInformation,
+    MemoryEnclaveImageInformation,
+    MemoryBasicInformationCapped,
+    MemoryPhysicalContiguityInformation,
+#ifdef __WINESRC__
+    MemoryWineImageInitFuncs = 1000,
+    MemoryWineUnixFuncs,
+    MemoryWineUnixWow64Funcs,
+#endif
 } MEMORY_INFORMATION_CLASS;
 
 typedef struct _MEMORY_SECTION_NAME
@@ -2436,15 +2456,15 @@ typedef struct _SYSTEM_HANDLE_INFORMATION_EX
 /* System Information Class 0x15 */
 
 typedef struct _SYSTEM_CACHE_INFORMATION {
-    ULONG CurrentSize;
-    ULONG PeakSize;
+    SIZE_T CurrentSize;
+    SIZE_T PeakSize;
     ULONG PageFaultCount;
-    ULONG MinimumWorkingSet;
-    ULONG MaximumWorkingSet;
-    ULONG unused[4];
-#ifdef _WIN64
-    ULONG unknown64[7];
-#endif
+    SIZE_T MinimumWorkingSet;
+    SIZE_T MaximumWorkingSet;
+    SIZE_T CurrentSizeIncludingTransitionInPages;
+    SIZE_T PeakSizeIncludingTransitionInPages;
+    ULONG TransitionRePurposeCount;
+    ULONG Flags;
 } SYSTEM_CACHE_INFORMATION, *PSYSTEM_CACHE_INFORMATION;
 
 /* System Information Class 0x17 */
@@ -2484,6 +2504,12 @@ typedef struct _SYSTEM_KERNEL_DEBUGGER_INFORMATION {
 	BOOLEAN  DebuggerEnabled;
 	BOOLEAN  DebuggerNotPresent;
 } SYSTEM_KERNEL_DEBUGGER_INFORMATION, *PSYSTEM_KERNEL_DEBUGGER_INFORMATION;
+
+typedef struct _SYSTEM_KERNEL_DEBUGGER_INFORMATION_EX {
+    BOOLEAN  DebuggerAllowed;
+    BOOLEAN  DebuggerEnabled;
+    BOOLEAN  DebuggerPresent;
+} SYSTEM_KERNEL_DEBUGGER_INFORMATION_EX, *PSYSTEM_KERNEL_DEBUGGER_INFORMATION_EX;
 
 typedef struct _VM_COUNTERS
 {
@@ -3378,7 +3404,7 @@ typedef void (CALLBACK *PLDR_DLL_NOTIFICATION_FUNCTION)(ULONG, LDR_DLL_NOTIFICAT
 /* FIXME: to be checked */
 #define MAXIMUM_FILENAME_LENGTH 256
 
-typedef struct _SYSTEM_MODULE
+typedef struct _RTL_PROCESS_MODULE_INFORMATION
 {
     PVOID               Section;                        /* 00/00 */
     PVOID               MappedBaseAddress;              /* 04/08 */
@@ -3390,13 +3416,13 @@ typedef struct _SYSTEM_MODULE
     WORD                LoadCount;                      /* 18/24 */
     WORD                NameOffset;                     /* 1a/26 */
     BYTE                Name[MAXIMUM_FILENAME_LENGTH];  /* 1c/28 */
-} SYSTEM_MODULE, *PSYSTEM_MODULE;
+} RTL_PROCESS_MODULE_INFORMATION, *PRTL_PROCESS_MODULE_INFORMATION;
 
-typedef struct _SYSTEM_MODULE_INFORMATION
+typedef struct _RTL_PROCESS_MODULES
 {
     ULONG               ModulesCount;
-    SYSTEM_MODULE       Modules[1]; /* FIXME: should be Modules[0] */
-} SYSTEM_MODULE_INFORMATION, *PSYSTEM_MODULE_INFORMATION;
+    RTL_PROCESS_MODULE_INFORMATION Modules[1]; /* FIXME: should be Modules[0] */
+} RTL_PROCESS_MODULES, *PRTL_PROCESS_MODULES;
 
 #define PROCESS_CREATE_FLAGS_BREAKAWAY              0x00000001
 #define PROCESS_CREATE_FLAGS_NO_DEBUG_INHERIT       0x00000002
@@ -3413,7 +3439,7 @@ typedef struct _SYSTEM_MODULE_INFORMATION
 typedef struct _RTL_PROCESS_MODULE_INFORMATION_EX
 {
     USHORT NextOffset;
-    SYSTEM_MODULE BaseInfo;
+    RTL_PROCESS_MODULE_INFORMATION BaseInfo;
     ULONG ImageCheckSum;
     ULONG TimeDateStamp;
     void *DefaultBase;
@@ -3703,6 +3729,8 @@ typedef struct _WOW64_CPURESERVED
     /* CONTEXT_EX *context_ex */
 } WOW64_CPURESERVED, *PWOW64_CPURESERVED;
 
+#define WOW64_CPURESERVED_FLAG_RESET_STATE 1
+
 typedef struct _WOW64_CPU_AREA_INFO
 {
     void              *Context;
@@ -3712,6 +3740,26 @@ typedef struct _WOW64_CPU_AREA_INFO
     ULONG              ContextFlag;
     USHORT             Machine;
 } WOW64_CPU_AREA_INFO, *PWOW64_CPU_AREA_INFO;
+
+#ifdef __WINESRC__
+/* undocumented layout of LdrSystemDllInitBlock */
+/* this varies across Windows version; we are using the win10-2004 layout */
+typedef struct
+{
+    ULONG   version;
+    ULONG   unknown1[3];
+    ULONG64 unknown2;
+    ULONG64 pLdrInitializeThunk;
+    ULONG64 pKiUserExceptionDispatcher;
+    ULONG64 pKiUserApcDispatcher;
+    ULONG64 pKiUserCallbackDispatcher;
+    ULONG64 pRtlUserThreadStart;
+    ULONG64 pRtlpQueryProcessDebugInformationRemote;
+    ULONG64 ntdll_handle;
+    ULONG64 pLdrSystemDllInitBlock;
+    ULONG64 pRtlpFreezeTimeBias;
+} SYSTEM_DLL_INIT_BLOCK;
+#endif
 
 /***********************************************************************
  * Function declarations
@@ -3746,7 +3794,7 @@ NTSYSAPI NTSTATUS  WINAPI LdrLoadDll(LPCWSTR, DWORD, const UNICODE_STRING*, HMOD
 NTSYSAPI NTSTATUS  WINAPI LdrLockLoaderLock(ULONG,ULONG*,ULONG_PTR*);
 IMAGE_BASE_RELOCATION * WINAPI LdrProcessRelocationBlock(void*,UINT,USHORT*,INT_PTR);
 NTSYSAPI NTSTATUS  WINAPI LdrQueryImageFileExecutionOptions(const UNICODE_STRING*,LPCWSTR,ULONG,void*,ULONG,ULONG*);
-NTSYSAPI NTSTATUS  WINAPI LdrQueryProcessModuleInformation(SYSTEM_MODULE_INFORMATION*, ULONG, ULONG*);
+NTSYSAPI NTSTATUS  WINAPI LdrQueryProcessModuleInformation(RTL_PROCESS_MODULES*, ULONG, ULONG*);
 NTSYSAPI NTSTATUS  WINAPI LdrRegisterDllNotification(ULONG,PLDR_DLL_NOTIFICATION_FUNCTION,void*,void**);
 NTSYSAPI NTSTATUS  WINAPI LdrRemoveDllDirectory(void*);
 NTSYSAPI NTSTATUS  WINAPI LdrSetDefaultDllDirectories(ULONG);
@@ -3833,6 +3881,7 @@ NTSYSAPI NTSTATUS  WINAPI NtFreeVirtualMemory(HANDLE,PVOID*,SIZE_T*,ULONG);
 NTSYSAPI NTSTATUS  WINAPI NtFsControlFile(HANDLE,HANDLE,PIO_APC_ROUTINE,PVOID,PIO_STATUS_BLOCK,ULONG,PVOID,ULONG,PVOID,ULONG);
 NTSYSAPI NTSTATUS  WINAPI NtGetContextThread(HANDLE,CONTEXT*);
 NTSYSAPI ULONG     WINAPI NtGetCurrentProcessorNumber(void);
+NTSYSAPI NTSTATUS  WINAPI NtGetNextThread(HANDLE,HANDLE,ACCESS_MASK,ULONG,ULONG,HANDLE*);
 NTSYSAPI NTSTATUS  WINAPI NtGetNlsSectionPtr(ULONG,ULONG,void*,void**,SIZE_T*);
 NTSYSAPI NTSTATUS  WINAPI NtGetPlugPlayEvent(ULONG,ULONG,PVOID,ULONG);
 NTSYSAPI ULONG     WINAPI NtGetTickCount(VOID);
@@ -3846,6 +3895,7 @@ NTSYSAPI NTSTATUS  WINAPI NtIsProcessInJob(HANDLE,HANDLE);
 NTSYSAPI NTSTATUS  WINAPI NtListenPort(HANDLE,PLPC_MESSAGE);
 NTSYSAPI NTSTATUS  WINAPI NtLoadDriver(const UNICODE_STRING *);
 NTSYSAPI NTSTATUS  WINAPI NtLoadKey(const OBJECT_ATTRIBUTES *,OBJECT_ATTRIBUTES *);
+NTSYSAPI NTSTATUS  WINAPI NtLoadKey2(const OBJECT_ATTRIBUTES *,OBJECT_ATTRIBUTES *,ULONG);
 NTSYSAPI NTSTATUS  WINAPI NtLockFile(HANDLE,HANDLE,PIO_APC_ROUTINE,void*,PIO_STATUS_BLOCK,PLARGE_INTEGER,PLARGE_INTEGER,ULONG*,BOOLEAN,BOOLEAN);
 NTSYSAPI NTSTATUS  WINAPI NtLockVirtualMemory(HANDLE,PVOID*,SIZE_T*,ULONG);
 NTSYSAPI NTSTATUS  WINAPI NtMakeTemporaryObject(HANDLE);
@@ -3912,6 +3962,7 @@ NTSYSAPI NTSTATUS  WINAPI NtQuerySection(HANDLE,SECTION_INFORMATION_CLASS,PVOID,
 NTSYSAPI NTSTATUS  WINAPI NtQuerySemaphore(HANDLE,SEMAPHORE_INFORMATION_CLASS,PVOID,ULONG,PULONG);
 NTSYSAPI NTSTATUS  WINAPI NtQuerySymbolicLinkObject(HANDLE,PUNICODE_STRING,PULONG);
 NTSYSAPI NTSTATUS  WINAPI NtQuerySystemEnvironmentValue(PUNICODE_STRING,PWCHAR,ULONG,PULONG);
+NTSYSAPI NTSTATUS  WINAPI NtQuerySystemEnvironmentValueEx(PUNICODE_STRING,GUID*,void*,ULONG*,ULONG*);
 NTSYSAPI NTSTATUS  WINAPI NtQuerySystemInformation(SYSTEM_INFORMATION_CLASS,PVOID,ULONG,PULONG);
 NTSYSAPI NTSTATUS  WINAPI NtQuerySystemInformationEx(SYSTEM_INFORMATION_CLASS,void*,ULONG,void*,ULONG,ULONG*);
 NTSYSAPI NTSTATUS  WINAPI NtQuerySystemTime(PLARGE_INTEGER);
@@ -4410,6 +4461,7 @@ NTSYSAPI NTSTATUS  WINAPI RtlWow64GetThreadSelectorEntry(HANDLE,THREAD_DESCRIPTO
 NTSYSAPI NTSTATUS  WINAPI RtlWow64SetThreadContext(HANDLE,const WOW64_CONTEXT*);
 #else
 NTSYSAPI NTSTATUS  WINAPI NtWow64AllocateVirtualMemory64(HANDLE,ULONG64*,ULONG64,ULONG64*,ULONG,ULONG);
+NTSYSAPI NTSTATUS  WINAPI NtWow64GetNativeSystemInformation(SYSTEM_INFORMATION_CLASS,void*,ULONG,ULONG*);
 NTSYSAPI NTSTATUS  WINAPI NtWow64ReadVirtualMemory64(HANDLE,ULONG64,void*,ULONG64,ULONG64*);
 NTSYSAPI NTSTATUS  WINAPI NtWow64WriteVirtualMemory64(HANDLE,ULONG64,const void*,ULONG64,ULONG64*);
 NTSYSAPI LONGLONG  WINAPI RtlConvertLongToLargeInteger(LONG);
@@ -4471,9 +4523,9 @@ NTSYSAPI void      WINAPI TpWaitForWork(TP_WORK *,BOOL);
 
 /* Wine internal functions */
 
-NTSYSAPI NTSTATUS CDECL wine_nt_to_unix_file_name( const UNICODE_STRING *nameW, char *nameA, SIZE_T *size,
-                                                   UINT disposition );
-NTSYSAPI NTSTATUS CDECL wine_unix_to_nt_file_name( const char *name, WCHAR *buffer, SIZE_T *size );
+NTSYSAPI NTSTATUS WINAPI wine_nt_to_unix_file_name( const OBJECT_ATTRIBUTES *attr, char *nameA, ULONG *size,
+                                                    UINT disposition );
+NTSYSAPI NTSTATUS WINAPI wine_unix_to_nt_file_name( const char *name, WCHAR *buffer, ULONG *size );
 
 
 /***********************************************************************
@@ -4562,9 +4614,6 @@ static inline PLIST_ENTRY RemoveTailList(PLIST_ENTRY le)
 
 /* Wine internal functions */
 extern NTSTATUS CDECL __wine_init_unix_lib( HMODULE module, DWORD reason, const void *ptr_in, void *ptr_out );
-extern NTSTATUS CDECL __wine_unix_call( UINT64 handle, unsigned int code, void *args );
-
-typedef NTSTATUS (*unixlib_entry_t)( void *args );
 
 /* The thread information for 16-bit threads */
 /* NtCurrentTeb()->SubSystemTib points to this */

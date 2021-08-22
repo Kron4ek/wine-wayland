@@ -1447,4 +1447,97 @@ sync_test("functions scope", function() {
     val = with_function();
     ok(val == 8, "val != 8");
     ok(w == 9, "w != 9");
+
+    var func, func_outer, ret;
+    var o = new Object();
+
+    func_outer = function e()
+    {
+        function func_inner()
+        {
+            ok(typeof e == "function", "typeof e == " + typeof e);
+            ret = e
+        }
+        func = func_inner
+    }
+    func_outer();
+    func();
+    ok(ret === func_outer, "ret != func_outer");
+
+    func_outer = function f(f)
+    {
+        function func_inner()
+        {
+            ok(typeof f == "object", "typeof f == " + typeof f);
+            ret = f
+        }
+        func = func_inner
+    }
+    func_outer(o);
+    func();
+    ok(ret === o, "ret != o");
+});
+
+sync_test("console", function() {
+    var except
+
+    window.console.log('1', '2');
+    console.info('1', '2', '3');
+    console.info();
+    console.log();
+    console.trace();
+    console.warn();
+    console.debug();
+    console.error();
+
+    console.assert(false, '1');
+    console.assert(true, '1');
+    console.assert('1');
+
+    console.clear();
+    console.count('1');
+    console.count(1);
+
+
+    except = false;
+    try
+    {
+        console.countReset('1');
+    }
+    catch(e)
+    {
+        except = true;
+    }
+    ok(except, "console.countReset: expected exception");
+    console.dir(document);
+    console.dir();
+    console.dirxml(document);
+    console.group('1');
+    console.groupCollapsed('1');
+    console.groupEnd();
+
+    except = false;
+    try
+    {
+        console.table(['1', '2']);
+    }
+    catch(e)
+    {
+        except = true;
+    }
+    ok(except, "console.table: expected exception");
+
+    console.time('1');
+    console.timeEnd('1');
+
+    except = false;
+    try
+    {
+        console.timeLog('1');
+    }
+    catch(e)
+    {
+        except = true;
+    }
+    ok(except, "console.timeLog: expected exception");
 });

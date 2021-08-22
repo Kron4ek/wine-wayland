@@ -105,7 +105,7 @@
 #include "winerror.h"
 #include "winreg.h"
 #include "wingdi.h"
-#include "gdi_private.h"
+#include "ntgdi_private.h"
 #include "wine/debug.h"
 #include "wine/list.h"
 
@@ -1245,7 +1245,7 @@ static struct unix_face *unix_face_create( const char *unix_name, void *data_ptr
         This->style_name = decode_opentype_name( &style_name.face_name );
 
         memset( &full_name, 0, sizeof(full_name) );
-        style_name.primary_langid = primary_langid;
+        full_name.primary_langid = primary_langid;
         opentype_enum_full_names( tt_name_v0, search_face_name_callback, &full_name );
         This->full_name = decode_opentype_name( &full_name.face_name );
 
@@ -1352,7 +1352,7 @@ static int add_unix_face( const char *unix_name, const WCHAR *file, void *data_p
 static WCHAR *get_dos_file_name( LPCSTR str )
 {
     WCHAR *buffer;
-    SIZE_T len = strlen(str) + 1;
+    ULONG len = strlen(str) + 1;
 
     len += 8;  /* \??\unix prefix */
     if (!(buffer = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) ))) return NULL;
@@ -1374,11 +1374,13 @@ static WCHAR *get_dos_file_name( LPCSTR str )
 static char *get_unix_file_name( LPCWSTR dosW )
 {
     UNICODE_STRING nt_name;
+    OBJECT_ATTRIBUTES attr;
     NTSTATUS status;
-    SIZE_T size = 256;
+    ULONG size = 256;
     char *buffer;
 
     if (!RtlDosPathNameToNtPathName_U( dosW, &nt_name, NULL, NULL )) return NULL;
+    InitializeObjectAttributes( &attr, &nt_name, 0, 0, NULL );
     for (;;)
     {
         if (!(buffer = RtlAllocateHeap( GetProcessHeap(), 0, size )))
@@ -1386,7 +1388,7 @@ static char *get_unix_file_name( LPCWSTR dosW )
             RtlFreeUnicodeString( &nt_name );
             return NULL;
         }
-        status = wine_nt_to_unix_file_name( &nt_name, buffer, &size, FILE_OPEN_IF );
+        status = wine_nt_to_unix_file_name( &attr, buffer, &size, FILE_OPEN_IF );
         if (status != STATUS_BUFFER_TOO_SMALL) break;
         RtlFreeHeap( GetProcessHeap(), 0, buffer );
     }

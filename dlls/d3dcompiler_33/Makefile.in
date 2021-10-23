@@ -3,7 +3,7 @@ IMPORTS   = dxguid uuid
 EXTRADEFS = -DD3D_COMPILER_VERSION=33
 PARENTSRC = ../d3dcompiler_43
 
-EXTRADLLFLAGS = -mno-cygwin -Wb,--prefer-native
+EXTRADLLFLAGS = -Wb,--prefer-native
 
 C_SRCS = \
 	asmparser.c \
@@ -16,12 +16,10 @@ C_SRCS = \
 
 LEX_SRCS = \
 	asmshader.l \
-	hlsl.l \
 	ppl.l
 
 BISON_SRCS = \
 	asmshader.y \
-	hlsl.y \
 	ppy.y
 
 RC_SRCS = version.rc

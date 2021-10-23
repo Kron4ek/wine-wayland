@@ -84,7 +84,7 @@ static void gnutls_log( int level, const char *msg )
     TRACE( "<%d> %s", level, msg );
 }
 
-BOOL gnutls_initialize(void)
+static BOOL gnutls_initialize(void)
 {
     const char *env_str;
     int ret;
@@ -146,7 +146,7 @@ fail:
     return FALSE;
 }
 
-void gnutls_uninitialize(void)
+static void gnutls_uninitialize(void)
 {
     pgnutls_global_deinit();
     dlclose( libgnutls_handle );
@@ -598,7 +598,7 @@ static void load_root_certs(void)
             {
                 SecCertificateRef cert = (SecCertificateRef)CFArrayGetValueAtIndex(certs, i);
                 CFDataRef certData;
-                if ((status = SecKeychainItemExport(cert, kSecFormatX509Cert, 0, NULL, &certData)) == noErr)
+                if ((status = SecItemExport(cert, kSecFormatX509Cert, 0, NULL, &certData)) == noErr)
                 {
                     BYTE *data = add_cert( CFDataGetLength(certData) );
                     if (data) memcpy( data, CFDataGetBytePtr(certData), CFDataGetLength(certData) );

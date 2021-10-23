@@ -4115,8 +4115,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH DeviceIoControl( HANDLE handle, DWORD code, void *
         status = NtDeviceIoControlFile( handle, event, NULL, cvalue, piosb, code,
                                         in_buff, in_count, out_buff, out_count );
 
-    if (returned) *returned = piosb->Information;
-    return set_ntstatus( status );
+    if (returned && !NT_ERROR(status)) *returned = piosb->Information;
+    if (status == STATUS_PENDING || !NT_SUCCESS( status )) return set_ntstatus( status );
+    return TRUE;
 }
 
 

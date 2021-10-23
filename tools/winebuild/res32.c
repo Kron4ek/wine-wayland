@@ -19,7 +19,6 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -27,10 +26,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
-#ifdef HAVE_SYS_TYPES_H
-# include <sys/types.h>
-#endif
-#include <fcntl.h>
 
 #include "build.h"
 
@@ -628,7 +623,6 @@ void output_res_o_file( DLLSPEC *spec )
 {
     unsigned int i;
     char *res_file = NULL;
-    const char *format;
     int fd;
     struct strarray args;
 
@@ -687,20 +681,22 @@ void output_res_o_file( DLLSPEC *spec )
     free( output_buffer );
 
     args = find_tool( "windres", NULL );
+    strarray_add( &args, "-i" );
+    strarray_add( &args, res_file );
+    strarray_add( &args, "-o" );
+    strarray_add( &args, output_file_name );
     switch (target_cpu)
     {
         case CPU_x86:
-            format = "pe-i386";
+            strarray_add( &args, "-F" );
+            strarray_add( &args, "pe-i386" );
             break;
         case CPU_x86_64:
-            format = "pe-x86-64";
+            strarray_add( &args, "-F" );
+            strarray_add( &args, "pe-x86-64" );
             break;
         default:
-            format = NULL;
             break;
     }
-    strarray_add( &args, "-i", res_file, "-o", output_file_name, NULL );
-    if (format)
-        strarray_add( &args, "-F", format, NULL );
     spawn( args );
 }

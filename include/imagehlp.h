@@ -239,6 +239,7 @@ typedef struct _API_VERSION {
   USHORT  Reserved;
 } API_VERSION, *LPAPI_VERSION;
 
+#ifndef _WIN64
 typedef struct _IMAGE_DEBUG_INFORMATION {
   LIST_ENTRY List;
   DWORD        Size;
@@ -281,6 +282,15 @@ typedef struct _IMAGE_DEBUG_INFORMATION {
 
   DWORD Reserved[3];
 } IMAGE_DEBUG_INFORMATION, *PIMAGE_DEBUG_INFORMATION;
+
+PIMAGE_DEBUG_INFORMATION WINAPI MapDebugInformation(
+  HANDLE FileHandle, PCSTR FileName,
+  PCSTR SymbolPath, ULONG ImageBase
+);
+BOOL WINAPI UnmapDebugInformation(
+  PIMAGE_DEBUG_INFORMATION DebugInfo
+);
+#endif
 
 typedef struct _ADDRESS {
     DWORD          Offset;
@@ -459,6 +469,8 @@ typedef struct _IMAGEHLP_MODULE64
     BOOL                        TypeInfo;
     BOOL                        SourceIndexed;
     BOOL                        Publics;
+    DWORD                       MachineType;
+    DWORD                       Reserved;
 } IMAGEHLP_MODULE64, *PIMAGEHLP_MODULE64;
 
 typedef struct _IMAGEHLP_MODULEW64
@@ -486,6 +498,8 @@ typedef struct _IMAGEHLP_MODULEW64
     BOOL                        TypeInfo;
     BOOL                        SourceIndexed;
     BOOL                        Publics;
+    DWORD                       MachineType;
+    DWORD                       Reserved;
 } IMAGEHLP_MODULEW64, *PIMAGEHLP_MODULEW64;
 
 typedef struct _IMAGEHLP_LINE {
@@ -954,10 +968,6 @@ BOOL WINAPI MapAndLoad(
   PCSTR ImageName, PCSTR DllPath, PLOADED_IMAGE LoadedImage,
   BOOL DotDll, BOOL ReadOnly
 );
-PIMAGE_DEBUG_INFORMATION WINAPI MapDebugInformation(
-  HANDLE FileHandle, PCSTR FileName,
-  PCSTR SymbolPath, ULONG ImageBase
-);
 DWORD WINAPI MapFileAndCheckSumA(
   PCSTR Filename, PDWORD HeaderSum, PDWORD CheckSum
 );
@@ -1380,9 +1390,6 @@ DWORD WINAPI UnDecorateSymbolNameW(
 );
 BOOL WINAPI UnMapAndLoad(
   PLOADED_IMAGE LoadedImage
-);
-BOOL WINAPI UnmapDebugInformation(
-  PIMAGE_DEBUG_INFORMATION DebugInfo
 );
 BOOL WINAPI UpdateDebugInfoFile(
   PCSTR ImageFileName, PCSTR SymbolPath,

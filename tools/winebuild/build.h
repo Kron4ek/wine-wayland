@@ -29,16 +29,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-
-#ifndef max
-#define max(a,b)   (((a) > (b)) ? (a) : (b))
-#endif
-#ifndef min
-#define min(a,b)   (((a) < (b)) ? (a) : (b))
-#endif
-
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+#include "../tools.h"
 
 typedef enum
 {
@@ -136,6 +127,7 @@ typedef struct
     int              subsystem;          /* subsystem id */
     int              subsystem_major;    /* subsystem version major number */
     int              subsystem_minor;    /* subsystem version minor number */
+    int              syscall_table;      /* syscall table id */
     int              unicode_app;        /* default to unicode entry point */
     ORDDEF          *entry_points;       /* dll entry points */
     ORDDEF         **names;              /* array of entry point names (points into entry_points) */
@@ -167,13 +159,6 @@ static inline int is_pe(void)
 {
     return target_platform == PLATFORM_MINGW || target_platform == PLATFORM_WINDOWS;
 }
-
-struct strarray
-{
-    const char **str;
-    unsigned int count;
-    unsigned int max;
-};
 
 /* entry point flags */
 #define FLAG_NORELAY   0x0001  /* don't use relay debugging for this function */
@@ -228,10 +213,6 @@ struct strarray
 
 /* global functions */
 
-#ifndef __GNUC__
-#define __attribute__(X)
-#endif
-
 #ifndef DECLSPEC_NORETURN
 # if defined(_MSC_VER) && (_MSC_VER >= 1200) && !defined(MIDL_PASS)
 #  define DECLSPEC_NORETURN __declspec(noreturn)
@@ -239,17 +220,7 @@ struct strarray
 #  define DECLSPEC_NORETURN __attribute__((noreturn))
 # endif
 #endif
-
-extern void *xmalloc (size_t size);
-extern void *xrealloc (void *ptr, size_t size);
-extern char *xstrdup( const char *str );
 extern char *strupper(char *s);
-extern int strendswith(const char* str, const char* end);
-extern char *strmake(const char* fmt, ...) __attribute__((__format__ (__printf__, 1, 2 )));
-extern struct strarray strarray_fromstring( const char *str, const char *delim );
-extern void strarray_add( struct strarray *array, ... );
-extern void strarray_addv( struct strarray *array, char * const *argv );
-extern void strarray_addall( struct strarray *array, struct strarray args );
 extern DECLSPEC_NORETURN void fatal_error( const char *msg, ... )
    __attribute__ ((__format__ (__printf__, 1, 2)));
 extern DECLSPEC_NORETURN void fatal_perror( const char *msg, ... )
@@ -310,7 +281,7 @@ extern void add_import_dll( const char *name, const char *filename );
 extern void add_delayed_import( const char *name );
 extern void add_extra_ld_symbol( const char *name );
 extern void add_spec_extra_ld_symbol( const char *name );
-extern void read_undef_symbols( DLLSPEC *spec, char **argv );
+extern void read_undef_symbols( DLLSPEC *spec, struct strarray files );
 extern void resolve_imports( DLLSPEC *spec );
 extern int is_undefined( const char *name );
 extern int has_imports(void);
@@ -319,7 +290,7 @@ extern void output_module( DLLSPEC *spec );
 extern void output_stubs( DLLSPEC *spec );
 extern void output_syscalls( DLLSPEC *spec );
 extern void output_imports( DLLSPEC *spec );
-extern void output_static_lib( DLLSPEC *spec, char **argv );
+extern void output_static_lib( DLLSPEC *spec, struct strarray files );
 extern void output_exports( DLLSPEC *spec );
 extern int load_res32_file( const char *name, DLLSPEC *spec );
 extern void output_resources( DLLSPEC *spec );
@@ -336,8 +307,8 @@ extern void output_spec16_file( DLLSPEC *spec );
 extern void output_fake_module16( DLLSPEC *spec16 );
 extern void output_res_o_file( DLLSPEC *spec );
 extern void output_asm_relays16(void);
-extern void make_builtin_files( char *argv[] );
-extern void fixup_constructors( char *argv[] );
+extern void make_builtin_files( struct strarray files );
+extern void fixup_constructors( struct strarray files );
 
 extern void add_16bit_exports( DLLSPEC *spec32, DLLSPEC *spec16 );
 extern int parse_spec_file( FILE *file, DLLSPEC *spec );

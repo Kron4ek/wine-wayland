@@ -271,7 +271,7 @@ static LONG CDECL cabinet_seek_stream( INT_PTR hf, LONG dist, int seektype )
     return -1;
 }
 
-static UINT CDECL msi_media_get_disk_info(MSIPACKAGE *package, MSIMEDIAINFO *mi)
+static UINT msi_media_get_disk_info(MSIPACKAGE *package, MSIMEDIAINFO *mi)
 {
     MSIRECORD *row;
 
@@ -507,16 +507,23 @@ static INT_PTR cabinet_close_file_info(FDINOTIFICATIONTYPE fdint,
     data->mi->is_continuous = FALSE;
 
     if (!DosDateTimeToFileTime(pfdin->date, pfdin->time, &ft))
+    {
+        CloseHandle(handle);
         return -1;
+    }
     if (!LocalFileTimeToFileTime(&ft, &ftLocal))
+    {
+        CloseHandle(handle);
         return -1;
+    }
     if (!SetFileTime(handle, &ftLocal, 0, &ftLocal))
+    {
+        CloseHandle(handle);
         return -1;
+    }
 
     CloseHandle(handle);
-
-    data->cb(data->package, data->curfile, MSICABEXTRACT_FILEEXTRACTED, NULL, NULL,
-             data->user);
+    data->cb(data->package, data->curfile, MSICABEXTRACT_FILEEXTRACTED, NULL, NULL, data->user);
 
     msi_free(data->curfile);
     data->curfile = NULL;

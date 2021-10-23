@@ -127,6 +127,7 @@ int dinput_keyboard_hook( IDirectInputDevice8W *iface, WPARAM wparam, LPARAM lpa
     EnterCriticalSection(&This->base.crit);
     queue_event(iface, DIDFT_MAKEINSTANCE(dik_code) | DIDFT_PSHBUTTON,
                 new_diks, GetCurrentTime(), This->base.dinput->evsequence++);
+    if (This->base.hEvent) SetEvent( This->base.hEvent );
     LeaveCriticalSection(&This->base.crit);
 
     return ret;
@@ -203,12 +204,12 @@ static HRESULT alloc_device( REFGUID rguid, IDirectInputImpl *dinput, SysKeyboar
 
     if (FAILED(hr = direct_input_device_alloc( sizeof(SysKeyboardImpl), &SysKeyboardWvt, rguid, dinput, (void **)&newDevice )))
         return hr;
+    df = newDevice->base.data_format.wine_df;
     newDevice->base.crit.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": SysKeyboardImpl*->base.crit");
 
     newDevice->subtype = get_keyboard_subtype();
 
     /* Create copy of default data format */
-    if (!(df = HeapAlloc(GetProcessHeap(), 0, c_dfDIKeyboard.dwSize))) goto failed;
     memcpy(df, &c_dfDIKeyboard, c_dfDIKeyboard.dwSize);
     if (!(df->rgodf = HeapAlloc(GetProcessHeap(), 0, df->dwNumObjs * df->dwObjSize))) goto failed;
 
@@ -225,8 +226,6 @@ static HRESULT alloc_device( REFGUID rguid, IDirectInputImpl *dinput, SysKeyboar
         df->rgodf[idx++].dwType = DIDFT_MAKEINSTANCE(dik_code) | DIDFT_PSHBUTTON;
     }
     df->dwNumObjs = idx;
-
-    newDevice->base.data_format.wine_df = df;
 
     *out = newDevice;
     return DI_OK;

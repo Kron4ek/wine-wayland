@@ -369,7 +369,6 @@ static int sockaddr_from_unix( const union unix_sockaddr *uaddr, struct WS_socka
 }
 
 #ifndef HAVE_STRUCT_MSGHDR_MSG_ACCRIGHTS
-#if defined(IP_PKTINFO) || defined(IP_RECVDSTADDR)
 static WSACMSGHDR *fill_control_message( int level, int type, WSACMSGHDR *current, ULONG *maxsize, void *data, int len )
 {
     ULONG msgsize = sizeof(WSACMSGHDR) + WSA_CMSG_ALIGN(len);
@@ -384,11 +383,9 @@ static WSACMSGHDR *fill_control_message( int level, int type, WSACMSGHDR *curren
     memcpy(ptr, data, len);
     return (WSACMSGHDR *)(ptr + WSA_CMSG_ALIGN(len));
 }
-#endif /* defined(IP_PKTINFO) || defined(IP_RECVDSTADDR) */
 
 static int convert_control_headers(struct msghdr *hdr, WSABUF *control)
 {
-#if defined(IP_PKTINFO) || defined(IP_RECVDSTADDR)
     WSACMSGHDR *cmsg_win = (WSACMSGHDR *)control->buf, *ptr;
     ULONG ctlsize = control->len;
     struct cmsghdr *cmsg_unix;
@@ -428,6 +425,27 @@ static int convert_control_headers(struct msghdr *hdr, WSABUF *control)
                         break;
                     }
 #endif /* IP_PKTINFO */
+
+#if defined(IP_TOS)
+                    case IP_TOS:
+                    {
+                        ptr = fill_control_message( WS_IPPROTO_IP, WS_IP_TOS, ptr, &ctlsize,
+                                                    CMSG_DATA(cmsg_unix), sizeof(INT) );
+                        if (!ptr) goto error;
+                        break;
+                    }
+#endif /* IP_TOS */
+
+#if defined(IP_TTL)
+                    case IP_TTL:
+                    {
+                        ptr = fill_control_message( WS_IPPROTO_IP, WS_IP_TTL, ptr, &ctlsize,
+                                                    CMSG_DATA(cmsg_unix), sizeof(INT) );
+                        if (!ptr) goto error;
+                        break;
+                    }
+#endif /* IP_TTL */
+
                     default:
                         FIXME("Unhandled IPPROTO_IP message header type %d\n", cmsg_unix->cmsg_type);
                         break;
@@ -462,6 +480,16 @@ static int convert_control_headers(struct msghdr *hdr, WSABUF *control)
                     }
 #endif /* IPV6_PKTINFO */
 
+#if defined(IPV6_TCLASS)
+                    case IPV6_TCLASS:
+                    {
+                        ptr = fill_control_message( WS_IPPROTO_IPV6, WS_IPV6_TCLASS, ptr, &ctlsize,
+                                                    CMSG_DATA(cmsg_unix), sizeof(INT) );
+                        if (!ptr) goto error;
+                        break;
+                    }
+#endif /* IPV6_TCLASS */
+
                     default:
                         FIXME("Unhandled IPPROTO_IPV6 message header type %d\n", cmsg_unix->cmsg_type);
                         break;
@@ -480,10 +508,6 @@ static int convert_control_headers(struct msghdr *hdr, WSABUF *control)
 error:
     control->len = 0;
     return 0;
-#else /* defined(IP_PKTINFO) || defined(IP_RECVDSTADDR) */
-    control->len = 0;
-    return 1;
-#endif /* defined(IP_PKTINFO) || defined(IP_RECVDSTADDR) */
 }
 #endif /* HAVE_STRUCT_MSGHDR_MSG_ACCRIGHTS */
 
@@ -552,33 +576,27 @@ static NTSTATUS try_recv( int fd, struct async_recv_ioctl *async, ULONG_PTR *siz
     return status;
 }
 
-static NTSTATUS async_recv_proc( void *user, ULONG_PTR *info, NTSTATUS status )
+static BOOL async_recv_proc( void *user, ULONG_PTR *info, NTSTATUS *status )
 {
     struct async_recv_ioctl *async = user;
-    ULONG_PTR information = 0;
     int fd, needs_close;
 
-    TRACE( "%#x\n", status );
+    TRACE( "%#x\n", *status );
 
-    if (status == STATUS_ALERTED)
+    if (*status == STATUS_ALERTED)
     {
-        if ((status = server_get_unix_fd( async->io.handle, 0, &fd, &needs_close, NULL, NULL )))
-            return status;
+        if ((*status = server_get_unix_fd( async->io.handle, 0, &fd, &needs_close, NULL, NULL )))
+            return TRUE;
 
-        status = try_recv( fd, async, &information );
-        TRACE( "got status %#x, %#lx bytes read\n", status, information );
-
-        if (status == STATUS_DEVICE_NOT_READY)
-            status = STATUS_PENDING;
-
+        *status = try_recv( fd, async, info );
+        TRACE( "got status %#x, %#lx bytes read\n", *status, *info );
         if (needs_close) close( fd );
+
+        if (*status == STATUS_DEVICE_NOT_READY)
+            return FALSE;
     }
-    if (status != STATUS_PENDING)
-    {
-        *info = information;
-        release_fileio( &async->io );
-    }
-    return status;
+    release_fileio( &async->io );
+    return TRUE;
 }
 
 static NTSTATUS sock_recv( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc_user, IO_STATUS_BLOCK *io,
@@ -691,31 +709,26 @@ static ULONG_PTR fill_poll_output( struct async_poll_ioctl *async, NTSTATUS stat
     return offsetof( struct afd_poll_params, sockets[count] );
 }
 
-static NTSTATUS async_poll_proc( void *user, ULONG_PTR *info, NTSTATUS status )
+static BOOL async_poll_proc( void *user, ULONG_PTR *info, NTSTATUS *status )
 {
     struct async_poll_ioctl *async = user;
-    ULONG_PTR information = 0;
 
-    if (status == STATUS_ALERTED)
+    if (*status == STATUS_ALERTED)
     {
         SERVER_START_REQ( get_async_result )
         {
             req->user_arg = wine_server_client_ptr( async );
             wine_server_set_reply( req, async->sockets, async->count * sizeof(async->sockets[0]) );
-            status = wine_server_call( req );
+            *status = wine_server_call( req );
         }
         SERVER_END_REQ;
 
-        information = fill_poll_output( async, status );
+        *info = fill_poll_output( async, *status );
     }
 
-    if (status != STATUS_PENDING)
-    {
-        *info = information;
-        free( async->input );
-        release_fileio( &async->io );
-    }
-    return status;
+    free( async->input );
+    release_fileio( &async->io );
+    return TRUE;
 }
 
 
@@ -737,12 +750,11 @@ static NTSTATUS sock_poll( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, voi
             || in_size < offsetof( struct afd_poll_params, sockets[params->count] ))
         return STATUS_INVALID_PARAMETER;
 
-    TRACE( "timeout %s, count %u, unknown %#x, padding (%#x, %#x, %#x), sockets[0] {%04lx, %#x}\n",
-            wine_dbgstr_longlong(params->timeout), params->count, params->unknown,
+    TRACE( "timeout %s, count %u, exclusive %#x, padding (%#x, %#x, %#x), sockets[0] {%04lx, %#x}\n",
+            wine_dbgstr_longlong(params->timeout), params->count, params->exclusive,
             params->padding[0], params->padding[1], params->padding[2],
             params->sockets[0].socket, params->sockets[0].flags );
 
-    if (params->unknown) FIXME( "unknown boolean is %#x\n", params->unknown );
     if (params->padding[0]) FIXME( "padding[0] is %#x\n", params->padding[0] );
     if (params->padding[1]) FIXME( "padding[1] is %#x\n", params->padding[1] );
     if (params->padding[2]) FIXME( "padding[2] is %#x\n", params->padding[2] );
@@ -783,6 +795,7 @@ static NTSTATUS sock_poll( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, voi
     SERVER_START_REQ( poll_socket )
     {
         req->async = server_async( handle, &async->io, event, apc, apc_user, iosb_client_ptr(io) );
+        req->exclusive = !!params->exclusive;
         req->timeout = params->timeout;
         wine_server_add_data( req, input, params->count * sizeof(*input) );
         wine_server_set_reply( req, async->sockets, params->count * sizeof(async->sockets[0]) );
@@ -874,32 +887,29 @@ static NTSTATUS try_send( int fd, struct async_send_ioctl *async )
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS async_send_proc( void *user, ULONG_PTR *info, NTSTATUS status )
+static BOOL async_send_proc( void *user, ULONG_PTR *info, NTSTATUS *status )
 {
     struct async_send_ioctl *async = user;
     int fd, needs_close;
 
-    TRACE( "%#x\n", status );
+    TRACE( "%#x\n", *status );
 
-    if (status == STATUS_ALERTED)
+    if (*status == STATUS_ALERTED)
     {
-        if ((status = server_get_unix_fd( async->io.handle, 0, &fd, &needs_close, NULL, NULL )))
-            return status;
+        if ((*status = server_get_unix_fd( async->io.handle, 0, &fd, &needs_close, NULL, NULL )))
+            return TRUE;
 
-        status = try_send( fd, async );
-        TRACE( "got status %#x\n", status );
-
-        if (status == STATUS_DEVICE_NOT_READY)
-            status = STATUS_PENDING;
+        *status = try_send( fd, async );
+        TRACE( "got status %#x\n", *status );
 
         if (needs_close) close( fd );
+
+        if (*status == STATUS_DEVICE_NOT_READY)
+            return FALSE;
     }
-    if (status != STATUS_PENDING)
-    {
-        *info = async->sent_len;
-        release_fileio( &async->io );
-    }
-    return status;
+    *info = async->sent_len;
+    release_fileio( &async->io );
+    return TRUE;
 }
 
 static NTSTATUS sock_send( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc_user,
@@ -1021,7 +1031,7 @@ static NTSTATUS try_transmit( int sock_fd, int file_fd, struct async_transmit_io
 
         if (ret < read_size || (async->file_len && async->file_cursor == async->file_len))
             async->file = NULL;
-        return STATUS_PENDING; /* still more data to send */
+        return STATUS_DEVICE_NOT_READY; /* still more data to send */
     }
 
     while (async->tail_cursor < async->buffers.TailLength)
@@ -1037,39 +1047,36 @@ static NTSTATUS try_transmit( int sock_fd, int file_fd, struct async_transmit_io
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS async_transmit_proc( void *user, ULONG_PTR *info, NTSTATUS status )
+static BOOL async_transmit_proc( void *user, ULONG_PTR *info, NTSTATUS *status )
 {
     int sock_fd, file_fd = -1, sock_needs_close = FALSE, file_needs_close = FALSE;
     struct async_transmit_ioctl *async = user;
 
-    TRACE( "%#x\n", status );
+    TRACE( "%#x\n", *status );
 
-    if (status == STATUS_ALERTED)
+    if (*status == STATUS_ALERTED)
     {
-        if ((status = server_get_unix_fd( async->io.handle, 0, &sock_fd, &sock_needs_close, NULL, NULL )))
-            return status;
+        if ((*status = server_get_unix_fd( async->io.handle, 0, &sock_fd, &sock_needs_close, NULL, NULL )))
+            return TRUE;
 
-        if (async->file && (status = server_get_unix_fd( async->file, 0, &file_fd, &file_needs_close, NULL, NULL )))
+        if (async->file && (*status = server_get_unix_fd( async->file, 0, &file_fd, &file_needs_close, NULL, NULL )))
         {
             if (sock_needs_close) close( sock_fd );
-            return status;
+            return TRUE;
         }
 
-        status = try_transmit( sock_fd, file_fd, async );
-        TRACE( "got status %#x\n", status );
-
-        if (status == STATUS_DEVICE_NOT_READY)
-            status = STATUS_PENDING;
+        *status = try_transmit( sock_fd, file_fd, async );
+        TRACE( "got status %#x\n", *status );
 
         if (sock_needs_close) close( sock_fd );
         if (file_needs_close) close( file_fd );
+
+        if (*status == STATUS_DEVICE_NOT_READY)
+            return FALSE;
     }
-    if (status != STATUS_PENDING)
-    {
-        *info = async->head_cursor + async->file_cursor + async->tail_cursor;
-        release_fileio( &async->io );
-    }
-    return status;
+    *info = async->head_cursor + async->file_cursor + async->tail_cursor;
+    release_fileio( &async->io );
+    return TRUE;
 }
 
 static NTSTATUS sock_transmit( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc_user,
@@ -1169,7 +1176,7 @@ static NTSTATUS do_getsockopt( HANDLE handle, IO_STATUS_BLOCK *io, int level,
     ret = getsockopt( fd, level, option, out_buffer, &len );
     if (needs_close) close( fd );
     if (ret) return sock_errno_to_status( errno );
-    io->Information = len;
+    if (io) io->Information = len;
     return STATUS_SUCCESS;
 }
 
@@ -1187,6 +1194,15 @@ static NTSTATUS do_setsockopt( HANDLE handle, IO_STATUS_BLOCK *io, int level,
     ret = setsockopt( fd, level, option, optval, optlen );
     if (needs_close) close( fd );
     return ret ? sock_errno_to_status( errno ) : STATUS_SUCCESS;
+}
+
+
+static int get_sock_type( HANDLE handle )
+{
+    int sock_type;
+    if (do_getsockopt( handle, NULL, SOL_SOCKET, SO_TYPE, &sock_type, sizeof(sock_type) ) != STATUS_SUCCESS)
+        return -1;
+    return sock_type;
 }
 
 
@@ -1753,29 +1769,55 @@ NTSTATUS sock_ioctl( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc
 
 #ifdef IP_HDRINCL
         case IOCTL_AFD_WINE_GET_IP_HDRINCL:
+            if (get_sock_type( handle ) != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IP, IP_HDRINCL, out_buffer, out_size );
 
         case IOCTL_AFD_WINE_SET_IP_HDRINCL:
+            if (get_sock_type( handle ) != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IP, IP_HDRINCL, in_buffer, in_size );
 #endif
 
         case IOCTL_AFD_WINE_GET_IP_MULTICAST_IF:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IP, IP_MULTICAST_IF, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IP_MULTICAST_IF:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IP, IP_MULTICAST_IF, in_buffer, in_size );
+        }
 
         case IOCTL_AFD_WINE_GET_IP_MULTICAST_LOOP:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IP, IP_MULTICAST_LOOP, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IP_MULTICAST_LOOP:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IP, IP_MULTICAST_LOOP, in_buffer, in_size );
+        }
 
         case IOCTL_AFD_WINE_GET_IP_MULTICAST_TTL:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IP, IP_MULTICAST_TTL, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IP_MULTICAST_TTL:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IP, IP_MULTICAST_TTL, in_buffer, in_size );
+        }
 
         case IOCTL_AFD_WINE_GET_IP_OPTIONS:
             return do_getsockopt( handle, io, IPPROTO_IP, IP_OPTIONS, out_buffer, out_size );
@@ -1785,16 +1827,64 @@ NTSTATUS sock_ioctl( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc
 
 #ifdef IP_PKTINFO
         case IOCTL_AFD_WINE_GET_IP_PKTINFO:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IP, IP_PKTINFO, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IP_PKTINFO:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IP, IP_PKTINFO, in_buffer, in_size );
+        }
 #elif defined(IP_RECVDSTADDR)
         case IOCTL_AFD_WINE_GET_IP_PKTINFO:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IP, IP_RECVDSTADDR, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IP_PKTINFO:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IP, IP_RECVDSTADDR, in_buffer, in_size );
+        }
+#endif
+
+#ifdef IP_RECVTOS
+        case IOCTL_AFD_WINE_GET_IP_RECVTOS:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
+            return do_getsockopt( handle, io, IPPROTO_IP, IP_RECVTOS, out_buffer, out_size );
+        }
+
+        case IOCTL_AFD_WINE_SET_IP_RECVTOS:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
+            return do_setsockopt( handle, io, IPPROTO_IP, IP_RECVTOS, in_buffer, in_size );
+        }
+#endif
+
+#ifdef IP_RECVTTL
+        case IOCTL_AFD_WINE_GET_IP_RECVTTL:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
+            return do_getsockopt( handle, io, IPPROTO_IP, IP_RECVTTL, out_buffer, out_size );
+        }
+
+        case IOCTL_AFD_WINE_SET_IP_RECVTTL:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
+            return do_setsockopt( handle, io, IPPROTO_IP, IP_RECVTTL, in_buffer, in_size );
+        }
 #endif
 
         case IOCTL_AFD_WINE_GET_IP_TOS:
@@ -1883,37 +1973,93 @@ NTSTATUS sock_ioctl( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc
 #endif
 
         case IOCTL_AFD_WINE_GET_IPV6_MULTICAST_HOPS:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IPV6_MULTICAST_HOPS:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, in_buffer, in_size );
+        }
 
         case IOCTL_AFD_WINE_GET_IPV6_MULTICAST_IF:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IPV6, IPV6_MULTICAST_IF, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IPV6_MULTICAST_IF:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IPV6, IPV6_MULTICAST_IF, in_buffer, in_size );
+        }
 
         case IOCTL_AFD_WINE_GET_IPV6_MULTICAST_LOOP:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IPV6_MULTICAST_LOOP:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, in_buffer, in_size );
+        }
 
 #ifdef IPV6_RECVHOPLIMIT
         case IOCTL_AFD_WINE_GET_IPV6_RECVHOPLIMIT:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IPV6_RECVHOPLIMIT:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, in_buffer, in_size );
+        }
 #endif
 
 #ifdef IPV6_RECVPKTINFO
         case IOCTL_AFD_WINE_GET_IPV6_RECVPKTINFO:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_getsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVPKTINFO, out_buffer, out_size );
+        }
 
         case IOCTL_AFD_WINE_SET_IPV6_RECVPKTINFO:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
             return do_setsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVPKTINFO, in_buffer, in_size );
+        }
+#endif
+
+#ifdef IPV6_RECVTCLASS
+        case IOCTL_AFD_WINE_GET_IPV6_RECVTCLASS:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
+            return do_getsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVTCLASS, out_buffer, out_size );
+        }
+
+        case IOCTL_AFD_WINE_SET_IPV6_RECVTCLASS:
+        {
+            int sock_type = get_sock_type( handle );
+            if (sock_type != SOCK_DGRAM && sock_type != SOCK_RAW) return STATUS_INVALID_PARAMETER;
+            return do_setsockopt( handle, io, IPPROTO_IPV6, IPV6_RECVTCLASS, in_buffer, in_size );
+        }
 #endif
 
         case IOCTL_AFD_WINE_GET_IPV6_UNICAST_HOPS:

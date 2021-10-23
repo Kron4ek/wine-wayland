@@ -73,7 +73,8 @@ static inline struct ntdll_thread_data *ntdll_get_thread_data(void)
     return (struct ntdll_thread_data *)&NtCurrentTeb()->GdiTebBatch;
 }
 
-typedef NTSTATUS async_callback_t( void *user, ULONG_PTR *info, NTSTATUS status );
+/* returns TRUE if the async is complete; FALSE if it should be restarted */
+typedef BOOL async_callback_t( void *user, ULONG_PTR *info, NTSTATUS *status );
 
 struct async_fileio
 {
@@ -87,6 +88,7 @@ static const SIZE_T teb_size = 0x3800;  /* TEB64 + TEB32 + debug info */
 static const SIZE_T signal_stack_mask = 0xffff;
 static const SIZE_T signal_stack_size = 0x10000 - 0x3800;
 static const SIZE_T kernel_stack_size = 0x20000;
+static const SIZE_T min_kernel_stack  = 0x2000;
 static const LONG teb_offset = 0x2000;
 
 #define FILE_WRITE_TO_END_OF_FILE      ((LONGLONG)-1)
@@ -95,8 +97,9 @@ static const LONG teb_offset = 0x2000;
 /* callbacks to PE ntdll from the Unix side */
 extern void     (WINAPI *pDbgUiRemoteBreakin)( void *arg ) DECLSPEC_HIDDEN;
 extern NTSTATUS (WINAPI *pKiRaiseUserExceptionDispatcher)(void) DECLSPEC_HIDDEN;
-extern void     (WINAPI *pKiUserApcDispatcher)(CONTEXT*,ULONG_PTR,ULONG_PTR,ULONG_PTR,PNTAPCFUNC) DECLSPEC_HIDDEN;
 extern NTSTATUS (WINAPI *pKiUserExceptionDispatcher)(EXCEPTION_RECORD*,CONTEXT*) DECLSPEC_HIDDEN;
+extern void     (WINAPI *pKiUserApcDispatcher)(CONTEXT*,ULONG_PTR,ULONG_PTR,ULONG_PTR,PNTAPCFUNC) DECLSPEC_HIDDEN;
+extern void     (WINAPI *pKiUserCallbackDispatcher)(ULONG,void*,ULONG) DECLSPEC_HIDDEN;
 extern void     (WINAPI *pLdrInitializeThunk)(CONTEXT*,void**,ULONG_PTR,ULONG_PTR) DECLSPEC_HIDDEN;
 extern void     (WINAPI *pRtlUserThreadStart)( PRTL_THREAD_START_ROUTINE entry, void *arg ) DECLSPEC_HIDDEN;
 extern void     (WINAPI *p__wine_ctrl_routine)(void *) DECLSPEC_HIDDEN;
@@ -165,7 +168,6 @@ extern BOOL is_builtin_path( const UNICODE_STRING *path, WORD *machine ) DECLSPE
 extern NTSTATUS load_main_exe( const WCHAR *name, const char *unix_name, const WCHAR *curdir, WCHAR **image,
                                void **module ) DECLSPEC_HIDDEN;
 extern NTSTATUS load_start_exe( WCHAR **image, void **module ) DECLSPEC_HIDDEN;
-extern NTSTATUS get_builtin_init_funcs( void *handle, void **funcs, SIZE_T len, SIZE_T *retlen ) DECLSPEC_HIDDEN;
 extern void start_server( BOOL debug ) DECLSPEC_HIDDEN;
 
 extern unsigned int server_call_unlocked( void *req_ptr ) DECLSPEC_HIDDEN;
@@ -234,6 +236,7 @@ extern void virtual_set_force_exec( BOOL enable ) DECLSPEC_HIDDEN;
 extern void virtual_set_large_address_space(void) DECLSPEC_HIDDEN;
 extern void virtual_fill_image_information( const pe_image_info_t *pe_info,
                                             SECTION_IMAGE_INFORMATION *info ) DECLSPEC_HIDDEN;
+extern void release_builtin_module( void *module ) DECLSPEC_HIDDEN;
 extern void *get_builtin_so_handle( void *module ) DECLSPEC_HIDDEN;
 extern NTSTATUS get_builtin_unix_info( void *module, const char **name, void **handle, void **entry ) DECLSPEC_HIDDEN;
 extern NTSTATUS set_builtin_unix_handle( void *module, const char *name, void *handle ) DECLSPEC_HIDDEN;
@@ -252,9 +255,9 @@ extern void signal_init_process(void) DECLSPEC_HIDDEN;
 extern void DECLSPEC_NORETURN signal_start_thread( PRTL_THREAD_START_ROUTINE entry, void *arg,
                                                    BOOL suspend, TEB *teb ) DECLSPEC_HIDDEN;
 extern void DECLSPEC_NORETURN signal_exit_thread( int status, void (*func)(int), TEB *teb ) DECLSPEC_HIDDEN;
+extern SYSTEM_SERVICE_TABLE KeServiceDescriptorTable[4] DECLSPEC_HIDDEN;
 extern void __wine_syscall_dispatcher(void) DECLSPEC_HIDDEN;
 extern void WINAPI DECLSPEC_NORETURN __wine_syscall_dispatcher_return( void *frame, ULONG_PTR retval ) DECLSPEC_HIDDEN;
-extern unsigned int __wine_syscall_flags DECLSPEC_HIDDEN;
 extern NTSTATUS signal_set_full_context( CONTEXT *context ) DECLSPEC_HIDDEN;
 extern NTSTATUS get_thread_wow64_context( HANDLE handle, void *ctx, ULONG size ) DECLSPEC_HIDDEN;
 extern NTSTATUS set_thread_wow64_context( HANDLE handle, const void *ctx, ULONG size ) DECLSPEC_HIDDEN;

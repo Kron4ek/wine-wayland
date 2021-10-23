@@ -1,10 +1,15 @@
 MODULE    = nsiproxy.sys
-IMPORTS   = ntoskrnl uuid
+UNIXLIB   = nsiproxy.so
+IMPORTS   = ntoskrnl
+EXTRALIBS = $(PROCSTAT_LIBS)
+
 EXTRADLLFLAGS = -Wl,--subsystem,native
 
 C_SRCS = \
 	device.c \
+	icmp_echo.c \
 	ip.c \
 	ndis.c \
 	nsi.c \
-	tcp.c
+	tcp.c \
+	udp.c

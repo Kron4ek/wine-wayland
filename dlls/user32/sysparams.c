@@ -3980,12 +3980,12 @@ BOOL CDECL nulldrv_GetMonitorInfo( HMONITOR handle, MONITORINFO *info )
     /* Fallback to report one monitor */
     if (handle == NULLDRV_DEFAULT_HMONITOR)
     {
-        RECT default_rect = {0, 0, 640, 480};
+        RECT default_rect = {0, 0, 1024, 768};
         info->rcMonitor = default_rect;
         info->rcWork = default_rect;
         info->dwFlags = MONITORINFOF_PRIMARY;
         if (info->cbSize >= sizeof(MONITORINFOEXW))
-            lstrcpyW( ((MONITORINFOEXW *)info)->szDevice, L"\\\\.\\DISPLAY1" );
+            lstrcpyW( ((MONITORINFOEXW *)info)->szDevice, L"WinDisc" );
         return TRUE;
     }
 
@@ -4111,12 +4111,20 @@ static BOOL CALLBACK enum_mon_callback( HMONITOR monitor, HDC hdc, LPRECT rect, 
 
 BOOL CDECL nulldrv_EnumDisplayMonitors( HDC hdc, RECT *rect, MONITORENUMPROC proc, LPARAM lp )
 {
+    BOOL is_winstation_visible = FALSE;
+    USEROBJECTFLAGS flags;
+    HWINSTA winstation;
     RECT monitor_rect;
     DWORD i = 0;
 
     TRACE("(%p, %p, %p, 0x%lx)\n", hdc, rect, proc, lp);
 
-    if (update_monitor_cache())
+    /* Report physical monitor information only if window station has visible display surfaces */
+    winstation = GetProcessWindowStation();
+    if (GetUserObjectInformationW( winstation, UOI_FLAGS, &flags, sizeof(flags), NULL ))
+        is_winstation_visible = flags.dwFlags & WSF_VISIBLE;
+
+    if (is_winstation_visible && update_monitor_cache())
     {
         while (TRUE)
         {
@@ -4137,7 +4145,7 @@ BOOL CDECL nulldrv_EnumDisplayMonitors( HDC hdc, RECT *rect, MONITORENUMPROC pro
     }
 
     /* Fallback to report one monitor if using SetupAPI failed */
-    SetRect( &monitor_rect, 0, 0, 640, 480 );
+    SetRect( &monitor_rect, 0, 0, 1024, 768 );
     if (!proc( NULLDRV_DEFAULT_HMONITOR, hdc, &monitor_rect, lp ))
         return FALSE;
     return TRUE;
@@ -4496,6 +4504,14 @@ BOOL WINAPI GetPhysicalCursorPos( POINT *point )
 BOOL WINAPI SetPhysicalCursorPos( INT x, INT y )
 {
     return SetCursorPos( x, y );
+}
+
+/***********************************************************************
+ *		WindowFromPhysicalPoint (USER32.@)
+ */
+HWND WINAPI WindowFromPhysicalPoint( POINT pt )
+{
+    return WindowFromPoint( pt );
 }
 
 /***********************************************************************

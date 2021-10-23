@@ -1881,7 +1881,7 @@ HRESULT init_dispex_from_constr(jsdisp_t *dispex, script_ctx_t *ctx, const built
         if(is_object_instance(val) && get_object(val))
             prot = iface_to_jsdisp(get_object(val));
         else
-            prot = ctx->object_prototype;
+            prot = jsdisp_addref(ctx->object_prototype);
 
         jsval_release(val);
     }
@@ -2143,6 +2143,8 @@ HRESULT disp_call_value(script_ctx_t *ctx, IDispatch *disp, IDispatch *jsthis, W
     if(args != buf)
         heap_free(args);
 
+    if(FAILED(hres))
+        return hres;
     if(!r)
         return S_OK;
 

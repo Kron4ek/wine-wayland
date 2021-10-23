@@ -19,16 +19,17 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include <sys/time.h>
 #ifdef HAVE_SYS_SOCKET_H
 # include <sys/socket.h>
@@ -294,6 +295,24 @@ static int process_in_job( struct job *job, struct process *process )
         if (process_in_job( j, process )) return 1;
     }
     return process->job == job;
+}
+
+static process_id_t *get_job_pids( struct job *job, process_id_t *pids, process_id_t *end )
+{
+    struct process *process;
+    struct job *j;
+
+    LIST_FOR_EACH_ENTRY( j, &job->child_job_list, struct job, parent_job_entry )
+        pids = get_job_pids( j, pids, end );
+
+    LIST_FOR_EACH_ENTRY( process, &job->process_list, struct process, job_entry )
+    {
+        if (pids == end) break;
+        if (process->end_time) continue;  /* skip processes that ended */
+        *pids++ = process->id;
+    }
+
+    return pids;
 }
 
 static void add_job_process( struct job *job, struct process *process )
@@ -1780,11 +1799,18 @@ DECL_HANDLER(process_in_job)
 DECL_HANDLER(get_job_info)
 {
     struct job *job = get_job_obj( current->process, req->handle, JOB_OBJECT_QUERY );
+    process_id_t *pids;
+    data_size_t len;
 
     if (!job) return;
 
     reply->total_processes = job->total_processes;
     reply->active_processes = job->num_processes;
+
+    len = min( get_reply_max_size(), reply->active_processes * sizeof(*pids) );
+    if (len && ((pids = set_reply_data_size( len ))))
+        get_job_pids( job, pids, pids + len / sizeof(*pids) );
+
     release_object( job );
 }
 

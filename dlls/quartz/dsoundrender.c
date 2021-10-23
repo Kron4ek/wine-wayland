@@ -283,7 +283,7 @@ static HRESULT DSoundRender_SendSampleData(struct dsound_render *This,
     return S_OK;
 }
 
-static HRESULT WINAPI DSoundRender_PrepareReceive(struct dsound_render *This, IMediaSample *pSample)
+static HRESULT DSoundRender_PrepareReceive(struct dsound_render *This, IMediaSample *pSample)
 {
     HRESULT hr;
     AM_MEDIA_TYPE *amt;
@@ -320,7 +320,7 @@ static HRESULT WINAPI DSoundRender_PrepareReceive(struct dsound_render *This, IM
     return S_OK;
 }
 
-static HRESULT WINAPI DSoundRender_DoRenderSample(struct dsound_render *This, IMediaSample *pSample)
+static HRESULT DSoundRender_DoRenderSample(struct dsound_render *This, IMediaSample *pSample)
 {
     LPBYTE pbSrcStream = NULL;
     LONG cbSrcStream = 0;
@@ -549,8 +549,6 @@ static void dsound_render_destroy(struct strmbase_filter *iface)
     strmbase_passthrough_cleanup(&filter->passthrough);
     strmbase_filter_cleanup(&filter->filter);
     free(filter);
-
-    InterlockedDecrement(&object_locks);
 }
 
 static struct strmbase_pin *dsound_render_get_pin(struct strmbase_filter *iface, unsigned int index)
@@ -957,7 +955,7 @@ static ULONG WINAPI dsound_render_qc_AddRef(IQualityControl *iface)
 static ULONG WINAPI dsound_render_qc_Release(IQualityControl *iface)
 {
     struct dsound_render *filter = impl_from_IQualityControl(iface);
-    return IUnknown_AddRef(filter->filter.outer_unk);
+    return IUnknown_Release(filter->filter.outer_unk);
 }
 
 static HRESULT WINAPI dsound_render_qc_Notify(IQualityControl *iface,

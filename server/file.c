@@ -19,7 +19,6 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -126,6 +125,7 @@ static const struct fd_ops file_fd_ops =
     default_fd_get_file_info,     /* get_file_info */
     no_fd_get_volume_info,        /* get_volume_info */
     default_fd_ioctl,             /* ioctl */
+    default_fd_cancel_async,      /* cancel_async */
     default_fd_queue_async,       /* queue_async */
     default_fd_reselect_async     /* reselect_async */
 };
@@ -270,7 +270,7 @@ static struct object *create_file( struct fd *root, const char *nameptr, data_si
     access = map_access( access, &file_type.mapping );
 
     /* FIXME: should set error to STATUS_OBJECT_NAME_COLLISION if file existed before */
-    fd = open_fd( root, name, nt_name, flags | O_NONBLOCK | O_LARGEFILE, &mode, access, sharing, options );
+    fd = open_fd( root, name, nt_name, flags | O_NONBLOCK, &mode, access, sharing, options );
     if (!fd) goto done;
 
     if (S_ISDIR(mode))

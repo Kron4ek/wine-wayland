@@ -1423,7 +1423,7 @@ static HRESULT WINAPI Contain_FindConnectionPoint(
     else
     {
         *ppCP = iface->pt[0];
-        IUnknown_AddRef((IUnknown*)*ppCP);
+        IConnectionPoint_AddRef(*ppCP);
     }
 
     return S_OK;
@@ -1459,7 +1459,8 @@ static void test_IConnectionPoint(void)
     dispatch->IDispatch_iface.lpVtbl = &disp_vtbl;
     dispatch->refCount = 1;
 
-    rc = pConnectToConnectionPoint((IUnknown*)dispatch, &IID_NULL, TRUE, (IUnknown*)container, &cookie, &point);
+    rc = pConnectToConnectionPoint((IUnknown*)&dispatch->IDispatch_iface, &IID_NULL, TRUE,
+                                   (IUnknown*)&container->IConnectionPointContainer_iface, &cookie, &point);
     ok(rc == S_OK, "pConnectToConnectionPoint failed with %x\n",rc);
     ok(point != NULL, "returned ConnectionPoint is NULL\n");
     ok(cookie != 0xffffffff, "invalid cookie returned\n");
@@ -1475,15 +1476,16 @@ static void test_IConnectionPoint(void)
     rc = pIConnectionPoint_SimpleInvoke(point,0xa1,&params);
     ok(rc == S_OK, "pConnectToConnectionPoint failed with %x\n",rc);
 
-    rc = pConnectToConnectionPoint(NULL, &IID_NULL, FALSE, (IUnknown*)container, &cookie, NULL);
+    rc = pConnectToConnectionPoint(NULL, &IID_NULL, FALSE,
+                                   (IUnknown*)&container->IConnectionPointContainer_iface, &cookie, NULL);
     ok(rc == S_OK, "pConnectToConnectionPoint failed with %x\n",rc);
 
 /* MSDN says this should be required but it crashes on XP
     IUnknown_Release(point);
 */
-    ref = IUnknown_Release((IUnknown*)container);
+    ref = IConnectionPointContainer_Release(&container->IConnectionPointContainer_iface);
     ok(ref == 0, "leftover IConnectionPointContainer reference %i\n",ref);
-    ref = IUnknown_Release((IUnknown*)dispatch);
+    ref = IDispatch_Release(&dispatch->IDispatch_iface);
     ok(ref == 0, "leftover IDispatch reference %i\n",ref);
 }
 
@@ -1593,7 +1595,7 @@ static void test_SHPropertyBag_ReadLONG(void)
     rc = pSHPropertyBag_ReadLONG(&pb->IPropertyBag_iface, szName1, &out);
     ok(rc == DISP_E_BADVARTYPE || broken(rc == S_OK) || broken(rc == S_FALSE), "incorrect return %x\n",rc);
     ok(out == 0xfeedface  || broken(out == 0xfeedfa00), "value should not have changed %x\n",out);
-    IUnknown_Release((IUnknown*)pb);
+    IPropertyBag_Release(&pb->IPropertyBag_iface);
 }
 
 static void test_SHSetWindowBits(void)
@@ -1672,12 +1674,6 @@ static void test_SHFormatDateTimeA(void)
     DWORD flags;
     INT ret;
 
-if (0)
-{
-    /* crashes on native */
-    pSHFormatDateTimeA(NULL, NULL, NULL, 0);
-}
-
     GetLocalTime(&st);
     SystemTimeToFileTime(&st, &filetime);
     /* SHFormatDateTime expects input as utc */
@@ -1715,6 +1711,21 @@ if (0)
     ok(ret == lstrlenA(buff)+1, "got %d\n", ret);
     ok(GetLastError() == 0xdeadbeef,
         "expected 0xdeadbeef, got %d\n", GetLastError());
+
+    flags = FDTF_DEFAULT;
+    ret = pSHFormatDateTimeA(&filetime, &flags, buff, sizeof(buff));
+    ok(ret == lstrlenA(buff)+1, "got %d\n", ret);
+
+    buff2[0] = '\0';
+    flags = FDTF_SHORTDATE | FDTF_SHORTTIME;
+    ret = pSHFormatDateTimeA(&filetime, &flags, buff2, sizeof(buff2));
+    ok(ret == lstrlenA(buff2)+1, "got %d\n", ret);
+    ok(lstrcmpA(buff, buff2) == 0, "expected (%s), got (%s)\n", buff, buff2);
+
+    buff2[0] = '\0';
+    ret = pSHFormatDateTimeA(&filetime, NULL, buff2, sizeof(buff2));
+    ok(ret == lstrlenA(buff2)+1, "got %d\n", ret);
+    ok(lstrcmpA(buff, buff2) == 0, "expected (%s), got (%s)\n", buff, buff2);
 
     /* now check returned strings */
     flags = FDTF_NOAUTOREADINGORDER | FDTF_SHORTTIME;

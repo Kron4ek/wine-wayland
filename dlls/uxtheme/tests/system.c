@@ -20,14 +20,21 @@
 
 #include <stdarg.h>
 
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
+
 #include "windows.h"
+#include "winternl.h"
+#include "ddk/d3dkmthk.h"
 #include "vfwmsgs.h"
 #include "uxtheme.h"
+#include "vsstyle.h"
 
 #include "msg.h"
 #include "wine/test.h"
 
 static HTHEME  (WINAPI * pOpenThemeDataEx)(HWND, LPCWSTR, DWORD);
+static HTHEME (WINAPI *pOpenThemeDataForDpi)(HWND, LPCWSTR, UINT);
 static HPAINTBUFFER (WINAPI *pBeginBufferedPaint)(HDC, const RECT *, BP_BUFFERFORMAT, BP_PAINTPARAMS *, HDC *);
 static HRESULT (WINAPI *pBufferedPaintClear)(HPAINTBUFFER, const RECT *);
 static HRESULT (WINAPI *pEndBufferedPaint)(HPAINTBUFFER, BOOL);
@@ -35,6 +42,14 @@ static HRESULT (WINAPI *pGetBufferedPaintBits)(HPAINTBUFFER, RGBQUAD **, int *);
 static HDC (WINAPI *pGetBufferedPaintDC)(HPAINTBUFFER);
 static HDC (WINAPI *pGetBufferedPaintTargetDC)(HPAINTBUFFER);
 static HRESULT (WINAPI *pGetBufferedPaintTargetRect)(HPAINTBUFFER, RECT *);
+
+static LONG (WINAPI *pDisplayConfigGetDeviceInfo)(DISPLAYCONFIG_DEVICE_INFO_HEADER *);
+static LONG (WINAPI *pDisplayConfigSetDeviceInfo)(DISPLAYCONFIG_DEVICE_INFO_HEADER *);
+static BOOL (WINAPI *pGetDpiForMonitorInternal)(HMONITOR, UINT, UINT *, UINT *);
+static DPI_AWARENESS_CONTEXT (WINAPI *pSetThreadDpiAwarenessContext)(DPI_AWARENESS_CONTEXT);
+
+static NTSTATUS (WINAPI *pD3DKMTCloseAdapter)(const D3DKMT_CLOSEADAPTER *);
+static NTSTATUS (WINAPI *pD3DKMTOpenAdapterFromGdiDisplayName)(D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME *);
 
 /* For message tests */
 enum seq_index
@@ -48,20 +63,34 @@ static struct msg_sequence *sequences[NUM_MSG_SEQUENCES];
 
 static void init_funcs(void)
 {
-    HMODULE hUxtheme = GetModuleHandleA("uxtheme.dll");
+    HMODULE user32 = GetModuleHandleA("user32.dll");
+    HMODULE gdi32 = GetModuleHandleA("gdi32.dll");
+    HMODULE uxtheme = GetModuleHandleA("uxtheme.dll");
 
-#define UXTHEME_GET_PROC(func) p ## func = (void*)GetProcAddress(hUxtheme, #func)
-    UXTHEME_GET_PROC(BeginBufferedPaint);
-    UXTHEME_GET_PROC(BufferedPaintClear);
-    UXTHEME_GET_PROC(EndBufferedPaint);
-    UXTHEME_GET_PROC(GetBufferedPaintBits);
-    UXTHEME_GET_PROC(GetBufferedPaintDC);
-    UXTHEME_GET_PROC(GetBufferedPaintTargetDC);
-    UXTHEME_GET_PROC(GetBufferedPaintTargetRect);
-    UXTHEME_GET_PROC(BufferedPaintClear);
+#define GET_PROC(module, func)                       \
+    p##func = (void *)GetProcAddress(module, #func); \
+    if (!p##func)                                    \
+        trace("GetProcAddress(%s, %s) failed.\n", #module, #func);
 
-    UXTHEME_GET_PROC(OpenThemeDataEx);
-#undef UXTHEME_GET_PROC
+    GET_PROC(uxtheme, BeginBufferedPaint)
+    GET_PROC(uxtheme, BufferedPaintClear)
+    GET_PROC(uxtheme, EndBufferedPaint)
+    GET_PROC(uxtheme, GetBufferedPaintBits)
+    GET_PROC(uxtheme, GetBufferedPaintDC)
+    GET_PROC(uxtheme, GetBufferedPaintTargetDC)
+    GET_PROC(uxtheme, GetBufferedPaintTargetRect)
+    GET_PROC(uxtheme, OpenThemeDataEx)
+    GET_PROC(uxtheme, OpenThemeDataForDpi)
+
+    GET_PROC(user32, DisplayConfigGetDeviceInfo)
+    GET_PROC(user32, DisplayConfigSetDeviceInfo)
+    GET_PROC(user32, GetDpiForMonitorInternal)
+    GET_PROC(user32, SetThreadDpiAwarenessContext)
+
+    GET_PROC(gdi32, D3DKMTCloseAdapter)
+    GET_PROC(gdi32, D3DKMTOpenAdapterFromGdiDisplayName)
+
+#undef GET_PROC
 }
 
 /* Try to make sure pending X events have been processed before continuing */
@@ -80,6 +109,113 @@ static void flush_events(void)
             DispatchMessageA(&msg);
         diff = time - GetTickCount();
     }
+}
+
+static unsigned int get_primary_monitor_effective_dpi(void)
+{
+    DPI_AWARENESS_CONTEXT old_context;
+    UINT dpi_x = 0, dpi_y = 0;
+    POINT point = {0, 0};
+    HMONITOR monitor;
+
+    if (pSetThreadDpiAwarenessContext && pGetDpiForMonitorInternal)
+    {
+        old_context = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+        monitor = MonitorFromPoint(point, MONITOR_DEFAULTTOPRIMARY);
+        pGetDpiForMonitorInternal(monitor, 0, &dpi_x, &dpi_y);
+        pSetThreadDpiAwarenessContext(old_context);
+        return dpi_y;
+    }
+
+    return USER_DEFAULT_SCREEN_DPI;
+}
+
+static int get_dpi_scale_index(int dpi)
+{
+    static const int scales[] = {100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450, 500};
+    int scale, scale_idx;
+
+    scale = dpi * 100 / 96;
+    for (scale_idx = 0; scale_idx < ARRAY_SIZE(scales); ++scale_idx)
+    {
+        if (scales[scale_idx] == scale)
+            return scale_idx;
+    }
+
+    return -1;
+}
+
+static BOOL set_primary_monitor_effective_dpi(unsigned int primary_dpi)
+{
+    D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME open_adapter_gdi_desc;
+    DISPLAYCONFIG_GET_SOURCE_DPI_SCALE get_scale_req;
+    DISPLAYCONFIG_SET_SOURCE_DPI_SCALE set_scale_req;
+    int current_scale_idx, target_scale_idx;
+    D3DKMT_CLOSEADAPTER close_adapter_desc;
+    BOOL ret = FALSE;
+    LONG error;
+
+#define CHECK_FUNC(func)                       \
+    if (!p##func)                              \
+    {                                          \
+        skip("%s() is unavailable.\n", #func); \
+        return FALSE;                          \
+    }
+
+    CHECK_FUNC(D3DKMTCloseAdapter)
+    CHECK_FUNC(D3DKMTOpenAdapterFromGdiDisplayName)
+    CHECK_FUNC(DisplayConfigGetDeviceInfo)
+    CHECK_FUNC(DisplayConfigSetDeviceInfo)
+
+#undef CHECK_FUNC
+
+    lstrcpyW(open_adapter_gdi_desc.DeviceName, L"\\\\.\\DISPLAY1");
+    if (pD3DKMTOpenAdapterFromGdiDisplayName(&open_adapter_gdi_desc) == STATUS_PROCEDURE_NOT_FOUND)
+    {
+        win_skip("D3DKMTOpenAdapterFromGdiDisplayName() is unavailable.\n");
+        return FALSE;
+    }
+
+    get_scale_req.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_DPI_SCALE;
+    get_scale_req.header.size = sizeof(get_scale_req);
+    get_scale_req.header.adapterId = open_adapter_gdi_desc.AdapterLuid;
+    get_scale_req.header.id = open_adapter_gdi_desc.VidPnSourceId;
+    error = pDisplayConfigGetDeviceInfo(&get_scale_req.header);
+    if (error != NO_ERROR)
+    {
+        skip("DisplayConfigGetDeviceInfo failed, returned %d.\n", error);
+        goto failed;
+    }
+
+    current_scale_idx = get_dpi_scale_index(get_primary_monitor_effective_dpi());
+    if (current_scale_idx == -1)
+    {
+        skip("Failed to find current scale index.\n");
+        goto failed;
+    }
+
+    target_scale_idx = get_dpi_scale_index(primary_dpi);
+    if (target_scale_idx < get_scale_req.minRelativeScaleStep
+        || target_scale_idx > get_scale_req.maxRelativeScaleStep)
+    {
+        skip("DPI %d is not available.\n", primary_dpi);
+        goto failed;
+    }
+
+    set_scale_req.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_SOURCE_DPI_SCALE;
+    set_scale_req.header.size = sizeof(set_scale_req);
+    set_scale_req.header.adapterId = open_adapter_gdi_desc.AdapterLuid;
+    set_scale_req.header.id = open_adapter_gdi_desc.VidPnSourceId;
+    set_scale_req.relativeScaleStep = get_scale_req.curRelativeScaleStep + (target_scale_idx - current_scale_idx);
+    error = pDisplayConfigSetDeviceInfo(&set_scale_req.header);
+    if (error == NO_ERROR)
+        ret = get_primary_monitor_effective_dpi() == primary_dpi;
+    flush_events();
+
+failed:
+    close_adapter_desc.hAdapter = open_adapter_gdi_desc.hAdapter;
+    pD3DKMTCloseAdapter(&close_adapter_desc);
+    return ret;
 }
 
 static LRESULT WINAPI TestSetWindowThemeParentProcA(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -508,6 +644,34 @@ static void test_OpenThemeDataEx(void)
     DestroyWindow(hWnd);
 }
 
+static void test_OpenThemeDataForDpi(void)
+{
+    BOOL is_theme_active;
+    HTHEME htheme;
+
+    if (!pOpenThemeDataForDpi)
+    {
+        win_skip("OpenThemeDataForDpi is unavailable.\n");
+        return;
+    }
+
+    is_theme_active = IsThemeActive();
+    SetLastError(0xdeadbeef);
+    htheme = pOpenThemeDataForDpi(NULL, WC_BUTTONW, 96);
+    if (is_theme_active)
+    {
+        ok(!!htheme, "Got a NULL handle.\n");
+        ok(GetLastError() == NO_ERROR, "Expected error %u, got %u.\n", NO_ERROR, GetLastError());
+        CloseThemeData(htheme);
+    }
+    else
+    {
+        ok(!htheme, "Got a non-NULL handle.\n");
+        ok(GetLastError() == E_PROP_ID_UNSUPPORTED, "Expected error %u, got %u.\n",
+           E_PROP_ID_UNSUPPORTED, GetLastError());
+    }
+}
+
 static void test_GetCurrentThemeName(void)
 {
     BOOL    bThemeActive;
@@ -827,6 +991,278 @@ todo_wine
     DeleteDC(target);
 }
 
+static void test_GetThemePartSize(void)
+{
+    DPI_AWARENESS_CONTEXT old_context;
+    unsigned int old_dpi, current_dpi;
+    HTHEME htheme = NULL;
+    HWND hwnd = NULL;
+    SIZE size, size2;
+    HRESULT hr;
+    HDC hdc;
+
+    if (!pSetThreadDpiAwarenessContext)
+    {
+        win_skip("SetThreadDpiAwarenessContext is unavailable.\n");
+        return;
+    }
+
+    old_context = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    current_dpi = get_primary_monitor_effective_dpi();
+    old_dpi = current_dpi;
+    /* DPI needs to be 50% larger than 96 to avoid the effect of TrueSizeStretchMark */
+    if (current_dpi < 192 && !set_primary_monitor_effective_dpi(192))
+    {
+        skip("Failed to set primary monitor dpi to 192.\n");
+        goto done;
+    }
+
+    hwnd = CreateWindowA("Button", "Test", WS_POPUP, 100, 100, 100, 100, NULL, NULL, NULL, NULL);
+    htheme = OpenThemeData(hwnd, WC_BUTTONW);
+    if (!htheme)
+    {
+        skip("Theming is inactive.\n");
+        goto done;
+    }
+
+    hdc = GetDC(hwnd);
+    hr = GetThemePartSize(htheme, hdc, BP_CHECKBOX, CBS_CHECKEDNORMAL, NULL, TS_DRAW, &size);
+    ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
+    hr = GetThemePartSize(htheme, NULL, BP_CHECKBOX, CBS_CHECKEDNORMAL, NULL, TS_DRAW, &size2);
+    ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
+    ok(size2.cx == size.cx && size2.cy == size.cy, "Expected size %dx%d, got %dx%d.\n",
+       size.cx, size.cy, size2.cx, size2.cy);
+    ReleaseDC(hwnd, hdc);
+
+    /* Test that theme part size doesn't change even if DPI is changed */
+    if (!set_primary_monitor_effective_dpi(96))
+    {
+        skip("Failed to set primary monitor dpi to 96.\n");
+        goto done;
+    }
+
+    hdc = GetDC(hwnd);
+    hr = GetThemePartSize(htheme, hdc, BP_CHECKBOX, CBS_CHECKEDNORMAL, NULL, TS_DRAW, &size2);
+    ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
+    ok(size2.cx == size.cx && size2.cy == size.cy, "Expected size %dx%d, got %dx%d.\n", size.cx,
+       size.cy, size2.cx, size2.cy);
+    hr = GetThemePartSize(htheme, NULL, BP_CHECKBOX, CBS_CHECKEDNORMAL, NULL, TS_DRAW, &size2);
+    ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
+    ok(size2.cx == size.cx && size2.cy == size.cy, "Expected size %dx%d, got %dx%d.\n", size.cx,
+       size.cy, size2.cx, size2.cy);
+
+    /* Test that theme part size changes after DPI is changed and theme handle is reopened.
+     * If DPI awareness context is not DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, theme part size
+     * still doesn't change, even after the theme handle is reopened. */
+    CloseThemeData(htheme);
+    htheme = OpenThemeData(hwnd, WC_BUTTONW);
+
+    hr = GetThemePartSize(htheme, hdc, BP_CHECKBOX, CBS_CHECKEDNORMAL, NULL, TS_DRAW, &size2);
+    ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
+    ok(size2.cx != size.cx || size2.cy != size.cy, "Expected size not equal to %dx%d.\n", size.cx,
+       size.cy);
+    hr = GetThemePartSize(htheme, NULL, BP_CHECKBOX, CBS_CHECKEDNORMAL, NULL, TS_DRAW, &size2);
+    ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
+    ok(size2.cx != size.cx || size2.cy != size.cy, "Expected size not equal to %dx%d.\n", size.cx,
+       size.cy);
+    ReleaseDC(hwnd, hdc);
+
+    /* Test that OpenThemeData() without a window will assume the DPI is 96 */
+    if (!set_primary_monitor_effective_dpi(192))
+    {
+        skip("Failed to set primary monitor dpi to 192.\n");
+        goto done;
+    }
+
+    CloseThemeData(htheme);
+    htheme = OpenThemeData(NULL, WC_BUTTONW);
+    size = size2;
+
+    hdc = GetDC(hwnd);
+    hr = GetThemePartSize(htheme, hdc, BP_CHECKBOX, CBS_CHECKEDNORMAL, NULL, TS_DRAW, &size2);
+    ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
+    ok(size2.cx == size.cx && size2.cy == size.cy, "Expected size %dx%d, got %dx%d.\n", size.cx,
+       size.cy, size2.cx, size2.cy);
+    hr = GetThemePartSize(htheme, NULL, BP_CHECKBOX, CBS_CHECKEDNORMAL, NULL, TS_DRAW, &size2);
+    ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
+    ok(size2.cx == size.cx && size2.cy == size.cy, "Expected size %dx%d, got %dx%d.\n", size.cx,
+       size.cy, size2.cx, size2.cy);
+    ReleaseDC(hwnd, hdc);
+
+done:
+    if (hwnd)
+        DestroyWindow(hwnd);
+    if (htheme)
+        CloseThemeData(htheme);
+    if (get_primary_monitor_effective_dpi() != old_dpi)
+        set_primary_monitor_effective_dpi(old_dpi);
+    pSetThreadDpiAwarenessContext(old_context);
+}
+
+static void test_EnableTheming(void)
+{
+    WCHAR old_color_string[13], new_color_string[13], color_string[13];
+    BOOL old_gradient_caption, new_gradient_caption, gradient_caption;
+    BOOL old_flat_menu, new_flat_menu, flat_menu;
+    LOGFONTW old_logfont, new_logfont, logfont;
+    NONCLIENTMETRICSW old_ncm, new_ncm, ncm;
+    DPI_AWARENESS_CONTEXT old_context = 0;
+    COLORREF old_color, new_color;
+    BOOL is_theme_active, ret;
+    DWORD size, length;
+    HRESULT hr;
+    LSTATUS ls;
+    HKEY hkey;
+
+    if (IsThemeActive())
+    {
+        hr = EnableTheming(TRUE);
+        ok(hr == S_OK, "EnableTheming failed, hr %#x.\n", hr);
+        ok(IsThemeActive(), "Expected theming active.\n");
+
+        /* Only run in interactive mode because once theming is disabled, it can't be turned back on
+         * via EnableTheming() */
+        if (winetest_interactive)
+        {
+            if (pSetThreadDpiAwarenessContext)
+            {
+                old_context = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+            }
+            else if (get_primary_monitor_effective_dpi() != 96)
+            {
+                skip("DPI isn't 96, skipping.\n");
+                return;
+            }
+
+            /* Read current system metrics */
+            old_color = GetSysColor(COLOR_SCROLLBAR);
+            swprintf(old_color_string, ARRAY_SIZE(old_color_string), L"%d %d %d",
+                     GetRValue(old_color), GetGValue(old_color), GetBValue(old_color));
+
+            memset(&old_ncm, 0, sizeof(old_ncm));
+            old_ncm.cbSize = FIELD_OFFSET(NONCLIENTMETRICSW, iPaddedBorderWidth);
+            ret = SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(old_ncm), &old_ncm, 0);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+
+            memset(&old_logfont, 0, sizeof(old_logfont));
+            ret = SystemParametersInfoW(SPI_GETICONTITLELOGFONT, sizeof(old_logfont), &old_logfont, 0);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ret = SystemParametersInfoW(SPI_GETFLATMENU, 0, &old_flat_menu, 0);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ret = SystemParametersInfoW(SPI_GETGRADIENTCAPTIONS, 0, &old_gradient_caption, 0);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+
+            /* Write new system metrics to the registry */
+            new_color = ~old_color;
+            new_flat_menu = !old_flat_menu;
+            new_gradient_caption = !old_gradient_caption;
+            memcpy(&new_ncm, &old_ncm, sizeof(new_ncm));
+            new_ncm.iScrollWidth += 5;
+            memcpy(&new_logfont, &old_logfont, sizeof(new_logfont));
+            new_logfont.lfWidth += 5;
+
+            ls = RegOpenKeyExW(HKEY_CURRENT_USER, L"Control Panel\\Colors", 0, KEY_ALL_ACCESS,
+                               &hkey);
+            ok(!ls, "RegOpenKeyExW failed, ls %#x.\n", ls);
+
+            length = swprintf(new_color_string, ARRAY_SIZE(new_color_string), L"%d %d %d",
+                              GetRValue(new_color), GetGValue(new_color), GetBValue(new_color));
+            ls = RegSetValueExW(hkey, L"Scrollbar", 0, REG_SZ, (BYTE *)new_color_string,
+                                (length + 1) * sizeof(WCHAR));
+            ok(!ls, "RegSetValueExW failed, ls %#x.\n", ls);
+
+            ret = SystemParametersInfoW(SPI_SETNONCLIENTMETRICS, sizeof(new_ncm), &new_ncm,
+                                        SPIF_UPDATEINIFILE);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ret = SystemParametersInfoW(SPI_SETICONTITLELOGFONT, sizeof(new_logfont), &new_logfont,
+                                        SPIF_UPDATEINIFILE);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ret = SystemParametersInfoW(SPI_SETFLATMENU, 0, (void *)(INT_PTR)new_flat_menu,
+                                        SPIF_UPDATEINIFILE);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ret = SystemParametersInfoW(SPI_SETGRADIENTCAPTIONS, 0,
+                                        (void *)(INT_PTR)new_gradient_caption, SPIF_UPDATEINIFILE);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+
+            /* Change theming state */
+            hr = EnableTheming(FALSE);
+            ok(hr == S_OK, "EnableTheming failed, hr %#x.\n", hr);
+            is_theme_active = IsThemeActive();
+            ok(!is_theme_active || broken(is_theme_active), /* Win8+ can no longer disable theming */
+               "Expected theming inactive.\n");
+
+            /* Test that system metrics are unchanged */
+            size = sizeof(color_string);
+            ls = RegQueryValueExW(hkey, L"Scrollbar", NULL, NULL, (BYTE *)color_string, &size);
+            ok(!ls, "RegQueryValueExW failed, ls %#x.\n", ls);
+            ok(!lstrcmpW(color_string, new_color_string), "Expected %s, got %s.\n",
+               wine_dbgstr_w(new_color_string), wine_dbgstr_w(color_string));
+
+            ret = SystemParametersInfoW(SPI_GETFLATMENU, 0, &flat_menu, 0);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ok(flat_menu == new_flat_menu, "Expected %d, got %d.\n", new_flat_menu, flat_menu);
+            ret = SystemParametersInfoW(SPI_GETGRADIENTCAPTIONS, 0, &gradient_caption, 0);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ok(gradient_caption == new_gradient_caption, "Expected %d, got %d.\n",
+               new_gradient_caption, gradient_caption);
+
+            memset(&ncm, 0, sizeof(ncm));
+            ncm.cbSize = FIELD_OFFSET(NONCLIENTMETRICSW, iPaddedBorderWidth);
+            ret = SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ok(!memcmp(&ncm, &new_ncm, sizeof(ncm)), "Expected non-client metrics unchanged.\n");
+
+            memset(&logfont, 0, sizeof(logfont));
+            ret = SystemParametersInfoW(SPI_GETICONTITLELOGFONT, sizeof(logfont), &logfont, 0);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ok(!memcmp(&logfont, &new_logfont, sizeof(logfont)),
+               "Expected icon title font unchanged.\n");
+
+            /* Test that theming cannot be turned on via EnableTheming() */
+            hr = EnableTheming(TRUE);
+            ok(hr == S_OK, "EnableTheming failed, hr %#x.\n", hr);
+            is_theme_active = IsThemeActive();
+            ok(!is_theme_active || broken(is_theme_active), /* Win8+ can no longer disable theming */
+               "Expected theming inactive.\n");
+
+            /* Restore system metrics */
+            ls = RegSetValueExW(hkey, L"Scrollbar", 0, REG_SZ, (BYTE *)old_color_string,
+                                (lstrlenW(old_color_string) + 1) * sizeof(WCHAR));
+            ok(!ls, "RegSetValueExW failed, ls %#x.\n", ls);
+            ret = SystemParametersInfoW(SPI_SETFLATMENU, 0, (void *)(INT_PTR)old_flat_menu,
+                                        SPIF_UPDATEINIFILE);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ret = SystemParametersInfoW(SPI_SETGRADIENTCAPTIONS, 0,
+                                        (void *)(INT_PTR)old_gradient_caption, SPIF_UPDATEINIFILE);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ret = SystemParametersInfoW(SPI_SETNONCLIENTMETRICS, sizeof(old_ncm), &old_ncm,
+                                        SPIF_UPDATEINIFILE);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+            ret = SystemParametersInfoW(SPI_SETICONTITLELOGFONT, sizeof(old_logfont), &old_logfont,
+                                        SPIF_UPDATEINIFILE);
+            ok(ret, "SystemParametersInfoW failed, error %u.\n", GetLastError());
+
+            RegCloseKey(hkey);
+            if (pSetThreadDpiAwarenessContext)
+                pSetThreadDpiAwarenessContext(old_context);
+        }
+    }
+    else
+    {
+        hr = EnableTheming(FALSE);
+        ok(hr == S_OK, "EnableTheming failed, hr %#x.\n", hr);
+        ok(!IsThemeActive(), "Expected theming inactive.\n");
+
+        hr = EnableTheming(TRUE);
+        ok(hr == S_OK, "EnableTheming failed, hr %#x.\n", hr);
+        ok(!IsThemeActive(), "Expected theming inactive.\n");
+
+        hr = EnableTheming(FALSE);
+        ok(hr == S_OK, "EnableTheming failed, hr %#x.\n", hr);
+        ok(!IsThemeActive(), "Expected theming inactive.\n");
+    }
+}
+
 START_TEST(system)
 {
     init_funcs();
@@ -841,7 +1277,12 @@ START_TEST(system)
     test_SetWindowTheme();
     test_OpenThemeData();
     test_OpenThemeDataEx();
+    test_OpenThemeDataForDpi();
     test_GetCurrentThemeName();
+    test_GetThemePartSize();
     test_CloseThemeData();
     test_buffered_paint();
+
+    /* Test EnableTheming() in the end because it may disable theming */
+    test_EnableTheming();
 }

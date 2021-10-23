@@ -40,7 +40,6 @@
     SYSCALL_ENTRY( NtCancelIoFileEx ) \
     SYSCALL_ENTRY( NtCancelTimer ) \
     SYSCALL_ENTRY( NtClearEvent ) \
-    SYSCALL_ENTRY( NtClearPowerRequest ) \
     SYSCALL_ENTRY( NtClose ) \
     SYSCALL_ENTRY( NtCompleteConnectPort ) \
     SYSCALL_ENTRY( NtConnectPort ) \
@@ -60,7 +59,6 @@
     SYSCALL_ENTRY( NtCreateNamedPipeFile ) \
     SYSCALL_ENTRY( NtCreatePagingFile ) \
     SYSCALL_ENTRY( NtCreatePort ) \
-    SYSCALL_ENTRY( NtCreatePowerRequest ) \
     SYSCALL_ENTRY( NtCreateSection ) \
     SYSCALL_ENTRY( NtCreateSemaphore ) \
     SYSCALL_ENTRY( NtCreateSymbolicLinkObject ) \
@@ -171,6 +169,7 @@
     SYSCALL_ENTRY( NtQueryVirtualMemory ) \
     SYSCALL_ENTRY( NtQueryVolumeInformationFile ) \
     SYSCALL_ENTRY( NtQueueApcThread ) \
+    SYSCALL_ENTRY( NtRaiseException ) \
     SYSCALL_ENTRY( NtRaiseHardError ) \
     SYSCALL_ENTRY( NtReadFile ) \
     SYSCALL_ENTRY( NtReadFileScatter ) \
@@ -209,7 +208,6 @@
     SYSCALL_ENTRY( NtSetIntervalProfile ) \
     SYSCALL_ENTRY( NtSetIoCompletion ) \
     SYSCALL_ENTRY( NtSetLdtEntries ) \
-    SYSCALL_ENTRY( NtSetPowerRequest ) \
     SYSCALL_ENTRY( NtSetSecurityObject ) \
     SYSCALL_ENTRY( NtSetSystemInformation ) \
     SYSCALL_ENTRY( NtSetSystemTime ) \
@@ -227,6 +225,7 @@
     SYSCALL_ENTRY( NtTerminateProcess ) \
     SYSCALL_ENTRY( NtTerminateThread ) \
     SYSCALL_ENTRY( NtTestAlert ) \
+    SYSCALL_ENTRY( NtTraceControl ) \
     SYSCALL_ENTRY( NtUnloadDriver ) \
     SYSCALL_ENTRY( NtUnloadKey ) \
     SYSCALL_ENTRY( NtUnlockFile ) \
@@ -246,6 +245,7 @@
     SYSCALL_ENTRY( NtYieldExecution ) \
     SYSCALL_ENTRY( __wine_dbg_write ) \
     SYSCALL_ENTRY( __wine_unix_call ) \
+    SYSCALL_ENTRY( __wine_unix_spawnvp ) \
     SYSCALL_ENTRY( wine_nt_to_unix_file_name ) \
     SYSCALL_ENTRY( wine_server_call ) \
     SYSCALL_ENTRY( wine_server_fd_to_handle ) \

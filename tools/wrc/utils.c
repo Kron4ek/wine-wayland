@@ -19,7 +19,6 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -28,6 +27,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "../tools.h"
 #include "wrc.h"
 #include "utils.h"
 #include "parser.h"
@@ -85,16 +85,6 @@ int parser_warning(const char *s, ...)
 	return 0;
 }
 
-void internal_error(const char *file, int line, const char *s, ...)
-{
-	va_list ap;
-	va_start(ap, s);
-	fprintf(stderr, "Internal error (please report) %s %d: ", file, line);
-	vfprintf(stderr, s, ap);
-	va_end(ap);
-	exit(3);
-}
-
 void fatal_perror( const char *msg, ... )
 {
         va_list valist;
@@ -137,95 +127,6 @@ void chat(const char *s, ...)
 	}
 }
 
-char *dup_basename(const char *name, const char *ext)
-{
-	int namelen;
-	int extlen = strlen(ext);
-	char *base;
-	char *slash;
-
-	if(!name)
-		name = "wrc.tab";
-
-	slash = strrchr(name, '/');
-	if (slash)
-		name = slash + 1;
-
-	namelen = strlen(name);
-
-	/* +4 for later extension and +1 for '\0' */
-	base = xmalloc(namelen +4 +1);
-	strcpy(base, name);
-	if(!strcasecmp(name + namelen-extlen, ext))
-	{
-		base[namelen - extlen] = '\0';
-	}
-	return base;
-}
-
-void *xmalloc(size_t size)
-{
-    void *res;
-
-    assert(size > 0);
-    res = malloc(size);
-    if(res == NULL)
-    {
-	error("Virtual memory exhausted.\n");
-    }
-    memset(res, 0x55, size);
-    return res;
-}
-
-
-void *xrealloc(void *p, size_t size)
-{
-    void *res;
-
-    assert(size > 0);
-    res = realloc(p, size);
-    if(res == NULL)
-    {
-	error("Virtual memory exhausted.\n");
-    }
-    return res;
-}
-
-char *strmake( const char* fmt, ... )
-{
-    int n;
-    size_t size = 100;
-    va_list ap;
-
-    for (;;)
-    {
-        char *p = xmalloc( size );
-        va_start( ap, fmt );
-        n = vsnprintf( p, size, fmt, ap );
-        va_end( ap );
-        if (n == -1) size *= 2;
-        else if ((size_t)n >= size) size = n + 1;
-        else return p;
-        free( p );
-    }
-}
-
-char *xstrdup(const char *str)
-{
-	char *s;
-
-	assert(str != NULL);
-	s = xmalloc(strlen(str)+1);
-	return strcpy(s, str);
-}
-
-int strendswith( const char *str, const char *end )
-{
-    int l = strlen(str);
-    int m = strlen(end);
-    return l >= m && !strcmp( str + l - m, end );
-}
-
 int compare_striA( const char *str1, const char *str2 )
 {
     for (;;)
@@ -264,36 +165,30 @@ int compare_striW( const WCHAR *str1, const WCHAR *str2 )
 */
 int compare_name_id(const name_id_t *n1, const name_id_t *n2)
 {
-	if(n1->type == name_ord && n2->type == name_ord)
-	{
-		return n1->name.i_name - n2->name.i_name;
-	}
-	else if(n1->type == name_str && n2->type == name_str)
+    switch (n1->type)
+    {
+    case name_ord:
+	if (n2->type == name_ord) return n1->name.i_name - n2->name.i_name;
+	return 1;
+
+    case name_str:
+	if (n2->type == name_str)
 	{
 		if(n1->name.s_name->type == str_char
 		&& n2->name.s_name->type == str_char)
 		{
 			return compare_striA(n1->name.s_name->str.cstr, n2->name.s_name->str.cstr);
 		}
-		else if(n1->name.s_name->type == str_unicode
-		&& n2->name.s_name->type == str_unicode)
-		{
-			return compare_striW(n1->name.s_name->str.wstr, n2->name.s_name->str.wstr);
-		}
 		else
 		{
-			internal_error(__FILE__, __LINE__, "Can't yet compare strings of mixed type\n");
+			assert( n1->name.s_name->type == str_unicode );
+			assert( n2->name.s_name->type == str_unicode );
+			return compare_striW(n1->name.s_name->str.wstr, n2->name.s_name->str.wstr);
 		}
 	}
-	else if(n1->type == name_ord && n2->type == name_str)
-		return 1;
-	else if(n1->type == name_str && n2->type == name_ord)
-		return -1;
-	else
-		internal_error(__FILE__, __LINE__, "Comparing name-ids with unknown types (%d, %d)\n",
-				n1->type, n2->type);
-
-	return 0; /* Keep the compiler happy */
+        return -1;
+    }
+    return 0; /* Keep the compiler happy */
 }
 
 #ifdef _WIN32

@@ -1470,20 +1470,28 @@ static void test_effect_parameter_value_GetMatrixArray(const struct test_effect_
 static void test_effect_parameter_value_GetMatrixPointerArray(const struct test_effect_parameter_value_result *res,
         ID3DXEffect *effect, const DWORD *res_value, D3DXHANDLE parameter, UINT i)
 {
+    union
+    {
+        float f[sizeof(D3DXMATRIX) / sizeof(float)];
+        D3DXMATRIX m;
+    } fvalue[EFFECT_PARAMETER_VALUE_ARRAY_SIZE * sizeof(float) / sizeof(D3DXMATRIX)];
     const D3DXPARAMETER_DESC *res_desc = &res->desc;
     const char *res_full_name = res->full_name;
     HRESULT hr;
-    DWORD cmp = 0xabababab;
-    FLOAT fvalue[EFFECT_PARAMETER_VALUE_ARRAY_SIZE];
-    D3DXMATRIX *matrix_pointer_array[sizeof(fvalue)/sizeof(D3DXMATRIX)];
+    D3DXMATRIX *matrix_pointer_array[ARRAY_SIZE(fvalue)];
     UINT l, k, m, element, err = 0;
+    union
+    {
+        DWORD d;
+        float f;
+    } cmp = {0xabababab};
 
     for (element = 0; element <= res_desc->Elements + 1; ++element)
     {
         memset(fvalue, 0xab, sizeof(fvalue));
         for (l = 0; l < element; ++l)
         {
-            matrix_pointer_array[l] = (D3DXMATRIX *)&fvalue[l * sizeof(**matrix_pointer_array) / sizeof(FLOAT)];
+            matrix_pointer_array[l] = &fvalue[l].m;
         }
         hr = effect->lpVtbl->GetMatrixPointerArray(effect, parameter, matrix_pointer_array, element);
         if (!element)
@@ -1491,7 +1499,10 @@ static void test_effect_parameter_value_GetMatrixPointerArray(const struct test_
             ok(hr == D3D_OK, "%u - %s[%u]: GetMatrixPointerArray failed, got %#x, expected %#x\n",
                     i, res_full_name, element, hr, D3D_OK);
 
-            for (l = 0; l < EFFECT_PARAMETER_VALUE_ARRAY_SIZE; ++l) if (fvalue[l] != *(FLOAT *)&cmp) ++err;
+            for (m = 0; m < ARRAY_SIZE(fvalue); ++m)
+                for (l = 0; l < ARRAY_SIZE(fvalue[l].f); ++l)
+                    if (fvalue[m].f[l] != cmp.f)
+                        ++err;
         }
         else if (element <= res_desc->Elements && res_desc->Class == D3DXPC_MATRIX_ROWS)
         {
@@ -1506,20 +1517,27 @@ static void test_effect_parameter_value_GetMatrixPointerArray(const struct test_
                     {
                         if (k < res_desc->Columns && l < res_desc->Rows)
                         {
-                            if (!compare_float(fvalue[m * 16 + l * 4 + k], get_float(res_desc->Type,
+                            if (!compare_float(fvalue[m].m.m[l][k], get_float(res_desc->Type,
                                     &res_value[m * res_desc->Columns * res_desc->Rows + l * res_desc->Columns + k]), 512))
                                 ++err;
                         }
-                        else if (fvalue[m * 16 + l * 4 + k] != 0.0f) ++err;
+                        else if (fvalue[m].m.m[l][k] != 0.0f)
+                            ++err;
                     }
                 }
             }
 
-            for (l = element * 16; l < EFFECT_PARAMETER_VALUE_ARRAY_SIZE; ++l) if (fvalue[l] != *(FLOAT *)&cmp) ++err;
+            for (m = element; m < ARRAY_SIZE(fvalue); ++m)
+                for (l = 0; l < ARRAY_SIZE(fvalue[m].f); ++l)
+                    if (fvalue[m].f[l] != cmp.f)
+                        ++err;
         }
         else
         {
-            for (l = 0; l < EFFECT_PARAMETER_VALUE_ARRAY_SIZE; ++l) if (fvalue[l] != *(FLOAT *)&cmp) ++err;
+            for (m = 0; m < ARRAY_SIZE(fvalue); ++m)
+                for (l = 0; l < ARRAY_SIZE(fvalue[m].f); ++l)
+                    if (fvalue[m].f[l] != cmp.f)
+                        ++err;
 
             ok(hr == D3DERR_INVALIDCALL, "%u - %s[%u]: GetMatrixPointerArray failed, got %#x, expected %#x\n",
                     i, res_full_name, element, hr, D3DERR_INVALIDCALL);
@@ -7892,9 +7910,9 @@ static void test_effect_find_next_valid_technique(void)
     D3DPRESENT_PARAMETERS present_parameters = {0};
     IDirect3DDevice9 *device;
     D3DXTECHNIQUE_DESC desc;
+    D3DXHANDLE tech, tech2;
     ID3DXEffect *effect;
     IDirect3D9 *d3d;
-    D3DXHANDLE tech;
     ULONG refcount;
     HWND window;
     HRESULT hr;
@@ -7939,9 +7957,12 @@ static void test_effect_find_next_valid_technique(void)
     ok(hr == D3D_OK, "Got result %#x.\n", hr);
     ok(!strcmp(desc.Name, "tech1"), "Got unexpected technique %s.\n", desc.Name);
 
-    hr = effect->lpVtbl->FindNextValidTechnique(effect, tech, &tech);
+    tech2 = tech;
+    hr = effect->lpVtbl->FindNextValidTechnique(effect, tech, &tech2);
     ok(hr == S_FALSE, "Got result %#x.\n", hr);
-    hr = effect->lpVtbl->GetTechniqueDesc(effect, tech, &desc);
+    ok(!tech2, "Unexpected technique handle %p.\n", tech2);
+    /* Test GetTechniqueDesc() with a NULL handle. */
+    hr = effect->lpVtbl->GetTechniqueDesc(effect, tech2, &desc);
     ok(hr == D3D_OK, "Got result %#x.\n", hr);
     ok(!strcmp(desc.Name, "tech0"), "Got unexpected technique %s.\n", desc.Name);
 
@@ -7957,9 +7978,10 @@ static void test_effect_find_next_valid_technique(void)
     ok(hr == D3D_OK, "Got result %#x.\n", hr);
     ok(!strcmp(desc.Name, "tech1"), "Got unexpected technique %s.\n", desc.Name);
 
-    hr = effect->lpVtbl->FindNextValidTechnique(effect, tech, &tech);
+    hr = effect->lpVtbl->FindNextValidTechnique(effect, tech, &tech2);
     ok(hr == S_FALSE, "Got result %#x.\n", hr);
-    hr = effect->lpVtbl->GetTechniqueDesc(effect, tech, &desc);
+    ok(!tech2, "Unexpected technique handle %p.\n", tech2);
+    hr = effect->lpVtbl->GetTechniqueDesc(effect, tech2, &desc);
     ok(hr == D3D_OK, "Got result %#x.\n", hr);
     ok(!strcmp(desc.Name, "tech0"), "Got unexpected technique %s.\n", desc.Name);
 
@@ -7985,8 +8007,9 @@ static void test_effect_find_next_valid_technique(void)
     ok(hr == D3D_OK, "Got result %#x.\n", hr);
     ok(!strcmp(desc.Name, "tech1"), "Got unexpected technique %s.\n", desc.Name);
 
-    hr = effect->lpVtbl->FindNextValidTechnique(effect, tech, &tech);
+    hr = effect->lpVtbl->FindNextValidTechnique(effect, tech, &tech2);
     ok(hr == S_FALSE, "Got result %#x.\n", hr);
+    ok(!tech2, "Unexpected technique handle %p.\n", tech2);
 
     hr = effect->lpVtbl->FindNextValidTechnique(effect, "nope", &tech);
     ok(hr == D3DERR_INVALIDCALL, "Got result %#x.\n", hr);

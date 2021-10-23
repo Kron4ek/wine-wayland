@@ -1139,6 +1139,7 @@ static HRESULT wined3d_buffer_init(struct wined3d_buffer *buffer, struct wined3d
 {
     const struct wined3d_format *format = wined3d_get_format(device->adapter, WINED3DFMT_R8_UNORM, desc->bind_flags);
     struct wined3d_resource *resource = &buffer->resource;
+    unsigned int access;
     HRESULT hr;
 
     TRACE("buffer %p, device %p, desc byte_width %u, usage %s, bind_flags %s, "
@@ -1164,8 +1165,12 @@ static HRESULT wined3d_buffer_init(struct wined3d_buffer *buffer, struct wined3d
         return E_INVALIDARG;
     }
 
+    access = desc->access;
+    if (desc->bind_flags & WINED3D_BIND_CONSTANT_BUFFER && wined3d_settings.cb_access_map_w)
+        access |= WINED3D_RESOURCE_ACCESS_MAP_W;
+
     if (FAILED(hr = resource_init(resource, device, WINED3D_RTYPE_BUFFER, format,
-            WINED3D_MULTISAMPLE_NONE, 0, desc->usage, desc->bind_flags, desc->access,
+            WINED3D_MULTISAMPLE_NONE, 0, desc->usage, desc->bind_flags, access,
             desc->byte_width, 1, 1, desc->byte_width, parent, parent_ops, &buffer_resource_ops)))
     {
         WARN("Failed to initialize resource, hr %#x.\n", hr);
@@ -1179,7 +1184,7 @@ static HRESULT wined3d_buffer_init(struct wined3d_buffer *buffer, struct wined3d
             buffer, buffer->resource.size, buffer->resource.usage, buffer->resource.heap_memory);
 
     if (device->create_parms.flags & WINED3DCREATE_SOFTWARE_VERTEXPROCESSING
-            || wined3d_resource_access_is_managed(desc->access))
+            || wined3d_resource_access_is_managed(access))
     {
         /* SWvp and managed buffers always return the same pointer in buffer
          * maps and retain data in DISCARD maps. Keep a system memory copy of
@@ -1582,22 +1587,38 @@ HRESULT wined3d_buffer_vk_init(struct wined3d_buffer_vk *buffer_vk, struct wined
 void wined3d_buffer_vk_barrier(struct wined3d_buffer_vk *buffer_vk,
         struct wined3d_context_vk *context_vk, uint32_t bind_mask)
 {
+    uint32_t src_bind_mask = 0;
+
     TRACE("buffer_vk %p, context_vk %p, bind_mask %s.\n",
             buffer_vk, context_vk, wined3d_debug_bind_flags(bind_mask));
 
-    if (buffer_vk->bind_mask && buffer_vk->bind_mask != bind_mask)
+    if (bind_mask & ~WINED3D_READ_ONLY_BIND_MASK)
+    {
+        src_bind_mask = buffer_vk->bind_mask & WINED3D_READ_ONLY_BIND_MASK;
+        if (!src_bind_mask)
+            src_bind_mask = buffer_vk->bind_mask;
+
+        buffer_vk->bind_mask = bind_mask;
+    }
+    else if ((buffer_vk->bind_mask & bind_mask) != bind_mask)
+    {
+        src_bind_mask = buffer_vk->bind_mask & ~WINED3D_READ_ONLY_BIND_MASK;
+        buffer_vk->bind_mask |= bind_mask;
+    }
+
+    if (src_bind_mask)
     {
         const struct wined3d_vk_info *vk_info = context_vk->vk_info;
         VkBufferMemoryBarrier vk_barrier;
 
         TRACE("    %s -> %s.\n",
-                wined3d_debug_bind_flags(buffer_vk->bind_mask), wined3d_debug_bind_flags(bind_mask));
+                wined3d_debug_bind_flags(src_bind_mask), wined3d_debug_bind_flags(bind_mask));
 
         wined3d_context_vk_end_current_render_pass(context_vk);
 
         vk_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
         vk_barrier.pNext = NULL;
-        vk_barrier.srcAccessMask = vk_access_mask_from_bind_flags(buffer_vk->bind_mask);
+        vk_barrier.srcAccessMask = vk_access_mask_from_bind_flags(src_bind_mask);
         vk_barrier.dstAccessMask = vk_access_mask_from_bind_flags(bind_mask);
         vk_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         vk_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -1605,11 +1626,10 @@ void wined3d_buffer_vk_barrier(struct wined3d_buffer_vk *buffer_vk,
         vk_barrier.offset = buffer_vk->bo.buffer_offset;
         vk_barrier.size = buffer_vk->b.resource.size;
         VK_CALL(vkCmdPipelineBarrier(wined3d_context_vk_get_command_buffer(context_vk),
-                vk_pipeline_stage_mask_from_bind_flags(buffer_vk->bind_mask),
+                vk_pipeline_stage_mask_from_bind_flags(src_bind_mask),
                 vk_pipeline_stage_mask_from_bind_flags(bind_mask),
                 0, 0, NULL, 1, &vk_barrier, 0, NULL));
     }
-    buffer_vk->bind_mask = bind_mask;
 }
 
 HRESULT CDECL wined3d_buffer_create(struct wined3d_device *device, const struct wined3d_buffer_desc *desc,

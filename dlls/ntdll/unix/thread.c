@@ -67,7 +67,6 @@
 #include "ddk/wdm.h"
 #include "wine/server.h"
 #include "wine/debug.h"
-#include "wine/exception.h"
 #include "unix_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(thread);
@@ -1025,6 +1024,9 @@ static void contexts_to_server( context_t server_contexts[2], CONTEXT *context )
         context_to_server( &server_contexts[count++], native_machine, native_context, native_machine );
         if (wow_context) context_to_server( &server_contexts[count++], main_image_info.Machine,
                                             wow_context, main_image_info.Machine );
+        else if (native_machine != main_image_info.Machine)
+            context_to_server( &server_contexts[count++], main_image_info.Machine,
+                               native_context, native_machine );
     }
     else
         context_to_server( &server_contexts[count++], native_machine,
@@ -1738,6 +1740,16 @@ NTSTATUS get_thread_context( HANDLE handle, void *context, BOOL *self, USHORT ma
         if (!ret && count > 1) ret = context_from_server( context, &server_contexts[1], machine );
     }
     return ret;
+}
+
+
+/***********************************************************************
+ *              ntdll_set_exception_jmp_buf
+ */
+void ntdll_set_exception_jmp_buf( __wine_jmp_buf *jmp )
+{
+    assert( !jmp || !ntdll_get_thread_data()->jmp_buf );
+    ntdll_get_thread_data()->jmp_buf = jmp;
 }
 
 

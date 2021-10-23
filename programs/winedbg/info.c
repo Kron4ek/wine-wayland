@@ -19,8 +19,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -31,7 +29,6 @@
 #include "winuser.h"
 #include "tlhelp32.h"
 #include "wine/debug.h"
-#include "wine/exception.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(winedbg);
 
@@ -137,10 +134,21 @@ static const char* get_symtype_str(const IMAGEHLP_MODULE64* mi)
         case 'S' | ('T' << 8) | ('A' << 16) | ('B' << 24):
             return "Stabs";
         case 'D' | ('W' << 8) | ('A' << 16) | ('R' << 24):
+            /* previous versions of dbghelp used to report this... */
             return "Dwarf";
         default:
+            if ((mi->CVSig & 0x00FFFFFF) == ('D' | ('W' << 8) | ('F' << 16)))
+            {
+                static char tmp[64];
+                DWORD versbit = mi->CVSig >> 24;
+                strcpy(tmp, "Dwarf");
+                if (versbit & 1) strcat(tmp, "-2");
+                if (versbit & 2) strcat(tmp, "-3");
+                if (versbit & 4) strcat(tmp, "-4");
+                if (versbit & 8) strcat(tmp, "-5");
+                return tmp;
+            }
             return "DIA";
-
         }
     }
 }
@@ -166,7 +174,7 @@ static void module_print_info(const struct info_module *module, BOOL is_embedded
                is_embedded ? "\\" : get_symtype_str(&module->mi), module->name);
 }
 
-static int      module_compare(const void* p1, const void* p2)
+static int __cdecl module_compare(const void* p1, const void* p2)
 {
     struct info_module *left = (struct info_module *)p1;
     struct info_module *right = (struct info_module *)p2;

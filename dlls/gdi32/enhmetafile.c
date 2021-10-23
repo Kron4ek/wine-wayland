@@ -35,13 +35,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
+
 #include "windef.h"
 #include "winbase.h"
 #include "wingdi.h"
 #include "winnls.h"
 #include "winerror.h"
-#include "ntgdi_private.h"
 #include "gdi_private.h"
+
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(enhmetafile);
@@ -1439,7 +1441,7 @@ BOOL WINAPI PlayEnhMetaFileRecord(
       {
         const EMRSETCOLORADJUSTMENT *lpSetColorAdjust = (const EMRSETCOLORADJUSTMENT *)mr;
 
-        SetColorAdjustment( hdc, &lpSetColorAdjust->ColorAdjustment );
+        NtGdiSetColorAdjustment( hdc, &lpSetColorAdjust->ColorAdjustment );
 
         break;
       }
@@ -1814,8 +1816,8 @@ BOOL WINAPI PlayEnhMetaFileRecord(
       {
         const EMRRESIZEPALETTE *lpResizePalette = (const EMRRESIZEPALETTE *)mr;
 
-        ResizePalette( (handletable->objectHandle)[lpResizePalette->ihPal],
-                       (UINT)lpResizePalette->cEntries );
+        NtGdiResizePalette( handletable->objectHandle[lpResizePalette->ihPal],
+                            lpResizePalette->cEntries );
 
         break;
       }

@@ -19,6 +19,7 @@
 #define COBJMACROS
 
 #include "oleacc_private.h"
+#include "commctrl.h"
 
 #include "wine/debug.h"
 #include "wine/heap.h"
@@ -31,6 +32,8 @@ typedef struct {
     IEnumVARIANT IEnumVARIANT_iface;
 
     LONG ref;
+
+    HWND hwnd;
 } Window;
 
 static inline Window* impl_from_Window(IAccessible *iface)
@@ -327,11 +330,14 @@ static ULONG WINAPI Window_OleWindow_Release(IOleWindow *iface)
     return IAccessible_Release(&This->IAccessible_iface);
 }
 
-static HRESULT WINAPI Window_OleWindow_GetWindow(IOleWindow *iface, HWND *phwnd)
+static HRESULT WINAPI Window_OleWindow_GetWindow(IOleWindow *iface, HWND *hwnd)
 {
     Window *This = impl_from_Window_OleWindow(iface);
-    FIXME("(%p)->(%p)\n", This, phwnd);
-    return E_NOTIMPL;
+
+    TRACE("(%p)->(%p)\n", This, hwnd);
+
+    *hwnd = This->hwnd;
+    return S_OK;
 }
 
 static HRESULT WINAPI Window_OleWindow_ContextSensitiveHelp(IOleWindow *iface, BOOL fEnterMode)
@@ -411,6 +417,12 @@ static const IEnumVARIANTVtbl WindowEnumVARIANTVtbl = {
     Window_EnumVARIANT_Clone
 };
 
+static const struct win_class_data classes[] = {
+    {WC_LISTBOXW,           0x10000, TRUE},
+    {L"#32768",             0x10001, TRUE}, /* menu */
+    {NULL}
+};
+
 HRESULT create_window_object(HWND hwnd, const IID *iid, void **obj)
 {
     Window *window;
@@ -423,10 +435,13 @@ HRESULT create_window_object(HWND hwnd, const IID *iid, void **obj)
     if(!window)
         return E_OUTOFMEMORY;
 
+    find_class_data(hwnd, classes);
+
     window->IAccessible_iface.lpVtbl = &WindowVtbl;
     window->IOleWindow_iface.lpVtbl = &WindowOleWindowVtbl;
     window->IEnumVARIANT_iface.lpVtbl = &WindowEnumVARIANTVtbl;
     window->ref = 1;
+    window->hwnd = hwnd;
 
     hres = IAccessible_QueryInterface(&window->IAccessible_iface, iid, obj);
     IAccessible_Release(&window->IAccessible_iface);

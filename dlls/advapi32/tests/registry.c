@@ -491,9 +491,9 @@ static void test_enum_value(void)
     else
         ok( !res, "RegSetValueExA returned %d\n", res );
     res = RegSetValueExA( test_key, "Test", 0, REG_EXPAND_SZ, NULL, 0 );
-    ok( ERROR_SUCCESS == res || ERROR_INVALID_PARAMETER == res, "RegSetValueExA returned %d\n", res );
+    ok( ERROR_SUCCESS == res, "RegSetValueExA returned %d\n", res );
     res = RegSetValueExA( test_key, "Test", 0, REG_BINARY, NULL, 0 );
-    ok( ERROR_SUCCESS == res || ERROR_INVALID_PARAMETER == res, "RegSetValueExA returned %d\n", res );
+    ok( ERROR_SUCCESS == res, "RegSetValueExA returned %d\n", res );
 
     /* test reading the value and data without setting them */
     val_count = 20;
@@ -3867,6 +3867,7 @@ static void test_performance_keys(void)
         ret = RegSetValueA(keys[i], "Global", REG_SZ, "dummy", 5);
         ok(ret == ERROR_INVALID_HANDLE, "got %u\n", ret);
 
+        key_count = 0x900ddeed;
         ret = RegQueryInfoKeyA(keys[i], NULL, NULL, NULL, &key_count, NULL,
                 NULL, &value_count, NULL, NULL, NULL, NULL);
         todo_wine ok(!ret, "got %u\n", ret);
@@ -3928,10 +3929,11 @@ static void test_perflib_key(void)
     HKEY perflib_key, key, key2;
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING string;
-    char lang_name[4];
+    char lang_name[5];
+    const char *knames[2] = {"009", "CurrentLanguage"};
     char *buffer;
     DWORD size;
-    LONG ret;
+    LONG ret, l;
 
     ret = RegOpenKeyExA(HKEY_LOCAL_MACHINE,
             "Software\\Microsoft\\Windows NT\\CurrentVersion\\Perflib", 0, KEY_READ, &perflib_key);
@@ -4026,21 +4028,70 @@ static void test_perflib_key(void)
     else
         ok(!ret, "got %#x\n", ret);
 
-    /* multilingual support was not really completely thought through */
-
-    sprintf(lang_name, "%03x", primary_lang);
-    if (primary_lang != LANG_ENGLISH)
+    for (l = 0; l < ARRAY_SIZE(knames); l++)
     {
-        ret = RegOpenKeyExA(perflib_key, lang_name, 0, KEY_READ, &key);
-        todo_wine ok(!ret, "got %u\n", ret);
+        winetest_push_context("%d", l);
+      todo_wine_if(l == 1) {
+        ret = RegOpenKeyExA(perflib_key, knames[l], 0, KEY_READ, &key);
+        ok(!ret, "got %u\n", ret);
+        if (is_special_key(key))
+        {
+            size = buffer_size;
+            ret = RegQueryValueExA(key, "counter", NULL, NULL, (BYTE *)buffer, &size);
+            ok(!ret, "got %u\n", ret);
+            if (!ret)
+            {
+                char *str;
+                int c = 0;
+                for (str = buffer; *str; str += strlen(str) + 1)
+                    c++;
+                /* Note that the two keys may not have the same number of
+                 * entries if they are in different languages.
+                 */
+                ok(c >= 2 && (c % 2) == 0, "%d is not a valid number of entries in %s\n", c, knames[l]);
+                trace("%s has %d entries\n", knames[l], c);
+            }
+        }
+        else
+        {
+            /* Windows 7 does not always return a special key for 009
+             * when running without elevated privileges.
+             */
+            ok(broken(l == 0), "expected a special handle, got %p\n", key);
+        }
+
+        ret = RegCloseKey(key);
+        ok(!ret, "got %u\n", ret);
+      }
+        winetest_pop_context();
+    }
+
+    /* multilingual support was not really completely thought through */
+    switch (primary_lang)
+    {
+    case LANG_PORTUGUESE:
+    case LANG_CHINESE:
+        sprintf(lang_name, "%04x", GetUserDefaultLangID());
+        break;
+    default:
+        sprintf(lang_name, "%03x", primary_lang);
+        break;
+    }
+    if (primary_lang != LANG_ENGLISH &&
+        !RegOpenKeyExA(perflib_key, lang_name, 0, KEY_READ, &key))
+    {
         ok(!is_special_key(key), "expected a normal handle, got %p\n", key);
 
+        size = buffer_size;
         ret = RegQueryValueExA(key, "counter", NULL, NULL, (BYTE *)buffer, &size);
         todo_wine ok(ret == ERROR_FILE_NOT_FOUND, "got %u\n", ret);
 
         ret = RegCloseKey(key);
         todo_wine ok(!ret, "got %u\n", ret);
     }
+    /* else some languages don't have their own key. The keys are not really
+     * usable anyway so assume it does not really matter.
+     */
 
     ret = RegCloseKey(perflib_key);
     ok(!ret, "got %u\n", ret);
@@ -4369,7 +4420,7 @@ static void test_EnumDynamicTimeZoneInformation(void)
                 memset(name, 0, sizeof(name));
                 status = pRegLoadMUIStringW(subkey, L"MUI_Display", name, size, &size, 0, sysdir);
                 /* recently added time zones may not have MUI strings */
-                todo_wine ok((status == ERROR_SUCCESS && *name) ||
+                ok((status == ERROR_SUCCESS && *name) ||
                    broken(status == ERROR_RESOURCE_TYPE_NOT_FOUND) /* Win10 1809 32-bit */ ||
                    broken(status == ERROR_MUI_FILE_NOT_FOUND) /* Win10 1809 64-bit */,
                    "status %d MUI_Display %s\n", status, wine_dbgstr_w(name));

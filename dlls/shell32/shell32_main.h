@@ -36,7 +36,6 @@
 #include "shlobj.h"
 #include "shellapi.h"
 #include "wine/heap.h"
-#include "wine/unicode.h"
 #include "wine/list.h"
 
 /*******************************************
@@ -112,6 +111,7 @@ HRESULT WINAPI IAutoComplete_Constructor(IUnknown * pUnkOuter, REFIID riid, LPVO
 HRESULT WINAPI ApplicationAssociationRegistration_Constructor(IUnknown *outer, REFIID riid, LPVOID *ppv) DECLSPEC_HIDDEN;
 
 HRESULT WINAPI ApplicationDestinations_Constructor(IUnknown *outer, REFIID riid, LPVOID *ppv) DECLSPEC_HIDDEN;
+HRESULT WINAPI ApplicationDocumentLists_Constructor(IUnknown *outer, REFIID riid, LPVOID *ppv) DECLSPEC_HIDDEN;
 
 HRESULT IShellLink_ConstructFromFile(IUnknown * pUnkOuter, REFIID riid, LPCITEMIDLIST pidl, IUnknown **ppv) DECLSPEC_HIDDEN;
 
@@ -177,7 +177,6 @@ static inline WCHAR * __SHCloneStrAtoW(WCHAR ** target, const char * source)
 
 extern WCHAR swShell32Name[MAX_PATH] DECLSPEC_HIDDEN;
 
-BOOL UNIXFS_is_rooted_at_desktop(void) DECLSPEC_HIDDEN;
 extern const GUID CLSID_UnixFolder DECLSPEC_HIDDEN;
 extern const GUID CLSID_UnixDosFolder DECLSPEC_HIDDEN;
 

@@ -11490,6 +11490,13 @@ static BOOL shader_glsl_has_ffp_proj_control(void *shader_priv)
     return priv->ffp_proj_control;
 }
 
+static uint64_t shader_glsl_shader_compile(struct wined3d_context *context, const struct wined3d_shader_desc *shader_desc,
+        enum wined3d_shader_type shader_type)
+{
+    ERR("Not implemented.\n");
+    return 0;
+}
+
 const struct wined3d_shader_backend_ops glsl_shader_backend =
 {
     shader_glsl_handle_instruction,
@@ -11509,6 +11516,7 @@ const struct wined3d_shader_backend_ops glsl_shader_backend =
     shader_glsl_get_caps,
     shader_glsl_color_fixup_supported,
     shader_glsl_has_ffp_proj_control,
+    shader_glsl_shader_compile,
 };
 
 static void glsl_vertex_pipe_vp_enable(const struct wined3d_context *context, BOOL enable) {}
@@ -12621,8 +12629,10 @@ static void gen_yv12_read(struct wined3d_string_buffer *buffer,
      * Don't forget to clamp the y values in into the range, otherwise we'll
      * get filtering bleeding. */
 
-    /* Read odd lines from the right side (add 0.5 to the x coordinate). */
-    shader_addline(buffer, "    if (fract(floor(texcoord.y * size.y) * 0.5 + 1.0 / 6.0) >= 0.5)\n");
+    /* Read odd lines from the right side (add 0.5 to the x coordinate). Keep
+     * in mind that each line of the chroma plane corresponds to 2 lines of the
+     * resulting image. */
+    shader_addline(buffer, "    if (fract(texcoord.y * size.y * 0.25) >= 0.5)\n");
     shader_addline(buffer, "        texcoord.x += 0.5;\n");
 
     /* Clamp, keep the half pixel origin in mind. */

@@ -93,7 +93,7 @@ struct host *host_create( HWND hwnd, CREATESTRUCTW *cs, BOOL emulate_10 )
 {
     struct host *texthost;
 
-    texthost = CoTaskMemAlloc(sizeof(*texthost));
+    texthost = heap_alloc(sizeof(*texthost));
     if (!texthost) return NULL;
 
     texthost->ITextHost_iface.lpVtbl = &textHostVtbl;
@@ -158,7 +158,7 @@ static ULONG WINAPI ITextHostImpl_Release( ITextHost2 *iface )
     {
         SetWindowLongPtrW( host->window, 0, 0 );
         ITextServices_Release( host->text_srv );
-        CoTaskMemFree( host );
+        heap_free( host );
     }
     return ref;
 }
@@ -1639,7 +1639,6 @@ BOOL WINAPI DllMain( HINSTANCE instance, DWORD reason, void *reserved )
     case DLL_PROCESS_ATTACH:
         dll_instance = instance;
         DisableThreadLibraryCalls( instance );
-        me_heap = HeapCreate( 0, 0x10000, 0 );
         if (!register_classes( instance )) return FALSE;
         LookupInit();
         break;
@@ -1653,7 +1652,6 @@ BOOL WINAPI DllMain( HINSTANCE instance, DWORD reason, void *reserved )
         if (listbox_registered) UnregisterClassW( L"REListBox20W", 0 );
         if (combobox_registered) UnregisterClassW( L"REComboBox20W", 0 );
         LookupCleanup();
-        HeapDestroy( me_heap );
         release_typelib();
         break;
     }

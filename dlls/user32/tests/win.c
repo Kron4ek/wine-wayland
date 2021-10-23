@@ -1222,9 +1222,9 @@ static LRESULT CALLBACK cbt_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
 
 	    /* WS_VISIBLE should be turned off yet */
 	    style = createwnd->lpcs->style & ~WS_VISIBLE;
-	    ok(style == GetWindowLongA(hwnd, GWL_STYLE),
-		"style of hwnd and style in the CREATESTRUCT do not match: %08x != %08x\n",
-		GetWindowLongA(hwnd, GWL_STYLE), style);
+            ok(style == GetWindowLongA(hwnd, GWL_STYLE),
+                    "style of hwnd and style in the CREATESTRUCT do not match: %08x != %08x\n",
+                    GetWindowLongA(hwnd, GWL_STYLE), style);
 
             if (0)
             {
@@ -4424,34 +4424,65 @@ static void test_SetParent(void)
     ok(!IsWindow(popup), "popup still exists\n");
 }
 
+typedef struct
+{
+    DWORD cs_style;
+    DWORD cs_exstyle;
+    DWORD style;
+    DWORD exstyle;
+} test_style;
+
+static LRESULT WINAPI cbt_proc(int ncode, WPARAM wparam, LPARAM lparam)
+{
+    CBT_CREATEWNDW* c = (CBT_CREATEWNDW*)lparam;
+    HWND hwnd = (HWND)wparam;
+    test_style *ts;
+    DWORD style;
+
+    if (ncode !=  HCBT_CREATEWND)
+        return CallNextHookEx(NULL, ncode, wparam, lparam);
+
+    ts = c->lpcs->lpCreateParams;
+    ok(ts != NULL, "lpCreateParams not set\n");
+    ok(c->lpcs->style == ts->cs_style, "style = 0x%08x, expected 0x%08x\n",
+            c->lpcs->style, ts->cs_style);
+    ok(c->lpcs->dwExStyle == ts->cs_exstyle, "exstyle = 0x%08x, expected 0x%08x\n",
+            c->lpcs->dwExStyle, ts->cs_exstyle);
+
+    style = GetWindowLongW(hwnd, GWL_STYLE);
+    ok(style == ts->cs_style, "style = 0x%08x, expected 0x%08x\n",
+            style, ts->cs_style);
+    style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+    ok(style == (ts->cs_exstyle & ~WS_EX_LAYERED),
+            "exstyle = 0x%08x, expected 0x%08x\n", style, ts->cs_exstyle);
+    return CallNextHookEx(NULL, ncode, wparam, lparam);
+}
+
 static LRESULT WINAPI StyleCheckProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-    LPCREATESTRUCTA lpcs;
-    LPSTYLESTRUCT lpss;
+    CREATESTRUCTA *cs;
+    test_style *ts;
+    DWORD style;
 
     switch (msg)
     {
     case WM_NCCREATE:
     case WM_CREATE:
-        lpcs = (LPCREATESTRUCTA)lparam;
-        lpss = lpcs->lpCreateParams;
-        if (lpss)
-        {
-            if ((lpcs->dwExStyle & WS_EX_DLGMODALFRAME) ||
-                ((!(lpcs->dwExStyle & WS_EX_STATICEDGE)) &&
-                    (lpcs->style & (WS_DLGFRAME | WS_THICKFRAME))))
-                ok(lpcs->dwExStyle & WS_EX_WINDOWEDGE, "Window should have WS_EX_WINDOWEDGE style\n");
-            else
-                ok(!(lpcs->dwExStyle & WS_EX_WINDOWEDGE), "Window shouldn't have WS_EX_WINDOWEDGE style\n");
+        cs = (LPCREATESTRUCTA)lparam;
+        ts = cs->lpCreateParams;
 
-            ok((lpss->styleOld & ~WS_EX_WINDOWEDGE) == (lpcs->dwExStyle & ~WS_EX_WINDOWEDGE),
-                "Ex style (0x%08x) should match what the caller passed to CreateWindowEx (0x%08x)\n",
-                lpss->styleOld, lpcs->dwExStyle);
+        ok(ts != NULL, "lpCreateParams not set\n");
+        ok(cs->style == ts->cs_style, "style = 0x%08x, expected 0x%08x\n",
+                cs->style, ts->cs_style);
+        ok(cs->dwExStyle == ts->cs_exstyle, "exstyle = 0x%08x, expected 0x%08x\n",
+                cs->dwExStyle, ts->cs_exstyle);
 
-            ok(lpss->styleNew == lpcs->style,
-                "Style (0x%08x) should match what the caller passed to CreateWindowEx (0x%08x)\n",
-                lpss->styleNew, lpcs->style);
-        }
+        style = GetWindowLongW(hwnd, GWL_STYLE);
+        ok(style == ts->style, "style = 0x%08x, expected 0x%08x\n",
+                style, ts->style);
+        style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        ok(style == ts->exstyle, "exstyle = 0x%08x, expected 0x%08x\n",
+                style, ts->exstyle);
         break;
     }
     return DefWindowProcA(hwnd, msg, wparam, lparam);
@@ -4483,22 +4514,34 @@ static void check_window_style(DWORD dwStyleIn, DWORD dwExStyleIn, DWORD dwStyle
 {
     DWORD dwActualStyle;
     DWORD dwActualExStyle;
-    STYLESTRUCT ss;
+    test_style ts;
     HWND hwnd;
     HWND hwndParent = NULL;
+    HHOOK hook;
 
-    ss.styleNew = dwStyleIn;
-    ss.styleOld = dwExStyleIn;
+    ts.cs_style = dwStyleIn;
+    ts.cs_exstyle = dwExStyleIn;
+    if ((dwExStyleIn & WS_EX_DLGMODALFRAME) ||
+            ((!(dwExStyleIn & WS_EX_STATICEDGE)) &&
+             (dwStyleIn & (WS_DLGFRAME | WS_THICKFRAME))))
+        ts.cs_exstyle |= WS_EX_WINDOWEDGE;
+    else
+        ts.cs_exstyle &= ~WS_EX_WINDOWEDGE;
+    ts.style = dwStyleOut;
+    ts.exstyle = dwExStyleOut;
 
     if (dwStyleIn & WS_CHILD)
     {
-        hwndParent = CreateWindowExA(0, (LPCSTR)MAKEINTATOM(atomStyleCheckClass), NULL,
+        hwndParent = CreateWindowExA(0, "static", NULL,
             WS_OVERLAPPEDWINDOW, 0, 0, 0, 0, NULL, NULL, NULL, NULL);
+        ok(hwndParent != NULL, "CreateWindowExA failed\n");
     }
 
+    hook = SetWindowsHookExW(WH_CBT, cbt_proc, 0, GetCurrentThreadId());
     hwnd = CreateWindowExA(dwExStyleIn, (LPCSTR)MAKEINTATOM(atomStyleCheckClass), NULL,
-                    dwStyleIn, 0, 0, 0, 0, hwndParent, NULL, NULL, &ss);
-    assert(hwnd);
+                    dwStyleIn, 0, 0, 0, 0, hwndParent, NULL, NULL, &ts);
+    ok(hwnd != NULL, "CreateWindowExA failed\n");
+    UnhookWindowsHookEx(hook);
 
     flush_events( TRUE );
 
@@ -4535,9 +4578,7 @@ static void check_window_style(DWORD dwStyleIn, DWORD dwExStyleIn, DWORD dwStyle
     else
         dwExStyleOut = dwExStyleIn & ~WS_EX_WINDOWEDGE;
     ok(dwActualStyle == dwStyleOut, "expected style %#x, got %#x\n", dwStyleOut, dwActualStyle);
-    /* FIXME: Remove the condition below once Wine is fixed */
-    todo_wine_if (dwActualExStyle != dwExStyleOut)
-        ok(dwActualExStyle == dwExStyleOut, "expected ex_style %#x, got %#x\n", dwExStyleOut, dwActualExStyle);
+    ok(dwActualExStyle == dwExStyleOut, "expected ex_style %#x, got %#x\n", dwExStyleOut, dwActualExStyle);
 
     DestroyWindow(hwnd);
     if (hwndParent) DestroyWindow(hwndParent);
@@ -4546,48 +4587,63 @@ static void check_window_style(DWORD dwStyleIn, DWORD dwExStyleIn, DWORD dwStyle
 /* tests what window styles the window manager automatically adds */
 static void test_window_styles(void)
 {
+    static const struct
+    {
+        DWORD style_in;
+        DWORD exstyle_in;
+        DWORD style_out;
+        DWORD exstyle_out;
+    } tests[] = {
+        {0, 0, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE},
+        {WS_DLGFRAME, 0, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE},
+        {WS_THICKFRAME, 0, WS_THICKFRAME|WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE},
+        {WS_DLGFRAME, WS_EX_STATICEDGE, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE|WS_EX_STATICEDGE},
+        {WS_THICKFRAME, WS_EX_STATICEDGE, WS_THICKFRAME|WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE|WS_EX_STATICEDGE},
+        {WS_OVERLAPPEDWINDOW, 0, WS_CLIPSIBLINGS|WS_OVERLAPPEDWINDOW, WS_EX_WINDOWEDGE},
+        {WS_CHILD, 0, WS_CHILD, 0},
+        {WS_CHILD|WS_DLGFRAME, 0, WS_CHILD|WS_DLGFRAME, WS_EX_WINDOWEDGE},
+        {WS_CHILD|WS_THICKFRAME, 0, WS_CHILD|WS_THICKFRAME, WS_EX_WINDOWEDGE},
+        {WS_CHILD|WS_DLGFRAME, WS_EX_STATICEDGE, WS_CHILD|WS_DLGFRAME, WS_EX_STATICEDGE},
+        {WS_CHILD|WS_THICKFRAME, WS_EX_STATICEDGE, WS_CHILD|WS_THICKFRAME, WS_EX_STATICEDGE},
+        {WS_CHILD|WS_CAPTION, 0, WS_CHILD|WS_CAPTION, WS_EX_WINDOWEDGE},
+        {WS_CHILD|WS_CAPTION|WS_SYSMENU, 0, WS_CHILD|WS_CAPTION|WS_SYSMENU, WS_EX_WINDOWEDGE},
+        {WS_CHILD, WS_EX_WINDOWEDGE, WS_CHILD, 0},
+        {WS_CHILD, WS_EX_DLGMODALFRAME, WS_CHILD, WS_EX_WINDOWEDGE|WS_EX_DLGMODALFRAME},
+        {WS_CHILD, WS_EX_DLGMODALFRAME|WS_EX_STATICEDGE, WS_CHILD, WS_EX_STATICEDGE|WS_EX_WINDOWEDGE|WS_EX_DLGMODALFRAME},
+        {WS_CHILD|WS_POPUP, 0, WS_CHILD|WS_POPUP|WS_CLIPSIBLINGS, 0},
+        {WS_CHILD|WS_POPUP|WS_DLGFRAME, 0, WS_CHILD|WS_POPUP|WS_DLGFRAME|WS_CLIPSIBLINGS, WS_EX_WINDOWEDGE},
+        {WS_CHILD|WS_POPUP|WS_THICKFRAME, 0, WS_CHILD|WS_POPUP|WS_THICKFRAME|WS_CLIPSIBLINGS, WS_EX_WINDOWEDGE},
+        {WS_CHILD|WS_POPUP|WS_DLGFRAME, WS_EX_STATICEDGE, WS_CHILD|WS_POPUP|WS_DLGFRAME|WS_CLIPSIBLINGS, WS_EX_STATICEDGE},
+        {WS_CHILD|WS_POPUP|WS_THICKFRAME, WS_EX_STATICEDGE, WS_CHILD|WS_POPUP|WS_THICKFRAME|WS_CLIPSIBLINGS, WS_EX_STATICEDGE},
+        {WS_CHILD|WS_POPUP, WS_EX_APPWINDOW, WS_CHILD|WS_POPUP|WS_CLIPSIBLINGS, WS_EX_APPWINDOW},
+        {WS_CHILD|WS_POPUP, WS_EX_WINDOWEDGE, WS_CHILD|WS_POPUP|WS_CLIPSIBLINGS, 0},
+        {WS_CHILD, WS_EX_WINDOWEDGE, WS_CHILD, 0},
+        {0, WS_EX_TOOLWINDOW, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE|WS_EX_TOOLWINDOW},
+        {WS_POPUP, 0, WS_POPUP|WS_CLIPSIBLINGS, 0},
+        {WS_POPUP, WS_EX_WINDOWEDGE, WS_POPUP|WS_CLIPSIBLINGS, 0},
+        {WS_POPUP|WS_DLGFRAME, 0, WS_POPUP|WS_DLGFRAME|WS_CLIPSIBLINGS, WS_EX_WINDOWEDGE},
+        {WS_POPUP|WS_THICKFRAME, 0, WS_POPUP|WS_THICKFRAME|WS_CLIPSIBLINGS, WS_EX_WINDOWEDGE},
+        {WS_POPUP|WS_DLGFRAME, WS_EX_STATICEDGE, WS_POPUP|WS_DLGFRAME|WS_CLIPSIBLINGS, WS_EX_STATICEDGE},
+        {WS_POPUP|WS_THICKFRAME, WS_EX_STATICEDGE, WS_POPUP|WS_THICKFRAME|WS_CLIPSIBLINGS, WS_EX_STATICEDGE},
+        {WS_CAPTION, WS_EX_STATICEDGE, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_STATICEDGE|WS_EX_WINDOWEDGE},
+        {0, WS_EX_APPWINDOW, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_APPWINDOW|WS_EX_WINDOWEDGE},
+        {0, WS_EX_LAYERED, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_LAYERED|WS_EX_WINDOWEDGE},
+        {0, WS_EX_LAYERED|WS_EX_TRANSPARENT, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_WINDOWEDGE},
+        {0, WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_TOOLWINDOW, WS_CLIPSIBLINGS|WS_CAPTION,
+            WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_TOOLWINDOW|WS_EX_WINDOWEDGE},
+    };
+    int i;
+
     register_style_check_class();
 
-    check_window_style(0, 0, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE);
-    check_window_style(WS_DLGFRAME, 0, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE);
-    check_window_style(WS_THICKFRAME, 0, WS_THICKFRAME|WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE);
-    check_window_style(WS_DLGFRAME, WS_EX_STATICEDGE, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE|WS_EX_STATICEDGE);
-    check_window_style(WS_THICKFRAME, WS_EX_STATICEDGE, WS_THICKFRAME|WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE|WS_EX_STATICEDGE);
-    check_window_style(WS_OVERLAPPEDWINDOW, 0, WS_CLIPSIBLINGS|WS_OVERLAPPEDWINDOW, WS_EX_WINDOWEDGE);
-    check_window_style(WS_CHILD, 0, WS_CHILD, 0);
-    check_window_style(WS_CHILD|WS_DLGFRAME, 0, WS_CHILD|WS_DLGFRAME, WS_EX_WINDOWEDGE);
-    check_window_style(WS_CHILD|WS_THICKFRAME, 0, WS_CHILD|WS_THICKFRAME, WS_EX_WINDOWEDGE);
-    check_window_style(WS_CHILD|WS_DLGFRAME, WS_EX_STATICEDGE, WS_CHILD|WS_DLGFRAME, WS_EX_STATICEDGE);
-    check_window_style(WS_CHILD|WS_THICKFRAME, WS_EX_STATICEDGE, WS_CHILD|WS_THICKFRAME, WS_EX_STATICEDGE);
-    check_window_style(WS_CHILD|WS_CAPTION, 0, WS_CHILD|WS_CAPTION, WS_EX_WINDOWEDGE);
-    check_window_style(WS_CHILD|WS_CAPTION|WS_SYSMENU, 0, WS_CHILD|WS_CAPTION|WS_SYSMENU, WS_EX_WINDOWEDGE);
-    check_window_style(WS_CHILD, WS_EX_WINDOWEDGE, WS_CHILD, 0);
-    check_window_style(WS_CHILD, WS_EX_DLGMODALFRAME, WS_CHILD, WS_EX_WINDOWEDGE|WS_EX_DLGMODALFRAME);
-    check_window_style(WS_CHILD, WS_EX_DLGMODALFRAME|WS_EX_STATICEDGE, WS_CHILD, WS_EX_STATICEDGE|WS_EX_WINDOWEDGE|WS_EX_DLGMODALFRAME);
-    check_window_style(WS_CHILD|WS_POPUP, 0, WS_CHILD|WS_POPUP|WS_CLIPSIBLINGS, 0);
-    check_window_style(WS_CHILD|WS_POPUP|WS_DLGFRAME, 0, WS_CHILD|WS_POPUP|WS_DLGFRAME|WS_CLIPSIBLINGS, WS_EX_WINDOWEDGE);
-    check_window_style(WS_CHILD|WS_POPUP|WS_THICKFRAME, 0, WS_CHILD|WS_POPUP|WS_THICKFRAME|WS_CLIPSIBLINGS, WS_EX_WINDOWEDGE);
-    check_window_style(WS_CHILD|WS_POPUP|WS_DLGFRAME, WS_EX_STATICEDGE, WS_CHILD|WS_POPUP|WS_DLGFRAME|WS_CLIPSIBLINGS, WS_EX_STATICEDGE);
-    check_window_style(WS_CHILD|WS_POPUP|WS_THICKFRAME, WS_EX_STATICEDGE, WS_CHILD|WS_POPUP|WS_THICKFRAME|WS_CLIPSIBLINGS, WS_EX_STATICEDGE);
-    check_window_style(WS_CHILD|WS_POPUP, WS_EX_APPWINDOW, WS_CHILD|WS_POPUP|WS_CLIPSIBLINGS, WS_EX_APPWINDOW);
-    check_window_style(WS_CHILD|WS_POPUP, WS_EX_WINDOWEDGE, WS_CHILD|WS_POPUP|WS_CLIPSIBLINGS, 0);
-    check_window_style(WS_CHILD, WS_EX_WINDOWEDGE, WS_CHILD, 0);
-    check_window_style(0, WS_EX_TOOLWINDOW, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_WINDOWEDGE|WS_EX_TOOLWINDOW);
-    check_window_style(WS_POPUP, 0, WS_POPUP|WS_CLIPSIBLINGS, 0);
-    check_window_style(WS_POPUP, WS_EX_WINDOWEDGE, WS_POPUP|WS_CLIPSIBLINGS, 0);
-    check_window_style(WS_POPUP|WS_DLGFRAME, 0, WS_POPUP|WS_DLGFRAME|WS_CLIPSIBLINGS, WS_EX_WINDOWEDGE);
-    check_window_style(WS_POPUP|WS_THICKFRAME, 0, WS_POPUP|WS_THICKFRAME|WS_CLIPSIBLINGS, WS_EX_WINDOWEDGE);
-    check_window_style(WS_POPUP|WS_DLGFRAME, WS_EX_STATICEDGE, WS_POPUP|WS_DLGFRAME|WS_CLIPSIBLINGS, WS_EX_STATICEDGE);
-    check_window_style(WS_POPUP|WS_THICKFRAME, WS_EX_STATICEDGE, WS_POPUP|WS_THICKFRAME|WS_CLIPSIBLINGS, WS_EX_STATICEDGE);
-    check_window_style(WS_CAPTION, WS_EX_STATICEDGE, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_STATICEDGE|WS_EX_WINDOWEDGE);
-    check_window_style(0, WS_EX_APPWINDOW, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_APPWINDOW|WS_EX_WINDOWEDGE);
-
-    if (pGetLayeredWindowAttributes)
+    for (i = 0; i < ARRAY_SIZE(tests); i++)
     {
-        check_window_style(0, WS_EX_LAYERED, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_LAYERED|WS_EX_WINDOWEDGE);
-        check_window_style(0, WS_EX_LAYERED|WS_EX_TRANSPARENT, WS_CLIPSIBLINGS|WS_CAPTION, WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_WINDOWEDGE);
-        check_window_style(0, WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_TOOLWINDOW, WS_CLIPSIBLINGS|WS_CAPTION,
-                                                      WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_TOOLWINDOW|WS_EX_WINDOWEDGE);
+        if ((tests[i].exstyle_in & WS_EX_LAYERED) && !pGetLayeredWindowAttributes)
+            continue;
+
+        winetest_push_context("style %#x exstyle %#x", tests[i].style_in, tests[i].exstyle_in);
+        check_window_style(tests[i].style_in, tests[i].exstyle_in, tests[i].style_out, tests[i].exstyle_out);
+        winetest_pop_context();
     }
 }
 
@@ -4741,9 +4797,7 @@ static void check_dialog_style(DWORD style_in, DWORD ex_style_in, DWORD style_ou
         ex_style_out = ex_style_in | WS_EX_WINDOWEDGE;
     else
         ex_style_out = ex_style_in & ~WS_EX_WINDOWEDGE;
-    /* FIXME: Remove the condition below once Wine is fixed */
-    todo_wine_if (ex_style != ex_style_out)
-        ok(ex_style == ex_style_out, "expected ex_style %#x, got %#x\n", ex_style_out, ex_style);
+    ok(ex_style == ex_style_out, "expected ex_style %#x, got %#x\n", ex_style_out, ex_style);
 
     DestroyWindow(hwnd);
 
@@ -11624,14 +11678,19 @@ static void test_IsWindowEnabled(void)
 
 static void test_window_placement(void)
 {
-    RECT orig = {100, 200, 300, 400}, orig2 = {200, 300, 400, 500}, rect;
+    RECT orig = {100, 200, 300, 400}, orig2 = {200, 300, 400, 500}, rect, work_rect;
     WINDOWPLACEMENT wp = {sizeof(wp)};
+    MONITORINFO mon_info;
     HWND hwnd;
     BOOL ret;
 
     hwnd = CreateWindowA("MainWindowClass", "wp", WS_OVERLAPPEDWINDOW,
         orig.left, orig.top, orig.right - orig.left, orig.bottom - orig.top, 0, 0, 0, 0);
     ok(!!hwnd, "failed to create window, error %u\n", GetLastError());
+
+    mon_info.cbSize = sizeof(mon_info);
+    GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &mon_info);
+    work_rect = mon_info.rcWork;
 
     ret = GetWindowPlacement(hwnd, &wp);
     ok(ret, "failed to get window placement, error %u\n", GetLastError());
@@ -11675,7 +11734,6 @@ static void test_window_placement(void)
     ok(wp.showCmd == SW_SHOWMAXIMIZED, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
@@ -11693,6 +11751,42 @@ todo_wine
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
         wine_dbgstr_rect(&wp.rcNormalPosition));
 
+    SetWindowPos(hwnd, 0, work_rect.left, work_rect.top, work_rect.right - work_rect.left,
+                 work_rect.bottom - work_rect.top, SWP_NOZORDER | SWP_NOACTIVATE);
+    ret = GetWindowPlacement(hwnd, &wp);
+    ok(ret, "failed to get window placement, error %u\n", GetLastError());
+    ok(wp.showCmd == SW_SHOWMAXIMIZED, "got show cmd %u\n", wp.showCmd);
+    ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
+        "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
+    ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
+        "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
+    ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
+        wine_dbgstr_rect(&wp.rcNormalPosition));
+
+    SetWindowPos(hwnd, 0, work_rect.left, work_rect.top, work_rect.right - work_rect.left - 1,
+                 work_rect.bottom - work_rect.top, SWP_NOZORDER | SWP_NOACTIVATE);
+    ret = GetWindowPlacement(hwnd, &wp);
+    ok(ret, "failed to get window placement, error %u\n", GetLastError());
+    ok(wp.showCmd == SW_SHOWMAXIMIZED, "got show cmd %u\n", wp.showCmd);
+    ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
+        "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
+    ok(wp.ptMaxPosition.x == work_rect.left && wp.ptMaxPosition.y == work_rect.top,
+        "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
+    ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
+        wine_dbgstr_rect(&wp.rcNormalPosition));
+
+    SetWindowPos(hwnd, 0, work_rect.left, work_rect.top, work_rect.right - work_rect.left,
+                 work_rect.bottom - work_rect.top - 1, SWP_NOZORDER | SWP_NOACTIVATE);
+    ret = GetWindowPlacement(hwnd, &wp);
+    ok(ret, "failed to get window placement, error %u\n", GetLastError());
+    ok(wp.showCmd == SW_SHOWMAXIMIZED, "got show cmd %u\n", wp.showCmd);
+    ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
+        "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
+    ok(wp.ptMaxPosition.x == work_rect.left && wp.ptMaxPosition.y == work_rect.top,
+        "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
+    ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
+        wine_dbgstr_rect(&wp.rcNormalPosition));
+
     ShowWindow(hwnd, SW_MINIMIZE);
 
     ret = GetWindowPlacement(hwnd, &wp);
@@ -11701,7 +11795,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWMINIMIZED, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
@@ -11714,7 +11807,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWMAXIMIZED, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
@@ -11727,7 +11819,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWNORMAL, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
@@ -11745,7 +11836,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWNORMAL, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == 100 && wp.ptMinPosition.y == 100,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig2), "got normal pos %s\n",
@@ -11761,7 +11851,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWMINIMIZED, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig2), "got normal pos %s\n",
@@ -11783,7 +11872,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWMINIMIZED, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
@@ -11804,7 +11892,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWMAXIMIZED, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == 100 && wp.ptMinPosition.y == 100,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
@@ -11825,7 +11912,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWMINIMIZED, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
@@ -11839,7 +11925,6 @@ todo_wine
     ok(wp.showCmd == SW_SHOWMINIMIZED, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",
@@ -11854,7 +11939,6 @@ todo_wine
     ok(wp.showCmd == SW_NORMAL, "got show cmd %u\n", wp.showCmd);
     ok(wp.ptMinPosition.x == -32000 && wp.ptMinPosition.y == -32000,
         "got minimized pos (%d,%d)\n", wp.ptMinPosition.x, wp.ptMinPosition.y);
-todo_wine
     ok(wp.ptMaxPosition.x == -1 && wp.ptMaxPosition.y == -1,
         "got maximized pos (%d,%d)\n", wp.ptMaxPosition.x, wp.ptMaxPosition.y);
     ok(EqualRect(&wp.rcNormalPosition, &orig), "got normal pos %s\n",

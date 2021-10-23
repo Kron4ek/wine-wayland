@@ -45,7 +45,7 @@ extern HRESULT assembly_get_runtime_version(ASSEMBLY *assembly, LPSTR *version) 
 extern HRESULT assembly_get_vtable_fixups(ASSEMBLY *assembly, VTableFixup **fixups, DWORD *count) DECLSPEC_HIDDEN;
 extern HRESULT assembly_get_native_entrypoint(ASSEMBLY *assembly, NativeEntryPointFunc *func) DECLSPEC_HIDDEN;
 
-#define WINE_MONO_VERSION "6.3.0"
+#define WINE_MONO_VERSION "6.4.0"
 
 /* Mono embedding */
 typedef struct _MonoDomain MonoDomain;
@@ -218,5 +218,7 @@ extern HRESULT get_file_from_strongname(WCHAR* stringnameW, WCHAR* assemblies_pa
 
 extern void runtimehost_init(void) DECLSPEC_HIDDEN;
 extern void runtimehost_uninit(void) DECLSPEC_HIDDEN;
+
+extern void CDECL mono_print_handler_fn(const char *string, INT is_stdout) DECLSPEC_HIDDEN;
 
 #endif   /* __MSCOREE_PRIVATE__ */

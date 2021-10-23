@@ -214,8 +214,8 @@ NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
         TRACE(" eax=%08x ebx=%08x ecx=%08x edx=%08x esi=%08x edi=%08x\n",
               context->Eax, context->Ebx, context->Ecx,
               context->Edx, context->Esi, context->Edi );
-        TRACE(" ebp=%08x esp=%08x cs=%04x ds=%04x es=%04x fs=%04x gs=%04x flags=%08x\n",
-              context->Ebp, context->Esp, context->SegCs, context->SegDs,
+        TRACE(" ebp=%08x esp=%08x cs=%04x ss=%04x ds=%04x es=%04x fs=%04x gs=%04x flags=%08x\n",
+              context->Ebp, context->Esp, context->SegCs, context->SegSs, context->SegDs,
               context->SegEs, context->SegFs, context->SegGs, context->EFlags );
     }
 
@@ -244,6 +244,17 @@ void WINAPI KiUserApcDispatcher( CONTEXT *context, ULONG_PTR ctx, ULONG_PTR arg1
 {
     func( ctx, arg1, arg2 );
     NtContinue( context, TRUE );
+}
+
+
+/*******************************************************************
+ *		KiUserCallbackDispatcher (NTDLL.@)
+ */
+void WINAPI KiUserCallbackDispatcher( ULONG id, void *args, ULONG len )
+{
+    NTSTATUS (WINAPI *func)(void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+
+    RtlRaiseStatus( NtCallbackReturn( NULL, 0, func( args, len )));
 }
 
 

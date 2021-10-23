@@ -23,7 +23,7 @@
 
 #include "windef.h"
 #include "winbase.h"
-#include "wingdi.h"
+#include "ntgdi.h"
 #include "winuser.h"
 #include "winnls.h"
 #include "usp10.h"
@@ -632,11 +632,11 @@ static VOID *load_CMAP_format12_table(HDC hdc, ScriptCache *psc)
 
     if (!psc->CMAP_Table)
     {
-        length = GetFontData(hdc, CMAP_TAG , 0, NULL, 0);
+        length = NtGdiGetFontData(hdc, CMAP_TAG , 0, NULL, 0);
         if (length != GDI_ERROR)
         {
             psc->CMAP_Table = heap_alloc(length);
-            GetFontData(hdc, CMAP_TAG , 0, psc->CMAP_Table, length);
+            NtGdiGetFontData(hdc, CMAP_TAG , 0, psc->CMAP_Table, length);
             TRACE("Loaded cmap table of %i bytes\n",length);
         }
         else
@@ -676,7 +676,7 @@ DWORD OpenType_CMAP_GetGlyphIndex(HDC hdc, ScriptCache *psc, DWORD utf32c, WORD 
     if (utf32c < 0x10000)
     {
         WCHAR ch = utf32c;
-        return GetGlyphIndicesW(hdc, &ch, 1, glyph_index, flags);
+        return NtGdiGetGlyphIndicesW(hdc, &ch, 1, glyph_index, flags);
     }
 
     if (!psc->CMAP_format12_Table)

@@ -293,10 +293,13 @@ struct unix_funcs
     void (WINAPI *p_vkGetDescriptorSetLayoutSupport)(VkDevice, const VkDescriptorSetLayoutCreateInfo *, VkDescriptorSetLayoutSupport *);
     void (WINAPI *p_vkGetDescriptorSetLayoutSupportKHR)(VkDevice, const VkDescriptorSetLayoutCreateInfo *, VkDescriptorSetLayoutSupport *);
     void (WINAPI *p_vkGetDeviceAccelerationStructureCompatibilityKHR)(VkDevice, const VkAccelerationStructureVersionInfoKHR *, VkAccelerationStructureCompatibilityKHR *);
+    void (WINAPI *p_vkGetDeviceBufferMemoryRequirementsKHR)(VkDevice, const VkDeviceBufferMemoryRequirementsKHR *, VkMemoryRequirements2 *);
     void (WINAPI *p_vkGetDeviceGroupPeerMemoryFeatures)(VkDevice, uint32_t, uint32_t, uint32_t, VkPeerMemoryFeatureFlags *);
     void (WINAPI *p_vkGetDeviceGroupPeerMemoryFeaturesKHR)(VkDevice, uint32_t, uint32_t, uint32_t, VkPeerMemoryFeatureFlags *);
     VkResult (WINAPI *p_vkGetDeviceGroupPresentCapabilitiesKHR)(VkDevice, VkDeviceGroupPresentCapabilitiesKHR *);
     VkResult (WINAPI *p_vkGetDeviceGroupSurfacePresentModesKHR)(VkDevice, VkSurfaceKHR, VkDeviceGroupPresentModeFlagsKHR *);
+    void (WINAPI *p_vkGetDeviceImageMemoryRequirementsKHR)(VkDevice, const VkDeviceImageMemoryRequirementsKHR *, VkMemoryRequirements2 *);
+    void (WINAPI *p_vkGetDeviceImageSparseMemoryRequirementsKHR)(VkDevice, const VkDeviceImageMemoryRequirementsKHR *, uint32_t *, VkSparseImageMemoryRequirements2 *);
     void (WINAPI *p_vkGetDeviceMemoryCommitment)(VkDevice, VkDeviceMemory, VkDeviceSize *);
     uint64_t (WINAPI *p_vkGetDeviceMemoryOpaqueCaptureAddress)(VkDevice, const VkDeviceMemoryOpaqueCaptureAddressInfo *);
     uint64_t (WINAPI *p_vkGetDeviceMemoryOpaqueCaptureAddressKHR)(VkDevice, const VkDeviceMemoryOpaqueCaptureAddressInfo *);
@@ -402,6 +405,7 @@ struct unix_funcs
     void (WINAPI *p_vkResetQueryPoolEXT)(VkDevice, VkQueryPool, uint32_t, uint32_t);
     VkResult (WINAPI *p_vkSetDebugUtilsObjectNameEXT)(VkDevice, const VkDebugUtilsObjectNameInfoEXT *);
     VkResult (WINAPI *p_vkSetDebugUtilsObjectTagEXT)(VkDevice, const VkDebugUtilsObjectTagInfoEXT *);
+    void (WINAPI *p_vkSetDeviceMemoryPriorityEXT)(VkDevice, VkDeviceMemory, float);
     VkResult (WINAPI *p_vkSetEvent)(VkDevice, VkEvent);
     VkResult (WINAPI *p_vkSetPrivateDataEXT)(VkDevice, VkObjectType, uint64_t, VkPrivateDataSlotEXT, uint64_t);
     VkResult (WINAPI *p_vkSignalSemaphore)(VkDevice, const VkSemaphoreSignalInfo *);
@@ -419,6 +423,10 @@ struct unix_funcs
     VkResult (WINAPI *p_vkWaitSemaphores)(VkDevice, const VkSemaphoreWaitInfo *, uint64_t);
     VkResult (WINAPI *p_vkWaitSemaphoresKHR)(VkDevice, const VkSemaphoreWaitInfo *, uint64_t);
     VkResult (WINAPI *p_vkWriteAccelerationStructuresPropertiesKHR)(VkDevice, uint32_t, const VkAccelerationStructureKHR *, VkQueryType, size_t, void *, size_t);
+
+    /* winevulkan specific functions */
+    BOOL (WINAPI *p_is_available_instance_function)(VkInstance, const char *);
+    BOOL (WINAPI *p_is_available_device_function)(VkDevice, const char *);
 };
 
 #endif /* __WINE_VULKAN_LOADER_THUNKS_H */

@@ -170,18 +170,6 @@ NTSTATUS WINAPI wow64_NtClearEvent( UINT *args )
 
 
 /**********************************************************************
- *           wow64_NtClearPowerRequest
- */
-NTSTATUS WINAPI wow64_NtClearPowerRequest( UINT *args )
-{
-    HANDLE handle = get_handle( &args );
-    POWER_REQUEST_TYPE type = get_ulong( &args );
-
-    return NtClearPowerRequest( handle, type );
-}
-
-
-/**********************************************************************
  *           wow64_NtCompleteConnectPort
  */
 NTSTATUS WINAPI wow64_NtCompleteConnectPort( UINT *args )
@@ -377,19 +365,6 @@ NTSTATUS WINAPI wow64_NtCreatePort( UINT *args )
     status = NtCreatePort( &handle, objattr_32to64( &attr, attr32 ), info_len, data_len, reserved );
     put_handle( handle_ptr, handle );
     return status;
-}
-
-
-/**********************************************************************
- *           wow64_NtCreatePowerRequest
- */
-NTSTATUS WINAPI wow64_NtCreatePowerRequest( UINT *args )
-{
-    ULONG *handle_ptr = get_ptr( &args );
-    COUNTED_REASON_CONTEXT *context = get_ptr( &args );
-
-    FIXME( "%p %p: stub\n", handle_ptr, context );
-    return STATUS_NOT_IMPLEMENTED;
 }
 
 
@@ -1404,18 +1379,6 @@ NTSTATUS WINAPI wow64_NtSetIoCompletion( UINT *args )
 
 
 /**********************************************************************
- *           wow64_NtSetPowerRequest
- */
-NTSTATUS WINAPI wow64_NtSetPowerRequest( UINT *args )
-{
-    HANDLE handle = get_handle( &args );
-    POWER_REQUEST_TYPE type = get_ulong( &args );
-
-    return NtSetPowerRequest( handle, type );
-}
-
-
-/**********************************************************************
  *           wow64_NtSetTimer
  */
 NTSTATUS WINAPI wow64_NtSetTimer( UINT *args )
@@ -1478,6 +1441,22 @@ NTSTATUS WINAPI wow64_NtTerminateJobObject( UINT *args )
 NTSTATUS WINAPI wow64_NtTestAlert( UINT *args )
 {
     return NtTestAlert();
+}
+
+
+/**********************************************************************
+ *           wow64_NtTraceControl
+ */
+NTSTATUS WINAPI wow64_NtTraceControl( UINT *args )
+{
+    ULONG code = get_ulong( &args );
+    void *inbuf = get_ptr( &args );
+    ULONG inbuf_len = get_ulong( &args );
+    void *outbuf = get_ptr( &args );
+    ULONG outbuf_len = get_ulong( &args );
+    ULONG *size = get_ptr( &args );
+
+    return NtTraceControl( code, inbuf, inbuf_len, outbuf, outbuf_len, size );
 }
 
 

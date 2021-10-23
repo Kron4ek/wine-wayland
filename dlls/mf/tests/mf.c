@@ -1139,7 +1139,7 @@ static void test_session_events(IMFMediaSession *session)
     ok(hr == MF_S_MULTIPLE_BEGIN, "Unexpected hr %#x.\n", hr);
 
     /* Same callback, different state. */
-    hr = IMFMediaSession_BeginGetEvent(session, &callback.IMFAsyncCallback_iface, (IUnknown *)&callback);
+    hr = IMFMediaSession_BeginGetEvent(session, &callback.IMFAsyncCallback_iface, (IUnknown *)&callback.IMFAsyncCallback_iface);
     ok(hr == MF_E_MULTIPLE_BEGIN, "Unexpected hr %#x.\n", hr);
 
     /* Different callback, same state. */
@@ -4558,6 +4558,12 @@ todo_wine
 
     hr = IMFMediaSink_Shutdown(sink);
     ok(hr == S_OK, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFMediaSink_GetStreamSinkCount(sink, NULL);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
+
+    hr = IMFMediaSink_GetStreamSinkCount(sink, &count);
+    ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);
 
     hr = IMFRateSupport_GetSlowestRate(rs, MFRATE_FORWARD, FALSE, &rate);
     ok(hr == MF_E_SHUTDOWN, "Unexpected hr %#x.\n", hr);

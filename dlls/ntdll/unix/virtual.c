@@ -59,7 +59,6 @@
 #include "windef.h"
 #include "winnt.h"
 #include "winternl.h"
-#include "wine/exception.h"
 #include "wine/list.h"
 #include "wine/rbtree.h"
 #include "unix_private.h"
@@ -103,35 +102,6 @@ struct file_view
     size_t        size;          /* size in bytes */
     unsigned int  protect;       /* protection for all pages at allocation time and SEC_* flags */
 };
-
-#undef __TRY
-#undef __EXCEPT
-#undef __ENDTRY
-
-#define __TRY \
-    do { __wine_jmp_buf __jmp; \
-         int __first = 1; \
-         assert( !ntdll_get_thread_data()->jmp_buf ); \
-         for (;;) if (!__first) \
-         { \
-             do {
-
-#define __EXCEPT \
-             } while(0); \
-             ntdll_get_thread_data()->jmp_buf = NULL; \
-             break; \
-         } else { \
-             if (__wine_setjmpex( &__jmp, NULL )) { \
-                 do {
-
-#define __ENDTRY \
-                 } while (0); \
-                 break; \
-             } \
-             ntdll_get_thread_data()->jmp_buf = &__jmp; \
-             __first = 0; \
-         } \
-    } while (0);
 
 /* per-page protection flags */
 #define VPROT_READ       0x01
@@ -615,7 +585,7 @@ static void add_builtin_module( void *module, void *handle )
 /***********************************************************************
  *           release_builtin_module
  */
-static void release_builtin_module( void *module )
+void release_builtin_module( void *module )
 {
     struct builtin_module *builtin;
 
@@ -672,7 +642,7 @@ static NTSTATUS get_builtin_unix_funcs( void *module, BOOL wow, void **funcs )
     {
         if (builtin->module != module) continue;
         *funcs = dlsym( builtin->unix_handle, ptr_name );
-        status = STATUS_SUCCESS;
+        status = *funcs ? STATUS_SUCCESS : STATUS_ENTRYPOINT_NOT_FOUND;
         break;
     }
     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
@@ -942,6 +912,60 @@ static BYTE get_page_vprot( const void *addr )
 #endif
 }
 
+
+/***********************************************************************
+ *           get_vprot_range_size
+ *
+ * Return the size of the region with equal masked vprot byte.
+ * Also return the protections for the first page.
+ * The function assumes that base and size are page aligned,
+ * base + size does not wrap around and the range is within view so
+ * vprot bytes are allocated for the range. */
+static SIZE_T get_vprot_range_size( char *base, SIZE_T size, BYTE mask, BYTE *vprot )
+{
+    static const UINT_PTR word_from_byte = (UINT_PTR)0x101010101010101;
+    static const UINT_PTR index_align_mask = sizeof(UINT_PTR) - 1;
+    SIZE_T curr_idx, start_idx, end_idx, aligned_start_idx;
+    UINT_PTR vprot_word, mask_word;
+    const BYTE *vprot_ptr;
+
+    TRACE("base %p, size %p, mask %#x.\n", base, (void *)size, mask);
+
+    curr_idx = start_idx = (size_t)base >> page_shift;
+    end_idx = start_idx + (size >> page_shift);
+
+    aligned_start_idx = (start_idx + index_align_mask) & ~index_align_mask;
+    if (aligned_start_idx > end_idx) aligned_start_idx = end_idx;
+
+#ifdef _WIN64
+    vprot_ptr = pages_vprot[curr_idx >> pages_vprot_shift] + (curr_idx & pages_vprot_mask);
+#else
+    vprot_ptr = pages_vprot + curr_idx;
+#endif
+    *vprot = *vprot_ptr;
+
+    /* Page count page table is at least the multiples of sizeof(UINT_PTR)
+     * so we don't have to worry about crossing the boundary on unaligned idx values. */
+
+    for (; curr_idx < aligned_start_idx; ++curr_idx, ++vprot_ptr)
+        if ((*vprot ^ *vprot_ptr) & mask) return (curr_idx - start_idx) << page_shift;
+
+    vprot_word = word_from_byte * *vprot;
+    mask_word = word_from_byte * mask;
+    for (; curr_idx < end_idx; curr_idx += sizeof(UINT_PTR), vprot_ptr += sizeof(UINT_PTR))
+    {
+#ifdef _WIN64
+        if (!(curr_idx & pages_vprot_mask)) vprot_ptr = pages_vprot[curr_idx >> pages_vprot_shift];
+#endif
+        if ((vprot_word ^ *(UINT_PTR *)vprot_ptr) & mask_word)
+        {
+            for (; curr_idx < end_idx; ++curr_idx, ++vprot_ptr)
+                if ((*vprot ^ *vprot_ptr) & mask) break;
+            return (curr_idx - start_idx) << page_shift;
+        }
+    }
+    return size;
+}
 
 /***********************************************************************
  *           set_page_vprot
@@ -2042,39 +2066,43 @@ done:
 /***********************************************************************
  *           get_committed_size
  *
- * Get the size of the committed range starting at base.
+ * Get the size of the committed range with equal masked vprot bytes starting at base.
  * Also return the protections for the first page.
  */
-static SIZE_T get_committed_size( struct file_view *view, void *base, BYTE *vprot )
+static SIZE_T get_committed_size( struct file_view *view, void *base, BYTE *vprot, BYTE vprot_mask )
 {
-    SIZE_T i, start;
+    SIZE_T offset, size;
 
-    start = ((char *)base - (char *)view->base) >> page_shift;
-    *vprot = get_page_vprot( base );
+    base = ROUND_ADDR( base, page_mask );
+    offset = (char *)base - (char *)view->base;
 
     if (view->protect & SEC_RESERVE)
     {
-        SIZE_T ret = 0;
+        size = 0;
+
+        *vprot = get_page_vprot( base );
+
         SERVER_START_REQ( get_mapping_committed_range )
         {
             req->base   = wine_server_client_ptr( view->base );
-            req->offset = start << page_shift;
+            req->offset = offset;
             if (!wine_server_call( req ))
             {
-                ret = reply->size;
+                size = reply->size;
                 if (reply->committed)
                 {
                     *vprot |= VPROT_COMMITTED;
-                    set_page_vprot_bits( base, ret, VPROT_COMMITTED, 0 );
+                    set_page_vprot_bits( base, size, VPROT_COMMITTED, 0 );
                 }
             }
         }
         SERVER_END_REQ;
-        return ret;
+
+        if (!size || !(vprot_mask & ~VPROT_COMMITTED)) return size;
     }
-    for (i = start + 1; i < view->size >> page_shift; i++)
-        if ((*vprot ^ get_page_vprot( (char *)view->base + (i << page_shift) )) & VPROT_COMMITTED) break;
-    return (i - start) << page_shift;
+    else size = view->size - offset;
+
+    return get_vprot_range_size( base, size, vprot_mask, vprot );
 }
 
 
@@ -4025,7 +4053,7 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T 
     if ((view = find_view( base, size )))
     {
         /* Make sure all the pages are committed */
-        if (get_committed_size( view, base, &vprot ) >= size && (vprot & VPROT_COMMITTED))
+        if (get_committed_size( view, base, &vprot, VPROT_COMMITTED ) >= size && (vprot & VPROT_COMMITTED))
         {
             old = get_win32_prot( vprot, view->protect );
             status = set_protection( view, base, size, new_prot );
@@ -4196,18 +4224,14 @@ static NTSTATUS get_basic_memory_info( HANDLE process, LPCVOID addr,
     else
     {
         BYTE vprot;
-        char *ptr;
-        SIZE_T range_size = get_committed_size( view, base, &vprot );
 
+        info->RegionSize = get_committed_size( view, base, &vprot, ~VPROT_WRITEWATCH );
         info->State = (vprot & VPROT_COMMITTED) ? MEM_COMMIT : MEM_RESERVE;
         info->Protect = (vprot & VPROT_COMMITTED) ? get_win32_prot( vprot, view->protect ) : 0;
         info->AllocationProtect = get_win32_prot( view->protect, view->protect );
         if (view->protect & SEC_IMAGE) info->Type = MEM_IMAGE;
         else if (view->protect & (SEC_FILE | SEC_RESERVE | SEC_COMMIT)) info->Type = MEM_MAPPED;
         else info->Type = MEM_PRIVATE;
-        for (ptr = base; ptr < base + range_size; ptr += page_size)
-            if ((get_page_vprot( ptr ) ^ vprot) & ~VPROT_WRITEWATCH) break;
-        info->RegionSize = ptr - base;
     }
     server_leave_uninterrupted_section( &virtual_mutex, &sigset );
 
@@ -4253,8 +4277,8 @@ static NTSTATUS get_working_set_ex( HANDLE process, LPCVOID addr,
         }
 
         if ((view = find_view( p->VirtualAddress, 0 )) &&
-                get_committed_size( view, p->VirtualAddress, &vprot ) &&
-                (vprot & VPROT_COMMITTED))
+            get_committed_size( view, p->VirtualAddress, &vprot, VPROT_COMMITTED ) &&
+            (vprot & VPROT_COMMITTED))
         {
             p->VirtualAttributes.Valid = !(vprot & VPROT_GUARD) && (vprot & 0x0f) && (pagemap >> 63);
             p->VirtualAttributes.Shared = !is_view_valloc( view ) && ((pagemap >> 61) & 1);
@@ -4328,21 +4352,6 @@ NTSTATUS WINAPI NtQueryVirtualMemory( HANDLE process, LPCVOID addr,
 
         case MemoryMappedFilenameInformation:
             return get_memory_section_name( process, addr, buffer, len, res_len );
-
-        case MemoryWineImageInitFuncs:
-            if (process == GetCurrentProcess())
-            {
-                void *module = (void *)addr;
-                void *handle = get_builtin_so_handle( module );
-
-                if (handle)
-                {
-                    status = get_builtin_init_funcs( handle, buffer, len, res_len );
-                    release_builtin_module( module );
-                    return status;
-                }
-            }
-            return STATUS_INVALID_HANDLE;
 
         case MemoryWineUnixFuncs:
         case MemoryWineUnixWow64Funcs:

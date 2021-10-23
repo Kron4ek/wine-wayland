@@ -53,6 +53,8 @@ typedef struct
     UINT_PTR uAppData;
 } ActionMap;
 
+typedef HRESULT dinput_device_read_state( IDirectInputDevice8W *iface );
+
 /* Device implementation */
 typedef struct IDirectInputDeviceImpl IDirectInputDeviceImpl;
 struct IDirectInputDeviceImpl
@@ -84,6 +86,10 @@ struct IDirectInputDeviceImpl
     /* Action mapping */
     int                         num_actions; /* number of actions mapped */
     ActionMap                  *action_map;  /* array of mappings */
+
+    /* internal device file reading */
+    HANDLE                    read_event;
+    dinput_device_read_state *read_callback;
 };
 
 extern HRESULT direct_input_device_alloc( SIZE_T size, const IDirectInputDevice8WVtbl *vtbl, const GUID *guid,
@@ -91,7 +97,7 @@ extern HRESULT direct_input_device_alloc( SIZE_T size, const IDirectInputDevice8
 extern const IDirectInputDevice8AVtbl dinput_device_a_vtbl DECLSPEC_HIDDEN;
 
 extern BOOL get_app_key(HKEY*, HKEY*) DECLSPEC_HIDDEN;
-extern DWORD get_config_key(HKEY, HKEY, const char*, char*, DWORD) DECLSPEC_HIDDEN;
+extern DWORD get_config_key( HKEY, HKEY, const WCHAR *, WCHAR *, DWORD ) DECLSPEC_HIDDEN;
 
 /* Routines to do DataFormat / WineFormat conversions */
 extern void fill_DataFormat(void *out, DWORD size, const void *in, const DataFormat *df)  DECLSPEC_HIDDEN;

@@ -38,6 +38,7 @@
 WINE_DEFAULT_DEBUG_CHANNEL(hid);
 
 DEFINE_DEVPROPKEY(DEVPROPKEY_HID_HANDLE, 0xbc62e415, 0xf4fe, 0x405c, 0x8e, 0xda, 0x63, 0x6f, 0xb5, 0x9f, 0x08, 0x98, 2);
+DEFINE_GUID(GUID_DEVINTERFACE_WINEXINPUT, 0x6c53d5fd, 0x6480, 0x440f, 0xb6, 0x18, 0x47, 0x67, 0x50, 0xc5, 0xe1, 0xa6);
 
 #if defined(__i386__) && !defined(_WIN32)
 
@@ -109,8 +110,11 @@ C_ASSERT(offsetof(RAWINPUT, data.hid.bRawData[2 * sizeof(USAGE)]) < sizeof(RAWIN
 
 static void send_wm_input_device_change(BASE_DEVICE_EXTENSION *ext, LPARAM param)
 {
+    HIDP_COLLECTION_DESC *desc = ext->u.pdo.device_desc.CollectionDesc;
     RAWINPUT rawinput;
     INPUT input;
+
+    if (!IsEqualGUID( ext->class_guid, &GUID_DEVINTERFACE_HID )) return;
 
     rawinput.header.dwType = RIM_TYPEHID;
     rawinput.header.dwSize = offsetof(RAWINPUT, data.hid.bRawData[2 * sizeof(USAGE)]);
@@ -118,8 +122,8 @@ static void send_wm_input_device_change(BASE_DEVICE_EXTENSION *ext, LPARAM param
     rawinput.header.wParam = param;
     rawinput.data.hid.dwCount = 0;
     rawinput.data.hid.dwSizeHid = 0;
-    ((USAGE *)rawinput.data.hid.bRawData)[0] = ext->u.pdo.preparsed_data->caps.UsagePage;
-    ((USAGE *)rawinput.data.hid.bRawData)[1] = ext->u.pdo.preparsed_data->caps.Usage;
+    ((USAGE *)rawinput.data.hid.bRawData)[0] = desc->UsagePage;
+    ((USAGE *)rawinput.data.hid.bRawData)[1] = desc->Usage;
 
     input.type = INPUT_HARDWARE;
     input.hi.uMsg = WM_INPUT_DEVICE_CHANGE;
@@ -132,6 +136,7 @@ static NTSTATUS WINAPI driver_add_device(DRIVER_OBJECT *driver, DEVICE_OBJECT *b
 {
     WCHAR device_id[MAX_DEVICE_ID_LEN], instance_id[MAX_DEVICE_ID_LEN];
     BASE_DEVICE_EXTENSION *ext;
+    BOOL is_xinput_class;
     DEVICE_OBJECT *fdo;
     NTSTATUS status;
     minidriver *minidriver;
@@ -165,6 +170,10 @@ static NTSTATUS WINAPI driver_add_device(DRIVER_OBJECT *driver, DEVICE_OBJECT *b
     swprintf(ext->device_id, ARRAY_SIZE(ext->device_id), L"HID\\%s", wcsrchr(device_id, '\\') + 1);
     wcscpy(ext->instance_id, instance_id);
 
+    is_xinput_class = !wcsncmp(device_id, L"WINEXINPUT\\", 7) && wcsstr(device_id, L"&XI_") != NULL;
+    if (is_xinput_class) ext->class_guid = &GUID_DEVINTERFACE_WINEXINPUT;
+    else ext->class_guid = &GUID_DEVINTERFACE_HID;
+
     status = minidriver->AddDevice(minidriver->minidriver.DriverObject, fdo);
     if (status != STATUS_SUCCESS)
     {
@@ -183,6 +192,7 @@ static void create_child(minidriver *minidriver, DEVICE_OBJECT *fdo)
 {
     BASE_DEVICE_EXTENSION *fdo_ext = fdo->DeviceExtension, *pdo_ext;
     HID_DEVICE_ATTRIBUTES attr = {0};
+    HIDP_COLLECTION_DESC *desc;
     HID_DESCRIPTOR descriptor;
     DEVICE_OBJECT *child_pdo;
     BYTE *reportDescriptor;
@@ -212,12 +222,11 @@ static void create_child(minidriver *minidriver, DEVICE_OBJECT *fdo)
 
     pdo_ext = child_pdo->DeviceExtension;
     pdo_ext->u.pdo.parent_fdo = fdo;
-    list_init( &pdo_ext->u.pdo.report_queues );
-    KeInitializeSpinLock( &pdo_ext->u.pdo.report_queues_lock );
-    InitializeListHead(&pdo_ext->u.pdo.irp_queue);
-    KeInitializeSpinLock(&pdo_ext->u.pdo.irp_queue_lock);
+    list_init( &pdo_ext->u.pdo.queues );
+    KeInitializeSpinLock( &pdo_ext->u.pdo.queues_lock );
     wcscpy(pdo_ext->device_id, fdo_ext->device_id);
     wcscpy(pdo_ext->instance_id, fdo_ext->instance_id);
+    pdo_ext->class_guid = fdo_ext->class_guid;
 
     pdo_ext->u.pdo.information.VendorID = attr.VendorID;
     pdo_ext->u.pdo.information.ProductID = attr.ProductID;
@@ -253,19 +262,21 @@ static void create_child(minidriver *minidriver, DEVICE_OBJECT *fdo)
         return;
     }
 
-    pdo_ext->u.pdo.preparsed_data = parse_descriptor( reportDescriptor, descriptor.DescriptorList[i].wReportLength );
+    io.Status = HidP_GetCollectionDescription( reportDescriptor, descriptor.DescriptorList[i].wReportLength,
+                                               PagedPool, &pdo_ext->u.pdo.device_desc );
     free(reportDescriptor);
-    if (!pdo_ext->u.pdo.preparsed_data)
+    if (io.Status != HIDP_STATUS_SUCCESS)
     {
         ERR("Cannot parse Report Descriptor\n");
         IoDeleteDevice(child_pdo);
         return;
     }
 
-    pdo_ext->u.pdo.information.DescriptorSize = pdo_ext->u.pdo.preparsed_data->size;
+    desc = pdo_ext->u.pdo.device_desc.CollectionDesc;
+    pdo_ext->u.pdo.information.DescriptorSize = desc->PreparsedDataLength;
 
-    page = pdo_ext->u.pdo.preparsed_data->caps.UsagePage;
-    usage = pdo_ext->u.pdo.preparsed_data->caps.Usage;
+    page = desc->UsagePage;
+    usage = desc->Usage;
     if (page == HID_USAGE_PAGE_GENERIC && usage == HID_USAGE_GENERIC_MOUSE)
         pdo_ext->u.pdo.rawinput_handle = WINE_MOUSE_HANDLE;
     else if (page == HID_USAGE_PAGE_GENERIC && usage == HID_USAGE_GENERIC_KEYBOARD)
@@ -359,22 +370,13 @@ static NTSTATUS fdo_pnp(DEVICE_OBJECT *device, IRP *irp)
     }
 }
 
-static void remove_pending_irps(BASE_DEVICE_EXTENSION *ext)
-{
-    IRP *irp;
-
-    while ((irp = pop_irp_from_queue(ext)))
-    {
-        irp->IoStatus.Status = STATUS_DELETE_PENDING;
-        IoCompleteRequest(irp, IO_NO_INCREMENT);
-    }
-}
-
 static NTSTATUS pdo_pnp(DEVICE_OBJECT *device, IRP *irp)
 {
     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation(irp);
     BASE_DEVICE_EXTENSION *ext = device->DeviceExtension;
+    HIDP_COLLECTION_DESC *desc = ext->u.pdo.device_desc.CollectionDesc;
     NTSTATUS status = irp->IoStatus.Status;
+    struct hid_queue *queue, *next;
     KIRQL irql;
 
     TRACE("irp %p, minor function %#x.\n", irp, irpsp->MinorFunction);
@@ -440,21 +442,19 @@ static NTSTATUS pdo_pnp(DEVICE_OBJECT *device, IRP *irp)
         }
 
         case IRP_MN_START_DEVICE:
-            if ((status = IoRegisterDeviceInterface(device, &GUID_DEVINTERFACE_HID, NULL, &ext->u.pdo.link_name)))
+            if ((status = IoRegisterDeviceInterface(device, ext->class_guid, NULL, &ext->u.pdo.link_name)))
             {
                 ERR("Failed to register interface, status %#x.\n", status);
                 break;
             }
 
             /* FIXME: This should probably be done in mouhid.sys. */
-            if (ext->u.pdo.preparsed_data->caps.UsagePage == HID_USAGE_PAGE_GENERIC
-                    && ext->u.pdo.preparsed_data->caps.Usage == HID_USAGE_GENERIC_MOUSE)
+            if (desc->UsagePage == HID_USAGE_PAGE_GENERIC && desc->Usage == HID_USAGE_GENERIC_MOUSE)
             {
                 if (!IoRegisterDeviceInterface(device, &GUID_DEVINTERFACE_MOUSE, NULL, &ext->u.pdo.mouse_link_name))
                     ext->u.pdo.is_mouse = TRUE;
             }
-            if (ext->u.pdo.preparsed_data->caps.UsagePage == HID_USAGE_PAGE_GENERIC
-                    && ext->u.pdo.preparsed_data->caps.Usage == HID_USAGE_GENERIC_KEYBOARD)
+            if (desc->UsagePage == HID_USAGE_PAGE_GENERIC && desc->Usage == HID_USAGE_GENERIC_KEYBOARD)
             {
                 if (!IoRegisterDeviceInterface(device, &GUID_DEVINTERFACE_KEYBOARD, NULL, &ext->u.pdo.keyboard_link_name))
                     ext->u.pdo.is_keyboard = TRUE;
@@ -471,8 +471,6 @@ static NTSTATUS pdo_pnp(DEVICE_OBJECT *device, IRP *irp)
             break;
 
         case IRP_MN_REMOVE_DEVICE:
-            remove_pending_irps(ext);
-
             send_wm_input_device_change(ext, GIDC_REMOVAL);
 
             IoSetDeviceInterfaceState(&ext->u.pdo.link_name, FALSE);
@@ -488,7 +486,12 @@ static NTSTATUS pdo_pnp(DEVICE_OBJECT *device, IRP *irp)
             }
             CloseHandle(ext->u.pdo.halt_event);
 
-            free(ext->u.pdo.preparsed_data);
+            KeAcquireSpinLock( &ext->u.pdo.queues_lock, &irql );
+            LIST_FOR_EACH_ENTRY_SAFE( queue, next, &ext->u.pdo.queues, struct hid_queue, entry )
+                hid_queue_destroy( queue );
+            KeReleaseSpinLock( &ext->u.pdo.queues_lock, irql );
+
+            HidP_FreeCollectionDescription(&ext->u.pdo.device_desc);
 
             RtlFreeUnicodeString(&ext->u.pdo.link_name);
 
@@ -502,7 +505,10 @@ static NTSTATUS pdo_pnp(DEVICE_OBJECT *device, IRP *irp)
             ext->u.pdo.removed = TRUE;
             KeReleaseSpinLock(&ext->u.pdo.lock, irql);
 
-            remove_pending_irps(ext);
+            KeAcquireSpinLock( &ext->u.pdo.queues_lock, &irql );
+            LIST_FOR_EACH_ENTRY_SAFE( queue, next, &ext->u.pdo.queues, struct hid_queue, entry )
+                hid_queue_remove_pending_irps( queue );
+            KeReleaseSpinLock( &ext->u.pdo.queues_lock, irql );
 
             SetEvent(ext->u.pdo.halt_event);
             status = STATUS_SUCCESS;

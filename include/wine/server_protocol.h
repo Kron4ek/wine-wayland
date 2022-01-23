@@ -470,8 +470,7 @@ enum apc_type
     APC_MAP_VIEW,
     APC_UNMAP_VIEW,
     APC_CREATE_THREAD,
-    APC_DUP_HANDLE,
-    APC_BREAK_PROCESS
+    APC_DUP_HANDLE
 };
 
 typedef struct
@@ -871,7 +870,7 @@ struct new_thread_request
     struct request_header __header;
     obj_handle_t process;
     unsigned int access;
-    int          suspend;
+    unsigned int flags;
     int          request_fd;
     /* VARARG(objattr,object_attributes); */
     char __pad_28[4];
@@ -1249,6 +1248,20 @@ struct dup_handle_reply
     struct reply_header __header;
     obj_handle_t handle;
     char __pad_12[4];
+};
+
+
+
+struct compare_objects_request
+{
+    struct request_header __header;
+    obj_handle_t first;
+    obj_handle_t second;
+    char __pad_20[4];
+};
+struct compare_objects_reply
+{
+    struct reply_header __header;
 };
 
 
@@ -1746,36 +1759,6 @@ struct recv_socket_reply
 };
 
 
-struct poll_socket_input
-{
-    obj_handle_t socket;
-    int flags;
-};
-
-struct poll_socket_output
-{
-    int flags;
-    unsigned int status;
-};
-
-
-struct poll_socket_request
-{
-    struct request_header __header;
-    int          exclusive;
-    async_data_t async;
-    timeout_t    timeout;
-    /* VARARG(sockets,poll_socket_input); */
-};
-struct poll_socket_reply
-{
-    struct reply_header __header;
-    obj_handle_t wait;
-    unsigned int options;
-    /* VARARG(sockets,poll_socket_output); */
-};
-
-
 
 struct send_socket_request
 {
@@ -2001,6 +1984,8 @@ struct thread_info
     int             base_priority;
     int             current_priority;
     int             unix_tid;
+    client_ptr_t    teb;
+    client_ptr_t    entry_point;
 };
 
 struct process_info
@@ -2029,6 +2014,8 @@ struct list_processes_reply
     struct reply_header __header;
     data_size_t     info_size;
     int             process_count;
+    int             total_thread_count;
+    data_size_t     total_name_len;
     /* VARARG(data,process_info,info_size); */
 };
 
@@ -5617,6 +5604,7 @@ enum request
     REQ_close_handle,
     REQ_set_handle_info,
     REQ_dup_handle,
+    REQ_compare_objects,
     REQ_make_temporary,
     REQ_open_process,
     REQ_open_thread,
@@ -5647,7 +5635,6 @@ enum request
     REQ_lock_file,
     REQ_unlock_file,
     REQ_recv_socket,
-    REQ_poll_socket,
     REQ_send_socket,
     REQ_get_next_console_request,
     REQ_read_directory_changes,
@@ -5908,6 +5895,7 @@ union generic_request
     struct close_handle_request close_handle_request;
     struct set_handle_info_request set_handle_info_request;
     struct dup_handle_request dup_handle_request;
+    struct compare_objects_request compare_objects_request;
     struct make_temporary_request make_temporary_request;
     struct open_process_request open_process_request;
     struct open_thread_request open_thread_request;
@@ -5938,7 +5926,6 @@ union generic_request
     struct lock_file_request lock_file_request;
     struct unlock_file_request unlock_file_request;
     struct recv_socket_request recv_socket_request;
-    struct poll_socket_request poll_socket_request;
     struct send_socket_request send_socket_request;
     struct get_next_console_request_request get_next_console_request_request;
     struct read_directory_changes_request read_directory_changes_request;
@@ -6197,6 +6184,7 @@ union generic_reply
     struct close_handle_reply close_handle_reply;
     struct set_handle_info_reply set_handle_info_reply;
     struct dup_handle_reply dup_handle_reply;
+    struct compare_objects_reply compare_objects_reply;
     struct make_temporary_reply make_temporary_reply;
     struct open_process_reply open_process_reply;
     struct open_thread_reply open_thread_reply;
@@ -6227,7 +6215,6 @@ union generic_reply
     struct lock_file_reply lock_file_reply;
     struct unlock_file_reply unlock_file_reply;
     struct recv_socket_reply recv_socket_reply;
-    struct poll_socket_reply poll_socket_reply;
     struct send_socket_reply send_socket_reply;
     struct get_next_console_request_reply get_next_console_request_reply;
     struct read_directory_changes_reply read_directory_changes_reply;
@@ -6461,7 +6448,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 733
+#define SERVER_PROTOCOL_VERSION 739
 
 /* ### protocol_version end ### */
 

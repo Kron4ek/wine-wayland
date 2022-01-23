@@ -2858,9 +2858,15 @@ static DWORD CALLBACK flush_proc(HANDLE pipe)
 
     res = FlushFileBuffers(pipe);
     if (expected_flush_error == ERROR_SUCCESS)
+    {
         ok(res, "FlushFileBuffers failed: %u\n", GetLastError());
+    }
     else
-        ok(!res && GetLastError() == expected_flush_error, "FlushFileBuffers failed: %u\n", GetLastError());
+    {
+        ok(!res, "FlushFileBuffers should have failed\n");
+        ok(GetLastError() == expected_flush_error,
+           "FlushFileBuffers set error %u, expected %u\n", GetLastError(), expected_flush_error);
+    }
     return 0;
 }
 
@@ -2935,6 +2941,7 @@ static void test_blocking_rw(HANDLE writer, HANDLE reader, DWORD buf_size, BOOL 
     OVERLAPPED read_overlapped, read_overlapped2, write_overlapped, write_overlapped2;
     char buf[10000], read_buf[10000];
     HANDLE flush_thread;
+    BOOL res;
 
     memset(buf, 0xaa, sizeof(buf));
 
@@ -3067,6 +3074,17 @@ static void test_blocking_rw(HANDLE writer, HANDLE reader, DWORD buf_size, BOOL 
     test_not_signaled(read_overlapped.hEvent);
     overlapped_write_sync(writer, buf, 1);
     test_overlapped_result(reader, &read_overlapped, 1, FALSE);
+
+    /* Test that canceling the same operation twice gives a sensible error */
+    SetLastError(0xdeadbeef);
+    overlapped_read_async(reader, read_buf, 1, &read_overlapped2);
+    res = pCancelIoEx(reader, &read_overlapped2);
+    ok(res, "CancelIoEx failed with error %d\n", GetLastError());
+    res = pCancelIoEx(reader, &read_overlapped2);
+    ok(!res, "CancelIOEx succeeded unexpectedly");
+    ok(GetLastError() == ERROR_NOT_FOUND,
+        "In CancelIoEx failure, expected ERROR_NOT_FOUND, got %d\n", GetLastError());
+    test_overlapped_failure(reader, &read_overlapped2, ERROR_OPERATION_ABORTED);
 
     /* make two async writes, cancel the first one and make sure that we read from the second one */
     overlapped_write_async(writer, buf, buf_size+2000, &write_overlapped);
@@ -4206,9 +4224,9 @@ START_TEST(pipe)
     {
         if (!strcmp(argv[2], "writepipe"))
         {
-            UINT_PTR handle;
-            sscanf(argv[3], "%lx", &handle);
-            child_process_write_pipe((HANDLE)handle);
+            ULONG handle;
+            sscanf(argv[3], "%x", &handle);
+            child_process_write_pipe(ULongToHandle(handle));
             return;
         }
         if (!strcmp(argv[2], "checkpid"))

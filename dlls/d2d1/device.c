@@ -175,6 +175,10 @@ static void d2d_device_context_draw(struct d2d_device_context *render_target, en
         ID3D11DeviceContext1_OMSetBlendState(context, render_target->bs, NULL, D3D11_DEFAULT_SAMPLE_MASK);
         d2d_brush_bind_resources(brush, render_target, 0);
     }
+    else
+    {
+        ID3D11DeviceContext1_OMSetBlendState(context, NULL, NULL, D3D11_DEFAULT_SAMPLE_MASK);
+    }
     if (opacity_brush)
         d2d_brush_bind_resources(opacity_brush, render_target, 1);
 
@@ -3859,7 +3863,7 @@ static HRESULT d2d_device_context_init(struct d2d_device_context *render_target,
         { 1.0f, -1.0f},
     };
     static const UINT16 indices[] = {0, 1, 2, 2, 1, 3};
-    static const D3D_FEATURE_LEVEL feature_levels = D3D_FEATURE_LEVEL_11_0;
+    static const D3D_FEATURE_LEVEL feature_levels = D3D_FEATURE_LEVEL_10_0;
 
     render_target->ID2D1DeviceContext_iface.lpVtbl = &d2d_device_context_vtbl;
     render_target->ID2D1GdiInteropRenderTarget_iface.lpVtbl = &d2d_gdi_interop_render_target_vtbl;

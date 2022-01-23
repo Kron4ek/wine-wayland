@@ -923,6 +923,15 @@ BOOL WINAPI ConvertToAutoInheritPrivateObjectSecurity( PSECURITY_DESCRIPTOR pare
 }
 
 /******************************************************************************
+ * CreateBoundaryDescriptorW    (kernelbase.@)
+ */
+HANDLE WINAPI CreateBoundaryDescriptorW( LPCWSTR name, ULONG flags )
+{
+    FIXME("%s %u - stub\n", debugstr_w(name), flags);
+    return NULL;
+}
+
+/******************************************************************************
  * CreatePrivateObjectSecurity    (kernelbase.@)
  */
 BOOL WINAPI CreatePrivateObjectSecurity( PSECURITY_DESCRIPTOR parent, PSECURITY_DESCRIPTOR creator,
@@ -1545,5 +1554,14 @@ BOOL WINAPI PrivilegedServiceAuditAlarmW( LPCWSTR subsystem, LPCWSTR service, HA
 BOOL WINAPI SetAclInformation( PACL acl, LPVOID info, DWORD len, ACL_INFORMATION_CLASS class )
 {
     FIXME( "%p %p 0x%08x 0x%08x - stub\n", acl, info, len, class );
+    return TRUE;
+}
+
+/******************************************************************************
+ * SetCachedSigningLevel    (kernelbase.@)
+ */
+BOOL WINAPI SetCachedSigningLevel( PHANDLE source, ULONG count, ULONG flags, HANDLE file )
+{
+    FIXME( "%p %u %u %p - stub\n", source, count, flags, file );
     return TRUE;
 }

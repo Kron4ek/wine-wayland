@@ -35,6 +35,8 @@ WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 #define TIMEOUT_INFINITE _I64_MAX
 
+#define u64_from_user_ptr(ptr) ((ULONGLONG)(uintptr_t)(ptr))
+
 static const WSAPROTOCOL_INFOW supported_protocols[] =
 {
     {
@@ -817,7 +819,7 @@ static BOOL WINAPI WS2_AcceptEx( SOCKET listener, SOCKET acceptor, void *dest, D
 static BOOL WINAPI WS2_TransmitFile( SOCKET s, HANDLE file, DWORD file_len, DWORD buffer_size,
                                      OVERLAPPED *overlapped, TRANSMIT_FILE_BUFFERS *buffers, DWORD flags )
 {
-    struct afd_transmit_params params = {0};
+    struct afd_transmit_params params = {{{0}}};
     IO_STATUS_BLOCK iosb, *piosb = &iosb;
     HANDLE event = NULL;
     void *cvalue = NULL;
@@ -842,10 +844,16 @@ static BOOL WINAPI WS2_TransmitFile( SOCKET s, HANDLE file, DWORD file_len, DWOR
         params.offset.QuadPart = FILE_USE_FILE_POINTER_POSITION;
     }
 
-    params.file = file;
+    params.file = HandleToULong( file );
     params.file_len = file_len;
     params.buffer_size = buffer_size;
-    if (buffers) params.buffers = *buffers;
+    if (buffers)
+    {
+        params.head_ptr = u64_from_user_ptr(buffers->Head);
+        params.head_len = buffers->HeadLength;
+        params.tail_ptr = u64_from_user_ptr(buffers->Tail);
+        params.tail_len = buffers->TailLength;
+    }
     params.flags = flags;
 
     status = NtDeviceIoControlFile( (HANDLE)s, event, NULL, cvalue, piosb,
@@ -923,13 +931,13 @@ static int WS2_recv_base( SOCKET s, WSABUF *buffers, DWORD buffer_count, DWORD *
         apc = socket_apc;
     }
 
-    params.control = control;
-    params.addr = addr;
-    params.addr_len = addr_len;
-    params.ws_flags = flags;
+    params.control_ptr = u64_from_user_ptr(control);
+    params.addr_ptr = u64_from_user_ptr(addr);
+    params.addr_len_ptr = u64_from_user_ptr(addr_len);
+    params.ws_flags_ptr = u64_from_user_ptr(flags);
     params.force_async = !!overlapped;
     params.count = buffer_count;
-    params.buffers = buffers;
+    params.buffers_ptr = u64_from_user_ptr(buffers);
 
     status = NtDeviceIoControlFile( (HANDLE)s, event, apc, cvalue, piosb,
                                     IOCTL_AFD_WINE_RECVMSG, &params, sizeof(params), NULL, 0 );
@@ -990,12 +998,12 @@ static int WS2_sendto( SOCKET s, WSABUF *buffers, DWORD buffer_count, DWORD *ret
         apc = socket_apc;
     }
 
-    params.addr = addr;
+    params.addr_ptr = u64_from_user_ptr( addr );
     params.addr_len = addr_len;
     params.ws_flags = flags;
     params.force_async = !!overlapped;
     params.count = buffer_count;
-    params.buffers = buffers;
+    params.buffers_ptr = u64_from_user_ptr( buffers );
 
     status = NtDeviceIoControlFile( (HANDLE)s, event, apc, cvalue, piosb,
                                     IOCTL_AFD_WINE_SENDMSG, &params, sizeof(params), NULL, 0 );
@@ -1068,7 +1076,7 @@ int WINAPI bind( SOCKET s, const struct sockaddr *addr, int len )
 
     if (!addr)
     {
-        SetLastError( WSAEAFNOSUPPORT );
+        SetLastError( WSAEFAULT );
         return -1;
     }
 
@@ -1134,6 +1142,8 @@ int WINAPI bind( SOCKET s, const struct sockaddr *addr, int len )
             return -1;
         status = io.u.Status;
     }
+
+    if (!status) TRACE( "successfully bound to address %s\n", debugstr_sockaddr( ret_addr ));
 
     free( params );
     free( ret_addr );
@@ -2356,13 +2366,8 @@ static int add_fd_to_set( SOCKET fd, struct fd_set *set )
             return 0;
     }
 
-    if (set->fd_count < FD_SETSIZE)
-    {
-        set->fd_array[set->fd_count++] = fd;
-        return 1;
-    }
-
-    return 0;
+    set->fd_array[set->fd_count++] = fd;
+    return 1;
 }
 
 
@@ -2372,9 +2377,9 @@ static int add_fd_to_set( SOCKET fd, struct fd_set *set )
 int WINAPI select( int count, fd_set *read_ptr, fd_set *write_ptr,
                    fd_set *except_ptr, const struct timeval *timeout)
 {
-    char buffer[offsetof( struct afd_poll_params, sockets[FD_SETSIZE * 3] )] = {0};
-    struct afd_poll_params *params = (struct afd_poll_params *)buffer;
-    struct fd_set read, write, except;
+    struct fd_set *read_input = NULL;
+    struct afd_poll_params *params;
+    unsigned int poll_count = 0;
     ULONG params_size, i, j;
     SOCKET poll_socket = 0;
     IO_STATUS_BLOCK io;
@@ -2384,99 +2389,126 @@ int WINAPI select( int count, fd_set *read_ptr, fd_set *write_ptr,
 
     TRACE( "read %p, write %p, except %p, timeout %p\n", read_ptr, write_ptr, except_ptr, timeout );
 
-    FD_ZERO( &read );
-    FD_ZERO( &write );
-    FD_ZERO( &except );
-    if (read_ptr) read = *read_ptr;
-    if (write_ptr) write = *write_ptr;
-    if (except_ptr) except = *except_ptr;
-
     if (!(sync_event = get_sync_event())) return -1;
 
-    if (timeout)
-        params->timeout = timeout->tv_sec * -10000000 + timeout->tv_usec * -10;
-    else
-        params->timeout = TIMEOUT_INFINITE;
+    if (read_ptr) poll_count += read_ptr->fd_count;
+    if (write_ptr) poll_count += write_ptr->fd_count;
+    if (except_ptr) poll_count += except_ptr->fd_count;
 
-    for (i = 0; i < read.fd_count; ++i)
-    {
-        params->sockets[params->count].socket = read.fd_array[i];
-        params->sockets[params->count].flags = AFD_POLL_READ | AFD_POLL_ACCEPT | AFD_POLL_HUP;
-        ++params->count;
-        poll_socket = read.fd_array[i];
-    }
-
-    for (i = 0; i < write.fd_count; ++i)
-    {
-        params->sockets[params->count].socket = write.fd_array[i];
-        params->sockets[params->count].flags = AFD_POLL_WRITE;
-        ++params->count;
-        poll_socket = write.fd_array[i];
-    }
-
-    for (i = 0; i < except.fd_count; ++i)
-    {
-        params->sockets[params->count].socket = except.fd_array[i];
-        params->sockets[params->count].flags = AFD_POLL_OOB | AFD_POLL_CONNECT_ERR;
-        ++params->count;
-        poll_socket = except.fd_array[i];
-    }
-
-    if (!params->count)
+    if (!poll_count)
     {
         SetLastError( WSAEINVAL );
         return -1;
     }
 
-    params_size = offsetof( struct afd_poll_params, sockets[params->count] );
+    params_size = offsetof( struct afd_poll_params, sockets[poll_count] );
+    if (!(params = calloc( params_size, 1 )))
+    {
+        SetLastError( WSAENOBUFS );
+        return -1;
+    }
+
+    if (timeout)
+        params->timeout = (LONGLONG)timeout->tv_sec * -10000000 + (LONGLONG)timeout->tv_usec * -10;
+    else
+        params->timeout = TIMEOUT_INFINITE;
+
+    if (read_ptr)
+    {
+        unsigned int read_size = offsetof( struct fd_set, fd_array[read_ptr->fd_count] );
+
+        if (!(read_input = malloc( read_size )))
+        {
+            free( params );
+            SetLastError( WSAENOBUFS );
+            return -1;
+        }
+        memcpy( read_input, read_ptr, read_size );
+
+        for (i = 0; i < read_ptr->fd_count; ++i)
+        {
+            params->sockets[params->count].socket = read_ptr->fd_array[i];
+            params->sockets[params->count].flags = AFD_POLL_READ | AFD_POLL_ACCEPT | AFD_POLL_HUP;
+            ++params->count;
+            poll_socket = read_ptr->fd_array[i];
+        }
+    }
+
+    if (write_ptr)
+    {
+        for (i = 0; i < write_ptr->fd_count; ++i)
+        {
+            params->sockets[params->count].socket = write_ptr->fd_array[i];
+            params->sockets[params->count].flags = AFD_POLL_WRITE;
+            ++params->count;
+            poll_socket = write_ptr->fd_array[i];
+        }
+    }
+
+    if (except_ptr)
+    {
+        for (i = 0; i < except_ptr->fd_count; ++i)
+        {
+            params->sockets[params->count].socket = except_ptr->fd_array[i];
+            params->sockets[params->count].flags = AFD_POLL_OOB | AFD_POLL_CONNECT_ERR;
+            ++params->count;
+            poll_socket = except_ptr->fd_array[i];
+        }
+    }
+
+    assert( params->count == poll_count );
 
     status = NtDeviceIoControlFile( (HANDLE)poll_socket, sync_event, NULL, NULL, &io,
                                     IOCTL_AFD_POLL, params, params_size, params, params_size );
     if (status == STATUS_PENDING)
     {
         if (WaitForSingleObject( sync_event, INFINITE ) == WAIT_FAILED)
+        {
+            free( read_input );
+            free( params );
             return -1;
+        }
         status = io.u.Status;
     }
     if (status == STATUS_TIMEOUT) status = STATUS_SUCCESS;
     if (!status)
     {
         /* pointers may alias, so clear them all first */
-        if (read_ptr) FD_ZERO( read_ptr );
-        if (write_ptr) FD_ZERO( write_ptr );
-        if (except_ptr) FD_ZERO( except_ptr );
+        if (read_ptr) read_ptr->fd_count = 0;
+        if (write_ptr) write_ptr->fd_count = 0;
+        if (except_ptr) except_ptr->fd_count = 0;
 
         for (i = 0; i < params->count; ++i)
         {
             unsigned int flags = params->sockets[i].flags;
             SOCKET s = params->sockets[i].socket;
 
-            for (j = 0; j < read.fd_count; ++j)
+            if (read_input)
             {
-                if (read.fd_array[j] == s
-                        && (flags & (AFD_POLL_READ | AFD_POLL_ACCEPT | AFD_POLL_HUP | AFD_POLL_CLOSE)))
+                for (j = 0; j < read_input->fd_count; ++j)
                 {
-                    ret_count += add_fd_to_set( s, read_ptr );
-                    flags &= ~AFD_POLL_CLOSE;
+                    if (read_input->fd_array[j] == s
+                            && (flags & (AFD_POLL_READ | AFD_POLL_ACCEPT | AFD_POLL_HUP | AFD_POLL_CLOSE)))
+                    {
+                        ret_count += add_fd_to_set( s, read_ptr );
+                        flags &= ~AFD_POLL_CLOSE;
+                    }
                 }
             }
 
             if (flags & AFD_POLL_CLOSE)
                 status = STATUS_INVALID_HANDLE;
 
-            for (j = 0; j < write.fd_count; ++j)
-            {
-                if (write.fd_array[j] == s && (flags & AFD_POLL_WRITE))
-                    ret_count += add_fd_to_set( s, write_ptr );
-            }
+            if (flags & AFD_POLL_WRITE)
+                ret_count += add_fd_to_set( s, write_ptr );
 
-            for (j = 0; j < except.fd_count; ++j)
-            {
-                if (except.fd_array[j] == s && (flags & (AFD_POLL_OOB | AFD_POLL_CONNECT_ERR)))
-                    ret_count += add_fd_to_set( s, except_ptr );
-            }
+            if (flags & (AFD_POLL_OOB | AFD_POLL_CONNECT_ERR))
+                ret_count += add_fd_to_set( s, except_ptr );
         }
     }
+
+    free( read_input );
+    free( params );
 
     SetLastError( NtStatusToWSAError( status ) );
     return status ? -1 : ret_count;
@@ -2542,7 +2574,7 @@ int WINAPI WSAPoll( WSAPOLLFD *fds, ULONG count, int timeout )
         return SOCKET_ERROR;
     }
 
-    params->timeout = (timeout >= 0 ? timeout * -10000 : TIMEOUT_INFINITE);
+    params->timeout = (timeout >= 0 ? (LONGLONG)timeout * -10000 : TIMEOUT_INFINITE);
 
     for (i = 0; i < count; ++i)
     {
@@ -3363,6 +3395,7 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
         CloseHandle(handle);
         return INVALID_SOCKET;
     }
+    WSASetLastError(0);
     return ret;
 
 done:

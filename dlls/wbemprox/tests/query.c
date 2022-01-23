@@ -1331,8 +1331,10 @@ static void test_Win32_NetworkAdapterConfiguration( IWbemServices *services )
     BSTR wql = SysAllocString( L"wql" ), query = SysAllocString( L"SELECT * FROM Win32_NetworkAdapterConfiguration" );
     IEnumWbemClassObject *result;
     IWbemClassObject *obj;
+    CIMTYPE type;
     HRESULT hr;
     DWORD count;
+    VARIANT val;
 
     hr = IWbemServices_ExecQuery( services, wql, query, 0, NULL, &result );
     ok( hr == S_OK, "got %08x\n", hr );
@@ -1345,6 +1347,16 @@ static void test_Win32_NetworkAdapterConfiguration( IWbemServices *services )
         check_property( obj, L"Description", VT_BSTR, CIM_STRING );
         check_property( obj, L"Index", VT_I4, CIM_UINT32 );
         check_property( obj, L"IPEnabled", VT_BOOL, CIM_BOOLEAN );
+
+        type = 0xdeadbeef;
+        VariantInit( &val );
+        hr = IWbemClassObject_Get( obj, L"DNSDomain", 0, &val, &type, NULL );
+        ok( hr == S_OK, "got %08x\n", hr );
+        ok( V_VT( &val ) == VT_BSTR || V_VT( &val ) == VT_NULL, "unexpected variant type 0x%x\n", V_VT( &val ) );
+        ok( type == CIM_STRING, "unexpected type 0x%x\n", type );
+        trace( "DNSDomain %s\n", wine_dbgstr_w(V_BSTR( &val )) );
+        VariantClear( &val );
+
         IWbemClassObject_Release( obj );
     }
 
@@ -1424,6 +1436,7 @@ static void test_Win32_OperatingSystem( IWbemServices *services )
     check_property( obj, L"Version", VT_BSTR, CIM_STRING );
     check_property( obj, L"TotalVisibleMemorySize", VT_BSTR, CIM_UINT64 );
     check_property( obj, L"TotalVirtualMemorySize", VT_BSTR, CIM_UINT64 );
+    check_property( obj, L"Status", VT_BSTR, CIM_STRING );
     check_property( obj, L"SystemDrive", VT_BSTR, CIM_STRING );
 
     IWbemClassObject_Release( obj );
@@ -1642,6 +1655,7 @@ static void test_Win32_VideoController( IWbemServices *services )
         if (hr != S_OK) break;
 
         check_property( obj, L"__CLASS", VT_BSTR, CIM_STRING );
+        check_property( obj, L"__DERIVATION", VT_BSTR | VT_ARRAY, CIM_STRING | CIM_FLAG_ARRAY );
         check_property( obj, L"__GENUS", VT_I4, CIM_SINT32 );
         check_property( obj, L"__NAMESPACE", VT_BSTR, CIM_STRING );
         check_property( obj, L"__PATH", VT_BSTR, CIM_STRING );
@@ -2088,6 +2102,41 @@ static void test_empty_namespace( IWbemLocator *locator )
     IWbemServices_Release( services );
 }
 
+static void test_MSSMBios_RawSMBiosTables( IWbemLocator *locator )
+{
+    BSTR path = SysAllocString( L"ROOT\\WMI" );
+    BSTR bios = SysAllocString( L"MSSMBios_RawSMBiosTables" );
+    IWbemServices *services;
+    IEnumWbemClassObject *iter;
+    IWbemClassObject *obj;
+    VARIANT val;
+    CIMTYPE type;
+    ULONG count;
+    HRESULT hr;
+
+    hr = IWbemLocator_ConnectServer( locator, path, NULL, NULL, NULL, 0, NULL, NULL, &services );
+    ok( hr == S_OK, "failed to get IWbemServices interface %08x\n", hr );
+
+    hr = IWbemServices_CreateInstanceEnum( services, bios, 0, NULL, &iter );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    hr = IEnumWbemClassObject_Next( iter, WBEM_INFINITE, 1, &obj, &count );
+    ok( hr == S_OK, "got %08x\n", hr );
+
+    type = 0;
+    VariantInit( &val );
+    hr = IWbemClassObject_Get( obj, L"SMBiosData", 0, &val, &type, NULL );
+    ok( hr == S_OK, "got %08x\n", hr );
+    todo_wine ok( V_VT( &val ) == (VT_UI1 | VT_ARRAY), "got %08x\n", V_VT(&val) );
+    ok( type == (CIM_UINT8 | CIM_FLAG_ARRAY), "got %08x\n", type );
+
+    IWbemClassObject_Release( obj );
+    IEnumWbemClassObject_Release( iter );
+    IWbemServices_Release( services );
+    SysFreeString( path );
+    SysFreeString( bios );
+}
+
 START_TEST(query)
 {
     BSTR path = SysAllocString( L"ROOT\\CIMV2" );
@@ -2166,6 +2215,7 @@ START_TEST(query)
     test_Win32_WinSAT( services );
     test_SystemRestore( services );
     test_empty_namespace( locator );
+    test_MSSMBios_RawSMBiosTables( locator );
 
     SysFreeString( path );
     IWbemServices_Release( services );

@@ -1261,15 +1261,10 @@ static BOOL elf_load_file_from_fmap(struct process* pcs, const WCHAR* filename,
 
         elf_module_info->file_map = *fmap;
         elf_reset_file_map(fmap);
-        if (dbghelp_options & SYMOPT_DEFERRED_LOADS)
-        {
-            elf_info->module->module.SymType = SymDeferred;
-            ret = TRUE;
-        }
-        else ret = elf_load_debug_info(pcs, elf_info->module);
 
         elf_module_info->elf_mark = 1;
         elf_module_info->elf_loader = 0;
+        ret = TRUE;
     } else ret = TRUE;
 
     if (elf_info->flags & ELF_INFO_NAME)
@@ -1429,7 +1424,6 @@ static BOOL elf_search_and_load_file(struct process* pcs, const WCHAR* filename,
 {
     BOOL                ret = FALSE;
     struct module*      module;
-    static const WCHAR  S_libstdcPPW[] = {'l','i','b','s','t','d','c','+','+','\0'};
 
     if (filename == NULL || *filename == '\0') return FALSE;
     if ((module = module_is_already_loaded(pcs, filename)))
@@ -1439,7 +1433,7 @@ static BOOL elf_search_and_load_file(struct process* pcs, const WCHAR* filename,
         return module->module.SymType;
     }
 
-    if (wcsstr(filename, S_libstdcPPW)) return FALSE; /* We know we can't do it */
+    if (wcsstr(filename, L"libstdc++")) return FALSE; /* We know we can't do it */
     ret = elf_load_file(pcs, filename, load_offset, dyn_addr, elf_info);
     /* if relative pathname, try some absolute base dirs */
     if (!ret && filename == file_name(filename))
@@ -1563,10 +1557,7 @@ static BOOL elf_enum_modules_internal(const struct process* pcs,
         ULONG_PTR ehdr_addr;
 
         if (elf_search_auxv(pcs, ELF_AT_SYSINFO_EHDR, &ehdr_addr))
-        {
-            static const WCHAR vdsoW[] = {'[','v','d','s','o',']','.','s','o',0};
-            cb(vdsoW, ehdr_addr, 0, TRUE, user);
-        }
+            cb(L"[vdso].so", ehdr_addr, 0, TRUE, user);
     }
     return TRUE;
 }

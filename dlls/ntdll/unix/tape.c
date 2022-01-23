@@ -23,14 +23,15 @@
 #endif
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <errno.h>
-#ifdef HAVE_SYS_IOCTL_H
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
-#endif
 #ifdef HAVE_SYS_MTIO_H
 #include <sys/mtio.h>
 #endif

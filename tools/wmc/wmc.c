@@ -24,6 +24,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <limits.h>
+#include <sys/types.h>
+#ifdef HAVE_SYS_SYSCTL_H
+# include <sys/sysctl.h>
+#endif
 
 #include "wmc.h"
 #include "utils.h"
@@ -32,14 +37,6 @@
 
 static const char usage[] =
 	"Usage: wmc [options...] [inputfile.mc]\n"
-	"   -B x                       Set output byte-order x={n[ative], l[ittle], b[ig]}\n"
-	"                              (default is n[ative] which equals "
-#ifdef WORDS_BIGENDIAN
-	"big"
-#else
-	"little"
-#endif
-	"-endian)\n"
 	"   -c                         Set 'custom-bit' in values\n"
 	"   -d                         Use decimal values in output\n"
 	"   -D                         Set debug flag\n"
@@ -64,11 +61,6 @@ static const char version_string[] =
 	"Wine Message Compiler version " PACKAGE_VERSION "\n"
 	"Copyright 2000 Bertho A. Stultiens\n"
 	;
-
-/*
- * The output byte-order of resources (set with -B)
- */
-int byteorder = WMC_BO_NATIVE;
 
 /*
  * Custom bit (bit 29) in output values must be set (-c option)
@@ -131,7 +123,7 @@ enum long_options_values
     LONG_OPT_NLS_DIR = 1,
 };
 
-static const char short_options[] = "B:cdDhH:io:O:P:uUvVW";
+static const char short_options[] = "cdDhH:io:O:P:uUvVW";
 static const struct long_option long_options[] =
 {
 	{ "help", 0, 'h' },
@@ -143,8 +135,6 @@ static const struct long_option long_options[] =
 	{ "version", 0, 'v' },
         { NULL }
 };
-
-static void segvhandler(int sig);
 
 static void cleanup_files(void)
 {
@@ -165,7 +155,12 @@ static void init_argv0_dir( const char *argv0 )
 #if defined(__linux__) || defined(__FreeBSD_kernel__) || defined(__NetBSD__)
     dir = realpath( "/proc/self/exe", NULL );
 #elif defined (__FreeBSD__) || defined(__DragonFly__)
-    dir = realpath( "/proc/curproc/file", NULL );
+    static int pathname[] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+    size_t path_size = PATH_MAX;
+    char *path = malloc( path_size );
+    if (path && !sysctl( pathname, sizeof(pathname)/sizeof(pathname[0]), path, &path_size, NULL, 0 ))
+        dir = realpath( path, NULL );
+    free( path );
 #else
     dir = realpath( argv0, NULL );
 #endif
@@ -180,25 +175,6 @@ static void option_callback( int optc, char *optarg )
 {
     switch(optc)
     {
-    case 'B':
-        switch(optarg[0])
-        {
-        case 'n':
-        case 'N':
-            byteorder = WMC_BO_NATIVE;
-            break;
-        case 'l':
-        case 'L':
-            byteorder = WMC_BO_LITTLE;
-            break;
-        case 'b':
-        case 'B':
-            byteorder = WMC_BO_BIG;
-            break;
-        default:
-            error("Byteordering must be n[ative], l[ittle] or b[ig]\n");
-        }
-        break;
     case 'c':
         custombit = 1;
         break;
@@ -263,7 +239,6 @@ int main(int argc,char *argv[])
         struct strarray files;
 
 	atexit( cleanup_files );
-	signal(SIGSEGV, segvhandler);
 	signal( SIGTERM, exit_on_signal );
 	signal( SIGINT, exit_on_signal );
 #ifdef SIGHUP
@@ -337,12 +312,6 @@ int main(int argc,char *argv[])
 		exit(1);
 	}
 
-#ifdef WORDS_BIGENDIAN
-	byte_swapped = (byteorder == WMC_BO_LITTLE);
-#else
-	byte_swapped = (byteorder == WMC_BO_BIG);
-#endif
-
         switch (output_format)
         {
         case FORMAT_RC:
@@ -364,12 +333,4 @@ int main(int argc,char *argv[])
 	output_name = NULL;
 	header_name = NULL;
 	return 0;
-}
-
-static void segvhandler(int sig)
-{
-	fprintf(stderr, "\n%s:%d: Oops, segment violation\n", input_name, line_number);
-	fflush(stdout);
-	fflush(stderr);
-	abort();
 }

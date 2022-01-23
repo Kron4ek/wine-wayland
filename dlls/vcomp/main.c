@@ -94,7 +94,7 @@ struct vcomp_team_data
     /* callback arguments */
     int                     nargs;
     void                    *wrapper;
-    __ms_va_list            valist;
+    va_list                 valist;
 
     /* barrier */
     unsigned int            barrier;
@@ -120,12 +120,12 @@ struct vcomp_task_data
     unsigned int            dynamic_chunksize;
 };
 
-static void **ptr_from_va_list(__ms_va_list valist)
+static void **ptr_from_va_list(va_list valist)
 {
     return *(void ***)&valist;
 }
 
-static void copy_va_list_data(void **args, __ms_va_list valist, int args_count)
+static void copy_va_list_data(void **args, va_list valist, int args_count)
 {
     unsigned int i;
 
@@ -1211,6 +1211,58 @@ void CDECL _vcomp_for_static_simple_init(unsigned int first, unsigned int last, 
     *end   = *begin + (per_thread - 1) * step;
 }
 
+void CDECL _vcomp_for_static_simple_init_i8(ULONG64 first, ULONG64 last, LONG64 step,
+                                         BOOL increment, ULONG64 *begin, ULONG64 *end)
+{
+    ULONG64 iterations, per_thread, remaining;
+    struct vcomp_thread_data *thread_data = vcomp_init_thread_data();
+    struct vcomp_team_data *team_data = thread_data->team;
+    int num_threads = team_data ? team_data->num_threads : 1;
+    int thread_num = thread_data->thread_num;
+
+    TRACE("(%s, %s, %s, %x, %p, %p)\n", wine_dbgstr_longlong(first), wine_dbgstr_longlong(last),
+            wine_dbgstr_longlong(step), increment, begin, end);
+
+    if (num_threads == 1)
+    {
+        *begin = first;
+        *end   = last;
+        return;
+    }
+
+    if (step <= 0)
+    {
+        *begin = 0;
+        *end   = increment ? -1 : 1;
+        return;
+    }
+
+    if (increment)
+        iterations = 1 + (last - first) / step;
+    else
+    {
+        iterations = 1 + (first - last) / step;
+        step *= -1;
+    }
+
+    per_thread = iterations / num_threads;
+    remaining  = iterations - per_thread * num_threads;
+
+    if (thread_num < remaining)
+        per_thread++;
+    else if (per_thread)
+        first += remaining * step;
+    else
+    {
+        *begin = first;
+        *end   = first - step;
+        return;
+    }
+
+    *begin = first + per_thread * thread_num * step;
+    *end   = *begin + (per_thread - 1) * step;
+}
+
 void CDECL _vcomp_for_static_init(int first, int last, int step, int chunksize, unsigned int *loops,
                                   int *begin, int *end, int *next, int *lastchunk)
 {
@@ -1271,6 +1323,79 @@ void CDECL _vcomp_for_static_init(int first, int last, int step, int chunksize, 
         chunksize = 1;
 
     num_chunks  = ((DWORD64)iterations + chunksize - 1) / chunksize;
+    per_thread  = num_chunks / num_threads;
+    remaining   = num_chunks - per_thread * num_threads;
+
+    *loops      = per_thread + (thread_num < remaining);
+    *begin      = first + thread_num * chunksize * step;
+    *end        = *begin + (chunksize - 1) * step;
+    *next       = chunksize * num_threads * step;
+    *lastchunk  = first + (num_chunks - 1) * chunksize * step;
+}
+
+void CDECL _vcomp_for_static_init_i8(LONG64 first, LONG64 last, LONG64 step, LONG64 chunksize, ULONG64 *loops,
+                                     LONG64 *begin, LONG64 *end, LONG64 *next, LONG64 *lastchunk)
+{
+    ULONG64 iterations, num_chunks, per_thread, remaining;
+    struct vcomp_thread_data *thread_data = vcomp_init_thread_data();
+    struct vcomp_team_data *team_data = thread_data->team;
+    int num_threads = team_data ? team_data->num_threads : 1;
+    int thread_num = thread_data->thread_num;
+    LONG64 no_begin, no_lastchunk;
+
+    TRACE("(%s, %s, %s, %s, %p, %p, %p, %p, %p)\n",
+          wine_dbgstr_longlong(first), wine_dbgstr_longlong(last),
+          wine_dbgstr_longlong(step), wine_dbgstr_longlong(chunksize),
+          loops, begin, end, next, lastchunk);
+
+    if (!begin)
+    {
+        begin = &no_begin;
+        lastchunk = &no_lastchunk;
+    }
+
+    if (num_threads == 1 && chunksize != 1)
+    {
+        *loops      = 1;
+        *begin      = first;
+        *end        = last;
+        *next       = 0;
+        *lastchunk  = first;
+        return;
+    }
+
+    if (first == last)
+    {
+        *loops = !thread_num;
+        if (!thread_num)
+        {
+            *begin      = first;
+            *end        = last;
+            *next       = 0;
+            *lastchunk  = first;
+        }
+        return;
+    }
+
+    if (step <= 0)
+    {
+        *loops = 0;
+        return;
+    }
+
+    if (first < last)
+        iterations = 1 + (last - first) / step;
+    else
+    {
+        iterations = 1 + (first - last) / step;
+        step *= -1;
+    }
+
+    if (chunksize < 1)
+        chunksize = 1;
+
+    num_chunks  = iterations / chunksize;
+    if (iterations % chunksize) num_chunks++;
     per_thread  = num_chunks / num_threads;
     remaining   = num_chunks - per_thread * num_threads;
 
@@ -1474,7 +1599,7 @@ void WINAPIV _vcomp_fork(BOOL ifval, int nargs, void *wrapper, ...)
     team_data.finished_threads  = 0;
     team_data.nargs             = nargs;
     team_data.wrapper           = wrapper;
-    __ms_va_start(team_data.valist, wrapper);
+    va_start(team_data.valist, wrapper);
     team_data.barrier           = 0;
     team_data.barrier_count     = 0;
 
@@ -1572,7 +1697,7 @@ void WINAPIV _vcomp_fork(BOOL ifval, int nargs, void *wrapper, ...)
         assert(list_empty(&thread_data.entry));
     }
 
-    __ms_va_end(team_data.valist);
+    va_end(team_data.valist);
 }
 
 static CRITICAL_SECTION *alloc_critsect(void)
@@ -1687,7 +1812,7 @@ static unsigned int get_step_count(int start, int end, int range_offset, int ste
 }
 
 static void CDECL c2vectparallel_wrapper(int start, int end, int step, int end_included, BOOL dynamic_distribution,
-        int volatile *dynamic_start, void *function, int nargs, __ms_va_list valist)
+        int volatile *dynamic_start, void *function, int nargs, va_list valist)
 {
     void *wrapper_args[MAX_VECT_PARALLEL_CALLBACK_ARGS];
     unsigned int step_count, steps_per_call, remainder;
@@ -1779,7 +1904,7 @@ void WINAPIV C2VectParallel(int start, int end, int step, BOOL end_included, int
     struct vcomp_thread_data *thread_data;
     int volatile dynamic_start;
     int prev_thread_count;
-    __ms_va_list valist;
+    va_list valist;
 
     TRACE("start %d, end %d, step %d, end_included %d, thread_count %d, dynamic_distribution %#x,"
             " function %p, nargs %d.\n", start, end, step, end_included, thread_count,
@@ -1793,7 +1918,7 @@ void WINAPIV C2VectParallel(int start, int end, int step, BOOL end_included, int
         return;
     }
 
-    __ms_va_start(valist, nargs);
+    va_start(valist, nargs);
 
     /* This expression can result in integer overflow. According to the tests,
      * native vcomp runs the function as a single thread both for empty range
@@ -1807,7 +1932,7 @@ void WINAPIV C2VectParallel(int start, int end, int step, BOOL end_included, int
         wrapper_args[1] = (void *)(ULONG_PTR)end;
         copy_va_list_data(&wrapper_args[2], valist, nargs - 2);
         _vcomp_fork_call_wrapper(function, nargs, wrapper_args);
-        __ms_va_end(valist);
+        va_end(valist);
         return;
     }
 
@@ -1821,7 +1946,7 @@ void WINAPIV C2VectParallel(int start, int end, int step, BOOL end_included, int
             &dynamic_start, function, nargs, valist);
 
     thread_data->fork_threads = prev_thread_count;
-    __ms_va_end(valist);
+    va_end(valist);
 }
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)

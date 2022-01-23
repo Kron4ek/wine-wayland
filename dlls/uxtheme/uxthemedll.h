@@ -21,7 +21,10 @@
 #ifndef __WINE_UXTHEMEDLL_H
 #define __WINE_UXTHEMEDLL_H
 
+#include <wingdi.h>
 #include <winuser.h>
+#include <uxtheme.h>
+#include <msstyles.h>
 
 typedef HANDLE HTHEMEFILE;
 
@@ -99,10 +102,10 @@ BOOL WINAPI ThemeHooksInstall(void) DECLSPEC_HIDDEN;
 BOOL WINAPI ThemeHooksRemove(void) DECLSPEC_HIDDEN;
 
 extern void UXTHEME_InitSystem(HINSTANCE hInst) DECLSPEC_HIDDEN;
+extern HRESULT UXTHEME_SetActiveTheme(PTHEME_FILE tf) DECLSPEC_HIDDEN;
 extern void UXTHEME_UninitSystem(void) DECLSPEC_HIDDEN;
 
 extern struct user_api_hook user_api DECLSPEC_HIDDEN;
-LRESULT WINAPI UXTHEME_DefDlgProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, BOOL unicode) DECLSPEC_HIDDEN;
 void WINAPI UXTHEME_ScrollBarDraw(HWND hwnd, HDC dc, INT bar, enum SCROLL_HITTEST hit_test,
                                   const struct SCROLL_TRACKING_INFO *tracking_info,
                                   BOOL draw_arrows, BOOL draw_interior, RECT *rect, INT arrowsize,

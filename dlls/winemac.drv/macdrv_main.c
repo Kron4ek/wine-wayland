@@ -299,6 +299,7 @@ static BOOL process_attach(void)
         return FALSE;
     }
 
+    init_user_driver();
     macdrv_init_display_devices(FALSE);
 
     return TRUE;

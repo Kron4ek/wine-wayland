@@ -18,7 +18,6 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include "dxgi_private.h"
 
@@ -80,9 +79,7 @@ static ULONG STDMETHODCALLTYPE dxgi_factory_Release(IWineDXGIFactory *iface)
         if (factory->device_window)
             DestroyWindow(factory->device_window);
 
-        wined3d_mutex_lock();
         wined3d_decref(factory->wined3d);
-        wined3d_mutex_unlock();
         wined3d_private_store_cleanup(&factory->private_store);
         heap_free(factory);
     }
@@ -255,7 +252,12 @@ static HRESULT STDMETHODCALLTYPE dxgi_factory_CreateSoftwareAdapter(IWineDXGIFac
 
 static BOOL STDMETHODCALLTYPE dxgi_factory_IsCurrent(IWineDXGIFactory *iface)
 {
-    FIXME("iface %p stub!\n", iface);
+    static BOOL once = FALSE;
+
+    if (!once++)
+        FIXME("iface %p stub!\n", iface);
+    else
+        WARN("iface %p stub!\n", iface);
 
     return TRUE;
 }

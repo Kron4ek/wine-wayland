@@ -71,9 +71,9 @@
 @ stub -arch=arm ??0_TaskCollection@details@Concurrency@@QAA@XZ
 @ stub -arch=i386 ??0_TaskCollection@details@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??0_TaskCollection@details@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0_Timer@details@Concurrency@@IAA@I_N@Z
-@ stub -arch=i386 ??0_Timer@details@Concurrency@@IAE@I_N@Z
-@ stub -arch=win64 ??0_Timer@details@Concurrency@@IEAA@I_N@Z
+@ cdecl -arch=arm ??0_Timer@details@Concurrency@@IAA@I_N@Z(ptr long long) _Timer_ctor
+@ thiscall -arch=i386 ??0_Timer@details@Concurrency@@IAE@I_N@Z(ptr long long) _Timer_ctor
+@ cdecl -arch=win64 ??0_Timer@details@Concurrency@@IEAA@I_N@Z(ptr long long) _Timer_ctor
 @ cdecl -arch=arm ??0__non_rtti_object@std@@QAA@ABV01@@Z(ptr ptr) __non_rtti_object_copy_ctor
 @ thiscall -arch=i386 ??0__non_rtti_object@std@@QAE@ABV01@@Z(ptr ptr) __non_rtti_object_copy_ctor
 @ cdecl -arch=win64 ??0__non_rtti_object@std@@QEAA@AEBV01@@Z(ptr ptr) __non_rtti_object_copy_ctor
@@ -299,9 +299,9 @@
 @ stub -arch=arm ??1_TaskCollection@details@Concurrency@@QAA@XZ
 @ stub -arch=i386 ??1_TaskCollection@details@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??1_TaskCollection@details@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??1_Timer@details@Concurrency@@MAA@XZ
-@ stub -arch=i386 ??1_Timer@details@Concurrency@@MAE@XZ
-@ stub -arch=win64 ??1_Timer@details@Concurrency@@MEAA@XZ
+@ cdecl -arch=arm ??1_Timer@details@Concurrency@@MAA@XZ(ptr) _Timer_dtor
+@ thiscall -arch=i386 ??1_Timer@details@Concurrency@@MAE@XZ(ptr) _Timer_dtor
+@ cdecl -arch=win64 ??1_Timer@details@Concurrency@@MEAA@XZ(ptr) _Timer_dtor
 @ cdecl -arch=arm ??1__non_rtti_object@std@@UAA@XZ(ptr) __non_rtti_object_dtor
 @ thiscall -arch=i386 ??1__non_rtti_object@std@@UAE@XZ(ptr) __non_rtti_object_dtor
 @ cdecl -arch=win64 ??1__non_rtti_object@std@@UEAA@XZ(ptr) __non_rtti_object_dtor
@@ -648,12 +648,12 @@
 @ thiscall -arch=i386 ?_SpinOnce@?$_SpinWait@$0A@@details@Concurrency@@QAE_NXZ(ptr) SpinWait__SpinOnce
 @ cdecl -arch=win64 ?_SpinOnce@?$_SpinWait@$0A@@details@Concurrency@@QEAA_NXZ(ptr) SpinWait__SpinOnce
 @ cdecl ?_SpinYield@Context@Concurrency@@SAXXZ() Context__SpinYield
-@ stub -arch=arm ?_Start@_Timer@details@Concurrency@@IAAXXZ
-@ stub -arch=i386 ?_Start@_Timer@details@Concurrency@@IAEXXZ
-@ stub -arch=win64 ?_Start@_Timer@details@Concurrency@@IEAAXXZ
-@ stub -arch=arm ?_Stop@_Timer@details@Concurrency@@IAAXXZ
-@ stub -arch=i386 ?_Stop@_Timer@details@Concurrency@@IAEXXZ
-@ stub -arch=win64 ?_Stop@_Timer@details@Concurrency@@IEAAXXZ
+@ cdecl -arch=arm ?_Start@_Timer@details@Concurrency@@IAAXXZ(ptr) _Timer__Start
+@ thiscall -arch=i386 ?_Start@_Timer@details@Concurrency@@IAEXXZ(ptr) _Timer__Start
+@ cdecl -arch=win64 ?_Start@_Timer@details@Concurrency@@IEAAXXZ(ptr) _Timer__Start
+@ cdecl -arch=arm ?_Stop@_Timer@details@Concurrency@@IAAXXZ(ptr) _Timer__Stop
+@ thiscall -arch=i386 ?_Stop@_Timer@details@Concurrency@@IAEXXZ(ptr) _Timer__Stop
+@ cdecl -arch=win64 ?_Stop@_Timer@details@Concurrency@@IEAAXXZ(ptr) _Timer__Stop
 @ stub -arch=arm ?_Tidy@exception@std@@AAAXXZ
 @ stub -arch=i386 ?_Tidy@exception@std@@AAEXXZ
 @ stub -arch=win64 ?_Tidy@exception@std@@AEAAXXZ
@@ -1273,9 +1273,9 @@
 @ cdecl _heapwalk(ptr)
 @ cdecl _hypot(double double)
 @ cdecl _hypotf(float float)
-@ cdecl _i64toa(int64 ptr long) ntdll._i64toa
+@ cdecl _i64toa(int64 ptr long)
 @ cdecl _i64toa_s(int64 ptr long long)
-@ cdecl _i64tow(int64 ptr long) ntdll._i64tow
+@ cdecl _i64tow(int64 ptr long)
 @ cdecl _i64tow_s(int64 ptr long long)
 @ stub _initptd
 @ cdecl _initterm(ptr ptr)
@@ -1379,7 +1379,7 @@
 @ cdecl _isxdigit_l(long ptr)
 @ cdecl _itoa(long ptr long)
 @ cdecl _itoa_s(long ptr long long)
-@ cdecl _itow(long ptr long) ntdll._itow
+@ cdecl _itow(long ptr long)
 @ cdecl _itow_s(long ptr long long)
 @ cdecl _j0(double)
 @ cdecl _j1(double)
@@ -1418,9 +1418,9 @@
 @ stub _lsearch_s
 @ cdecl _lseek(long long long)
 @ cdecl -ret64 _lseeki64(long int64 long)
-@ cdecl _ltoa(long ptr long) ntdll._ltoa
+@ cdecl _ltoa(long ptr long)
 @ cdecl _ltoa_s(long ptr long long)
-@ cdecl _ltow(long ptr long) ntdll._ltow
+@ cdecl _ltow(long ptr long)
 @ cdecl _ltow_s(long ptr long long)
 @ cdecl _makepath(ptr str str str str)
 @ cdecl _makepath_s(ptr long str str str str)
@@ -1561,7 +1561,7 @@
 @ cdecl _mbsupr_s(str long)
 @ stub _mbsupr_s_l
 @ cdecl _mbtowc_l(ptr str long ptr)
-@ cdecl _memccpy(ptr ptr long long) ntdll._memccpy
+@ cdecl _memccpy(ptr ptr long long)
 @ cdecl _memicmp(str str long)
 @ cdecl _memicmp_l(str str long ptr)
 @ cdecl _mkdir(str)
@@ -1756,13 +1756,13 @@
 @ cdecl _towupper_l(long ptr)
 @ extern _tzname MSVCRT__tzname
 @ cdecl _tzset()
-@ cdecl _ui64toa(int64 ptr long) ntdll._ui64toa
+@ cdecl _ui64toa(int64 ptr long)
 @ cdecl _ui64toa_s(int64 ptr long long)
-@ cdecl _ui64tow(int64 ptr long) ntdll._ui64tow
+@ cdecl _ui64tow(int64 ptr long)
 @ cdecl _ui64tow_s(int64 ptr long long)
-@ cdecl _ultoa(long ptr long) ntdll._ultoa
+@ cdecl _ultoa(long ptr long)
 @ cdecl _ultoa_s(long ptr long long)
-@ cdecl _ultow(long ptr long) ntdll._ultow
+@ cdecl _ultow(long ptr long)
 @ cdecl _ultow_s(long ptr long long)
 @ cdecl _umask(long)
 @ stub _umask_s
@@ -2173,7 +2173,7 @@
 @ cdecl strnlen(str long)
 @ cdecl strpbrk(str str)
 @ cdecl strrchr(str long)
-@ cdecl strspn(str str) ntdll.strspn
+@ cdecl strspn(str str)
 @ cdecl strstr(str str)
 @ cdecl strtod(str ptr)
 @ cdecl strtok(str str)
@@ -2219,10 +2219,10 @@
 @ cdecl wcscoll(wstr wstr)
 @ cdecl wcscpy(ptr wstr)
 @ cdecl wcscpy_s(ptr long wstr)
-@ cdecl wcscspn(wstr wstr) ntdll.wcscspn
+@ cdecl wcscspn(wstr wstr)
 @ cdecl wcsftime(ptr long wstr ptr)
 @ cdecl wcslen(wstr)
-@ cdecl wcsncat(wstr wstr long) ntdll.wcsncat
+@ cdecl wcsncat(wstr wstr long)
 @ cdecl wcsncat_s(wstr long wstr long)
 @ cdecl wcsncmp(wstr wstr long)
 @ cdecl wcsncpy(ptr wstr long)
@@ -2232,7 +2232,7 @@
 @ cdecl wcsrchr(wstr long)
 @ cdecl wcsrtombs(ptr ptr long ptr)
 @ cdecl wcsrtombs_s(ptr ptr long ptr long ptr)
-@ cdecl wcsspn(wstr wstr) ntdll.wcsspn
+@ cdecl wcsspn(wstr wstr)
 @ cdecl wcsstr(wstr wstr)
 @ cdecl wcstod(wstr ptr)
 @ cdecl wcstok(wstr wstr)

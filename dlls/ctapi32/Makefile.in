@@ -1,6 +1,7 @@
 MODULE    = ctapi32.dll
+UNIXLIB   = ctapi32.so
 IMPORTS   = advapi32
 
-EXTRADLLFLAGS = -mcygwin
-
-C_SRCS = ctapi32.c
+C_SRCS = \
+	ctapi32.c \
+	unixlib.c

@@ -170,6 +170,18 @@ NTSTATUS WINAPI wow64_NtClearEvent( UINT *args )
 
 
 /**********************************************************************
+ *           wow64_NtCompareObjects
+ */
+NTSTATUS WINAPI wow64_NtCompareObjects( UINT *args )
+{
+    HANDLE first = get_handle( &args );
+    HANDLE second = get_handle( &args );
+
+    return NtCompareObjects( first, second );
+}
+
+
+/**********************************************************************
  *           wow64_NtCompleteConnectPort
  */
 NTSTATUS WINAPI wow64_NtCompleteConnectPort( UINT *args )
@@ -1457,6 +1469,18 @@ NTSTATUS WINAPI wow64_NtTraceControl( UINT *args )
     ULONG *size = get_ptr( &args );
 
     return NtTraceControl( code, inbuf, inbuf_len, outbuf, outbuf_len, size );
+}
+
+
+/**********************************************************************
+ *           wow64_NtWaitForAlertByThreadId
+ */
+NTSTATUS WINAPI wow64_NtWaitForAlertByThreadId( UINT *args )
+{
+    const void *address = get_ptr( &args );
+    const LARGE_INTEGER *timeout = get_ptr( &args );
+
+    return NtWaitForAlertByThreadId( address, timeout );
 }
 
 

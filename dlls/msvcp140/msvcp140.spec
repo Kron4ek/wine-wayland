@@ -2514,7 +2514,7 @@
 @ thiscall -arch=i386 ?get_date@?$time_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QBE?AV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@0AAVios_base@2@AAHPAUtm@@@Z(ptr ptr ptr long ptr long ptr ptr ptr) time_get_wchar_get_date
 @ cdecl -arch=win64 ?get_date@?$time_get@_WV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@std@@@std@@QEBA?AV?$istreambuf_iterator@_WU?$char_traits@_W@std@@@2@V32@0AEAVios_base@2@AEAHPEAUtm@@@Z(ptr ptr ptr ptr ptr ptr ptr) time_get_wchar_get_date
 @ cdecl -arch=arm ?get_monthname@?$time_get@DV?$istreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBA?AV?$istreambuf_iterator@DU?$char_traits@D@std@@@2@V32@0AAVios_base@2@AAHPAUtm@@@Z(ptr ptr ptr long ptr long ptr ptr ptr) time_get_char_get_monthname
-@ thiscall -arch=arm ?get_monthname@?$time_get@DV?$istreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$istreambuf_iterator@DU?$char_traits@D@std@@@2@V32@0AAVios_base@2@AAHPAUtm@@@Z(ptr ptr ptr long ptr long ptr ptr ptr) time_get_char_get_monthname
+@ thiscall -arch=i386 ?get_monthname@?$time_get@DV?$istreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QBE?AV?$istreambuf_iterator@DU?$char_traits@D@std@@@2@V32@0AAVios_base@2@AAHPAUtm@@@Z(ptr ptr ptr long ptr long ptr ptr ptr) time_get_char_get_monthname
 @ cdecl -arch=win64 ?get_monthname@?$time_get@DV?$istreambuf_iterator@DU?$char_traits@D@std@@@std@@@std@@QEBA?AV?$istreambuf_iterator@DU?$char_traits@D@std@@@2@V32@0AEAVios_base@2@AEAHPEAUtm@@@Z(ptr ptr ptr ptr ptr ptr ptr) time_get_char_get_monthname
 @ stub -arch=arm ?get_monthname@?$time_get@GV?$istreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBA?AV?$istreambuf_iterator@GU?$char_traits@G@std@@@2@V32@0AAVios_base@2@AAHPAUtm@@@Z
 @ stub -arch=i386 ?get_monthname@?$time_get@GV?$istreambuf_iterator@GU?$char_traits@G@std@@@std@@@std@@QBE?AV?$istreambuf_iterator@GU?$char_traits@G@std@@@2@V32@0AAVios_base@2@AAHPAUtm@@@Z
@@ -3426,9 +3426,9 @@
 @ thiscall -arch=i386 ?sync@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MAEHXZ(ptr) basic_streambuf_wchar_sync
 @ cdecl -arch=win64 ?sync@?$basic_streambuf@_WU?$char_traits@_W@std@@@std@@MEAAHXZ(ptr) basic_streambuf_wchar_sync
 @ cdecl ?sync_with_stdio@ios_base@std@@SA_N_N@Z(long) ios_base_sync_with_stdio
-@ stub -arch=arm ?table@?$ctype@D@std@@QBAPBFXZ
-@ stub -arch=i386 ?table@?$ctype@D@std@@QBEPBFXZ
-@ stub -arch=win64 ?table@?$ctype@D@std@@QEBAPEBFXZ
+@ cdecl -arch=arm ?table@?$ctype@D@std@@QBAPBFXZ(ptr) ctype_char_table
+@ thiscall -arch=i386 ?table@?$ctype@D@std@@QBEPBFXZ(ptr) ctype_char_table
+@ cdecl -arch=win64 ?table@?$ctype@D@std@@QEBAPEBFXZ(ptr) ctype_char_table
 @ extern -arch=win32 ?table_size@?$ctype@D@std@@2IB ctype_char_table_size
 @ extern -arch=win64 ?table_size@?$ctype@D@std@@2_KB ctype_char_table_size
 @ cdecl -arch=arm ?tellg@?$basic_istream@DU?$char_traits@D@std@@@std@@QAA?AV?$fpos@U_Mbstatet@@@2@XZ(ptr ptr) basic_istream_char_tellg

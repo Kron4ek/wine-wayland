@@ -5,14 +5,14 @@ msgstr ""
 "Project-Id-Version: Wine\n"
 "Report-Msgid-Bugs-To: https://bugs.winehq.org\n"
 "POT-Creation-Date: N/A\n"
-"PO-Revision-Date: 2019-12-20 15:34+0300\n"
+"PO-Revision-Date: 2022-01-03 11:22+0300\n"
 "Last-Translator: Nikolay Sivov <nsivov@codeweavers.com>\n"
 "Language-Team: Russian\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Poedit 2.2.4\n"
+"X-Generator: Poedit 3.0.1\n"
 
 #: dlls/aclui/aclui.rc:29 dlls/inetcpl.cpl/inetcpl.rc:90
 #: programs/winefile/winefile.rc:114
@@ -33,7 +33,7 @@ msgstr "Жёлтый"
 
 #: dlls/aclui/aclui.rc:39
 msgid "Deny"
-msgstr ""
+msgstr "Запретить"
 
 #: dlls/aclui/aclui.rc:47
 #, fuzzy
@@ -2123,13 +2123,13 @@ msgstr "Удовлетворяет критерию="
 
 #: dlls/crypt32/crypt32.rc:222 dlls/cryptui/cryptui.rc:166
 #: dlls/oleaut32/oleaut32.rc:32 dlls/wininet/wininet.rc:94
-#: programs/ipconfig/ipconfig.rc:47
+#: programs/ipconfig/ipconfig.rc:48
 msgid "Yes"
 msgstr "Да"
 
 #: dlls/crypt32/crypt32.rc:223 dlls/cryptui/cryptui.rc:167
 #: dlls/oleaut32/oleaut32.rc:33 dlls/wininet/wininet.rc:95
-#: programs/ipconfig/ipconfig.rc:48
+#: programs/ipconfig/ipconfig.rc:49
 msgid "No"
 msgstr "Нет"
 
@@ -2741,7 +2741,7 @@ msgid "Friendly name"
 msgstr "Понятное имя"
 
 #: dlls/cryptui/cryptui.rc:65 dlls/shell32/shell32.rc:240
-#: programs/ipconfig/ipconfig.rc:44
+#: programs/ipconfig/ipconfig.rc:45
 msgid "Description"
 msgstr "Описание"
 
@@ -3744,10 +3744,8 @@ msgid "Connected"
 msgstr "Подключено"
 
 #: dlls/joy.cpl/joy.rc:46
-#, fuzzy
-#| msgid "Voice input device:"
 msgid "Connected (xinput device)"
-msgstr "Уст-во речевого ввода:"
+msgstr "Подключено (устройство xinput)"
 
 #: dlls/joy.cpl/joy.rc:48
 msgid "Disabled"
@@ -3806,10 +3804,8 @@ msgid "Subscript out of range"
 msgstr "Индекс вне диапазона"
 
 #: dlls/jscript/jscript.rc:31
-#, fuzzy
-#| msgid "Out of paper; "
 msgid "Out of stack space"
-msgstr "Не хватило бумаги; "
+msgstr "Превышен размер стека"
 
 #: dlls/jscript/jscript.rc:32
 msgid "Object required"
@@ -3897,17 +3893,15 @@ msgstr "Ожидается «@»"
 
 #: dlls/jscript/jscript.rc:80
 msgid "Microsoft JScript compilation error"
-msgstr ""
+msgstr "Ошибка компиляции Microsoft JScript"
 
 #: dlls/jscript/jscript.rc:81
 msgid "Microsoft JScript runtime error"
-msgstr ""
+msgstr "Ошибка выполнения Microsoft JScript"
 
 #: dlls/jscript/jscript.rc:82 dlls/vbscript/vbscript.rc:64
-#, fuzzy
-#| msgid "Unknown error"
 msgid "Unknown runtime error"
-msgstr "Неизвестная ошибка"
+msgstr "Неизвестная ошибка времени выполнения"
 
 #: dlls/jscript/jscript.rc:55
 msgid "Number expected"
@@ -4012,10 +4006,8 @@ msgid "Cannot modify non-writable property '|'"
 msgstr "Невозможно изменить свойство «|»"
 
 #: dlls/jscript/jscript.rc:77
-#, fuzzy
-#| msgid "'[object]' is not a date object"
 msgid "'this' is not a Map object"
-msgstr "«[object]» не объект типа «date»"
+msgstr "«this» не объект типа «Map»"
 
 #: dlls/jscript/jscript.rc:78
 msgid "Property cannot have both accessors and a value"
@@ -6992,32 +6984,24 @@ msgid "Connection reset by peer.\n"
 msgstr "Соединение закрыто удалённым узлом.\n"
 
 #: dlls/kernel32/winerror.mc:3767
-#, fuzzy
-#| msgid "Not implemented"
 msgid "Not implemented.\n"
-msgstr "Не реализовано"
+msgstr "Не реализовано.\n"
 
 #: dlls/kernel32/winerror.mc:3788
-#, fuzzy
-#| msgid "RPC call failed.\n"
 msgid "Call failed.\n"
-msgstr "Сбой RPC-вызова.\n"
+msgstr "Сбой вызова.\n"
 
 #: dlls/kernel32/winerror.mc:3760
 msgid "No Signature found in file.\n"
 msgstr "Подпись файла не обнаружена.\n"
 
 #: dlls/kernel32/winerror.mc:3774
-#, fuzzy
-#| msgid "Invalid level.\n"
 msgid "Invalid call.\n"
-msgstr "Неверный уровень системного вызова.\n"
+msgstr "Неверный вызов.\n"
 
 #: dlls/kernel32/winerror.mc:3781
-#, fuzzy
-#| msgid "Value is not available.\n"
 msgid "Resource is not currently available.\n"
-msgstr "Значение недоступно.\n"
+msgstr "В данный момент ресурс недоступен.\n"
 
 #: dlls/light.msstyles/light.rc:30 dlls/light.msstyles/light.rc:37
 #, fuzzy
@@ -7031,18 +7015,12 @@ msgid "Normal"
 msgstr "Обычный"
 
 #: dlls/localspl/localspl.rc:37
-#, fuzzy
-#| msgctxt "Drive letter"
-#| msgid "Letter"
 msgid "Letter"
-msgstr "Диск"
+msgstr "Письмо"
 
 #: dlls/localspl/localspl.rc:38
-#, fuzzy
-#| msgctxt "Drive letter"
-#| msgid "Letter"
 msgid "Letter Small"
-msgstr "Диск"
+msgstr "Письмо маленькое"
 
 #: dlls/localspl/localspl.rc:39
 #, fuzzy
@@ -7065,45 +7043,32 @@ msgid "Statement"
 msgstr "Состояние"
 
 #: dlls/localspl/localspl.rc:43
-#, fuzzy
-#| msgid "&Execute..."
 msgid "Executive"
-msgstr "&Запустить..."
+msgstr "Executive"
 
 #: dlls/localspl/localspl.rc:44
-#, fuzzy
-#| msgctxt "All key"
-#| msgid "A"
 msgid "A3"
-msgstr "A"
+msgstr "A3"
 
 #: dlls/localspl/localspl.rc:45
-#, fuzzy
-#| msgctxt "All key"
-#| msgid "A"
 msgid "A4"
-msgstr "A"
+msgstr "A4"
 
 #: dlls/localspl/localspl.rc:46
-#, fuzzy
-#| msgid "Small"
 msgid "A4 Small"
-msgstr "Мелкий"
+msgstr "A4 маленький"
 
 #: dlls/localspl/localspl.rc:47
-#, fuzzy
-#| msgctxt "All key"
-#| msgid "A"
 msgid "A5"
-msgstr "A"
+msgstr "A5"
 
 #: dlls/localspl/localspl.rc:48
 msgid "B4 (JIS)"
-msgstr ""
+msgstr "B4 (JIS)"
 
 #: dlls/localspl/localspl.rc:49
 msgid "B5 (JIS)"
-msgstr ""
+msgstr "B5 (JIS)"
 
 #: dlls/localspl/localspl.rc:50
 msgid "Folio"
@@ -7115,11 +7080,11 @@ msgstr ""
 
 #: dlls/localspl/localspl.rc:52
 msgid "10x14"
-msgstr ""
+msgstr "10x14"
 
 #: dlls/localspl/localspl.rc:53
 msgid "11x17"
-msgstr ""
+msgstr "11x17"
 
 #: dlls/localspl/localspl.rc:54
 #, fuzzy
@@ -7129,87 +7094,83 @@ msgstr "Блокнот"
 
 #: dlls/localspl/localspl.rc:55
 msgid "Envelope #9"
-msgstr ""
+msgstr "Конверт №9"
 
 #: dlls/localspl/localspl.rc:56
 msgid "Envelope #10"
-msgstr ""
+msgstr "Конверт №10"
 
 #: dlls/localspl/localspl.rc:57
 msgid "Envelope #11"
-msgstr ""
+msgstr "Конверт №11"
 
 #: dlls/localspl/localspl.rc:58
 msgid "Envelope #12"
-msgstr ""
+msgstr "Конверт №12"
 
 #: dlls/localspl/localspl.rc:59
 msgid "Envelope #14"
-msgstr ""
+msgstr "Конверт №14"
 
 #: dlls/localspl/localspl.rc:60
 msgid "C size sheet"
-msgstr ""
+msgstr "Лист C"
 
 #: dlls/localspl/localspl.rc:61
 msgid "D size sheet"
-msgstr ""
+msgstr "Лист D"
 
 #: dlls/localspl/localspl.rc:62
 msgid "E size sheet"
-msgstr ""
+msgstr "Лист E"
 
 #: dlls/localspl/localspl.rc:63
 msgid "Envelope DL"
-msgstr ""
+msgstr "Конверт DL"
 
 #: dlls/localspl/localspl.rc:64
 msgid "Envelope C5"
-msgstr ""
+msgstr "Конверт C5"
 
 #: dlls/localspl/localspl.rc:65
 msgid "Envelope C3"
-msgstr ""
+msgstr "Конверт C3"
 
 #: dlls/localspl/localspl.rc:66
 msgid "Envelope C4"
-msgstr ""
+msgstr "Конверт C4"
 
 #: dlls/localspl/localspl.rc:67
 msgid "Envelope C6"
-msgstr ""
+msgstr "Конверт C6"
 
 #: dlls/localspl/localspl.rc:68
 msgid "Envelope C65"
-msgstr ""
+msgstr "Конверт C65"
 
 #: dlls/localspl/localspl.rc:69
 msgid "Envelope B4"
-msgstr ""
+msgstr "Конверт B4"
 
 #: dlls/localspl/localspl.rc:70
 msgid "Envelope B5"
-msgstr ""
+msgstr "Конверт B5"
 
 #: dlls/localspl/localspl.rc:71
 msgid "Envelope B6"
-msgstr ""
+msgstr "Конверт B6"
 
 #: dlls/localspl/localspl.rc:72
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "Envelope"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт"
 
 #: dlls/localspl/localspl.rc:73
 msgid "Envelope Monarch"
 msgstr ""
 
 #: dlls/localspl/localspl.rc:74
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "6 3/4 Envelope"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт 6 3/4"
 
 #: dlls/localspl/localspl.rc:75
 msgid "US Std Fanfold"
@@ -7225,25 +7186,23 @@ msgstr ""
 
 #: dlls/localspl/localspl.rc:78
 msgid "B4 (ISO)"
-msgstr ""
+msgstr "B4 (ISO)"
 
 #: dlls/localspl/localspl.rc:79
-#, fuzzy
-#| msgid "Japanese"
 msgid "Japanese Postcard"
-msgstr "Японский"
+msgstr "Японская открытка"
 
 #: dlls/localspl/localspl.rc:80
 msgid "9x11"
-msgstr ""
+msgstr "9x11"
 
 #: dlls/localspl/localspl.rc:81
 msgid "10x11"
-msgstr ""
+msgstr "10x11"
 
 #: dlls/localspl/localspl.rc:82
 msgid "15x11"
-msgstr ""
+msgstr "15x11"
 
 #: dlls/localspl/localspl.rc:83
 msgid "Envelope Invite"
@@ -7265,10 +7224,8 @@ msgid "Tabloid Extra"
 msgstr ""
 
 #: dlls/localspl/localspl.rc:87
-#, fuzzy
-#| msgid "E&xtras"
 msgid "A4 Extra"
-msgstr "&Дополнительно"
+msgstr "A4 экстра"
 
 #: dlls/localspl/localspl.rc:88
 #, fuzzy
@@ -7290,11 +7247,11 @@ msgstr ""
 
 #: dlls/localspl/localspl.rc:91
 msgid "Super A"
-msgstr ""
+msgstr "Super A"
 
 #: dlls/localspl/localspl.rc:92
 msgid "Super B"
-msgstr ""
+msgstr "Super B"
 
 #: dlls/localspl/localspl.rc:93
 #, fuzzy
@@ -7305,7 +7262,7 @@ msgstr "Диск"
 
 #: dlls/localspl/localspl.rc:94
 msgid "A4 Plus"
-msgstr ""
+msgstr "A4 Plus"
 
 #: dlls/localspl/localspl.rc:95
 #, fuzzy
@@ -7319,27 +7276,20 @@ msgid "B5 (JIS) Transverse"
 msgstr ""
 
 #: dlls/localspl/localspl.rc:97
-#, fuzzy
-#| msgid "E&xtras"
 msgid "A3 Extra"
-msgstr "&Дополнительно"
+msgstr "A3 экстра"
 
 #: dlls/localspl/localspl.rc:98
-#, fuzzy
-#| msgid "E&xtras"
 msgid "A5 Extra"
-msgstr "&Дополнительно"
+msgstr "A5 экстра"
 
 #: dlls/localspl/localspl.rc:99
 msgid "B5 (ISO) Extra"
-msgstr ""
+msgstr "B5 (ISO) экстра"
 
 #: dlls/localspl/localspl.rc:100
-#, fuzzy
-#| msgctxt "All key"
-#| msgid "A"
 msgid "A2"
-msgstr "A"
+msgstr "A2"
 
 #: dlls/localspl/localspl.rc:101
 #, fuzzy
@@ -7354,246 +7304,203 @@ msgstr ""
 
 #: dlls/localspl/localspl.rc:103
 msgid "Japanese Double Postcard"
-msgstr ""
+msgstr "Японская двойная открытка"
 
 #: dlls/localspl/localspl.rc:104
-#, fuzzy
-#| msgctxt "All key"
-#| msgid "A"
 msgid "A6"
-msgstr "A"
+msgstr "A6"
 
 #: dlls/localspl/localspl.rc:105
 msgid "Japanese Envelope Kaku #2"
-msgstr ""
+msgstr "Японский конверт Kaku №2"
 
 #: dlls/localspl/localspl.rc:106
 msgid "Japanese Envelope Kaku #3"
-msgstr ""
+msgstr "Японский конверт Kaku №3"
 
 #: dlls/localspl/localspl.rc:107
 msgid "Japanese Envelope Chou #3"
-msgstr ""
+msgstr "Японский конверт Chou №3"
 
 #: dlls/localspl/localspl.rc:108
 msgid "Japanese Envelope Chou #4"
-msgstr ""
+msgstr "Японский конверт Chou №4"
 
 #: dlls/localspl/localspl.rc:109
 msgid "Letter Rotated"
-msgstr ""
+msgstr "Письмо (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:110
 msgid "A3 Rotated"
-msgstr ""
+msgstr "A3 (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:111
 msgid "A4 Rotated"
-msgstr ""
+msgstr "A4 (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:112
 msgid "A5 Rotated"
-msgstr ""
+msgstr "A5 (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:113
 msgid "B4 (JIS) Rotated"
-msgstr ""
+msgstr "B4 (JIS) (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:114
 msgid "B5 (JIS) Rotated"
-msgstr ""
+msgstr "B5 (JIS) (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:115
 msgid "Japanese Postcard Rotated"
-msgstr ""
+msgstr "Японская открытка (повёрнута)"
 
 #: dlls/localspl/localspl.rc:116
 msgid "Double Japan Postcard Rotated"
-msgstr ""
+msgstr "Двойная японская открытка (повёрнута)"
 
 #: dlls/localspl/localspl.rc:117
 msgid "A6 Rotated"
-msgstr ""
+msgstr "A6 (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:118
 msgid "Japan Envelope Kaku #2 Rotated"
-msgstr ""
+msgstr "Японский конверт Kaku №2 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:119
 msgid "Japan Envelope Kaku #3 Rotated"
-msgstr ""
+msgstr "Японский конверт Kaku №3 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:120
 msgid "Japan Envelope Chou #3 Rotated"
-msgstr ""
+msgstr "Японский конверт Chou №3 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:121
 msgid "Japan Envelope Chou #4 Rotated"
-msgstr ""
+msgstr "Японский конверт Chou №4 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:122
 msgid "B6 (JIS)"
-msgstr ""
+msgstr "B6 (JIS)"
 
 #: dlls/localspl/localspl.rc:123
 msgid "B6 (JIS) Rotated"
-msgstr ""
+msgstr "B6 (JIS) (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:124
 msgid "12x11"
-msgstr ""
+msgstr "12x11"
 
 #: dlls/localspl/localspl.rc:125
 msgid "Japan Envelope You #4"
-msgstr ""
+msgstr "Японский конверт You №4"
 
 #: dlls/localspl/localspl.rc:126
 msgid "Japan Envelope You #4 Rotated"
-msgstr ""
+msgstr "Японский конверт You №4 (повёрнутый)"
 
 #: dlls/localspl/localspl.rc:127
 msgid "PRC 16K"
-msgstr ""
+msgstr "PRC 16K"
 
 #: dlls/localspl/localspl.rc:128
 msgid "PRC 32K"
-msgstr ""
+msgstr "PRC 32K"
 
 #: dlls/localspl/localspl.rc:129
 msgid "PRC 32K(Big)"
-msgstr ""
+msgstr "PRC 32K(Big)"
 
 #: dlls/localspl/localspl.rc:130
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #1"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC1"
 
 #: dlls/localspl/localspl.rc:131
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #2"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC2"
 
 #: dlls/localspl/localspl.rc:132
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #3"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC3"
 
 #: dlls/localspl/localspl.rc:133
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #4"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC4"
 
 #: dlls/localspl/localspl.rc:134
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #5"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC5"
 
 #: dlls/localspl/localspl.rc:135
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #6"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC6"
 
 #: dlls/localspl/localspl.rc:136
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #7"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC7"
 
 #: dlls/localspl/localspl.rc:137
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #8"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC8"
 
 #: dlls/localspl/localspl.rc:138
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #9"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC9"
 
 #: dlls/localspl/localspl.rc:139
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #10"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC10"
 
 #: dlls/localspl/localspl.rc:140
 msgid "PRC 16K Rotated"
-msgstr ""
+msgstr "PRC 16K (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:141
 msgid "PRC 32K Rotated"
-msgstr ""
+msgstr "PRC 32K (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:142
 msgid "PRC 32K(Big) Rotated"
-msgstr ""
+msgstr "PRC 32K(Big) (повёрнуто)"
 
 #: dlls/localspl/localspl.rc:143
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #1 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC1 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:144
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #2 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC2 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:145
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #3 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC3 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:146
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #4 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC4 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:147
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #5 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC5 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:148
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #6 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC6 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:149
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #7 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC7 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:150
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #8 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC8 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:151
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #9 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC9 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:152
-#, fuzzy
-#| msgid "PKCS 7 Enveloped"
 msgid "PRC Envelope #10 Rotated"
-msgstr "Запечатано PKCS 7"
+msgstr "Конверт PRC10 (повёрнут)"
 
 #: dlls/localspl/localspl.rc:31 dlls/localui/localui.rc:31
 #: dlls/winspool.drv/winspool.rc:30
@@ -7653,10 +7560,8 @@ msgid "Sink has not been finalized.\n"
 msgstr "Приёмник данных не был завершён.\n"
 
 #: dlls/mferror/mferror.mc:732
-#, fuzzy
-#| msgid "Sink was already stopped.\n"
 msgid "Clock was stopped\n"
-msgstr "Приёмник данных уже был остановлен.\n"
+msgstr "Часы были остановлены\n"
 
 #: dlls/mferror/mferror.mc:32
 msgid "Media Foundation platform is not initialized.\n"
@@ -9140,10 +9045,8 @@ msgid "Select the data you want to connect to:"
 msgstr "Выберите формат для подключения:"
 
 #: dlls/oledb32/version.rc:66
-#, fuzzy
-#| msgid "Connections"
 msgid "Connection"
-msgstr "Подключения"
+msgstr "Подключение"
 
 #: dlls/oledb32/version.rc:69
 #, fuzzy
@@ -9162,16 +9065,12 @@ msgid "Use &data source name"
 msgstr "Введите ваше имя"
 
 #: dlls/oledb32/version.rc:74
-#, fuzzy
-#| msgid "Reset Connections"
 msgid "Use c&onnection string"
-msgstr "Сброшено подключений"
+msgstr "Использовать &строку подключения"
 
 #: dlls/oledb32/version.rc:75
-#, fuzzy
-#| msgid "Connections"
 msgid "&Connection string:"
-msgstr "Подключения"
+msgstr "Строка &подключения:"
 
 #: dlls/oledb32/version.rc:77
 #, fuzzy
@@ -9184,42 +9083,32 @@ msgid "2. Enter information to log on to the server"
 msgstr ""
 
 #: dlls/oledb32/version.rc:79
-#, fuzzy
-#| msgid "&User name:"
 msgid "User &name:"
 msgstr "По&льзователь:"
 
 #: dlls/oledb32/version.rc:83
-#, fuzzy
-#| msgid "&Blank page"
 msgid "&Blank password"
-msgstr "Пу&стая страница"
+msgstr "Пу&стой пароль"
 
 #: dlls/oledb32/version.rc:84
-#, fuzzy
-#| msgid "Wrong password.\n"
 msgid "Allow &saving password"
-msgstr "Неверный пароль.\n"
+msgstr "Разрешить &сохранять пароль"
 
 #: dlls/oledb32/version.rc:85
 msgid "3. Enter the &initial catalog to use:"
 msgstr ""
 
 #: dlls/oledb32/version.rc:87
-#, fuzzy
-#| msgid "Reset Connections"
 msgid "&Test Connection"
-msgstr "Сброшено подключений"
+msgstr "&Проверка подключения"
 
 #: dlls/oledb32/version.rc:92
 msgid "Advanced"
 msgstr "Мастер"
 
 #: dlls/oledb32/version.rc:95
-#, fuzzy
-#| msgid "Network share"
 msgid "Network settings"
-msgstr "Сетевой диск"
+msgstr "Сетевые настройки"
 
 #: dlls/oledb32/version.rc:96
 #, fuzzy
@@ -9238,22 +9127,16 @@ msgid "Connect:"
 msgstr "Подключено"
 
 #: dlls/oledb32/version.rc:103
-#, fuzzy
-#| msgid "seconds"
 msgid "seconds."
 msgstr "сек."
 
 #: dlls/oledb32/version.rc:104
-#, fuzzy
-#| msgid "Success"
 msgid "A&ccess:"
-msgstr "Успех"
+msgstr "До&ступ:"
 
 #: dlls/oledb32/version.rc:110
-#, fuzzy
-#| msgid "&All"
 msgid "All"
-msgstr "&Все"
+msgstr "Все"
 
 #: dlls/oledb32/version.rc:114
 msgid ""
@@ -9274,10 +9157,8 @@ msgid "Data Link Error"
 msgstr "Свойства подключения"
 
 #: dlls/oledb32/version.rc:50
-#, fuzzy
-#| msgid "Please select a file."
 msgid "Please select a provider."
-msgstr "Выберите файл."
+msgstr "Выберите провайдер."
 
 #: dlls/oledb32/version.rc:51
 msgid ""
@@ -9291,19 +9172,15 @@ msgstr "Свойства подключения"
 
 #: dlls/oledb32/version.rc:37
 msgid "OLE DB Provider(s)"
-msgstr ""
+msgstr "Провайдеры OLE DB"
 
 #: dlls/oledb32/version.rc:41
-#, fuzzy
-#| msgid "Ready"
 msgid "Read"
-msgstr "Готово"
+msgstr "Чтение"
 
 #: dlls/oledb32/version.rc:42
-#, fuzzy
-#| msgid "Readme:"
 msgid "ReadWrite"
-msgstr "Файл «Readme»:"
+msgstr "Чтение и запись"
 
 #: dlls/oledb32/version.rc:43
 msgid "Share Deny None"
@@ -9322,10 +9199,8 @@ msgid "Share Exclusive"
 msgstr ""
 
 #: dlls/oledb32/version.rc:47
-#, fuzzy
-#| msgid "I/O Writes"
 msgid "Write"
-msgstr "Число записей"
+msgstr "Запись"
 
 #: dlls/oledlg/oledlg.rc:55
 msgid "Insert Object"
@@ -10494,15 +10369,15 @@ msgstr "Выберите источник"
 
 #: dlls/tzres/tzres.rc:126
 msgid "China Standard Time"
-msgstr ""
+msgstr "Китайское стандартное время"
 
 #: dlls/tzres/tzres.rc:127
 msgid "China Daylight Time"
-msgstr ""
+msgstr "Китайское летнее время"
 
 #: dlls/tzres/tzres.rc:128
 msgid "(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi"
-msgstr ""
+msgstr "(UTC+08:00) Пекин, Чунцин, Гонконг, Урумчи"
 
 #: dlls/tzres/tzres.rc:267
 msgid "North Asia Standard Time"
@@ -10514,39 +10389,39 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:269
 msgid "(UTC+07:00) Krasnoyarsk"
-msgstr ""
+msgstr "(UTC+07:00) Красноярск"
 
 #: dlls/tzres/tzres.rc:168
 msgid "Georgian Standard Time"
-msgstr ""
+msgstr "Грузинское стандартное время"
 
 #: dlls/tzres/tzres.rc:169
 msgid "Georgian Daylight Time"
-msgstr ""
+msgstr "Грузинское летнее время"
 
 #: dlls/tzres/tzres.rc:170
 msgid "(UTC+04:00) Tbilisi"
-msgstr ""
+msgstr "(UTC+04:00) Тбилиси"
 
-#: dlls/tzres/tzres.rc:390 dlls/tzres/tzres.rc:391
+#: dlls/tzres/tzres.rc:393 dlls/tzres/tzres.rc:394
 msgid "UTC+12"
-msgstr ""
+msgstr "UTC+12"
 
-#: dlls/tzres/tzres.rc:392
+#: dlls/tzres/tzres.rc:395
 msgid "(UTC+12:00) Coordinated Universal Time+12"
 msgstr ""
 
 #: dlls/tzres/tzres.rc:252
 msgid "Nepal Standard Time"
-msgstr ""
+msgstr "Непальское стандартное время"
 
 #: dlls/tzres/tzres.rc:253
 msgid "Nepal Daylight Time"
-msgstr ""
+msgstr "Непальское летнее время"
 
 #: dlls/tzres/tzres.rc:254
 msgid "(UTC+05:45) Kathmandu"
-msgstr ""
+msgstr "(UTC+05:45) Катманду"
 
 #: dlls/tzres/tzres.rc:90
 msgid "Cape Verde Standard Time"
@@ -10562,15 +10437,15 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:183
 msgid "Haiti Standard Time"
-msgstr ""
+msgstr "Гаитянское стандартное время"
 
 #: dlls/tzres/tzres.rc:184
 msgid "Haiti Daylight Time"
-msgstr ""
+msgstr "Гаитянское летнее время"
 
 #: dlls/tzres/tzres.rc:185
 msgid "(UTC-05:00) Haiti"
-msgstr ""
+msgstr "(UTC-05:00) Гаити"
 
 #: dlls/tzres/tzres.rc:111
 msgid "Central European Standard Time"
@@ -10582,111 +10457,111 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:113
 msgid "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb"
-msgstr ""
+msgstr "(UTC+01:00) Сараево, Скопье, Варшава, Загреб"
 
 #: dlls/tzres/tzres.rc:234
 msgid "Morocco Standard Time"
-msgstr ""
+msgstr "Марокканское стандартное время"
 
 #: dlls/tzres/tzres.rc:235
 msgid "Morocco Daylight Time"
-msgstr ""
+msgstr "Марокканское летнее время"
 
 #: dlls/tzres/tzres.rc:236
 msgid "(UTC+01:00) Casablanca"
-msgstr ""
+msgstr "(UTC+01:00) Касабланка"
 
-#: dlls/tzres/tzres.rc:399 dlls/tzres/tzres.rc:400
+#: dlls/tzres/tzres.rc:402 dlls/tzres/tzres.rc:403
 msgid "UTC-08"
-msgstr ""
+msgstr "UTC-08"
 
-#: dlls/tzres/tzres.rc:401
+#: dlls/tzres/tzres.rc:404
 msgid "(UTC-08:00) Coordinated Universal Time-08"
 msgstr ""
 
 #: dlls/tzres/tzres.rc:39
 msgid "Altai Standard Time"
-msgstr ""
+msgstr "Алтайское стандартное время"
 
 #: dlls/tzres/tzres.rc:40
 msgid "Altai Daylight Time"
-msgstr ""
+msgstr "Алтайское летнее время"
 
 #: dlls/tzres/tzres.rc:41
 msgid "(UTC+07:00) Barnaul, Gorno-Altaysk"
-msgstr ""
+msgstr "(UTC+07:00) Барнаул, Горно-Алтайск"
 
 #: dlls/tzres/tzres.rc:108
 msgid "Central Europe Standard Time"
-msgstr ""
+msgstr "Центральноевропейское стандартное время"
 
 #: dlls/tzres/tzres.rc:109
 msgid "Central Europe Daylight Time"
-msgstr ""
+msgstr "Центральноевропейское летнее время"
 
 #: dlls/tzres/tzres.rc:110
 msgid "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague"
-msgstr ""
+msgstr "(UTC+01:00) Белград, Братислава, Будапешт, Любляна, Прага"
 
 #: dlls/tzres/tzres.rc:192
 msgid "Iran Standard Time"
-msgstr ""
+msgstr "Иранское стандартное время"
 
 #: dlls/tzres/tzres.rc:193
 msgid "Iran Daylight Time"
-msgstr ""
+msgstr "Иранское летнее время"
 
 #: dlls/tzres/tzres.rc:194
 msgid "(UTC+03:30) Tehran"
-msgstr ""
+msgstr "(UTC+03:30) Тегеран"
 
 #: dlls/tzres/tzres.rc:318
 msgid "Saint Pierre Standard Time"
-msgstr ""
+msgstr "Сен-Пьер стандартное время"
 
 #: dlls/tzres/tzres.rc:319
 msgid "Saint Pierre Daylight Time"
-msgstr ""
+msgstr "Сен-Пьер летнее время"
 
 #: dlls/tzres/tzres.rc:320
 msgid "(UTC-03:00) Saint Pierre and Miquelon"
-msgstr ""
+msgstr "(UTC-03:00) Сен-Пьер и Микелон"
 
 #: dlls/tzres/tzres.rc:327
 msgid "Sao Tome Standard Time"
-msgstr ""
+msgstr "Сан-Томе стандартное время"
 
 #: dlls/tzres/tzres.rc:328
 msgid "Sao Tome Daylight Time"
-msgstr ""
+msgstr "Сан-Томе летнее время"
 
 #: dlls/tzres/tzres.rc:329
 msgid "(UTC+00:00) Sao Tome"
-msgstr ""
+msgstr "(UTC+00:00) Сан-Томе"
 
 #: dlls/tzres/tzres.rc:249
 msgid "Namibia Standard Time"
-msgstr ""
+msgstr "Намибийское стандартное время"
 
 #: dlls/tzres/tzres.rc:250
 msgid "Namibia Daylight Time"
-msgstr ""
+msgstr "Намибийское летнее время"
 
 #: dlls/tzres/tzres.rc:251
 msgid "(UTC+02:00) Windhoek"
-msgstr ""
+msgstr "(UTC+02:00) Виндхук"
 
-#: dlls/tzres/tzres.rc:366
+#: dlls/tzres/tzres.rc:369
 msgid "Tonga Standard Time"
-msgstr ""
+msgstr "Тонга стандартное время"
 
-#: dlls/tzres/tzres.rc:367
+#: dlls/tzres/tzres.rc:370
 msgid "Tonga Daylight Time"
-msgstr ""
+msgstr "Тонга летнее время"
 
-#: dlls/tzres/tzres.rc:368
+#: dlls/tzres/tzres.rc:371
 msgid "(UTC+13:00) Nuku'alofa"
-msgstr ""
+msgstr "(UTC+13:00) Нукуалофа"
 
 #: dlls/tzres/tzres.rc:240
 msgid "Mountain Standard Time (Mexico)"
@@ -10702,27 +10577,39 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:171
 msgid "GMT Standard Time"
-msgstr ""
+msgstr "Стандартное время GMT"
 
 #: dlls/tzres/tzres.rc:172
 msgid "GMT Daylight Time"
-msgstr ""
+msgstr "Стандартное время GMT"
 
 #: dlls/tzres/tzres.rc:173
 msgid "(UTC+00:00) Dublin, Edinburgh, Lisbon, London"
-msgstr ""
+msgstr "(UTC+00:00) Дублин, Эдинбург, Лиссабон, Лондон"
+
+#: dlls/tzres/tzres.rc:342
+msgid "South Sudan Standard Time"
+msgstr "Южный Судан стандартное время"
+
+#: dlls/tzres/tzres.rc:343
+msgid "South Sudan Daylight Time"
+msgstr "Южный Судан летнее время"
+
+#: dlls/tzres/tzres.rc:344
+msgid "(UTC+02:00) Juba"
+msgstr "(UTC+02:00) Джуба"
 
 #: dlls/tzres/tzres.rc:102
 msgid "Central Asia Standard Time"
-msgstr ""
+msgstr "Центральноазиатское стандартное время"
 
 #: dlls/tzres/tzres.rc:103
 msgid "Central Asia Daylight Time"
-msgstr ""
+msgstr "Центральноазиатское летнее время"
 
 #: dlls/tzres/tzres.rc:104
 msgid "(UTC+06:00) Astana"
-msgstr ""
+msgstr "(UTC+06:00) Астана"
 
 #: dlls/tzres/tzres.rc:213
 msgid "Lord Howe Standard Time"
@@ -10738,35 +10625,35 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:48
 msgid "Arabic Standard Time"
-msgstr ""
+msgstr "Арабское стандартное время"
 
 #: dlls/tzres/tzres.rc:49
 msgid "Arabic Daylight Time"
-msgstr ""
+msgstr "Арабское летнее время"
 
 #: dlls/tzres/tzres.rc:50
 msgid "(UTC+03:00) Baghdad"
-msgstr ""
+msgstr "(UTC+03:00) Багдад"
 
-#: dlls/tzres/tzres.rc:393 dlls/tzres/tzres.rc:394
+#: dlls/tzres/tzres.rc:396 dlls/tzres/tzres.rc:397
 msgid "UTC+13"
-msgstr ""
+msgstr "UTC+13"
 
-#: dlls/tzres/tzres.rc:395
+#: dlls/tzres/tzres.rc:398
 msgid "(UTC+13:00) Coordinated Universal Time+13"
 msgstr ""
 
 #: dlls/tzres/tzres.rc:216
 msgid "Magadan Standard Time"
-msgstr ""
+msgstr "Магаданское стандартное время"
 
 #: dlls/tzres/tzres.rc:217
 msgid "Magadan Daylight Time"
-msgstr ""
+msgstr "Магаданское летнее время"
 
 #: dlls/tzres/tzres.rc:218
 msgid "(UTC+11:00) Magadan"
-msgstr ""
+msgstr "(UTC+11:00) Магадан"
 
 #: dlls/tzres/tzres.rc:258
 msgid "Newfoundland Standard Time"
@@ -10780,29 +10667,29 @@ msgstr ""
 msgid "(UTC-03:30) Newfoundland"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:345
+#: dlls/tzres/tzres.rc:348
 msgid "Sudan Standard Time"
-msgstr ""
+msgstr "Суданское стандартное время"
 
-#: dlls/tzres/tzres.rc:346
+#: dlls/tzres/tzres.rc:349
 msgid "Sudan Daylight Time"
-msgstr ""
+msgstr "Суданское летнее время"
 
-#: dlls/tzres/tzres.rc:347
+#: dlls/tzres/tzres.rc:350
 msgid "(UTC+02:00) Khartoum"
-msgstr ""
+msgstr "(UTC+02:00) Хартум"
 
-#: dlls/tzres/tzres.rc:435
+#: dlls/tzres/tzres.rc:438
 msgid "West Pacific Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:436
+#: dlls/tzres/tzres.rc:439
 msgid "West Pacific Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:437
+#: dlls/tzres/tzres.rc:440
 msgid "(UTC+10:00) Guam, Port Moresby"
-msgstr ""
+msgstr "(UTC+10:00) Гуам, Порт-Морсби"
 
 #: dlls/tzres/tzres.rc:279
 msgid "Pacific Standard Time"
@@ -10818,15 +10705,15 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:69
 msgid "Azerbaijan Standard Time"
-msgstr ""
+msgstr "Азербайджанское стандартное время"
 
 #: dlls/tzres/tzres.rc:70
 msgid "Azerbaijan Daylight Time"
-msgstr ""
+msgstr "Азербайджанское летнее время"
 
 #: dlls/tzres/tzres.rc:71
 msgid "(UTC+04:00) Baku"
-msgstr ""
+msgstr "(UTC+04:00) Баку"
 
 #: dlls/tzres/tzres.rc:219
 msgid "Magallanes Standard Time"
@@ -10838,31 +10725,31 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:221
 msgid "(UTC-03:00) Punta Arenas"
-msgstr ""
+msgstr "(UTC-03:00) Пунта-Аренас"
 
 #: dlls/tzres/tzres.rc:324
 msgid "Samoa Standard Time"
-msgstr ""
+msgstr "Стандартное время Самоа"
 
 #: dlls/tzres/tzres.rc:325
 msgid "Samoa Daylight Time"
-msgstr ""
+msgstr "Летнее время Самоа"
 
 #: dlls/tzres/tzres.rc:326
 msgid "(UTC+13:00) Samoa"
-msgstr ""
+msgstr "(UTC+13:00) Самоа"
 
 #: dlls/tzres/tzres.rc:201
 msgid "Kaliningrad Standard Time"
-msgstr ""
+msgstr "Калининградское стандартное время"
 
 #: dlls/tzres/tzres.rc:202
 msgid "Kaliningrad Daylight Time"
-msgstr ""
+msgstr "Калининградское летнее время"
 
 #: dlls/tzres/tzres.rc:203
 msgid "(UTC+02:00) Kaliningrad"
-msgstr ""
+msgstr "(UTC+02:00) Калининград"
 
 #: dlls/tzres/tzres.rc:282
 msgid "Pacific Standard Time (Mexico)"
@@ -10874,31 +10761,31 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:284
 msgid "(UTC-08:00) Baja California"
-msgstr ""
+msgstr "(UTC-08:00) Нижняя Калифорния"
 
 #: dlls/tzres/tzres.rc:228
 msgid "Middle East Standard Time"
-msgstr ""
+msgstr "Ближневосточное стандартное время"
 
 #: dlls/tzres/tzres.rc:229
 msgid "Middle East Daylight Time"
-msgstr ""
+msgstr "Ближневосточное летнее время"
 
 #: dlls/tzres/tzres.rc:230
 msgid "(UTC+02:00) Beirut"
-msgstr ""
+msgstr "(UTC+02:00) Бейрут"
 
-#: dlls/tzres/tzres.rc:360
+#: dlls/tzres/tzres.rc:363
 msgid "Tokyo Standard Time"
-msgstr ""
+msgstr "Стандартное время Токио"
 
-#: dlls/tzres/tzres.rc:361
+#: dlls/tzres/tzres.rc:364
 msgid "Tokyo Daylight Time"
-msgstr ""
+msgstr "Летнее время Токио"
 
-#: dlls/tzres/tzres.rc:362
+#: dlls/tzres/tzres.rc:365
 msgid "(UTC+09:00) Osaka, Sapporo, Tokyo"
-msgstr ""
+msgstr "(UTC+09:00) Осака, Саппоро, Токио"
 
 #: dlls/tzres/tzres.rc:210
 msgid "Line Islands Standard Time"
@@ -10910,43 +10797,43 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:212
 msgid "(UTC+14:00) Kiritimati Island"
-msgstr ""
+msgstr "(UTC+14:00) Кирибати"
 
 #: dlls/tzres/tzres.rc:129
 msgid "Cuba Standard Time"
-msgstr ""
+msgstr "Кубинское стандартное время"
 
 #: dlls/tzres/tzres.rc:130
 msgid "Cuba Daylight Time"
-msgstr ""
+msgstr "Кубинское летнее время"
 
 #: dlls/tzres/tzres.rc:131
 msgid "(UTC-05:00) Havana"
-msgstr ""
+msgstr "(UTC-05:00) Гавана"
 
 #: dlls/tzres/tzres.rc:198
 msgid "Jordan Standard Time"
-msgstr ""
+msgstr "Иорданское стандартное время"
 
 #: dlls/tzres/tzres.rc:199
 msgid "Jordan Daylight Time"
-msgstr ""
+msgstr "Иорданское летнее время"
 
 #: dlls/tzres/tzres.rc:200
 msgid "(UTC+02:00) Amman"
-msgstr ""
+msgstr "(UTC+02:00) Амман"
 
 #: dlls/tzres/tzres.rc:117
 msgid "Central Standard Time"
-msgstr ""
+msgstr "Центральное время"
 
 #: dlls/tzres/tzres.rc:118
 msgid "Central Daylight Time"
-msgstr ""
+msgstr "Центральное летнее время"
 
 #: dlls/tzres/tzres.rc:119
 msgid "(UTC-06:00) Central Time (US & Canada)"
-msgstr ""
+msgstr "(UTC-06:00) Центральное время (США и Канада)"
 
 #: dlls/tzres/tzres.rc:303 dlls/tzres/tzres.rc:304
 msgid "Russia Time Zone 3"
@@ -10954,31 +10841,31 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:305
 msgid "(UTC+04:00) Izhevsk, Samara"
-msgstr ""
+msgstr "(UTC+04:00) Ижевск, Самара"
 
-#: dlls/tzres/tzres.rc:414
+#: dlls/tzres/tzres.rc:417
 msgid "Volgograd Standard Time"
-msgstr ""
+msgstr "Волгоградское стандартное время"
 
-#: dlls/tzres/tzres.rc:415
+#: dlls/tzres/tzres.rc:418
 msgid "Volgograd Daylight Time"
-msgstr ""
+msgstr "Волгоградское летнее время"
 
-#: dlls/tzres/tzres.rc:416
+#: dlls/tzres/tzres.rc:419
 msgid "(UTC+04:00) Volgograd"
-msgstr ""
+msgstr "(UTC+04:00) Волгоград"
 
 #: dlls/tzres/tzres.rc:72
 msgid "Azores Standard Time"
-msgstr ""
+msgstr "Азорское стандартное время"
 
 #: dlls/tzres/tzres.rc:73
 msgid "Azores Daylight Time"
-msgstr ""
+msgstr "Азорское летнее время"
 
 #: dlls/tzres/tzres.rc:74
 msgid "(UTC-01:00) Azores"
-msgstr ""
+msgstr "(UTC-01:00) Азорские острова"
 
 #: dlls/tzres/tzres.rc:264
 msgid "North Asia East Standard Time"
@@ -10990,51 +10877,51 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:266
 msgid "(UTC+08:00) Irkutsk"
-msgstr ""
+msgstr "(UTC+08:00) Иркутск"
 
-#: dlls/tzres/tzres.rc:405 dlls/tzres/tzres.rc:406
+#: dlls/tzres/tzres.rc:408 dlls/tzres/tzres.rc:409
 msgid "UTC-11"
-msgstr ""
+msgstr "UTC-11"
 
-#: dlls/tzres/tzres.rc:407
+#: dlls/tzres/tzres.rc:410
 msgid "(UTC-11:00) Coordinated Universal Time-11"
 msgstr ""
 
 #: dlls/tzres/tzres.rc:51
 msgid "Argentina Standard Time"
-msgstr ""
+msgstr "Аргентинское стандартное время"
 
 #: dlls/tzres/tzres.rc:52
 msgid "Argentina Daylight Time"
-msgstr ""
+msgstr "Аргентинское летнее время"
 
 #: dlls/tzres/tzres.rc:53
 msgid "(UTC-03:00) City of Buenos Aires"
-msgstr ""
+msgstr "(UTC-03:00) Буэнос-Айрес"
 
-#: dlls/tzres/tzres.rc:375
+#: dlls/tzres/tzres.rc:378
 msgid "Turks And Caicos Standard Time"
-msgstr ""
+msgstr "Теркс и Кайкос стандартное время"
 
-#: dlls/tzres/tzres.rc:376
+#: dlls/tzres/tzres.rc:379
 msgid "Turks And Caicos Daylight Time"
-msgstr ""
+msgstr "Теркс и Кайкос летнее время"
 
-#: dlls/tzres/tzres.rc:377
+#: dlls/tzres/tzres.rc:380
 msgid "(UTC-05:00) Turks and Caicos"
-msgstr ""
+msgstr "(UTC-05:00) Теркс и Кайкос"
 
 #: dlls/tzres/tzres.rc:222
 msgid "Marquesas Standard Time"
-msgstr ""
+msgstr "Маркизские острова стандартное время"
 
 #: dlls/tzres/tzres.rc:223
 msgid "Marquesas Daylight Time"
-msgstr ""
+msgstr "Маркизские острова летнее время"
 
 #: dlls/tzres/tzres.rc:224
 msgid "(UTC-09:30) Marquesas Islands"
-msgstr ""
+msgstr "(UTC-09:30) Маркизские острова"
 
 #: dlls/tzres/tzres.rc:243
 msgid "Myanmar Standard Time"
@@ -11048,21 +10935,21 @@ msgstr ""
 msgid "(UTC+06:30) Yangon (Rangoon)"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:387 dlls/tzres/tzres.rc:388
+#: dlls/tzres/tzres.rc:390 dlls/tzres/tzres.rc:391
 msgid "Coordinated Universal Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:389
+#: dlls/tzres/tzres.rc:392
 msgid "(UTC) Coordinated Universal Time"
 msgstr ""
 
 #: dlls/tzres/tzres.rc:189
 msgid "India Standard Time"
-msgstr ""
+msgstr "Индийское стандартное время"
 
 #: dlls/tzres/tzres.rc:190
 msgid "India Daylight Time"
-msgstr ""
+msgstr "Индийское летнее время"
 
 #: dlls/tzres/tzres.rc:191
 msgid "(UTC+05:30) Chennai, Kolkata, Mumbai, New Delhi"
@@ -11078,151 +10965,151 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:182
 msgid "(UTC+02:00) Athens, Bucharest"
-msgstr ""
+msgstr "(UTC+02:00) Афины, Бухарест"
 
-#: dlls/tzres/tzres.rc:372
+#: dlls/tzres/tzres.rc:375
 msgid "Turkey Standard Time"
-msgstr ""
+msgstr "Турецкое стандартное время"
 
-#: dlls/tzres/tzres.rc:373
+#: dlls/tzres/tzres.rc:376
 msgid "Turkey Daylight Time"
-msgstr ""
+msgstr "Турецкое летнее время"
 
-#: dlls/tzres/tzres.rc:374
+#: dlls/tzres/tzres.rc:377
 msgid "(UTC+03:00) Istanbul"
-msgstr ""
+msgstr "(UTC+03:00) Стамбул"
 
 #: dlls/tzres/tzres.rc:54
 msgid "Astrakhan Standard Time"
-msgstr ""
+msgstr "Астраханское стандартное время"
 
 #: dlls/tzres/tzres.rc:55
 msgid "Astrakhan Daylight Time"
-msgstr ""
+msgstr "Астраханское летнее время"
 
 #: dlls/tzres/tzres.rc:56
 msgid "(UTC+04:00) Astrakhan, Ulyanovsk"
-msgstr ""
+msgstr "(UTC+04:00) Астрахань, Ульяновск"
 
 #: dlls/tzres/tzres.rc:162
 msgid "Fiji Standard Time"
-msgstr ""
+msgstr "Стандартное время Фиджи"
 
 #: dlls/tzres/tzres.rc:163
 msgid "Fiji Daylight Time"
-msgstr ""
+msgstr "Летнее время Фиджи"
 
 #: dlls/tzres/tzres.rc:164
 msgid "(UTC+12:00) Fiji"
-msgstr ""
+msgstr "(UTC+12:00) Фиджи"
 
 #: dlls/tzres/tzres.rc:87
 msgid "Canada Central Standard Time"
-msgstr ""
+msgstr "Центральное канадское время"
 
 #: dlls/tzres/tzres.rc:88
 msgid "Canada Central Daylight Time"
-msgstr ""
+msgstr "Центральное канадское летнее время"
 
 #: dlls/tzres/tzres.rc:89
 msgid "(UTC-06:00) Saskatchewan"
-msgstr ""
+msgstr "(UTC-06:00) Саскачеван"
 
-#: dlls/tzres/tzres.rc:441
+#: dlls/tzres/tzres.rc:444
 msgid "Yukon Standard Time"
-msgstr ""
+msgstr "Стандартное время Юкон"
 
-#: dlls/tzres/tzres.rc:442
+#: dlls/tzres/tzres.rc:445
 msgid "Yukon Daylight Time"
-msgstr ""
+msgstr "Летнее время Юкон"
 
-#: dlls/tzres/tzres.rc:443
+#: dlls/tzres/tzres.rc:446
 msgid "(UTC-07:00) Yukon"
-msgstr ""
+msgstr "(UTC-07:00) Юкон"
 
-#: dlls/tzres/tzres.rc:351
+#: dlls/tzres/tzres.rc:354
 msgid "Taipei Standard Time"
-msgstr ""
+msgstr "Тайбэйское стандартное время"
 
-#: dlls/tzres/tzres.rc:352
+#: dlls/tzres/tzres.rc:355
 msgid "Taipei Daylight Time"
-msgstr ""
+msgstr "Тайбэйское летнее время"
 
-#: dlls/tzres/tzres.rc:353
+#: dlls/tzres/tzres.rc:356
 msgid "(UTC+08:00) Taipei"
-msgstr ""
+msgstr "(UTC+08:00) Тайбэй"
 
-#: dlls/tzres/tzres.rc:423
+#: dlls/tzres/tzres.rc:426
 msgid "W. Europe Standard Time"
-msgstr ""
+msgstr "Западноевропейское стандартное время"
 
-#: dlls/tzres/tzres.rc:424
+#: dlls/tzres/tzres.rc:427
 msgid "W. Europe Daylight Time"
-msgstr ""
+msgstr "Западноевропейское летнее время"
 
-#: dlls/tzres/tzres.rc:425
+#: dlls/tzres/tzres.rc:428
 msgid "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna"
-msgstr ""
+msgstr "(UTC+01:00) Амстердам, Берлин, Берн, Стокгольм, Вена"
 
 #: dlls/tzres/tzres.rc:231
 msgid "Montevideo Standard Time"
-msgstr ""
+msgstr "Монтевидео стандартное время"
 
 #: dlls/tzres/tzres.rc:232
 msgid "Montevideo Daylight Time"
-msgstr ""
+msgstr "Монтевидео летнее время"
 
 #: dlls/tzres/tzres.rc:233
 msgid "(UTC-03:00) Montevideo"
-msgstr ""
+msgstr "(UTC-03:00) Монтевидео"
 
 #: dlls/tzres/tzres.rc:285
 msgid "Pakistan Standard Time"
-msgstr ""
+msgstr "Пакистанское стандартное время"
 
 #: dlls/tzres/tzres.rc:286
 msgid "Pakistan Daylight Time"
-msgstr ""
+msgstr "Пакистанское летнее время"
 
 #: dlls/tzres/tzres.rc:287
 msgid "(UTC+05:00) Islamabad, Karachi"
-msgstr ""
+msgstr "(UTC+05:00) Исламабад, Карачи"
 
-#: dlls/tzres/tzres.rc:363
+#: dlls/tzres/tzres.rc:366
 msgid "Tomsk Standard Time"
-msgstr ""
+msgstr "Томское стандартное время"
 
-#: dlls/tzres/tzres.rc:364
+#: dlls/tzres/tzres.rc:367
 msgid "Tomsk Daylight Time"
-msgstr ""
+msgstr "Томское летнее время"
 
-#: dlls/tzres/tzres.rc:365
+#: dlls/tzres/tzres.rc:368
 msgid "(UTC+07:00) Tomsk"
-msgstr ""
+msgstr "(UTC+07:00) Томск"
 
 #: dlls/tzres/tzres.rc:93
 msgid "Caucasus Standard Time"
-msgstr ""
+msgstr "Кавказское стандартное время"
 
 #: dlls/tzres/tzres.rc:94
 msgid "Caucasus Daylight Time"
-msgstr ""
+msgstr "Кавказское летнее время"
 
 #: dlls/tzres/tzres.rc:95
 msgid "(UTC+04:00) Yerevan"
-msgstr ""
+msgstr "(UTC+04:00) Ереван"
 
 #: dlls/tzres/tzres.rc:66
 msgid "AUS Eastern Standard Time"
-msgstr ""
+msgstr "Восточноавстралийское стандартное время"
 
 #: dlls/tzres/tzres.rc:67
 msgid "AUS Eastern Daylight Time"
-msgstr ""
+msgstr "Восточноавстралийское летнее время"
 
 #: dlls/tzres/tzres.rc:68
 msgid "(UTC+10:00) Canberra, Melbourne, Sydney"
-msgstr ""
+msgstr "(UTC+10:00) Канберра, Мельбурн, Сидней"
 
 #: dlls/tzres/tzres.rc:246
 msgid "N. Central Asia Standard Time"
@@ -11234,43 +11121,43 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:248
 msgid "(UTC+07:00) Novosibirsk"
-msgstr ""
+msgstr "(UTC+07:00) Новосибирск"
 
 #: dlls/tzres/tzres.rc:150
 msgid "Eastern Standard Time"
-msgstr ""
+msgstr "Восточное стандартное время"
 
 #: dlls/tzres/tzres.rc:151
 msgid "Eastern Daylight Time"
-msgstr ""
+msgstr "Восточное летнее время"
 
 #: dlls/tzres/tzres.rc:152
 msgid "(UTC-05:00) Eastern Time (US & Canada)"
-msgstr ""
+msgstr "(UTC-05:00) Восточное время (США и Канада)"
 
-#: dlls/tzres/tzres.rc:369
+#: dlls/tzres/tzres.rc:372
 msgid "Transbaikal Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:370
+#: dlls/tzres/tzres.rc:373
 msgid "Transbaikal Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:371
+#: dlls/tzres/tzres.rc:374
 msgid "(UTC+09:00) Chita"
-msgstr ""
+msgstr "(UTC+09:00) Чита"
 
 #: dlls/tzres/tzres.rc:141
 msgid "E. Europe Standard Time"
-msgstr ""
+msgstr "Восточноевропейское стандартное время"
 
 #: dlls/tzres/tzres.rc:142
 msgid "E. Europe Daylight Time"
-msgstr ""
+msgstr "Восточноевропейское летнее время"
 
 #: dlls/tzres/tzres.rc:143
 msgid "(UTC+02:00) Chisinau"
-msgstr ""
+msgstr "(UTC+02:00) Кишинёв"
 
 #: dlls/tzres/tzres.rc:120
 msgid "Central Standard Time (Mexico)"
@@ -11282,31 +11169,31 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:122
 msgid "(UTC-06:00) Guadalajara, Mexico City, Monterrey"
-msgstr ""
+msgstr "(UTC-06:00) Гвадалахара, Мехико, Монтеррей"
 
 #: dlls/tzres/tzres.rc:330
 msgid "Saratov Standard Time"
-msgstr ""
+msgstr "Саратовское стандартное время"
 
 #: dlls/tzres/tzres.rc:331
 msgid "Saratov Daylight Time"
-msgstr ""
+msgstr "Саратовское летнее время"
 
 #: dlls/tzres/tzres.rc:332
 msgid "(UTC+04:00) Saratov"
-msgstr ""
+msgstr "(UTC+04:00) Саратов"
 
 #: dlls/tzres/tzres.rc:57
 msgid "Atlantic Standard Time"
-msgstr ""
+msgstr "Атлантическое стандартное время"
 
 #: dlls/tzres/tzres.rc:58
 msgid "Atlantic Daylight Time"
-msgstr ""
+msgstr "Атлантическое летнее время"
 
 #: dlls/tzres/tzres.rc:59
 msgid "(UTC-04:00) Atlantic Time (Canada)"
-msgstr ""
+msgstr "(UTC-04:00) Атлантическое время (Канада)"
 
 #: dlls/tzres/tzres.rc:237
 msgid "Mountain Standard Time"
@@ -11320,97 +11207,97 @@ msgstr ""
 msgid "(UTC-07:00) Mountain Time (US & Canada)"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:381
+#: dlls/tzres/tzres.rc:384
 msgid "US Eastern Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:382
+#: dlls/tzres/tzres.rc:385
 msgid "US Eastern Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:383
+#: dlls/tzres/tzres.rc:386
 msgid "(UTC-05:00) Indiana (East)"
-msgstr ""
+msgstr "(UTC-05:00) Индиана (запад)"
 
 #: dlls/tzres/tzres.rc:321
 msgid "Sakhalin Standard Time"
-msgstr ""
+msgstr "Сахалинское стандартное время"
 
 #: dlls/tzres/tzres.rc:322
 msgid "Sakhalin Daylight Time"
-msgstr ""
+msgstr "Сахалинское летнее время"
 
 #: dlls/tzres/tzres.rc:323
 msgid "(UTC+11:00) Sakhalin"
-msgstr ""
+msgstr "(UTC+11:00) Сахалин"
 
 #: dlls/tzres/tzres.rc:270
 msgid "North Korea Standard Time"
-msgstr ""
+msgstr "Северокорейское стандартное время"
 
 #: dlls/tzres/tzres.rc:271
 msgid "North Korea Daylight Time"
-msgstr ""
+msgstr "Северокорейское летнее время"
 
 #: dlls/tzres/tzres.rc:272
 msgid "(UTC+09:00) Pyongyang"
-msgstr ""
+msgstr "(UTC+09:00) Пхеньян"
 
-#: dlls/tzres/tzres.rc:354
+#: dlls/tzres/tzres.rc:357
 msgid "Tasmania Standard Time"
-msgstr ""
+msgstr "Тасманийское стандартное время"
 
-#: dlls/tzres/tzres.rc:355
+#: dlls/tzres/tzres.rc:358
 msgid "Tasmania Daylight Time"
-msgstr ""
+msgstr "Тасманийское летнее время"
 
-#: dlls/tzres/tzres.rc:356
+#: dlls/tzres/tzres.rc:359
 msgid "(UTC+10:00) Hobart"
-msgstr ""
+msgstr "(UTC+10:00) Хобарт"
 
 #: dlls/tzres/tzres.rc:99
 msgid "Central America Standard Time"
-msgstr ""
+msgstr "Центральноамериканское стандартное время"
 
 #: dlls/tzres/tzres.rc:100
 msgid "Central America Daylight Time"
-msgstr ""
+msgstr "Центральноамериканское летнее время"
 
 #: dlls/tzres/tzres.rc:101
 msgid "(UTC-06:00) Central America"
-msgstr ""
+msgstr "(UTC-06:00) Центральная Америка"
 
-#: dlls/tzres/tzres.rc:396 dlls/tzres/tzres.rc:397
+#: dlls/tzres/tzres.rc:399 dlls/tzres/tzres.rc:400
 msgid "UTC-02"
-msgstr ""
+msgstr "UTC-02"
 
-#: dlls/tzres/tzres.rc:398
+#: dlls/tzres/tzres.rc:401
 msgid "(UTC-02:00) Coordinated Universal Time-02"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:384
+#: dlls/tzres/tzres.rc:387
 msgid "US Mountain Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:385
+#: dlls/tzres/tzres.rc:388
 msgid "US Mountain Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:386
+#: dlls/tzres/tzres.rc:389
 msgid "(UTC-07:00) Arizona"
-msgstr ""
+msgstr "(UTC-07:00) Аризона"
 
 #: dlls/tzres/tzres.rc:339
 msgid "South Africa Standard Time"
-msgstr ""
+msgstr "Южноафриканское стандартное время"
 
 #: dlls/tzres/tzres.rc:340
 msgid "South Africa Daylight Time"
-msgstr ""
+msgstr "Южноафриканское летнее время"
 
 #: dlls/tzres/tzres.rc:341
 msgid "(UTC+02:00) Harare, Pretoria"
-msgstr ""
+msgstr "(UTC+02:00) Хараре, Претория"
 
 #: dlls/tzres/tzres.rc:96
 msgid "Cen. Australia Standard Time"
@@ -11422,51 +11309,51 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:98
 msgid "(UTC+09:30) Adelaide"
-msgstr ""
+msgstr "(UTC+09:30) Аделаида"
 
-#: dlls/tzres/tzres.rc:402 dlls/tzres/tzres.rc:403
+#: dlls/tzres/tzres.rc:405 dlls/tzres/tzres.rc:406
 msgid "UTC-09"
-msgstr ""
+msgstr "UTC-09"
 
-#: dlls/tzres/tzres.rc:404
+#: dlls/tzres/tzres.rc:407
 msgid "(UTC-09:00) Coordinated Universal Time-09"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:342
+#: dlls/tzres/tzres.rc:345
 msgid "Sri Lanka Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:343
+#: dlls/tzres/tzres.rc:346
 msgid "Sri Lanka Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:344
+#: dlls/tzres/tzres.rc:347
 msgid "(UTC+05:30) Sri Jayawardenepura"
 msgstr ""
 
 #: dlls/tzres/tzres.rc:30
 msgid "Afghanistan Standard Time"
-msgstr ""
+msgstr "Афганское стандартное время"
 
 #: dlls/tzres/tzres.rc:31
 msgid "Afghanistan Daylight Time"
-msgstr ""
+msgstr "Афганское летнее время"
 
 #: dlls/tzres/tzres.rc:32
 msgid "(UTC+04:30) Kabul"
-msgstr ""
+msgstr "(UTC+04:30) Кабул"
 
-#: dlls/tzres/tzres.rc:438
+#: dlls/tzres/tzres.rc:441
 msgid "Yakutsk Standard Time"
-msgstr ""
+msgstr "Якутское стандартное время"
 
-#: dlls/tzres/tzres.rc:439
+#: dlls/tzres/tzres.rc:442
 msgid "Yakutsk Daylight Time"
-msgstr ""
+msgstr "Якутское летнее время"
 
-#: dlls/tzres/tzres.rc:440
+#: dlls/tzres/tzres.rc:443
 msgid "(UTC+09:00) Yakutsk"
-msgstr ""
+msgstr "(UTC+09:00) Якутск"
 
 #: dlls/tzres/tzres.rc:309
 msgid "SA Eastern Standard Time"
@@ -11482,51 +11369,51 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:42
 msgid "Arab Standard Time"
-msgstr ""
+msgstr "Арабское стандартное время"
 
 #: dlls/tzres/tzres.rc:43
 msgid "Arab Daylight Time"
-msgstr ""
+msgstr "Арабское летнее время"
 
 #: dlls/tzres/tzres.rc:44
 msgid "(UTC+03:00) Kuwait, Riyadh"
-msgstr ""
+msgstr "(UTC+03:00) Кувейт, Риад"
 
 #: dlls/tzres/tzres.rc:45
 msgid "Arabian Standard Time"
-msgstr ""
+msgstr "Аравийское стандартное время"
 
 #: dlls/tzres/tzres.rc:46
 msgid "Arabian Daylight Time"
-msgstr ""
+msgstr "Аравийское летнее время"
 
 #: dlls/tzres/tzres.rc:47
 msgid "(UTC+04:00) Abu Dhabi, Muscat"
-msgstr ""
+msgstr "(UTC+04:00) Абу-Даби, Мускат"
 
-#: dlls/tzres/tzres.rc:357
+#: dlls/tzres/tzres.rc:360
 msgid "Tocantins Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:358
+#: dlls/tzres/tzres.rc:361
 msgid "Tocantins Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:359
+#: dlls/tzres/tzres.rc:362
 msgid "(UTC-03:00) Araguaina"
-msgstr ""
+msgstr "(UTC-03:00) Арагуаина"
 
 #: dlls/tzres/tzres.rc:306
 msgid "Russian Standard Time"
-msgstr ""
+msgstr "Российское стандартное время"
 
 #: dlls/tzres/tzres.rc:307
 msgid "Russian Daylight Time"
-msgstr ""
+msgstr "Российское летнее время"
 
 #: dlls/tzres/tzres.rc:308
 msgid "(UTC+03:00) Moscow, St. Petersburg"
-msgstr ""
+msgstr "(UTC+03:00) Москва, Санкт-Петербург"
 
 #: dlls/tzres/tzres.rc:63
 msgid "Aus Central W. Standard Time"
@@ -11550,19 +11437,19 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:296
 msgid "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris"
-msgstr ""
+msgstr "(UTC+01:00) Брюссель, Копенгаген, Мадрид, Париж"
 
 #: dlls/tzres/tzres.rc:159
 msgid "Ekaterinburg Standard Time"
-msgstr ""
+msgstr "Екатеринбургское стандартное время"
 
 #: dlls/tzres/tzres.rc:160
 msgid "Ekaterinburg Daylight Time"
-msgstr ""
+msgstr "Екатеринбургское летнее время"
 
 #: dlls/tzres/tzres.rc:161
 msgid "(UTC+05:00) Ekaterinburg"
-msgstr ""
+msgstr "(UTC+05:00) Екатеринбург"
 
 #: dlls/tzres/tzres.rc:300 dlls/tzres/tzres.rc:301
 msgid "Russia Time Zone 11"
@@ -11570,31 +11457,31 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:302
 msgid "(UTC+12:00) Anadyr, Petropavlovsk-Kamchatsky"
-msgstr ""
+msgstr "(UTC+12:00) Анадырь, Петропавловск-Камчатский"
 
-#: dlls/tzres/tzres.rc:432
+#: dlls/tzres/tzres.rc:435
 msgid "West Bank Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:433
+#: dlls/tzres/tzres.rc:436
 msgid "West Bank Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:434
+#: dlls/tzres/tzres.rc:437
 msgid "(UTC+02:00) Gaza, Hebron"
-msgstr ""
+msgstr "(UTC+02:00) Газа, Хеврон"
 
-#: dlls/tzres/tzres.rc:348
+#: dlls/tzres/tzres.rc:351
 msgid "Syria Standard Time"
-msgstr ""
+msgstr "Сирийское стандартное время"
 
-#: dlls/tzres/tzres.rc:349
+#: dlls/tzres/tzres.rc:352
 msgid "Syria Daylight Time"
-msgstr ""
+msgstr "Сирийское летнее время"
 
-#: dlls/tzres/tzres.rc:350
+#: dlls/tzres/tzres.rc:353
 msgid "(UTC+02:00) Damascus"
-msgstr ""
+msgstr "(UTC+02:00) Дамаск"
 
 #: dlls/tzres/tzres.rc:60
 msgid "AUS Central Standard Time"
@@ -11618,43 +11505,43 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:179
 msgid "(UTC+00:00) Monrovia, Reykjavik"
-msgstr ""
+msgstr "(UTC+00:00) Монровия, Рейкьявик"
 
-#: dlls/tzres/tzres.rc:378
+#: dlls/tzres/tzres.rc:381
 msgid "Ulaanbaatar Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:379
+#: dlls/tzres/tzres.rc:382
 msgid "Ulaanbaatar Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:380
+#: dlls/tzres/tzres.rc:383
 msgid "(UTC+08:00) Ulaanbaatar"
-msgstr ""
+msgstr "(UTC+08:00) Улан-Батор"
 
 #: dlls/tzres/tzres.rc:261
 msgid "Norfolk Standard Time"
-msgstr ""
+msgstr "Норфолк стандартное время"
 
 #: dlls/tzres/tzres.rc:262
 msgid "Norfolk Daylight Time"
-msgstr ""
+msgstr "Норфолк летнее время"
 
 #: dlls/tzres/tzres.rc:263
 msgid "(UTC+11:00) Norfolk Island"
-msgstr ""
+msgstr "(UTC+11:00) Остров Норфолк"
 
 #: dlls/tzres/tzres.rc:195
 msgid "Israel Standard Time"
-msgstr ""
+msgstr "Израильское стандартное время"
 
 #: dlls/tzres/tzres.rc:196
 msgid "Israel Daylight Time"
-msgstr ""
+msgstr "Израильское летнее время"
 
 #: dlls/tzres/tzres.rc:197
 msgid "(UTC+02:00) Jerusalem"
-msgstr ""
+msgstr "(UTC+02:00) Иерусалим"
 
 #: dlls/tzres/tzres.rc:78
 msgid "Bangladesh Standard Time"
@@ -11666,7 +11553,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:80
 msgid "(UTC+06:00) Dhaka"
-msgstr ""
+msgstr "(UTC+06:00) Дакка"
 
 #: dlls/tzres/tzres.rc:312
 msgid "SA Pacific Standard Time"
@@ -11678,19 +11565,19 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:314
 msgid "(UTC-05:00) Bogota, Lima, Quito, Rio Branco"
-msgstr ""
+msgstr "(UTC-05:00) Богота, Лима, Кито, Риу-Бранку"
 
-#: dlls/tzres/tzres.rc:429
+#: dlls/tzres/tzres.rc:432
 msgid "West Asia Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:430
+#: dlls/tzres/tzres.rc:433
 msgid "West Asia Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:431
+#: dlls/tzres/tzres.rc:434
 msgid "(UTC+05:00) Ashgabat, Tashkent"
-msgstr ""
+msgstr "(UTC+05:00) Ашхабад, Ташкент"
 
 #: dlls/tzres/tzres.rc:33
 msgid "Alaskan Standard Time"
@@ -11702,7 +11589,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:35
 msgid "(UTC-09:00) Alaska"
-msgstr ""
+msgstr "(UTC-09:00) Аляска"
 
 #: dlls/tzres/tzres.rc:288
 msgid "Paraguay Standard Time"
@@ -11714,7 +11601,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:290
 msgid "(UTC-04:00) Asuncion"
-msgstr ""
+msgstr "(UTC-04:00) Асунсьон"
 
 #: dlls/tzres/tzres.rc:132
 msgid "Dateline Standard Time"
@@ -11730,15 +11617,15 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:207
 msgid "Libya Standard Time"
-msgstr ""
+msgstr "Ливийское стандартное время"
 
 #: dlls/tzres/tzres.rc:208
 msgid "Libya Daylight Time"
-msgstr ""
+msgstr "Ливийское летнее время"
 
 #: dlls/tzres/tzres.rc:209
 msgid "(UTC+02:00) Tripoli"
-msgstr ""
+msgstr "(UTC+02:00) Триполи"
 
 #: dlls/tzres/tzres.rc:75
 msgid "Bahia Standard Time"
@@ -11750,43 +11637,43 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:77
 msgid "(UTC-03:00) Salvador"
-msgstr ""
+msgstr "(UTC-03:00) Сальвадор"
 
-#: dlls/tzres/tzres.rc:408
+#: dlls/tzres/tzres.rc:411
 msgid "Venezuela Standard Time"
-msgstr ""
+msgstr "Венесуэльское стандартное время"
 
-#: dlls/tzres/tzres.rc:409
+#: dlls/tzres/tzres.rc:412
 msgid "Venezuela Daylight Time"
-msgstr ""
+msgstr "Венесуэльское летнее время"
 
-#: dlls/tzres/tzres.rc:410
+#: dlls/tzres/tzres.rc:413
 msgid "(UTC-04:00) Caracas"
-msgstr ""
+msgstr "(UTC-04:00) Каракас"
 
 #: dlls/tzres/tzres.rc:84
 msgid "Bougainville Standard Time"
-msgstr ""
+msgstr "Бугенвиль стандартное время"
 
 #: dlls/tzres/tzres.rc:85
 msgid "Bougainville Daylight Time"
-msgstr ""
+msgstr "Бугенвиль летнее время"
 
 #: dlls/tzres/tzres.rc:86
 msgid "(UTC+11:00) Bougainville Island"
-msgstr ""
+msgstr "(UTC+11:00) Остров Бугенвиль"
 
 #: dlls/tzres/tzres.rc:186
 msgid "Hawaiian Standard Time"
-msgstr ""
+msgstr "Гавайское стандартное время"
 
 #: dlls/tzres/tzres.rc:187
 msgid "Hawaiian Daylight Time"
-msgstr ""
+msgstr "Гавайское летнее время"
 
 #: dlls/tzres/tzres.rc:188
 msgid "(UTC-10:00) Hawaii"
-msgstr ""
+msgstr "(UTC-10:00) Гавайи"
 
 #: dlls/tzres/tzres.rc:333
 msgid "SE Asia Standard Time"
@@ -11798,7 +11685,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:335
 msgid "(UTC+07:00) Bangkok, Hanoi, Jakarta"
-msgstr ""
+msgstr "(UTC+07:00) Бангкок, Ханой, Джакарта"
 
 #: dlls/tzres/tzres.rc:291
 msgid "Qyzylorda Standard Time"
@@ -11810,19 +11697,19 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:293
 msgid "(UTC+05:00) Qyzylorda"
-msgstr ""
+msgstr "(UTC+05:00) Кызылорда"
 
-#: dlls/tzres/tzres.rc:426
+#: dlls/tzres/tzres.rc:429
 msgid "W. Mongolia Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:427
+#: dlls/tzres/tzres.rc:430
 msgid "W. Mongolia Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:428
+#: dlls/tzres/tzres.rc:431
 msgid "(UTC+07:00) Hovd"
-msgstr ""
+msgstr "(UTC+07:00) Ховд"
 
 #: dlls/tzres/tzres.rc:255
 msgid "New Zealand Standard Time"
@@ -11834,31 +11721,31 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:257
 msgid "(UTC+12:00) Auckland, Wellington"
-msgstr ""
+msgstr "(UTC+12:00) Окленд, Веллингтон"
 
 #: dlls/tzres/tzres.rc:36
 msgid "Aleutian Standard Time"
-msgstr ""
+msgstr "Алеутское стандартное время"
 
 #: dlls/tzres/tzres.rc:37
 msgid "Aleutian Daylight Time"
-msgstr ""
+msgstr "Алеутское летнее время"
 
 #: dlls/tzres/tzres.rc:38
 msgid "(UTC-10:00) Aleutian Islands"
-msgstr ""
+msgstr "(UTC-10:00) Алеутские острова"
 
 #: dlls/tzres/tzres.rc:273
 msgid "Omsk Standard Time"
-msgstr ""
+msgstr "Омское стандартное время"
 
 #: dlls/tzres/tzres.rc:274
 msgid "Omsk Daylight Time"
-msgstr ""
+msgstr "Омское летнее время"
 
 #: dlls/tzres/tzres.rc:275
 msgid "(UTC+06:00) Omsk"
-msgstr ""
+msgstr "(UTC+06:00) Омск"
 
 #: dlls/tzres/tzres.rc:105
 msgid "Central Brazilian Standard Time"
@@ -11870,19 +11757,19 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:107
 msgid "(UTC-04:00) Cuiaba"
-msgstr ""
+msgstr "(UTC-04:00) Куяба"
 
 #: dlls/tzres/tzres.rc:81
 msgid "Belarus Standard Time"
-msgstr ""
+msgstr "Белорусское стандартное время"
 
 #: dlls/tzres/tzres.rc:82
 msgid "Belarus Daylight Time"
-msgstr ""
+msgstr "Белорусское летнее время"
 
 #: dlls/tzres/tzres.rc:83
 msgid "(UTC+03:00) Minsk"
-msgstr ""
+msgstr "(UTC+03:00) Минск"
 
 #: dlls/tzres/tzres.rc:315
 msgid "SA Western Standard Time"
@@ -11898,15 +11785,15 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:174
 msgid "Greenland Standard Time"
-msgstr ""
+msgstr "Гренландское стандартное время"
 
 #: dlls/tzres/tzres.rc:175
 msgid "Greenland Daylight Time"
-msgstr ""
+msgstr "Гренландское летнее время"
 
 #: dlls/tzres/tzres.rc:176
 msgid "(UTC-03:00) Greenland"
-msgstr ""
+msgstr "(UTC-03:00) Гренландия"
 
 #: dlls/tzres/tzres.rc:147
 msgid "Easter Island Standard Time"
@@ -11918,7 +11805,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:149
 msgid "(UTC-06:00) Easter Island"
-msgstr ""
+msgstr "(UTC-06:00) Остров Пасхи"
 
 #: dlls/tzres/tzres.rc:297 dlls/tzres/tzres.rc:298
 msgid "Russia Time Zone 10"
@@ -11926,19 +11813,19 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:299
 msgid "(UTC+11:00) Chokurdakh"
-msgstr ""
+msgstr "(UTC+11:00) Чокурдах"
 
 #: dlls/tzres/tzres.rc:156
 msgid "Egypt Standard Time"
-msgstr ""
+msgstr "Египетское стандартное время"
 
 #: dlls/tzres/tzres.rc:157
 msgid "Egypt Daylight Time"
-msgstr ""
+msgstr "Египетское летнее время"
 
 #: dlls/tzres/tzres.rc:158
 msgid "(UTC+02:00) Cairo"
-msgstr ""
+msgstr "(UTC+02:00) Каир"
 
 #: dlls/tzres/tzres.rc:153
 msgid "Eastern Standard Time (Mexico)"
@@ -11950,7 +11837,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:155
 msgid "(UTC-05:00) Chetumal"
-msgstr ""
+msgstr "(UTC-05:00) Четумаль"
 
 #: dlls/tzres/tzres.rc:225
 msgid "Mauritius Standard Time"
@@ -11962,43 +11849,43 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:227
 msgid "(UTC+04:00) Port Louis"
-msgstr ""
+msgstr "(UTC+04:00) Порт-Луи"
 
-#: dlls/tzres/tzres.rc:411
+#: dlls/tzres/tzres.rc:414
 msgid "Vladivostok Standard Time"
-msgstr ""
+msgstr "Владивостокское стандартное время"
 
-#: dlls/tzres/tzres.rc:412
+#: dlls/tzres/tzres.rc:415
 msgid "Vladivostok Daylight Time"
-msgstr ""
+msgstr "Владивостокское летнее время"
 
-#: dlls/tzres/tzres.rc:413
+#: dlls/tzres/tzres.rc:416
 msgid "(UTC+10:00) Vladivostok"
-msgstr ""
+msgstr "(UTC+10:00) Владивосток"
 
 #: dlls/tzres/tzres.rc:336
 msgid "Singapore Standard Time"
-msgstr ""
+msgstr "Сингапурское стандартное время"
 
 #: dlls/tzres/tzres.rc:337
 msgid "Singapore Daylight Time"
-msgstr ""
+msgstr "Сингапурское летнее время"
 
 #: dlls/tzres/tzres.rc:338
 msgid "(UTC+08:00) Kuala Lumpur, Singapore"
-msgstr ""
+msgstr "(UTC+08:00) Куала-Лумпур, Сингапур"
 
 #: dlls/tzres/tzres.rc:204
 msgid "Korea Standard Time"
-msgstr ""
+msgstr "Корейское стандартное время"
 
 #: dlls/tzres/tzres.rc:205
 msgid "Korea Daylight Time"
-msgstr ""
+msgstr "Корейское летнее время"
 
 #: dlls/tzres/tzres.rc:206
 msgid "(UTC+09:00) Seoul"
-msgstr ""
+msgstr "(UTC+09:00) Сеул"
 
 #: dlls/tzres/tzres.rc:123
 msgid "Chatham Islands Standard Time"
@@ -12010,7 +11897,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:125
 msgid "(UTC+12:45) Chatham Islands"
-msgstr ""
+msgstr "(UTC+12:45) Острова Чатем"
 
 #: dlls/tzres/tzres.rc:135
 msgid "E. Africa Standard Time"
@@ -12022,7 +11909,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:137
 msgid "(UTC+03:00) Nairobi"
-msgstr ""
+msgstr "(UTC+03:00) Найроби"
 
 #: dlls/tzres/tzres.rc:165
 msgid "FLE Standard Time"
@@ -12034,7 +11921,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:167
 msgid "(UTC+02:00) Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius"
-msgstr ""
+msgstr "(UTC+02:00) Хельсинки, Киев, Рига, София, Таллин, Вильнюс"
 
 #: dlls/tzres/tzres.rc:144
 msgid "E. South America Standard Time"
@@ -12046,7 +11933,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:146
 msgid "(UTC-03:00) Brasilia"
-msgstr ""
+msgstr "(UTC-03:00) Бразилиа"
 
 #: dlls/tzres/tzres.rc:114
 msgid "Central Pacific Standard Time"
@@ -12060,15 +11947,15 @@ msgstr ""
 msgid "(UTC+11:00) Solomon Is., New Caledonia"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:420
+#: dlls/tzres/tzres.rc:423
 msgid "W. Central Africa Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:421
+#: dlls/tzres/tzres.rc:424
 msgid "W. Central Africa Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:422
+#: dlls/tzres/tzres.rc:425
 msgid "(UTC+01:00) West Central Africa"
 msgstr ""
 
@@ -12082,7 +11969,7 @@ msgstr ""
 
 #: dlls/tzres/tzres.rc:278
 msgid "(UTC-04:00) Santiago"
-msgstr ""
+msgstr "(UTC-04:00) Сантьяго"
 
 #: dlls/tzres/tzres.rc:138
 msgid "E. Australia Standard Time"
@@ -12096,17 +11983,17 @@ msgstr ""
 msgid "(UTC+10:00) Brisbane"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:417
+#: dlls/tzres/tzres.rc:420
 msgid "W. Australia Standard Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:418
+#: dlls/tzres/tzres.rc:421
 msgid "W. Australia Daylight Time"
 msgstr ""
 
-#: dlls/tzres/tzres.rc:419
+#: dlls/tzres/tzres.rc:422
 msgid "(UTC+08:00) Perth"
-msgstr ""
+msgstr "(UTC+08:00) Перт"
 
 #: dlls/urlmon/urlmon.rc:32 dlls/wininet/wininet.rc:88
 msgid "Security Warning"
@@ -12207,47 +12094,35 @@ msgstr "&Ещё окна..."
 
 #: dlls/vbscript/vbscript.rc:30
 msgid "Overflow"
-msgstr ""
+msgstr "Переполнение"
 
 #: dlls/vbscript/vbscript.rc:31
-#, fuzzy
-#| msgid "Out of memory."
 msgid "Out of memory"
-msgstr "Мало памяти."
+msgstr "Недостаточно памяти"
 
 #: dlls/vbscript/vbscript.rc:33
 msgid "This array is fixed or temporarily locked"
 msgstr ""
 
 #: dlls/vbscript/vbscript.rc:34
-#, fuzzy
-#| msgid "Data type mismatch.\n"
 msgid "Type mismatch"
-msgstr "Тип данных не совпадает.\n"
+msgstr "Несовпадение типов"
 
 #: dlls/vbscript/vbscript.rc:36
-#, fuzzy
-#| msgid "I/O device error.\n"
 msgid "Device I/O error"
-msgstr "Ошибка ввода/вывода на устройстве.\n"
+msgstr "Ошибка ввода/вывода на устройстве"
 
 #: dlls/vbscript/vbscript.rc:37
-#, fuzzy
-#| msgid "File already exists.\n"
 msgid "File already exists"
-msgstr "Файл уже существует.\n"
+msgstr "Файл уже существует"
 
 #: dlls/vbscript/vbscript.rc:38
-#, fuzzy
-#| msgid "Disk full.\n"
 msgid "Disk full"
-msgstr "Диск полностью заполнен.\n"
+msgstr "Диск заполнен"
 
 #: dlls/vbscript/vbscript.rc:39
-#, fuzzy
-#| msgid "Too many open files.\n"
 msgid "Too many files"
-msgstr "Слишком много открытых файлов.\n"
+msgstr "Слишком много файлов"
 
 #: dlls/vbscript/vbscript.rc:40
 #, fuzzy
@@ -12260,10 +12135,8 @@ msgid "Path/File access error"
 msgstr ""
 
 #: dlls/vbscript/vbscript.rc:42
-#, fuzzy
-#| msgid "Path not found.\n"
 msgid "Path not found"
-msgstr "Путь не найден.\n"
+msgstr "Путь не найден"
 
 #: dlls/vbscript/vbscript.rc:43
 #, fuzzy
@@ -12272,48 +12145,36 @@ msgid "Object variable not set"
 msgstr "(значение не задано)"
 
 #: dlls/vbscript/vbscript.rc:44
-#, fuzzy
-#| msgid "Invalid user buffer.\n"
 msgid "Invalid use of Null"
-msgstr "Неподходящий пользовательский буфер.\n"
+msgstr "Некорректное использование Null"
 
 #: dlls/vbscript/vbscript.rc:45
 msgid "Can't create necessary temporary file"
-msgstr ""
+msgstr "Не удалось создать временный файл"
 
 #: dlls/vbscript/vbscript.rc:46
-#, fuzzy
-#| msgid "Automation server can't create object"
 msgid "ActiveX component can't create object"
-msgstr "Сервер автоматизации не может создать объект"
+msgstr "Компонент ActiveX не смог создать объект"
 
 #: dlls/vbscript/vbscript.rc:47
-#, fuzzy
-#| msgid "Object doesn't support this action"
 msgid "Class doesn't support Automation"
-msgstr "Объект не поддерживает это действие"
+msgstr "Класс не поддерживает автоматизацию"
 
 #: dlls/vbscript/vbscript.rc:48
 msgid "File name or class name not found during Automation operation"
 msgstr ""
 
 #: dlls/vbscript/vbscript.rc:51
-#, fuzzy
-#| msgid "Object doesn't support this action"
 msgid "Object doesn't support named arguments"
-msgstr "Объект не поддерживает это действие"
+msgstr "Объект не поддерживает именованные аргументы"
 
 #: dlls/vbscript/vbscript.rc:52
-#, fuzzy
-#| msgid "Object doesn't support this action"
 msgid "Object doesn't support current locale setting"
-msgstr "Объект не поддерживает это действие"
+msgstr "Объект не поддерживает выбор локали"
 
 #: dlls/vbscript/vbscript.rc:53 dlls/vbscript/vbscript.rc:54
-#, fuzzy
-#| msgid "Element not found.\n"
 msgid "Named argument not found"
-msgstr "Элемент не найден.\n"
+msgstr "Именованный аргумент не найден"
 
 #: dlls/vbscript/vbscript.rc:55
 msgid "Wrong number of arguments or invalid property assignment"
@@ -12326,10 +12187,8 @@ msgid "Object not a collection"
 msgstr "Нарушение класса объекта"
 
 #: dlls/vbscript/vbscript.rc:57
-#, fuzzy
-#| msgid "Specified control was not found in message"
 msgid "Specified DLL function not found"
-msgstr "Указанный управляющий элемент не найден в сообщении"
+msgstr "Указанная функция не найдена в библиотеке"
 
 #: dlls/vbscript/vbscript.rc:58
 msgid "Variable uses an Automation type not supported in VBScript"
@@ -12345,11 +12204,11 @@ msgstr ""
 
 #: dlls/vbscript/vbscript.rc:62
 msgid "Microsoft VBScript compilation error"
-msgstr ""
+msgstr "Ошибка компиляции Microsoft VBScript"
 
 #: dlls/vbscript/vbscript.rc:63
 msgid "Microsoft VBScript runtime error"
-msgstr ""
+msgstr "Ошибка выполнения Microsoft VBScript"
 
 #: dlls/winemac.drv/winemac.rc:33
 msgid "Hide %@"
@@ -12450,22 +12309,16 @@ msgid "Effective Date"
 msgstr ""
 
 #: dlls/wininet/wininet.rc:37
-#, fuzzy
-#| msgid "Security"
 msgid "Security Protocol"
-msgstr "Безопасность"
+msgstr "Протокол безопасности"
 
 #: dlls/wininet/wininet.rc:38
-#, fuzzy
-#| msgid "Signature"
 msgid "Signature Type"
-msgstr "Подпись"
+msgstr "Тип подписи"
 
 #: dlls/wininet/wininet.rc:39
-#, fuzzy
-#| msgid "Encrypting File System"
 msgid "Encryption Type"
-msgstr "Шифрованная файловая система"
+msgstr "Тип шифрования"
 
 #: dlls/wininet/wininet.rc:40
 msgid "Privacy Strength"
@@ -12473,7 +12326,7 @@ msgstr ""
 
 #: dlls/wininet/wininet.rc:43
 msgid "bits"
-msgstr ""
+msgstr "бит"
 
 #: dlls/wininet/winineterror.mc:26
 msgid "The request has timed out.\n"
@@ -13438,6 +13291,26 @@ msgstr ""
 "      Определяет файл(ы) для обработки командой attrib.\n"
 "  /S  Обрабатывает подходящие файлы в текущей папке и всех подпапках.\n"
 "  /D  Обрабатывает также папки.\n"
+
+#: programs/chcp.com/chcp.rc:28
+msgid "Active code page: %1!u!\n"
+msgstr "Активная кодовая страница: %1!u!\n"
+
+#: programs/chcp.com/chcp.rc:29
+msgid "Invalid code page\n"
+msgstr "Неверная кодовая страница\n"
+
+#: programs/chcp.com/chcp.rc:33
+msgid ""
+"CHCP [number]\n"
+"\n"
+"  Sets or displays the active console code page.\n"
+"\n"
+"  number   The console code page to activate.\n"
+"\n"
+"  Type CHCP without a number to display the active console code page.\n"
+"\n"
+msgstr ""
 
 #: programs/clock/clock.rc:32
 msgid "Ana&log"
@@ -14499,7 +14372,7 @@ msgstr ""
 
 #: programs/fsutil/fsutil.mc:40
 msgid "Syntax: fsutil hardlink create <new> <existing>\n"
-msgstr ""
+msgstr "Синтаксис: fsutil hardlink create <новое имя> <существующее имя>\n"
 
 #: programs/hostname/hostname.rc:30
 msgid "Usage: hostname\n"
@@ -14547,45 +14420,49 @@ msgstr "IPv4-адрес"
 msgid "Hostname"
 msgstr "Имя узла"
 
-#: programs/ipconfig/ipconfig.rc:38
+#: programs/ipconfig/ipconfig.rc:39
 msgid "Node type"
 msgstr "Тип узла"
 
-#: programs/ipconfig/ipconfig.rc:39
+#: programs/ipconfig/ipconfig.rc:40
 msgid "Broadcast"
 msgstr "Широковещательный"
 
-#: programs/ipconfig/ipconfig.rc:40
+#: programs/ipconfig/ipconfig.rc:41
 msgid "Peer-to-peer"
 msgstr "Одноранговый"
 
-#: programs/ipconfig/ipconfig.rc:41
+#: programs/ipconfig/ipconfig.rc:42
 msgid "Mixed"
 msgstr "Смешанный"
 
-#: programs/ipconfig/ipconfig.rc:42
+#: programs/ipconfig/ipconfig.rc:43
 msgid "Hybrid"
 msgstr "Гибридный"
 
-#: programs/ipconfig/ipconfig.rc:43
+#: programs/ipconfig/ipconfig.rc:44
 msgid "IP routing enabled"
 msgstr "IP-маршрутизация включена"
 
-#: programs/ipconfig/ipconfig.rc:45
+#: programs/ipconfig/ipconfig.rc:46
 msgid "Physical address"
 msgstr "Физический адрес"
 
-#: programs/ipconfig/ipconfig.rc:46
+#: programs/ipconfig/ipconfig.rc:47
 msgid "DHCP enabled"
 msgstr "DHCP включен"
 
-#: programs/ipconfig/ipconfig.rc:49
+#: programs/ipconfig/ipconfig.rc:50
 msgid "Default gateway"
 msgstr "Шлюз по умолчанию"
 
-#: programs/ipconfig/ipconfig.rc:50
+#: programs/ipconfig/ipconfig.rc:51
 msgid "IPv6 address"
 msgstr "IPv6-адрес"
+
+#: programs/ipconfig/ipconfig.rc:38
+msgid "Primary DNS suffix"
+msgstr ""
 
 #: programs/msinfo32/msinfo32.rc:28
 msgid "System Information"
@@ -15633,37 +15510,24 @@ msgid "Type \"REG %1 /?\" for help.\n"
 msgstr "Для справки введите «REG %1 /?».\n"
 
 #: programs/reg/reg.rc:181
-#, fuzzy
-#| msgid ""
-#| "reg: The system was unable to find the specified registry key or value\n"
 msgid "reg: Unable to access or create the specified registry key\n"
-msgstr "reg: не удалось найти указанный раздел реестра или значение\n"
+msgstr "reg: не удалось получить доступ или создать ключ\n"
 
 #: programs/reg/reg.rc:116
-#, fuzzy
-#| msgid "The operation completed successfully\n"
 msgid "reg: The operation completed successfully\n"
-msgstr "Операция успешно завершена\n"
+msgstr "reg: операция успешно завершена\n"
 
 #: programs/reg/reg.rc:131
-#, fuzzy
-#| msgid "The registry operation was cancelled\n"
 msgid "reg: The registry operation was cancelled\n"
-msgstr "Операция с реестром была отменена\n"
+msgstr "reg: операция с реестром была отменена\n"
 
 #: programs/reg/reg.rc:174
-#, fuzzy
-#| msgid ""
-#| "reg: The system was unable to find the specified registry key or value\n"
 msgid "reg: Unable to find the specified registry key\n"
-msgstr "reg: не удалось найти указанный раздел реестра или значение\n"
+msgstr "reg: не удалось найти указанный ключ\n"
 
 #: programs/reg/reg.rc:120
-#, fuzzy
-#| msgid ""
-#| "reg: The system was unable to find the specified registry key or value\n"
 msgid "reg: Unable to find the specified registry value\n"
-msgstr "reg: не удалось найти указанный раздел реестра или значение\n"
+msgstr "reg: не удалось найти указанное значение\n"
 
 #: programs/reg/reg.rc:132 programs/regedit/regedit.rc:239
 msgid "(Default)"
@@ -15674,17 +15538,6 @@ msgid "Type \"REG /?\" for help.\n"
 msgstr "Для справки введите «REG /?».\n"
 
 #: programs/reg/reg.rc:35
-#, fuzzy
-#| msgid ""
-#| "Usage:\n"
-#| "  REG [operation] [parameters]\n"
-#| "\n"
-#| "Supported operations:\n"
-#| "  ADD | DELETE | IMPORT | EXPORT | QUERY\n"
-#| "\n"
-#| "For help on a specific operation, type:\n"
-#| "  REG [operation] /?\n"
-#| "\n"
 msgid ""
 "Usage:\n"
 "  REG [operation] [parameters]\n"
@@ -15696,11 +15549,11 @@ msgid ""
 "  REG [operation] /?\n"
 "\n"
 msgstr ""
-"Вызов:\n"
+"Использование:\n"
 "  REG [операция] [параметры]\n"
 "\n"
 "Поддерживаемые операции:\n"
-"  ADD | DELETE | IMPORT | EXPORT | QUERY\n"
+"  ADD | COPY | DELETE | EXPORT | IMPORT | QUERY\n"
 "\n"
 "Для получения справки по конкретной операции используйте:\n"
 "  REG [операция] /?\n"
@@ -15871,6 +15724,13 @@ msgid ""
 "     The name and path of the registry file to import.\n"
 "\n"
 msgstr ""
+"REG IMPORT <файл>\n"
+"\n"
+"  Импорт ключей, значений и данных из указанного файла.\n"
+"\n"
+"  <файл>\n"
+"     Имя импортируемого файла.\n"
+"\n"
 
 #: programs/reg/reg.rc:114
 msgid ""
@@ -15916,33 +15776,32 @@ msgid ""
 "     Access the registry using the 64-bit view.\n"
 "\n"
 msgstr ""
+"  /reg:32\n"
+"     Доступ к 32-битным веткам реестра.\n"
+"\n"
+"  /reg:64\n"
+"     Доступ к 64-битным веткам реестра.\n"
+"\n"
 
 #: programs/reg/reg.rc:117
-#, fuzzy
-#| msgid "reg: Invalid key name\n"
 msgid "reg: Invalid registry key\n"
-msgstr "reg: неверное имя раздела\n"
+msgstr "reg: неверный ключ\n"
 
 #: programs/reg/reg.rc:119
 msgid "reg: Unable to access remote machine\n"
 msgstr "reg: не удалось получить доступ к удалённому компьютеру\n"
 
 #: programs/reg/reg.rc:172
-#, fuzzy
-#| msgid "reg: Invalid system key [%1]\n"
 msgid "reg: Invalid system key\n"
-msgstr "reg: неверный системный ключ [%1]\n"
+msgstr "reg: неверный системный ключ\n"
 
 #: programs/reg/reg.rc:140
 msgid "reg: Invalid option [%1]. "
 msgstr "reg: неверная опция [%1]. "
 
 #: programs/reg/reg.rc:122
-#, fuzzy
-#| msgid "reg: The option [/d] must be followed by a valid hexadecimal value\n"
 msgid "reg: The option [/d] must be followed by a valid numeric value\n"
-msgstr ""
-"reg: за опцией [/d] должно следовать число в шестнадцатеричном формате\n"
+msgstr "reg: за опцией [/d] должно следовать числовое значение\n"
 
 #: programs/reg/reg.rc:123
 msgid "reg: The option [/d] must be followed by a valid hexadecimal value\n"
@@ -15974,12 +15833,10 @@ msgid "reg: The source and destination keys cannot be the same\n"
 msgstr ""
 
 #: programs/reg/reg.rc:205
-#, fuzzy
-#| msgid "The file '%1' already exists. Do you want to overwrite it?"
 msgid ""
 "The value '%1\\%2' already exists in the destination key. Do you want to "
 "overwrite it?"
-msgstr "Файл «%1» уже существует. Вы хотите заменить его?"
+msgstr "Значение «%1\\%2» уже существует. Вы хотите заменить его?"
 
 #: programs/reg/reg.rc:133
 msgid "Are you sure you want to delete the registry value '%1'?"
@@ -15994,10 +15851,8 @@ msgid "Are you sure you want to delete the registry key '%1'?"
 msgstr "Вы точно хотите удалить ключ реестра «%1»?"
 
 #: programs/reg/reg.rc:137
-#, fuzzy
-#| msgid "regedit: Unable to delete the registry key '%1'.\n"
 msgid "reg: Unable to delete all registry values in '%1'\n"
-msgstr "regedit: не удалось удалить ключ «%1».\n"
+msgstr "regedit: не удалось удалить все значения в «%1»\n"
 
 #: programs/reg/reg.rc:173
 msgid "The file '%1' already exists. Do you want to overwrite it?"
@@ -16008,10 +15863,8 @@ msgid "reg: Unrecognized escape sequence [\\%1!c!]\n"
 msgstr "reg: неизвестная управляющая последовательность [\\%1!c!]\n"
 
 #: programs/reg/reg.rc:175
-#, fuzzy
-#| msgid "reg: Unable to open the registry key '%1'.\n"
 msgid "reg: Unable to import the registry key '%1'\n"
-msgstr "reg: не удалось открыть ключ «%1».\n"
+msgstr "reg: не удалось импортировать ключ «%1»\n"
 
 #: programs/reg/reg.rc:150
 msgid "reg: The file '%1' was not found.\n"
@@ -16692,37 +16545,6 @@ msgid "regsvr32: Successfully uninstalled DLL '%1'\n"
 msgstr "regsvr32: DLL «%1» успешно удалена\n"
 
 #: programs/start/start.rc:57
-#, fuzzy
-#| msgid ""
-#| "Start a program, or open a document in the program normally used for "
-#| "files\n"
-#| "with that suffix.\n"
-#| "Usage:\n"
-#| "start [options] program_filename [...]\n"
-#| "start [options] document_filename\n"
-#| "\n"
-#| "Options:\n"
-#| "\"title\"        Specifies the title of the child windows.\n"
-#| "/d directory   Start the program in the specified directory.\n"
-#| "/b             Don't create a new console for the program.\n"
-#| "/i             Start the program with fresh environment variables.\n"
-#| "/min           Start the program minimized.\n"
-#| "/max           Start the program maximized.\n"
-#| "/low           Start the program in the idle priority class.\n"
-#| "/normal        Start the program in the normal priority class.\n"
-#| "/high          Start the program in the high priority class.\n"
-#| "/realtime      Start the program in the realtime priority class.\n"
-#| "/abovenormal   Start the program in the abovenormal priority class.\n"
-#| "/belownormal   Start the program in the belownormal priority class.\n"
-#| "/node n        Start the program on the specified NUMA node.\n"
-#| "/affinity mask Start the program with the specified affinity mask.\n"
-#| "/wait          Wait for the started program to finish, then exit with "
-#| "its\n"
-#| "exit code.\n"
-#| "/unix          Use a Unix filename and start the file like Windows\n"
-#| "Explorer.\n"
-#| "/ProgIDOpen    Open a document using the specified progID.\n"
-#| "/?             Display this help and exit.\n"
 msgid ""
 "Start a program, or open a document in the program normally used for files\n"
 "with that suffix.\n"
@@ -16777,6 +16599,8 @@ msgstr ""
 "/wait          Подождать завершения программы и вернуть её код возврата.\n"
 "/unix          Использовать Unix-имя файла и запустить как Windows\n"
 "               Explorer.\n"
+"/exec          Выполнить указанный файл (для внутреннего использования в "
+"Wine).\n"
 "/ProgIDOpen    Открывает документ с помощью указанного progID.\n"
 "/?             Показать эту справку и выйти.\n"
 
@@ -19271,7 +19095,7 @@ msgid ""
 "\n"
 "Syntax:\n"
 "XCOPY source [destination] [/I] [/S] [/Q] [/F] [/L] [/W] [/T] [/N] [/U]\n"
-"\t     [/R] [/H] [/C] [/P] [/A] [/M] [/E] [/D] [/Y] [/-Y]\n"
+"\t     [/R] [/H] [/C] [/P] [/A] [/M] [/E] [/D] [/Y] [/-Y] [/K]\n"
 "\n"
 "Where:\n"
 "\n"
@@ -19305,7 +19129,7 @@ msgstr ""
 "\n"
 "Синтаксис:\n"
 "XCOPY источник [назначение] [/I] [/S] [/Q] [/F] [/L] [/W] [/T] [/N] [/U]\n"
-"\t     [/R] [/H] [/C] [/P] [/A] [/M] [/E] [/D] [/Y] [/-Y]\n"
+"\t     [/R] [/H] [/C] [/P] [/A] [/M] [/E] [/D] [/Y] [/-Y] [/K]\n"
 "\n"
 "Где:\n"
 "\n"

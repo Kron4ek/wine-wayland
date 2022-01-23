@@ -2727,8 +2727,8 @@ BOOL WINAPI DECLSPEC_HOTPATCH Internal_EnumCalendarInfo( CALINFO_ENUMPROCW proc,
                                                          BOOL exex, LPARAM lparam )
 {
     WCHAR buffer[256];
-    DWORD optional = 0;
-    INT ret;
+    CALID calendars[2] = { id };
+    INT ret, i;
 
     if (!proc)
     {
@@ -2739,13 +2739,14 @@ BOOL WINAPI DECLSPEC_HOTPATCH Internal_EnumCalendarInfo( CALINFO_ENUMPROCW proc,
     if (id == ENUM_ALL_CALENDARS)
     {
         if (!GetLocaleInfoW( lcid, LOCALE_ICALENDARTYPE | LOCALE_RETURN_NUMBER,
-                             (WCHAR *)&id, sizeof(id) / sizeof(WCHAR) )) return FALSE;
+                             (WCHAR *)&calendars[0], sizeof(calendars[0]) / sizeof(WCHAR) )) return FALSE;
         if (!GetLocaleInfoW( lcid, LOCALE_IOPTIONALCALENDAR | LOCALE_RETURN_NUMBER,
-                             (WCHAR *)&optional, sizeof(optional) / sizeof(WCHAR) )) optional = 0;
+                             (WCHAR *)&calendars[1], sizeof(calendars[1]) / sizeof(WCHAR) )) calendars[1] = 0;
     }
 
-    for (;;)
+    for (i = 0; i < ARRAY_SIZE(calendars) && calendars[i]; i++)
     {
+        id = calendars[i];
         if (type & CAL_RETURN_NUMBER)
             ret = GetCalendarInfoW( lcid, id, type, NULL, 0, (LPDWORD)buffer );
         else if (unicode)
@@ -2764,8 +2765,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH Internal_EnumCalendarInfo( CALINFO_ENUMPROCW proc,
             else ret = proc( buffer );
         }
         if (!ret) break;
-        if (!optional) break;
-        id = optional;
     }
     return TRUE;
 }
@@ -3728,7 +3727,7 @@ static const WCHAR *get_message( DWORD flags, const void *src, UINT id, UINT lan
  *	FormatMessageA   (kernelbase.@)
  */
 DWORD WINAPI DECLSPEC_HOTPATCH FormatMessageA( DWORD flags, const void *source, DWORD msgid, DWORD langid,
-                                               char *buffer, DWORD size, __ms_va_list *args )
+                                               char *buffer, DWORD size, va_list *args )
 {
     DWORD ret = 0;
     ULONG len, retsize = 0;
@@ -3811,7 +3810,7 @@ done:
  *	FormatMessageW   (kernelbase.@)
  */
 DWORD WINAPI DECLSPEC_HOTPATCH FormatMessageW( DWORD flags, const void *source, DWORD msgid, DWORD langid,
-                                               WCHAR *buffer, DWORD size, __ms_va_list *args )
+                                               WCHAR *buffer, DWORD size, va_list *args )
 {
     ULONG retsize = 0;
     ULONG width = (flags & FORMAT_MESSAGE_MAX_WIDTH_MASK);
@@ -3905,7 +3904,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetCPInfo( UINT codepage, CPINFO *cpinfo )
     case CP_UTF8:
         cpinfo->DefaultChar[0] = 0x3f;
         cpinfo->DefaultChar[1] = 0;
-        cpinfo->LeadByte[0] = cpinfo->LeadByte[1] = 0;
+        memset( cpinfo->LeadByte, 0, sizeof(cpinfo->LeadByte) );
         cpinfo->MaxCharSize = (codepage == CP_UTF7) ? 5 : 4;
         break;
     default:
@@ -5579,9 +5578,6 @@ INT WINAPI DECLSPEC_HOTPATCH MultiByteToWideChar( UINT codepage, DWORD flags, co
         if (unix_cp == CP_UTF8)
         {
             ret = mbstowcs_utf8( flags, src, srclen, dst, dstlen );
-#ifdef __APPLE__  /* work around broken Mac OS X filesystem that enforces decomposed Unicode */
-            if (ret && dstlen) RtlNormalizeString( NormalizationC, dst, ret, dst, &ret );
-#endif
             break;
         }
         codepage = unix_cp;

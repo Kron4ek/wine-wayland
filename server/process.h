@@ -53,6 +53,7 @@ struct process
     process_id_t         group_id;        /* group id of the process */
     unsigned int         session_id;      /* session id */
     struct timeout_user *sigkill_timeout; /* timeout for final SIGKILL */
+    timeout_t            sigkill_delay;   /* delay before final SIGKILL */
     unsigned short       machine;         /* client machine type */
     int                  unix_pid;        /* Unix pid for final SIGKILL */
     int                  exit_code;       /* process exit code */
@@ -88,6 +89,7 @@ struct process
     const struct rawinput_device *rawinput_mouse; /* rawinput mouse device, if any */
     const struct rawinput_device *rawinput_kbd;   /* rawinput keyboard device, if any */
     struct list          kernel_object;   /* list of kernel object pointers */
+    pe_image_info_t      image_info;      /* main exe image info */
     int                  esync_fd;        /* esync file descriptor (signaled on exit) */
     unsigned int         fsync_idx;
 };

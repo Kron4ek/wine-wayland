@@ -1232,45 +1232,45 @@ static BOOL try_dsym(struct process *pcs, const WCHAR* path, struct macho_file_m
     return FALSE;
 }
 
-static const WCHAR dsym_subpath[] = {'\\','C','o','n','t','e','n','t','s',
-                                     '\\','R','e','s','o','u','r','c','e','s',
-                                     '\\','D','W','A','R','F','\\',0};
+static const WCHAR dsym_subpath[] = L"'\\Contents\\Resources\\DWARF\\";
 
 static WCHAR *query_dsym(const GUID *uuid, const WCHAR *filename)
 {
-    MOUNTMGR_TARGET_NAME *query;
-    WCHAR *ret = NULL;
-    char buf[1024];
+    WCHAR *dos_name = NULL, *ret = NULL;
+    ULONG size = 1024;
     HANDLE mgr;
-    BOOL res;
 
     mgr = CreateFileW(MOUNTMGR_DOS_DEVICE_NAME, GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL,
                       OPEN_EXISTING, 0, 0);
     if (mgr == INVALID_HANDLE_VALUE) return NULL;
 
-    query = (void *)buf;
-    res = DeviceIoControl( mgr, IOCTL_MOUNTMGR_QUERY_SYMBOL_FILE, (void*)uuid, sizeof(*uuid), query, sizeof(buf), NULL, NULL );
-    if (!res && GetLastError() == ERROR_MORE_DATA)
+    for (;;)
     {
-        size_t size = FIELD_OFFSET(MOUNTMGR_TARGET_NAME, DeviceName[query->DeviceNameLength]);
-        query = HeapAlloc(GetProcessHeap(), 0, size);
-        if (query)
-            res = DeviceIoControl( mgr, IOCTL_MOUNTMGR_QUERY_SYMBOL_FILE, (void*)uuid, sizeof(*uuid), query, size, NULL, NULL );
+        char *buf = malloc( size );
+        if (DeviceIoControl( mgr, IOCTL_MOUNTMGR_QUERY_SYMBOL_FILE, (void*)uuid, sizeof(*uuid),
+                             buf, size, NULL, NULL ))
+        {
+            dos_name = wine_get_dos_file_name( buf );
+            free( buf );
+            break;
+        }
+        free( buf );
+        if (GetLastError() != ERROR_MORE_DATA) break;
+        size *= 2;
     }
+
     CloseHandle(mgr);
 
-    if (res && (ret = HeapAlloc(GetProcessHeap(), 0,
-                                query->DeviceNameLength + sizeof(dsym_subpath) + lstrlenW(filename) * sizeof(WCHAR))))
-    {
-        WCHAR *p = ret;
-        memcpy(p, query->DeviceName, query->DeviceNameLength);
-        p += query->DeviceNameLength / sizeof(WCHAR);
-        memcpy(p, dsym_subpath, sizeof(dsym_subpath));
-        p += ARRAY_SIZE(dsym_subpath) - 1;
-        lstrcpyW(p, filename);
-    }
+    if (!dos_name) return NULL;
 
-    if (query != (void *)buf) HeapFree(GetProcessHeap(), 0, query);
+    if ((ret = HeapAlloc( GetProcessHeap(), 0,
+                          sizeof(dsym_subpath) + (lstrlenW(dos_name) + lstrlenW(filename)) * sizeof(WCHAR))))
+    {
+        wcscpy( ret, dos_name );
+        wcscat( ret, dsym_subpath );
+        wcscat( ret, filename );
+    }
+    HeapFree( GetProcessHeap(), 0, dos_name );
     return ret;
 }
 
@@ -1287,8 +1287,6 @@ static WCHAR *query_dsym(const GUID *uuid, const WCHAR *filename)
  */
 static void find_and_map_dsym(struct process *pcs, struct module* module)
 {
-    static const WCHAR dot_dsym[] = {'.','d','S','Y','M',0};
-    static const WCHAR dot_dwarf[] = {'.','d','w','a','r','f',0};
     struct macho_file_map* fmap = &module->format_info[DFI_MACHO]->u.macho_info->file_map.u.macho;
     const WCHAR* p;
     size_t len;
@@ -1300,19 +1298,19 @@ static void find_and_map_dsym(struct process *pcs, struct module* module)
         return;
 
     p = file_name(module->module.LoadedImageName);
-    len = lstrlenW(module->module.LoadedImageName) + lstrlenW(dot_dsym) + lstrlenW(dsym_subpath) + lstrlenW(p) + 1;
+    len = lstrlenW(module->module.LoadedImageName) + lstrlenW(L".dSYM") + lstrlenW(dsym_subpath) + lstrlenW(p) + 1;
     path = HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR));
     if (!path)
         return;
     lstrcpyW(path, module->module.LoadedImageName);
-    lstrcatW(path, dot_dsym);
+    lstrcatW(path, L".dSYM");
     lstrcatW(path, dsym_subpath);
     lstrcatW(path, p);
 
     if (try_dsym(pcs, path, fmap))
         goto found;
 
-    lstrcpyW(path + lstrlenW(module->module.LoadedImageName), dot_dwarf);
+    lstrcpyW(path + lstrlenW(module->module.LoadedImageName), L".dwarf");
 
     if (try_dsym(pcs, path, fmap))
         goto found;
@@ -1499,10 +1497,6 @@ static BOOL macho_load_file(struct process* pcs, const WCHAR* filename,
 
         macho_module_info->file_map = fmap;
         reset_file_map(&fmap);
-        if (dbghelp_options & SYMOPT_DEFERRED_LOADS)
-            macho_info->module->module.SymType = SymDeferred;
-        else if (!macho_load_debug_info(pcs, macho_info->module))
-            ret = FALSE;
 
         macho_info->module->format_info[DFI_MACHO]->u.macho_info->in_use = 1;
         macho_info->module->format_info[DFI_MACHO]->u.macho_info->is_loader = 0;
@@ -1552,7 +1546,6 @@ static BOOL macho_search_and_load_file(struct process* pcs, const WCHAR* filenam
 {
     BOOL                ret = FALSE;
     struct module*      module;
-    static const WCHAR  S_libstdcPPW[] = {'l','i','b','s','t','d','c','+','+','\0'};
     const WCHAR*        p;
     struct macho_load_params load_params;
 
@@ -1567,7 +1560,7 @@ static BOOL macho_search_and_load_file(struct process* pcs, const WCHAR* filenam
         return module->module.SymType;
     }
 
-    if (wcsstr(filename, S_libstdcPPW)) return FALSE; /* We know we can't do it */
+    if (wcsstr(filename, L"libstdc++")) return FALSE; /* We know we can't do it */
 
     load_params.process    = pcs;
     load_params.load_addr  = load_addr;

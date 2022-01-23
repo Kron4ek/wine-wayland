@@ -21,10 +21,10 @@
  * the other drivers. */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <dlfcn.h>
 
 #include "windef.h"
 #include "winbase.h"
@@ -57,12 +57,16 @@ static XContext vulkan_hwnd_context;
 
 #define VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR 1000004000
 
+static struct list surface_list = LIST_INIT( surface_list );
+
 struct wine_vk_surface
 {
     LONG ref;
+    struct list entry;
     Window window;
     VkSurfaceKHR surface; /* native surface */
     HWND hwnd;
+    DWORD hwnd_thread_id;
 };
 
 typedef struct VkXlibSurfaceCreateInfoKHR
@@ -74,7 +78,6 @@ typedef struct VkXlibSurfaceCreateInfoKHR
     Window window;
 } VkXlibSurfaceCreateInfoKHR;
 
-static VkResult (*pvkAcquireNextImageKHR)(VkDevice, VkSwapchainKHR, uint64_t, VkSemaphore, VkFence, uint32_t *);
 static VkResult (*pvkCreateInstance)(const VkInstanceCreateInfo *, const VkAllocationCallbacks *, VkInstance *);
 static VkResult (*pvkCreateSwapchainKHR)(VkDevice, const VkSwapchainCreateInfoKHR *, const VkAllocationCallbacks *, VkSwapchainKHR *);
 static VkResult (*pvkCreateXlibSurfaceKHR)(VkInstance, const VkXlibSurfaceCreateInfoKHR *, const VkAllocationCallbacks *, VkSurfaceKHR *);
@@ -116,7 +119,6 @@ static BOOL WINAPI wine_vk_init(INIT_ONCE *once, void *param, void **context)
 
 #define LOAD_FUNCPTR(f) if (!(p##f = dlsym(vulkan_handle, #f))) goto fail
 #define LOAD_OPTIONAL_FUNCPTR(f) p##f = dlsym(vulkan_handle, #f)
-    LOAD_FUNCPTR(vkAcquireNextImageKHR);
     LOAD_FUNCPTR(vkCreateInstance);
     LOAD_FUNCPTR(vkCreateSwapchainKHR);
     LOAD_FUNCPTR(vkCreateXlibSurfaceKHR);
@@ -209,6 +211,13 @@ static void wine_vk_surface_release(struct wine_vk_surface *surface)
     if (InterlockedDecrement(&surface->ref))
         return;
 
+    if (surface->entry.next)
+    {
+        EnterCriticalSection(&context_section);
+        list_remove(&surface->entry);
+        LeaveCriticalSection(&context_section);
+    }
+
     if (surface->window)
         XDestroyWindow(gdi_display, surface->window);
 
@@ -221,25 +230,31 @@ void wine_vk_surface_destroy(HWND hwnd)
     EnterCriticalSection(&context_section);
     if (!XFindContext(gdi_display, (XID)hwnd, vulkan_hwnd_context, (char **)&surface))
     {
+        surface->hwnd_thread_id = 0;
+        surface->hwnd = NULL;
         wine_vk_surface_release(surface);
     }
     XDeleteContext(gdi_display, (XID)hwnd, vulkan_hwnd_context);
     LeaveCriticalSection(&context_section);
 }
 
-static VkResult X11DRV_vkAcquireNextImageKHR(VkDevice device,
-        VkSwapchainKHR swapchain, uint64_t timeout, VkSemaphore semaphore,
-        VkFence fence, uint32_t *image_index)
+void vulkan_thread_detach(void)
 {
-    return pvkAcquireNextImageKHR(device, swapchain, timeout, semaphore, fence, image_index);
-}
+    struct wine_vk_surface *surface, *next;
+    DWORD thread_id = GetCurrentThreadId();
 
-static VkResult X11DRV_vkAcquireNextImage2KHR(VkDevice device,
-        const VkAcquireNextImageInfoKHR *acquire_info, uint32_t *image_index)
-{
-    static int once;
-    if (!once++) FIXME("Emulating vkGetPhysicalDeviceSurfaceCapabilities2KHR with vkGetPhysicalDeviceSurfaceCapabilitiesKHR, pNext is ignored.\n");
-    return X11DRV_vkAcquireNextImageKHR(device, acquire_info->swapchain, acquire_info->timeout, acquire_info->semaphore, acquire_info->fence, image_index);
+    EnterCriticalSection(&context_section);
+    LIST_FOR_EACH_ENTRY_SAFE(surface, next, &surface_list, struct wine_vk_surface, entry)
+    {
+        if (surface->hwnd_thread_id != thread_id)
+            continue;
+
+        TRACE("Detaching surface %p, hwnd %p.\n", surface, surface->hwnd);
+        XReparentWindow(gdi_display, surface->window, get_dummy_parent(), 0, 0);
+        XSync(gdi_display, False);
+        wine_vk_surface_destroy(surface->hwnd);
+    }
+    LeaveCriticalSection(&context_section);
 }
 
 static VkResult X11DRV_vkCreateInstance(const VkInstanceCreateInfo *create_info,
@@ -295,7 +310,7 @@ static VkResult X11DRV_vkCreateWin32SurfaceKHR(VkInstance instance,
 {
     VkResult res;
     VkXlibSurfaceCreateInfoKHR create_info_host;
-    struct wine_vk_surface *x11_surface, *prev;
+    struct wine_vk_surface *x11_surface;
 
     TRACE("%p %p %p %p\n", instance, create_info, allocator, surface);
 
@@ -315,8 +330,15 @@ static VkResult X11DRV_vkCreateWin32SurfaceKHR(VkInstance instance,
 
     x11_surface->ref = 1;
     x11_surface->hwnd = create_info->hwnd;
-    x11_surface->window = x11_surface->hwnd ? create_client_window(create_info->hwnd, &default_visual)
-                                            : create_dummy_client_window();
+    if (x11_surface->hwnd)
+    {
+        x11_surface->window = create_client_window(create_info->hwnd, &default_visual);
+        x11_surface->hwnd_thread_id = GetWindowThreadProcessId(x11_surface->hwnd, NULL);
+    }
+    else
+    {
+        x11_surface->window = create_dummy_client_window();
+    }
 
     if (!x11_surface->window)
     {
@@ -340,16 +362,14 @@ static VkResult X11DRV_vkCreateWin32SurfaceKHR(VkInstance instance,
         goto err;
     }
 
+    EnterCriticalSection(&context_section);
     if (x11_surface->hwnd)
     {
-        EnterCriticalSection(&context_section);
-        if (!XFindContext(gdi_display, (XID)create_info->hwnd, vulkan_hwnd_context, (char **)&prev))
-        {
-            wine_vk_surface_release(prev);
-        }
+        wine_vk_surface_destroy( x11_surface->hwnd );
         XSaveContext(gdi_display, (XID)create_info->hwnd, vulkan_hwnd_context, (char *)wine_vk_surface_grab(x11_surface));
-        LeaveCriticalSection(&context_section);
     }
+    list_add_tail(&surface_list, &x11_surface->entry);
+    LeaveCriticalSection(&context_section);
 
     *surface = (uintptr_t)x11_surface;
 
@@ -667,8 +687,6 @@ static VkSurfaceKHR X11DRV_wine_get_native_surface(VkSurfaceKHR surface)
 
 static const struct vulkan_funcs vulkan_funcs =
 {
-    X11DRV_vkAcquireNextImage2KHR,
-    X11DRV_vkAcquireNextImageKHR,
     X11DRV_vkCreateInstance,
     X11DRV_vkCreateSwapchainKHR,
     X11DRV_vkCreateWin32SurfaceKHR,
@@ -729,6 +747,10 @@ const struct vulkan_funcs *get_vulkan_driver(UINT version)
 }
 
 void wine_vk_surface_destroy(HWND hwnd)
+{
+}
+
+void vulkan_thread_detach(void)
 {
 }
 

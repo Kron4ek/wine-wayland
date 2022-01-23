@@ -81,10 +81,10 @@ static int WINAPIV vsprintf_wrapper(unsigned __int64 options, char *str,
                                     size_t len, const char *format, ...)
 {
     int ret;
-    __ms_va_list valist;
-    __ms_va_start(valist, format);
+    va_list valist;
+    va_start(valist, format);
     ret = __stdio_common_vsprintf(options, str, len, format, NULL, valist);
-    __ms_va_end(valist);
+    va_end(valist);
     return ret;
 }
 
@@ -165,10 +165,10 @@ static int WINAPIV vswprintf_wrapper(unsigned __int64 options, wchar_t *str,
                                      size_t len, const wchar_t *format, ...)
 {
     int ret;
-    __ms_va_list valist;
-    __ms_va_start(valist, format);
+    va_list valist;
+    va_start(valist, format);
     ret = __stdio_common_vswprintf(options, str, len, format, NULL, valist);
-    __ms_va_end(valist);
+    va_end(valist);
     return ret;
 }
 
@@ -259,10 +259,10 @@ static int WINAPIV vfprintf_wrapper(FILE *file,
                                     const char *format, ...)
 {
     int ret;
-    __ms_va_list valist;
-    __ms_va_start(valist, format);
+    va_list valist;
+    va_start(valist, format);
     ret = __stdio_common_vfprintf(0, file, format, NULL, valist);
-    __ms_va_end(valist);
+    va_end(valist);
     return ret;
 }
 
@@ -332,10 +332,10 @@ static int WINAPIV vfwprintf_wrapper(FILE *file,
                                      const wchar_t *format, ...)
 {
     int ret;
-    __ms_va_list valist;
-    __ms_va_start(valist, format);
+    va_list valist;
+    va_start(valist, format);
     ret = __stdio_common_vfwprintf(0, file, format, NULL, valist);
-    __ms_va_end(valist);
+    va_end(valist);
     return ret;
 }
 
@@ -429,10 +429,10 @@ static int WINAPIV _vsnprintf_s_wrapper(char *str, size_t sizeOfBuffer,
                                         size_t count, const char *format, ...)
 {
     int ret;
-    __ms_va_list valist;
-    __ms_va_start(valist, format);
+    va_list valist;
+    va_start(valist, format);
     ret = __stdio_common_vsnprintf_s(0, str, sizeOfBuffer, count, format, NULL, valist);
-    __ms_va_end(valist);
+    va_end(valist);
     return ret;
 }
 
@@ -481,10 +481,10 @@ static int WINAPIV _vsnwprintf_s_wrapper(WCHAR *str, size_t sizeOfBuffer,
                                         size_t count, const WCHAR *format, ...)
 {
     int ret;
-    __ms_va_list valist;
-    __ms_va_start(valist, format);
+    va_list valist;
+    va_start(valist, format);
     ret = __stdio_common_vsnwprintf_s(0, str, sizeOfBuffer, count, format, NULL, valist);
-    __ms_va_end(valist);
+    va_end(valist);
     return ret;
 }
 
@@ -845,6 +845,24 @@ static void test_printf_fp(void)
     }
 }
 
+static void test_printf_width_specification(void)
+{
+    int r;
+    char buffer[20];
+
+    r = vsprintf_wrapper(0, buffer, sizeof(buffer), "%0*2d", 1, 3);
+    ok(r == 2, "r = %d\n", r);
+    ok(!strcmp(buffer, "03"), "buffer wrong, got=%s\n", buffer);
+
+    r = vsprintf_wrapper(0, buffer, sizeof(buffer), "%*0d", 1, 2);
+    ok(r == 1, "r = %d\n", r);
+    ok(!strcmp(buffer, "2"), "buffer wrong, got=%s\n", buffer);
+
+    r = vsprintf_wrapper(0, buffer, sizeof(buffer), "% *2d", 0, 7);
+    ok(r == 2, "r = %d\n", r);
+    ok(!strcmp(buffer, " 7"), "buffer wrong, got=%s\n", buffer);
+}
+
 START_TEST(printf)
 {
     ok(_set_invalid_parameter_handler(test_invalid_parameter_handler) == NULL,
@@ -862,4 +880,5 @@ START_TEST(printf)
     test_printf_c99();
     test_printf_natural_string();
     test_printf_fp();
+    test_printf_width_specification();
 }

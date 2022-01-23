@@ -23,16 +23,16 @@
 #endif
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -341,5 +341,16 @@ NTSTATUS WINAPI NtTraceControl( ULONG code, void *inbuf, ULONG inbuf_len,
 {
     FIXME( "code %u, inbuf %p, inbuf_len %u, outbuf %p, outbuf_len %u, size %p\n", code, inbuf, inbuf_len,
            outbuf, outbuf_len, size );
+    return STATUS_SUCCESS;
+}
+
+
+/***********************************************************************
+ *              NtSetDebugFilterState  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtSetDebugFilterState( ULONG component_id, ULONG level, BOOLEAN state )
+{
+    FIXME( "component_id %#x, level %u, state %#x stub.\n", component_id, level, state );
+
     return STATUS_SUCCESS;
 }

@@ -1673,6 +1673,22 @@ static void _test_anchor_hostname(unsigned line, IUnknown *unk, const WCHAR *hos
     SysFreeString(str);
 }
 
+#define test_anchor_port(a,p) _test_anchor_port(__LINE__,a,p)
+static void _test_anchor_port(unsigned line, IUnknown *unk, const WCHAR *port)
+{
+    IHTMLAnchorElement *anchor = _get_anchor_iface(line, unk);
+    BSTR str;
+    HRESULT hres;
+
+    hres = IHTMLAnchorElement_get_port(anchor, &str);
+    ok_(__FILE__,line)(hres == S_OK, "get_port failed: %08x\n", hres);
+    if(port)
+        ok_(__FILE__,line)(!lstrcmpW(str, port), "port = %s, expected %s\n", wine_dbgstr_w(str), wine_dbgstr_w(port));
+    else
+        ok_(__FILE__,line)(str == NULL, "port = %s, expected NULL\n", wine_dbgstr_w(str));
+    SysFreeString(str);
+}
+
 #define test_anchor_search(a,h,n) _test_anchor_search(__LINE__,a,h,n)
 static void _test_anchor_search(unsigned line, IUnknown *elem, const WCHAR *search, BOOL allowbroken)
 {
@@ -2174,10 +2190,12 @@ static void _set_object_name(unsigned line, IHTMLElement *elem, const WCHAR *nam
 static IHTMLOptionElement *_create_option_elem(unsigned line, IHTMLDocument2 *doc,
         const WCHAR *txt, const WCHAR *val)
 {
+    VARIANT text, value, empty, option_var, args[2];
+    DISPPARAMS dp = { args, NULL, 2, 0 };
     IHTMLOptionElementFactory *factory;
     IHTMLOptionElement *option;
     IHTMLWindow2 *window;
-    VARIANT text, value, empty;
+    IDispatch *disp;
     HRESULT hres;
 
     hres = IHTMLDocument2_get_parentWindow(doc, &window);
@@ -2194,6 +2212,24 @@ static IHTMLOptionElement *_create_option_elem(unsigned line, IHTMLDocument2 *do
     V_VT(&value) = VT_BSTR;
     V_BSTR(&value) = SysAllocString(val);
     V_VT(&empty) = VT_EMPTY;
+
+    hres = IHTMLOptionElementFactory_QueryInterface(factory, &IID_IDispatch, (void**)&disp);
+    ok_(__FILE__,line)(hres == S_OK, "Could not get IDispatch: %08x\n", hres);
+
+    args[1] = text;
+    args[0] = value;
+    hres = IDispatch_Invoke(disp, DISPID_VALUE, &IID_NULL, 0, DISPATCH_CONSTRUCT, &dp, &option_var, NULL, NULL);
+    IDispatch_Release(disp);
+    ok_(__FILE__,line)(hres == S_OK, "Invoke(DISPID_VALUE) returned: %08x\n", hres);
+    ok_(__FILE__,line)(V_VT(&option_var) == VT_DISPATCH, "VT(option_var) = %d\n", V_VT(&option_var));
+    hres = IDispatch_QueryInterface(V_DISPATCH(&option_var), &IID_IHTMLOptionElement, (void**)&option);
+    ok_(__FILE__,line)(hres == S_OK, "Could not get IHTMLOptionElement: %08x\n", hres);
+    VariantClear(&option_var);
+
+    _test_option_text(line, option, txt);
+    _test_option_value(line, option, val);
+    _test_option_selected(line, option, VARIANT_FALSE);
+    IHTMLOptionElement_Release(option);
 
     hres = IHTMLOptionElementFactory_create(factory, text, value, empty, empty, &option);
     ok_(__FILE__,line) (hres == S_OK, "create failed: %08x\n", hres);
@@ -5999,7 +6035,6 @@ static void test_location(IHTMLDocument2 *doc)
     IHTMLLocation *location, *location2;
     IHTMLWindow2 *window;
     BSTR str;
-    ULONG ref;
     HRESULT hres;
 
     hres = IHTMLDocument2_get_location(doc, &location);
@@ -6035,8 +6070,7 @@ static void test_location(IHTMLDocument2 *doc)
     ok(!lstrcmpW(str, L"about:blank"), "unexpected href %s\n", wine_dbgstr_w(str));
     SysFreeString(str);
 
-    ref = IHTMLLocation_Release(location);
-    ok(!ref, "location should be destroyed here\n");
+    IHTMLLocation_Release(location);
 }
 
 static void test_plugins_col(IHTMLDocument2 *doc)
@@ -9203,11 +9237,13 @@ static void test_elems(IHTMLDocument2 *doc)
     elem = get_elem_by_id(doc, L"a", TRUE);
     if(elem) {
         test_anchor_href((IUnknown*)elem, L"http://test/");
+        test_anchor_port((IUnknown*)elem, L"80");
 
         /* Change the href */
-        test_anchor_put_href((IUnknown*)elem, L"http://test1/");
-        test_anchor_href((IUnknown*)elem, L"http://test1/");
+        test_anchor_put_href((IUnknown*)elem, L"http://test1:8080/");
+        test_anchor_href((IUnknown*)elem, L"http://test1:8080/");
         test_anchor_hostname((IUnknown*)elem, L"test1");
+        test_anchor_port((IUnknown*)elem, L"8080");
 
         /* Restore the href */
         test_anchor_put_href((IUnknown*)elem, L"http://test/");

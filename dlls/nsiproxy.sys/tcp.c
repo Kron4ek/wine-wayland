@@ -25,25 +25,13 @@
 
 #include "config.h"
 #include <stdarg.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <dirent.h>
+#include <unistd.h>
 
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
-#endif
-
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-
-#ifdef HAVE_DIRENT_H
-#include <dirent.h>
-#endif
-
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
 #endif
 
 #ifdef HAVE_SYS_SOCKETVAR_H
@@ -247,7 +235,7 @@ static inline MIB_TCP_STATE tcp_state_to_mib_state( int state )
 
 struct ipv6_addr_scope *get_ipv6_addr_scope_table( unsigned int *size )
 {
-    struct ipv6_addr_scope *table = NULL;
+    struct ipv6_addr_scope *table = NULL, *new_table;
     unsigned int table_size = 0, num = 0;
 
 #ifdef __linux__
@@ -272,11 +260,12 @@ struct ipv6_addr_scope *get_ipv6_addr_scope_table( unsigned int *size )
             {
                 if (!table_size) table_size = 4;
                 else table_size *= 2;
-                if (!(table = realloc( table, table_size * sizeof(table[0]) )))
+                if (!(new_table = realloc( table, table_size * sizeof(table[0]) )))
                 {
                     fclose( fp );
                     goto failed;
                 }
+                table = new_table;
             }
 
             entry = table + num - 1;
@@ -304,11 +293,12 @@ struct ipv6_addr_scope *get_ipv6_addr_scope_table( unsigned int *size )
             {
                 if (!table_size) table_size = 4;
                 else table_size *= 2;
-                if (!(table = realloc( table, table_size * sizeof(table[0]) )))
+                if (!(new_table = realloc( table, table_size * sizeof(table[0]) )))
                 {
                     freeifaddrs( addrs );
                     goto failed;
                 }
+                table = new_table;
             }
 
             sin6 = (struct sockaddr_in6 *)cur->ifa_addr;

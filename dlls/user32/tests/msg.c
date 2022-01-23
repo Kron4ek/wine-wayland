@@ -106,6 +106,7 @@ typedef struct
 } MEASURE_ITEM_STRUCT;
 
 static BOOL test_DestroyWindow_flag;
+static BOOL test_context_menu;
 static HWINEVENTHOOK hEvent_hook;
 static HHOOK hKBD_hook;
 static HHOOK hCBT_hook;
@@ -9984,7 +9985,7 @@ static LRESULT MsgCheckProc (BOOL unicode, HWND hwnd, UINT message,
         return 0;
     }
 
-    if (message == WM_CONTEXTMENU)
+    if (!test_context_menu && message == WM_CONTEXTMENU)
     {
         /* don't create context menu */
         return 0;
@@ -10110,7 +10111,7 @@ static LRESULT WINAPI ParentMsgCheckProcA(HWND hwnd, UINT message, WPARAM wParam
     return message == WM_COMPAREITEM ? -1 : ret;
 }
 
-static INT_PTR CALLBACK StopQuitMsgCheckProcA(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
+static LRESULT CALLBACK StopQuitMsgCheckProcA(HWND hwnd, UINT message, WPARAM wp, LPARAM lp)
 {
     if (message == WM_CREATE)
         PostMessageA(hwnd, WM_CLOSE, 0, 0);
@@ -14381,7 +14382,7 @@ static void test_dialog_messages(void)
     cls.lpszClassName = "MyDialogClass";
     cls.hInstance = GetModuleHandleA(NULL);
     /* need a cast since a dlgproc is used as a wndproc */
-    cls.lpfnWndProc = test_dlg_proc;
+    cls.lpfnWndProc = (WNDPROC)test_dlg_proc;
     if (!RegisterClassA(&cls)) assert(0);
 
     SetFocus(0);
@@ -14534,7 +14535,7 @@ static void test_EndDialog(void)
     ok(GetClassInfoA(0, "#32770", &cls), "GetClassInfo failed\n");
     cls.lpszClassName = "MyDialogClass";
     cls.hInstance = GetModuleHandleA(NULL);
-    cls.lpfnWndProc = test_dlg_proc;
+    cls.lpfnWndProc = (WNDPROC)test_dlg_proc;
     if (!RegisterClassA(&cls)) assert(0);
 
     flush_sequence();
@@ -16148,6 +16149,13 @@ static const struct message WmRestoreActiveMinimizedOverlappedSeq[] =
     { 0 }
 };
 
+static struct message WmContextMenuSeq[] = {
+    { WM_CONTEXTMENU, sent|wparam, 0 }, /* wparams set in the code */
+    { WM_CONTEXTMENU, sent|wparam|defwinproc, 0 },
+    { WM_CONTEXTMENU, sent|wparam|defwinproc, 0 },
+    { 0 }
+};
+
 struct rbuttonup_thread_data
 {
     HWND hwnd;
@@ -16169,7 +16177,7 @@ static DWORD CALLBACK post_rbuttonup_msg( void *arg )
 
 static void test_defwinproc(void)
 {
-    HWND hwnd;
+    HWND hwnd, child[3];
     MSG msg;
     BOOL gotwmquit = FALSE;
     POINT pos;
@@ -16218,6 +16226,23 @@ static void test_defwinproc(void)
     DefWindowProcA(hwnd, WM_SYSCOMMAND, SC_RESTORE, 0);
     flush_events();
     ok_sequence(WmRestoreActiveMinimizedOverlappedSeq, "DefWindowProcA(SC_RESTORE):active minimized overlapped", TRUE);
+
+    child[0] = CreateWindowExA(0, "TestWindowClass", "1st child",
+                               WS_VISIBLE | WS_CHILD, 0,0,500,100, hwnd, 0, 0, NULL);
+    child[1] = CreateWindowExA(0, "TestWindowClass", "2nd child",
+                               WS_VISIBLE | WS_CHILD, 0,0,500,100, child[0], 0, 0, NULL);
+    child[2] = CreateWindowExA(0, "TestWindowClass", "3rd child",
+                               WS_VISIBLE | WS_CHILD, 0,0,500,100, child[1], 0, 0, NULL);
+    flush_events();
+    flush_sequence();
+    test_context_menu = TRUE;
+    DefWindowProcA(child[2], WM_CONTEXTMENU, 0xcafe, 0);
+    test_context_menu = FALSE;
+    WmContextMenuSeq[0].wParam = (WPARAM)child[2];
+    WmContextMenuSeq[1].wParam = (WPARAM)child[1];
+    WmContextMenuSeq[2].wParam = (WPARAM)child[0];
+    ok_sequence(WmContextMenuSeq, "DefWindowProcA(WM_CONTEXTMENU)", FALSE);
+    DestroyWindow(child[0]);
 
     GetCursorPos(&pos);
     GetWindowRect(hwnd, &rect);
@@ -17359,6 +17384,29 @@ static const struct message WmHotkeyNew[] = {
     { WM_KEYUP, sent, 0, 0x80000001 }, /* lparam not checked so the sequence isn't a todo */
     { 0 }
 };
+static const struct message WmHotkeyPressALT[] = {
+    { WM_SYSKEYDOWN, kbd_hook|wparam|lparam, VK_LMENU, LLKHF_INJECTED|LLKHF_ALTDOWN },
+    { HCBT_KEYSKIPPED, hook|wparam|lparam|optional, VK_MENU, 0x20000001 },
+    { WM_SYSKEYDOWN, sent|wparam|lparam, VK_MENU, 0x20000001 },
+    { 0 }
+};
+static const struct message WmHotkeyPressWithALT[] = {
+    { WM_SYSKEYDOWN, kbd_hook, 0, LLKHF_INJECTED|LLKHF_ALTDOWN }, /* lparam not checked */
+    { WM_HOTKEY, sent|wparam, 6 },
+    { 0 }
+};
+static const struct message WmHotkeyReleaseWithALT[] = {
+    { WM_SYSKEYUP, kbd_hook|lparam, 0, LLKHF_INJECTED|LLKHF_UP|LLKHF_ALTDOWN },
+    { HCBT_KEYSKIPPED, hook|lparam|optional, 0, 0xa0000001 },
+    { WM_SYSKEYUP, sent|lparam, 0, 0xa0000001 },
+    { 0 }
+};
+static const struct message WmHotkeyReleaseALT[] = {
+    { WM_KEYUP, kbd_hook|wparam|lparam, VK_LMENU, LLKHF_INJECTED|LLKHF_UP },
+    { HCBT_KEYSKIPPED, hook|wparam|lparam|optional, VK_MENU, 0xc0000001 },
+    { WM_KEYUP, sent|wparam|lparam, VK_MENU, 0xc0000001 },
+    { 0 }
+};
 
 static int hotkey_letter;
 
@@ -17378,9 +17426,12 @@ static LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam
         msg.descr = "KeyboardHookProc";
         add_message(&msg);
 
-        if (wParam == WM_KEYUP || wParam == WM_KEYDOWN)
+        if (wParam == WM_KEYUP || wParam == WM_KEYDOWN ||
+            wParam == WM_SYSKEYUP || wParam == WM_SYSKEYDOWN)
         {
-            ok(kdbhookstruct->vkCode == VK_LWIN || kdbhookstruct->vkCode == hotkey_letter,
+            ok(kdbhookstruct->vkCode == VK_LWIN ||
+               kdbhookstruct->vkCode == VK_LMENU ||
+               kdbhookstruct->vkCode == hotkey_letter,
                "unexpected keycode %x\n", kdbhookstruct->vkCode);
        }
     }
@@ -17635,6 +17686,56 @@ static void test_hotkey(void)
     }
     ok_sequence(WmHotkeyReleaseLWIN, "thread hotkey release LWIN", FALSE);
 
+    /* Search for an ALT + letter combination that hasn't been registered */
+    for (hotkey_letter = 0x41; hotkey_letter <= 0x51; hotkey_letter ++)
+    {
+        SetLastError(0xdeadbeef);
+        ret = RegisterHotKey(test_window, 6, MOD_ALT, hotkey_letter);
+
+        if (ret == TRUE)
+        {
+            break;
+        }
+        else
+        {
+            ok(GetLastError() == ERROR_HOTKEY_ALREADY_REGISTERED || broken(GetLastError() == 0xdeadbeef),
+               "unexpected error %d\n", GetLastError());
+        }
+    }
+
+    if (hotkey_letter == 0x52)
+    {
+        ok(0, "Couldn't find any free ALT + letter combination\n");
+        goto end;
+    }
+
+    keybd_event(VK_LMENU, 0, 0, 0);
+    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE))
+        DispatchMessageA(&msg);
+    ok_sequence(WmHotkeyPressALT, "window hotkey press ALT", TRUE);
+
+    keybd_event(hotkey_letter, 0, 0, 0);
+    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE))
+    {
+        if (msg.message == WM_HOTKEY)
+        {
+            ok(msg.hwnd == test_window, "unexpected hwnd %p\n", msg.hwnd);
+            ok(msg.lParam == MAKELPARAM(MOD_ALT, hotkey_letter), "unexpected WM_HOTKEY lparam %lx\n", msg.lParam);
+        }
+        DispatchMessageA(&msg);
+    }
+    ok_sequence(WmHotkeyPressWithALT, "window hotkey press with ALT", FALSE);
+
+    keybd_event(hotkey_letter, 0, KEYEVENTF_KEYUP, 0);
+    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE))
+        DispatchMessageA(&msg);
+    ok_sequence(WmHotkeyReleaseWithALT, "window hotkey release with ALT", TRUE);
+
+    keybd_event(VK_LMENU, 0, KEYEVENTF_KEYUP, 0);
+    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE))
+        DispatchMessageA(&msg);
+    ok_sequence(WmHotkeyReleaseALT, "window hotkey release ALT", FALSE);
+
     /* Unregister thread hotkey */
     ret = UnregisterHotKey(NULL, 5);
     ok(ret == TRUE, "expected TRUE, got %i, err=%d\n", ret, GetLastError());
@@ -17645,6 +17746,7 @@ static void test_hotkey(void)
 end:
     UnregisterHotKey(NULL, 5);
     UnregisterHotKey(test_window, 5);
+    UnregisterHotKey(test_window, 6);
     DestroyWindow(test_window);
     flush_sequence();
 }

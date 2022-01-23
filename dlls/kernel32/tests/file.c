@@ -2709,7 +2709,7 @@ static void test_FindFirstFileA(void)
 
     /* try FindFirstFileA on "C:\foo\" */
     SetLastError( 0xdeadbeaf );
-    if (!GetTempFileNameA( buffer, "foo", 0, nonexistent ) && GetLastError() == ERROR_ACCESS_DENIED)
+    if (!GetTempFileNameA( buffer, "foo", 0, nonexistent ))
     {
         char tmp[MAX_PATH];
         GetTempPathA( sizeof(tmp), tmp );
@@ -2825,8 +2825,12 @@ static void test_FindFirstFileA(void)
     strcat(buffer2, "foo\\bar\\nul");
     handle = FindFirstFileA(buffer2, &data);
     err = GetLastError();
-    ok ( handle == INVALID_HANDLE_VALUE, "FindFirstFile on %s should fail\n", buffer2 );
-    ok ( err == ERROR_PATH_NOT_FOUND, "Bad Error number %d\n", err );
+    ok( handle == INVALID_HANDLE_VALUE || broken(1), /* win8 */
+         "FindFirstFile on %s should fail\n", buffer2 );
+    if (handle == INVALID_HANDLE_VALUE)
+        ok( err == ERROR_PATH_NOT_FOUND, "Bad Error number %d\n", err );
+    else
+        CloseHandle( handle );
 
     /* try FindFirstFileA on "c:\foo\nul\bar" */
     SetLastError( 0xdeadbeaf );
@@ -5927,6 +5931,7 @@ static void test_move_file(void)
 static void test_eof(void)
 {
     char temp_path[MAX_PATH], filename[MAX_PATH], buffer[20];
+    OVERLAPPED overlapped = {0};
     LARGE_INTEGER file_size;
     HANDLE file, mapping;
     unsigned int i;
@@ -5961,9 +5966,25 @@ static void test_eof(void)
     ok(ret, "failed to get size, error %u\n", GetLastError());
     ok(!file_size.QuadPart, "got size %I64d\n", file_size.QuadPart);
 
+    SetLastError(0xdeadbeef);
     ret = ReadFile(file, buffer, sizeof(buffer), &size, NULL);
     ok(ret, "failed to read, error %u\n", GetLastError());
     ok(!size, "got size %u\n", size);
+    ok(GetLastError() == 0xdeadbeef, "got error %u\n", GetLastError());
+
+    SetFilePointer(file, 2, NULL, SEEK_SET);
+
+    SetLastError(0xdeadbeef);
+    size = 0xdeadbeef;
+    overlapped.Offset = 2;
+    ret = ReadFile(file, buffer, sizeof(buffer), &size, &overlapped);
+    ok(!ret, "expected failure\n");
+    ok(GetLastError() == ERROR_HANDLE_EOF, "got error %u\n", GetLastError());
+    ok(!size, "got size %u\n", size);
+    todo_wine ok((NTSTATUS)overlapped.Internal == STATUS_PENDING, "got status %#x\n", (NTSTATUS)overlapped.Internal);
+    ok(!overlapped.InternalHigh, "got size %Iu\n", overlapped.InternalHigh);
+
+    SetFilePointer(file, 2, NULL, SEEK_SET);
 
     ret = SetEndOfFile(file);
     ok(ret, "failed to set EOF, error %u\n", GetLastError());

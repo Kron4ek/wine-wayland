@@ -2939,8 +2939,10 @@ static void test_create_rendertarget_view(void)
 
     if (!enable_debug_layer)
     {
+        rtview = (void *)0xdeadbeef;
         hr = ID3D10Device_CreateRenderTargetView(device, NULL, &rtv_desc, &rtview);
         ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+        ok(!rtview, "Unexpected pointer %p.\n", rtview);
     }
 
     expected_refcount = get_refcount(device) + 1;
@@ -3057,8 +3059,10 @@ static void test_create_rendertarget_view(void)
         }
 
         get_rtv_desc(&rtv_desc, &invalid_desc_tests[i].rtv_desc);
+        rtview = (void *)0xdeadbeef;
         hr = ID3D10Device_CreateRenderTargetView(device, texture, &rtv_desc, &rtview);
         ok(hr == E_INVALIDARG, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(!rtview, "Unexpected pointer %p.\n", rtview);
 
         ID3D10Resource_Release(texture);
     }
@@ -5533,6 +5537,20 @@ float4 main(float4 color : COLOR) : SV_TARGET
     blend_factor[2] = 0.3f;
     blend_factor[3] = 0.4f;
     ID3D10Device_OMSetBlendState(device, blend_state, blend_factor, D3D10_DEFAULT_SAMPLE_MASK);
+    /* OMGetBlendState() arguments are optional */
+    ID3D10Device_OMGetBlendState(device, NULL, NULL, NULL);
+    ID3D10Device_OMGetBlendState(device, &tmp_blend_state, NULL, NULL);
+    ID3D10BlendState_Release(tmp_blend_state);
+    sample_mask = 0;
+    ID3D10Device_OMGetBlendState(device, NULL, NULL, &sample_mask);
+    ok(sample_mask == D3D10_DEFAULT_SAMPLE_MASK, "Unexpected sample mask %#x.\n", sample_mask);
+    memset(tmp_blend_factor, 0, sizeof(tmp_blend_factor));
+    ID3D10Device_OMGetBlendState(device, NULL, tmp_blend_factor, NULL);
+    ok(tmp_blend_factor[0] == 0.1f && tmp_blend_factor[1] == 0.2f
+            && tmp_blend_factor[2] == 0.3f && tmp_blend_factor[3] == 0.4f,
+            "Got unexpected blend factor {%.8e, %.8e, %.8e, %.8e}.\n",
+            tmp_blend_factor[0], tmp_blend_factor[1], tmp_blend_factor[2], tmp_blend_factor[3]);
+
     ID3D10Device_OMGetBlendState(device, &tmp_blend_state, tmp_blend_factor, &sample_mask);
     ok(tmp_blend_factor[0] == 0.1f && tmp_blend_factor[1] == 0.2f
             && tmp_blend_factor[2] == 0.3f && tmp_blend_factor[3] == 0.4f,
@@ -5696,6 +5714,16 @@ float4 main(float4 color : COLOR) : SV_TARGET
     ok(tmp_ds_state == ds_state, "Got unexpected depth stencil state %p, expected %p.\n", tmp_ds_state, ds_state);
     ID3D10DepthStencilState_Release(tmp_ds_state);
     ok(stencil_ref == 3, "Got unexpected stencil ref %u.\n", stencil_ref);
+    /* For OMGetDepthStencilState() both arguments are optional. */
+    ID3D10Device_OMGetDepthStencilState(device, NULL, NULL);
+    stencil_ref = 0;
+    ID3D10Device_OMGetDepthStencilState(device, NULL, &stencil_ref);
+    ok(stencil_ref == 3, "Got unexpected stencil ref %u.\n", stencil_ref);
+    tmp_ds_state = NULL;
+    ID3D10Device_OMGetDepthStencilState(device, &tmp_ds_state, NULL);
+    ok(tmp_ds_state == ds_state, "Got unexpected depth stencil state %p, expected %p.\n", tmp_ds_state, ds_state);
+    ID3D10DepthStencilState_Release(tmp_ds_state);
+
     ID3D10Device_OMGetRenderTargets(device, D3D10_SIMULTANEOUS_RENDER_TARGET_COUNT, tmp_rtv, &tmp_dsv);
     for (i = 0; i < D3D10_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
     {
@@ -12345,9 +12373,11 @@ static void test_create_input_layout(void)
         DXGI_FORMAT_R16G16_FLOAT,
         DXGI_FORMAT_R16G16_UINT,
         DXGI_FORMAT_R16G16_SINT,
+        DXGI_FORMAT_R11G11B10_FLOAT,
         DXGI_FORMAT_R32_FLOAT,
         DXGI_FORMAT_R32_UINT,
         DXGI_FORMAT_R32_SINT,
+        DXGI_FORMAT_R16_FLOAT,
         DXGI_FORMAT_R16_UINT,
         DXGI_FORMAT_R16_SINT,
         DXGI_FORMAT_R8_UINT,
@@ -13620,6 +13650,12 @@ static void test_format_support(void)
         {DXGI_FORMAT_R32_UINT},
         {DXGI_FORMAT_R16_UINT},
     };
+    static const struct format_support vertex_buffers[] =
+    {
+        {DXGI_FORMAT_R8G8_UINT},
+        {DXGI_FORMAT_R11G11B10_FLOAT},
+        {DXGI_FORMAT_R16_FLOAT},
+    };
 
     if (!(device = create_device()))
     {
@@ -13659,6 +13695,9 @@ static void test_format_support(void)
 
     check_format_support(format_support, index_buffers, ARRAY_SIZE(index_buffers),
             D3D10_FORMAT_SUPPORT_IA_INDEX_BUFFER, "index buffer");
+
+    check_format_support(format_support, vertex_buffers, ARRAY_SIZE(vertex_buffers),
+            D3D10_FORMAT_SUPPORT_IA_VERTEX_BUFFER, "vertex buffer");
 
     check_format_support(format_support, display_format_support, ARRAY_SIZE(display_format_support),
             D3D10_FORMAT_SUPPORT_DISPLAY, "display");
@@ -15504,8 +15543,8 @@ static void test_stream_output(void)
 
 static void test_stream_output_resume(void)
 {
+    ID3D10Buffer *cb, *so_buffer, *so_buffer2, *buffer;
     struct d3d10core_test_context test_context;
-    ID3D10Buffer *cb, *so_buffer, *buffer;
     unsigned int i, j, idx, offset;
     struct resource_readback rb;
     ID3D10GeometryShader *gs;
@@ -15582,16 +15621,22 @@ static void test_stream_output_resume(void)
 
     cb = create_buffer(device, D3D10_BIND_CONSTANT_BUFFER, sizeof(constants[0]), &constants[0]);
     so_buffer = create_buffer(device, D3D10_BIND_STREAM_OUTPUT, 1024, NULL);
+    so_buffer2 = create_buffer(device, D3D10_BIND_STREAM_OUTPUT, 1024, NULL);
 
     ID3D10Device_GSSetShader(device, gs);
     ID3D10Device_GSSetConstantBuffers(device, 0, 1, &cb);
 
-    offset = 0;
-    ID3D10Device_SOSetTargets(device, 1, &so_buffer, &offset);
-
     ID3D10Device_ClearRenderTargetView(device, test_context.backbuffer_rtv, &white.x);
     check_texture_color(test_context.backbuffer, 0xffffffff, 0);
 
+    /* Draw into a SO buffer and then immediately destroy it, to make sure that
+     * wined3d doesn't try to rebind transform feedback buffers while transform
+     * feedback is active. */
+    offset = 0;
+    ID3D10Device_SOSetTargets(device, 1, &so_buffer2, &offset);
+    draw_color_quad(&test_context, &red);
+    ID3D10Device_SOSetTargets(device, 1, &so_buffer, &offset);
+    ID3D10Buffer_Release(so_buffer2);
     draw_color_quad(&test_context, &red);
     check_texture_color(test_context.backbuffer, 0xff0000ff, 0);
 
@@ -19223,7 +19268,6 @@ START_TEST(d3d10core)
     queue_test(test_private_data);
     queue_test(test_state_refcounting);
     queue_test(test_il_append_aligned);
-    queue_test(test_instanced_draw);
     queue_test(test_fragment_coords);
     queue_test(test_initial_texture_data);
     queue_test(test_update_subresource);
@@ -19275,7 +19319,6 @@ START_TEST(d3d10core)
     queue_test(test_compressed_format_compatibility);
     queue_test(test_clip_distance);
     queue_test(test_combined_clip_and_cull_distances);
-    queue_test(test_generate_mips);
     queue_test(test_alpha_to_coverage);
     queue_test(test_unbound_multisample_texture);
     queue_test(test_multiple_viewports);
@@ -19294,7 +19337,10 @@ START_TEST(d3d10core)
 
     run_queued_tests();
 
-    /* There should be no reason this test can't be run in parallel with the
-     * others, yet it fails when doing so. (AMD Radeon HD 6310, Windows 7) */
+    /* There should be no reason these tests can't be run in parallel with the
+     * others, yet they randomly fail or crash when doing so.
+     * (AMD Radeon HD 6310, Radeon 560, Windows 7 and Windows 10) */
     test_stream_output_vs();
+    test_instanced_draw();
+    test_generate_mips();
 }

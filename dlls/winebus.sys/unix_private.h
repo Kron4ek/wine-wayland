@@ -31,39 +31,39 @@
 
 struct effect_periodic
 {
-    BYTE magnitude;
-    BYTE offset;
-    BYTE phase;
+    UINT16 magnitude;
+    INT16 offset;
+    UINT16 phase;
     UINT16 period;
 };
 
 struct effect_envelope
 {
-    BYTE attack_level;
-    BYTE fade_level;
+    UINT16 attack_level;
+    UINT16 fade_level;
     UINT16 attack_time;
     UINT16 fade_time;
 };
 
 struct effect_condition
 {
-    BYTE center_point_offset;
-    BYTE positive_coefficient;
-    BYTE negative_coefficient;
-    BYTE positive_saturation;
-    BYTE negative_saturation;
-    BYTE dead_band;
+    INT16 center_point_offset;
+    INT16 positive_coefficient;
+    INT16 negative_coefficient;
+    UINT16 positive_saturation;
+    UINT16 negative_saturation;
+    UINT16 dead_band;
 };
 
 struct effect_constant_force
 {
-    UINT16 magnitude;
+    INT16 magnitude;
 };
 
 struct effect_ramp_force
 {
-    BYTE ramp_start;
-    BYTE ramp_end;
+    INT16 ramp_start;
+    INT16 ramp_end;
 };
 
 struct effect_params
@@ -73,11 +73,10 @@ struct effect_params
     UINT16 trigger_repeat_interval;
     UINT16 sample_period;
     UINT16 start_delay;
-    BYTE gain;
     BYTE trigger_button;
     BOOL axis_enabled[2];
     BOOL direction_enabled;
-    BYTE direction[2];
+    UINT16 direction[2];
     BYTE condition_count;
     /* only for periodic, constant or ramp forces */
     struct effect_envelope envelope;
@@ -109,6 +108,7 @@ struct hid_device_vtbl
     NTSTATUS (*haptics_start)(struct unix_device *iface, DWORD duration_ms,
                               USHORT rumble_intensity, USHORT buzz_intensity);
     NTSTATUS (*physical_device_control)(struct unix_device *iface, USAGE control);
+    NTSTATUS (*physical_device_set_gain)(struct unix_device *iface, BYTE percent);
     NTSTATUS (*physical_effect_control)(struct unix_device *iface, BYTE index, USAGE control, BYTE iterations);
     NTSTATUS (*physical_effect_update)(struct unix_device *iface, BYTE index, struct effect_params *params);
 };
@@ -151,12 +151,29 @@ struct hid_haptics
     BYTE waveform_report;
 };
 
+/* must match the order and number of usages in the
+ * PID_USAGE_STATE_REPORT report */
+enum effect_state_flags
+{
+    EFFECT_STATE_DEVICE_PAUSED = 0x01,
+    EFFECT_STATE_ACTUATORS_ENABLED = 0x02,
+    EFFECT_STATE_EFFECT_PLAYING = 0x04,
+};
+
+struct hid_effect_state
+{
+    USHORT report_len;
+    BYTE *report_buf;
+    BYTE id;
+};
+
 struct hid_physical
 {
     USAGE effect_types[32];
     struct effect_params effect_params[256];
 
     BYTE device_control_report;
+    BYTE device_gain_report;
     BYTE effect_control_report;
     BYTE effect_update_report;
     BYTE set_periodic_report;
@@ -164,6 +181,8 @@ struct hid_physical
     BYTE set_condition_report;
     BYTE set_constant_force_report;
     BYTE set_ramp_force_report;
+
+    struct hid_effect_state effect_state;
 };
 
 struct hid_device_state
@@ -243,6 +262,9 @@ extern BOOL hid_device_set_hatswitch_y(struct unix_device *iface, ULONG index, L
 extern BOOL hid_device_sync_report(struct unix_device *iface) DECLSPEC_HIDDEN;
 extern void hid_device_drop_report(struct unix_device *iface) DECLSPEC_HIDDEN;
 
+extern void hid_device_set_effect_state(struct unix_device *iface, BYTE index, BYTE flags) DECLSPEC_HIDDEN;
+
 BOOL is_xbox_gamepad(WORD vid, WORD pid) DECLSPEC_HIDDEN;
+BOOL is_dualshock4_gamepad(WORD vid, WORD pid) DECLSPEC_HIDDEN;
 
 #endif /* __WINEBUS_UNIX_PRIVATE_H */

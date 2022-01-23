@@ -21,7 +21,6 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 #include "wined3d_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
@@ -830,7 +829,7 @@ void wined3d_texture_get_memory(struct wined3d_texture *texture, unsigned int su
     if (locations & WINED3D_LOCATION_BUFFER)
     {
         data->addr = NULL;
-        data->buffer_object = (uintptr_t)&sub_resource->bo;
+        data->buffer_object = &sub_resource->bo.b;
         return;
     }
 
@@ -929,6 +928,9 @@ static void wined3d_texture_gl_allocate_mutable_storage(struct wined3d_texture_g
         layer_count = 1;
     else
         layer_count = texture_gl->t.layer_count;
+
+    GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0));
+    checkGLcall("glBindBuffer");
 
     for (layer = 0; layer < layer_count; ++layer)
     {
@@ -1536,6 +1538,11 @@ ULONG CDECL wined3d_texture_decref(struct wined3d_texture *texture)
 
     if (!refcount)
     {
+        bool in_cs_thread = GetCurrentThreadId() == texture->resource.device->cs->thread_id;
+
+        /* This is called from the CS thread to destroy temporary textures. */
+        if (!in_cs_thread)
+            wined3d_mutex_lock();
         /* Wait for the texture to become idle if it's using user memory,
          * since the application is allowed to free that memory once the
          * texture is destroyed. Note that this implies that
@@ -1550,6 +1557,8 @@ ULONG CDECL wined3d_texture_decref(struct wined3d_texture *texture)
             }
         }
         texture->resource.device->adapter->adapter_ops->adapter_destroy_texture(texture);
+        if (!in_cs_thread)
+            wined3d_mutex_unlock();
     }
 
     return refcount;
@@ -1880,7 +1889,7 @@ HRESULT CDECL wined3d_texture_update_desc(struct wined3d_texture *texture, unsig
      * requires a 4-byte aligned pitch and doesn't support texture formats
      * larger than 4 bytes per pixel nor any format using 3 bytes per pixel.
      * This check is here to verify that the assumption holds. */
-    if (pitch % texture->resource.format->byte_count)
+    if (pitch % format->byte_count)
     {
         WARN("Pitch unsupported, not a multiple of the texture format byte width.\n");
         return WINED3DERR_INVALIDCALL;
@@ -2525,6 +2534,9 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
 
         src_mem = wined3d_context_gl_map_bo_address(context_gl, &bo, src_slice_pitch * update_d, WINED3D_MAP_READ);
 
+        GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0));
+        checkGLcall("glBindBuffer");
+
         for (z = 0; z < update_d; ++z, src_mem += src_slice_pitch)
         {
             if (decompress)
@@ -2546,19 +2558,27 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
     }
     else
     {
+        const uint8_t *offset = bo.addr;
+
         if (bo.buffer_object)
         {
-            GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, ((struct wined3d_bo_gl *)bo.buffer_object)->id));
+            GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, wined3d_bo_gl(bo.buffer_object)->id));
+            checkGLcall("glBindBuffer");
+            offset += bo.buffer_object->buffer_offset;
+        }
+        else
+        {
+            GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0));
             checkGLcall("glBindBuffer");
         }
 
         wined3d_texture_gl_upload_bo(src_format, target, level, src_row_pitch, src_slice_pitch, dst_x,
-                dst_y, dst_z, update_w, update_h, update_d, bo.addr, srgb, dst_texture, gl_info);
+                dst_y, dst_z, update_w, update_h, update_d, offset, srgb, dst_texture, gl_info);
 
         if (bo.buffer_object)
         {
             GL_EXTCALL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0));
-            wined3d_context_gl_reference_bo(context_gl, (struct wined3d_bo_gl *)bo.buffer_object);
+            wined3d_context_gl_reference_bo(context_gl, wined3d_bo_gl(bo.buffer_object));
             checkGLcall("glBindBuffer");
         }
     }
@@ -2578,7 +2598,7 @@ static void wined3d_texture_gl_upload_data(struct wined3d_context *context,
 static void wined3d_texture_gl_download_data_slow_path(struct wined3d_texture_gl *texture_gl,
         unsigned int sub_resource_idx, struct wined3d_context_gl *context_gl, const struct wined3d_bo_address *data)
 {
-    struct wined3d_bo_gl *bo = (struct wined3d_bo_gl *)data->buffer_object;
+    struct wined3d_bo_gl *bo = wined3d_bo_gl(data->buffer_object);
     const struct wined3d_gl_info *gl_info = context_gl->gl_info;
     struct wined3d_texture_sub_resource *sub_resource;
     unsigned int dst_row_pitch, dst_slice_pitch;
@@ -2677,16 +2697,20 @@ static void wined3d_texture_gl_download_data_slow_path(struct wined3d_texture_gl
 
     if (temporary_mem)
     {
+        GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
+        checkGLcall("glBindBuffer");
         mem = temporary_mem;
     }
     else if (bo)
     {
         GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, bo->id));
         checkGLcall("glBindBuffer");
-        mem = data->addr;
+        mem = (uint8_t *)data->addr + bo->b.buffer_offset;
     }
     else
     {
+        GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
+        checkGLcall("glBindBuffer");
         mem = data->addr;
     }
 
@@ -2786,7 +2810,8 @@ static void wined3d_texture_gl_download_data_slow_path(struct wined3d_texture_gl
         {
             GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, bo->id));
             checkGLcall("glBindBuffer");
-            GL_EXTCALL(glBufferSubData(GL_PIXEL_PACK_BUFFER, 0, sub_resource->size, src_data));
+            GL_EXTCALL(glBufferSubData(GL_PIXEL_PACK_BUFFER,
+                    (GLintptr)data->addr + bo->b.buffer_offset, sub_resource->size, src_data));
             checkGLcall("glBufferSubData");
         }
         else
@@ -2817,7 +2842,8 @@ static void wined3d_texture_gl_download_data(struct wined3d_context *context,
     unsigned int src_level, src_width, src_height, src_depth;
     unsigned int src_row_pitch, src_slice_pitch;
     const struct wined3d_format_gl *format_gl;
-    struct wined3d_bo_gl *dst_bo;
+    uint8_t *offset = dst_bo_addr->addr;
+    struct wined3d_bo *dst_bo;
     BOOL srgb = FALSE;
     GLenum target;
 
@@ -2892,33 +2918,39 @@ static void wined3d_texture_gl_download_data(struct wined3d_context *context,
         return;
     }
 
-    if ((dst_bo = (struct wined3d_bo_gl *)dst_bo_addr->buffer_object))
+    if ((dst_bo = dst_bo_addr->buffer_object))
     {
-        GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, dst_bo->id));
+        GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, wined3d_bo_gl(dst_bo)->id));
+        checkGLcall("glBindBuffer");
+        offset += dst_bo->buffer_offset;
+    }
+    else
+    {
+        GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
         checkGLcall("glBindBuffer");
     }
 
     if (src_texture->resource.format_flags & WINED3DFMT_FLAG_COMPRESSED)
     {
         TRACE("Downloading compressed texture %p, %u, level %u, format %#x, type %#x, data %p.\n",
-                src_texture, src_sub_resource_idx, src_level, format_gl->format, format_gl->type, dst_bo_addr->addr);
+                src_texture, src_sub_resource_idx, src_level, format_gl->format, format_gl->type, offset);
 
-        GL_EXTCALL(glGetCompressedTexImage(target, src_level, dst_bo_addr->addr));
+        GL_EXTCALL(glGetCompressedTexImage(target, src_level, offset));
         checkGLcall("glGetCompressedTexImage");
     }
     else
     {
         TRACE("Downloading texture %p, %u, level %u, format %#x, type %#x, data %p.\n",
-                src_texture, src_sub_resource_idx, src_level, format_gl->format, format_gl->type, dst_bo_addr->addr);
+                src_texture, src_sub_resource_idx, src_level, format_gl->format, format_gl->type, offset);
 
-        gl_info->gl_ops.gl.p_glGetTexImage(target, src_level, format_gl->format, format_gl->type, dst_bo_addr->addr);
+        gl_info->gl_ops.gl.p_glGetTexImage(target, src_level, format_gl->format, format_gl->type, offset);
         checkGLcall("glGetTexImage");
     }
 
     if (dst_bo)
     {
         GL_EXTCALL(glBindBuffer(GL_PIXEL_PACK_BUFFER, 0));
-        wined3d_context_gl_reference_bo(context_gl, dst_bo);
+        wined3d_context_gl_reference_bo(context_gl, wined3d_bo_gl(dst_bo));
         checkGLcall("glBindBuffer");
     }
 }
@@ -4713,7 +4745,7 @@ static void wined3d_texture_vk_upload_data(struct wined3d_context *context,
     /* We need to be outside of a render pass for vkCmdPipelineBarrier() and vkCmdCopyBufferToImage() calls below. */
     wined3d_context_vk_end_current_render_pass(context_vk);
 
-    if (!(src_bo = (struct wined3d_bo_vk *)src_bo_addr->buffer_object))
+    if (!src_bo_addr->buffer_object)
     {
         if (!wined3d_context_vk_create_bo(context_vk, sub_resource->size,
                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &staging_bo))
@@ -4722,7 +4754,7 @@ static void wined3d_texture_vk_upload_data(struct wined3d_context *context,
             return;
         }
 
-        staging_bo_addr.buffer_object = (uintptr_t)&staging_bo;
+        staging_bo_addr.buffer_object = &staging_bo.b;
         staging_bo_addr.addr = NULL;
         if (!(map_ptr = wined3d_context_map_bo_address(context, &staging_bo_addr,
                 sub_resource->size, WINED3D_MAP_DISCARD | WINED3D_MAP_WRITE)))
@@ -4748,6 +4780,8 @@ static void wined3d_texture_vk_upload_data(struct wined3d_context *context,
     }
     else
     {
+        src_bo = wined3d_bo_vk(src_bo_addr->buffer_object);
+
         vk_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
         vk_barrier.pNext = NULL;
         vk_barrier.srcAccessMask = vk_access_mask_from_buffer_usage(src_bo->usage) & ~WINED3D_READ_ONLY_ACCESS_FLAGS;
@@ -4755,7 +4789,7 @@ static void wined3d_texture_vk_upload_data(struct wined3d_context *context,
         vk_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         vk_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         vk_barrier.buffer = src_bo->vk_buffer;
-        vk_barrier.offset = src_bo->buffer_offset + (size_t)src_bo_addr->addr;
+        vk_barrier.offset = src_bo->b.buffer_offset + (size_t)src_bo_addr->addr;
         vk_barrier.size = sub_resource->size;
 
         src_offset += (size_t)src_bo_addr->addr;
@@ -4779,7 +4813,7 @@ static void wined3d_texture_vk_upload_data(struct wined3d_context *context,
             dst_texture_vk->layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             dst_texture_vk->image.vk_image, &vk_range);
 
-    region.bufferOffset = src_bo->buffer_offset + src_offset;
+    region.bufferOffset = src_bo->b.buffer_offset + src_offset;
     region.bufferRowLength = (src_row_pitch / src_format->block_byte_count) * src_format->block_width;
     if (src_row_pitch)
         region.bufferImageHeight = (src_slice_pitch / src_row_pitch) * src_format->block_height;
@@ -4910,7 +4944,7 @@ static void wined3d_texture_vk_download_data(struct wined3d_context *context,
     /* We need to be outside of a render pass for vkCmdPipelineBarrier() and vkCmdCopyBufferToImage() calls below. */
     wined3d_context_vk_end_current_render_pass(context_vk);
 
-    if (!(dst_bo = (struct wined3d_bo_vk *)dst_bo_addr->buffer_object))
+    if (!dst_bo_addr->buffer_object)
     {
         if (!wined3d_context_vk_create_bo(context_vk, sub_resource->size,
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &staging_bo))
@@ -4923,6 +4957,8 @@ static void wined3d_texture_vk_download_data(struct wined3d_context *context,
     }
     else
     {
+        dst_bo = wined3d_bo_vk(dst_bo_addr->buffer_object);
+
         vk_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
         vk_barrier.pNext = NULL;
         vk_barrier.srcAccessMask = vk_access_mask_from_buffer_usage(dst_bo->usage);
@@ -4930,7 +4966,7 @@ static void wined3d_texture_vk_download_data(struct wined3d_context *context,
         vk_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         vk_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         vk_barrier.buffer = dst_bo->vk_buffer;
-        vk_barrier.offset = dst_bo->buffer_offset + (size_t)dst_bo_addr->addr;
+        vk_barrier.offset = dst_bo->b.buffer_offset + (size_t)dst_bo_addr->addr;
         vk_barrier.size = sub_resource->size;
 
         bo_stage_flags = vk_pipeline_stage_mask_from_buffer_usage(dst_bo->usage);
@@ -4953,7 +4989,7 @@ static void wined3d_texture_vk_download_data(struct wined3d_context *context,
             src_texture_vk->layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             src_texture_vk->image.vk_image, &vk_range);
 
-    region.bufferOffset = dst_bo->buffer_offset + dst_offset;
+    region.bufferOffset = dst_bo->b.buffer_offset + dst_offset;
     region.bufferRowLength = 0;
     region.bufferImageHeight = 0;
     region.imageSubresource.aspectMask = vk_range.aspectMask;
@@ -4985,7 +5021,7 @@ static void wined3d_texture_vk_download_data(struct wined3d_context *context,
         wined3d_context_vk_submit_command_buffer(context_vk, 0, NULL, NULL, 0, NULL);
         wined3d_context_vk_wait_command_buffer(context_vk, src_texture_vk->image.command_buffer_id);
 
-        staging_bo_addr.buffer_object = (uintptr_t)&staging_bo;
+        staging_bo_addr.buffer_object = &staging_bo.b;
         staging_bo_addr.addr = NULL;
         if (!(map_ptr = wined3d_context_map_bo_address(context, &staging_bo_addr,
                 sub_resource->size, WINED3D_MAP_READ)))
@@ -6127,6 +6163,26 @@ static void raw_blitter_clear(struct wined3d_blitter *blitter, struct wined3d_de
             clear_rects, draw_rect, flags, colour, depth, stencil);
 }
 
+static bool gl_formats_compatible(struct wined3d_texture *src_texture, DWORD src_location,
+        struct wined3d_texture *dst_texture, DWORD dst_location)
+{
+    GLuint src_internal, dst_internal;
+    bool src_ds, dst_ds;
+
+    src_ds = src_texture->resource.format->depth_size || src_texture->resource.format->stencil_size;
+    dst_ds = dst_texture->resource.format->depth_size || dst_texture->resource.format->stencil_size;
+    if (src_ds == dst_ds)
+        return true;
+    /* Also check the internal format because, e.g. WINED3DFMT_D24_UNORM_S8_UINT has nonzero depth and stencil
+     * sizes as does WINED3DFMT_R24G8_TYPELESS when bound with flag WINED3D_BIND_DEPTH_STENCIL, but these share
+     * the same internal format with WINED3DFMT_R24_UNORM_X8_TYPELESS. */
+    src_internal = wined3d_gl_get_internal_format(&src_texture->resource,
+            wined3d_format_gl(src_texture->resource.format), src_location == WINED3D_LOCATION_TEXTURE_SRGB);
+    dst_internal = wined3d_gl_get_internal_format(&dst_texture->resource,
+            wined3d_format_gl(dst_texture->resource.format), dst_location == WINED3D_LOCATION_TEXTURE_SRGB);
+    return src_internal == dst_internal;
+}
+
 static DWORD raw_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_blit_op op,
         struct wined3d_context *context, struct wined3d_texture *src_texture, unsigned int src_sub_resource_idx,
         DWORD src_location, const RECT *src_rect, struct wined3d_texture *dst_texture,
@@ -6141,11 +6197,7 @@ static DWORD raw_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_blit
     unsigned int src_level, src_layer, dst_level, dst_layer;
     struct wined3d_blitter *next;
     GLuint src_name, dst_name;
-    bool src_ds, dst_ds;
     DWORD location;
-
-    src_ds = src_texture->resource.format->depth_size || src_texture->resource.format->stencil_size;
-    dst_ds = dst_texture->resource.format->depth_size || dst_texture->resource.format->stencil_size;
 
     /* If we would need to copy from a renderbuffer or drawable, we'd probably
      * be better off using the FBO blitter directly, since we'd need to use it
@@ -6153,7 +6205,7 @@ static DWORD raw_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_blit
      *
      * We also can't copy between depth/stencil and colour resources, since
      * the formats are considered incompatible in OpenGL. */
-    if (op != WINED3D_BLIT_OP_RAW_BLIT || (src_ds != dst_ds)
+    if (op != WINED3D_BLIT_OP_RAW_BLIT || !gl_formats_compatible(src_texture, src_location, dst_texture, dst_location)
             || (src_texture->resource.format->id == dst_texture->resource.format->id
             && (!(src_location & (WINED3D_LOCATION_TEXTURE_RGB | WINED3D_LOCATION_TEXTURE_SRGB))
             || !(dst_location & (WINED3D_LOCATION_TEXTURE_RGB | WINED3D_LOCATION_TEXTURE_SRGB)))))

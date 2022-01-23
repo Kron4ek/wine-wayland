@@ -46,6 +46,8 @@ static NTSTATUS (WINAPI * pNtQueryObject)(HANDLE, OBJECT_INFORMATION_CLASS, void
 static NTSTATUS (WINAPI * pNtCreateDebugObject)( HANDLE *, ACCESS_MASK, OBJECT_ATTRIBUTES *, ULONG );
 static NTSTATUS (WINAPI * pNtSetInformationDebugObject)(HANDLE,DEBUGOBJECTINFOCLASS,PVOID,ULONG,ULONG*);
 static NTSTATUS (WINAPI * pDbgUiConvertStateChangeStructure)(DBGUI_WAIT_STATE_CHANGE*,DEBUG_EVENT*);
+static HANDLE   (WINAPI * pDbgUiGetThreadDebugObject)(void);
+static void     (WINAPI * pDbgUiSetThreadDebugObject)(HANDLE);
 
 static BOOL is_wow64;
 
@@ -99,6 +101,8 @@ static void InitFunctionPtrs(void)
     NTDLL_GET_PROC(NtSetInformationDebugObject);
     NTDLL_GET_PROC(NtGetCurrentProcessorNumber);
     NTDLL_GET_PROC(DbgUiConvertStateChangeStructure);
+    NTDLL_GET_PROC(DbgUiGetThreadDebugObject);
+    NTDLL_GET_PROC(DbgUiSetThreadDebugObject);
 
     pIsWow64Process = (void *)GetProcAddress(hkernel32, "IsWow64Process");
     if (!pIsWow64Process || !pIsWow64Process( GetCurrentProcess(), &is_wow64 )) is_wow64 = FALSE;
@@ -438,7 +442,7 @@ static void test_query_timeofday(void)
     if (winetest_debug > 1) trace("uCurrentTimeZoneId : (%d)\n", sti.uCurrentTimeZoneId);
 }
 
-static void test_query_process(void)
+static void test_query_process( BOOL extended )
 {
     NTSTATUS status;
     DWORD last_pid;
@@ -454,7 +458,10 @@ static void test_query_process(void)
     typedef struct _SYSTEM_PROCESS_INFORMATION_PRIVATE {
         ULONG NextEntryOffset;
         DWORD dwThreadCount;
-        DWORD dwUnknown1[6];
+        LARGE_INTEGER WorkingSetPrivateSize;
+        ULONG HardFaultCount;
+        ULONG NumberOfThreadsHighWatermark;
+        ULONGLONG CycleTime;
         FILETIME ftCreationTime;
         FILETIME ftUserTime;
         FILETIME ftKernelTime;
@@ -463,32 +470,54 @@ static void test_query_process(void)
         HANDLE UniqueProcessId;
         HANDLE ParentProcessId;
         ULONG HandleCount;
-        DWORD dwUnknown3;
-        DWORD dwUnknown4;
+        ULONG SessionId;
+        ULONG_PTR UniqueProcessKey;
         VM_COUNTERS_EX vmCounters;
         IO_COUNTERS ioCounters;
         SYSTEM_THREAD_INFORMATION ti[1];
     } SYSTEM_PROCESS_INFORMATION_PRIVATE;
 
-    ULONG SystemInformationLength = sizeof(SYSTEM_PROCESS_INFORMATION_PRIVATE);
-    SYSTEM_PROCESS_INFORMATION_PRIVATE *spi, *spi_buf = HeapAlloc(GetProcessHeap(), 0, SystemInformationLength);
+    BOOL is_process_wow64 = FALSE, current_process_found = FALSE;
+    SYSTEM_PROCESS_INFORMATION_PRIVATE *spi, *spi_buf;
+    SYSTEM_EXTENDED_THREAD_INFORMATION *ti;
+    SYSTEM_INFORMATION_CLASS info_class;
+    void *expected_address;
+    ULONG thread_info_size;
+
+    if (extended)
+    {
+        info_class = SystemExtendedProcessInformation;
+        thread_info_size = sizeof(SYSTEM_EXTENDED_THREAD_INFORMATION);
+    }
+    else
+    {
+        info_class = SystemProcessInformation;
+        thread_info_size = sizeof(SYSTEM_THREAD_INFORMATION);
+    }
 
     /* test ReturnLength */
     ReturnLength = 0;
-    status = pNtQuerySystemInformation(SystemProcessInformation, NULL, 0, &ReturnLength);
+    status = pNtQuerySystemInformation( info_class, NULL, 0, &ReturnLength);
     ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH got %08x\n", status);
-    ok( ReturnLength > 0, "got 0 length\n");
+    ok( ReturnLength > 0, "got 0 length\n" );
 
-    /* W2K3 and later returns the needed length, the rest returns 0, so we have to loop */
-    for (;;)
+    /* W2K3 and later returns the needed length, the rest returns 0. */
+    if (!ReturnLength)
     {
-        status = pNtQuerySystemInformation(SystemProcessInformation, spi_buf, SystemInformationLength, &ReturnLength);
-
-        if (status != STATUS_INFO_LENGTH_MISMATCH) break;
-        
-        spi_buf = HeapReAlloc(GetProcessHeap(), 0, spi_buf , SystemInformationLength *= 2);
+        win_skip( "Zero return length, skipping tests." );
+        return;
     }
-    ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
+
+    winetest_push_context( "extended %d", extended );
+
+    spi_buf = HeapAlloc(GetProcessHeap(), 0, ReturnLength);
+    status = pNtQuerySystemInformation(info_class, spi_buf, ReturnLength, &ReturnLength);
+
+    /* Sometimes new process or threads appear between the call and increase the size,
+     * otherwise the previously returned buffer size should be sufficient. */
+    ok( status == STATUS_SUCCESS || status == STATUS_INFO_LENGTH_MISMATCH,
+        "Expected STATUS_SUCCESS, got %08x\n", status );
+
     spi = spi_buf;
 
     for (;;)
@@ -496,27 +525,90 @@ static void test_query_process(void)
         DWORD_PTR tid;
         DWORD j;
 
+        winetest_push_context( "i %u (%s)", i, debugstr_w(spi->ProcessName.Buffer) );
+
         i++;
 
         last_pid = (DWORD_PTR)spi->UniqueProcessId;
-        ok(!(last_pid & 3), "Unexpected PID low bits: %p\n", spi->UniqueProcessId);
-        for (j = 0; j < spi->dwThreadCount; j++)
-        {
-            k++;
-            ok ( spi->ti[j].ClientId.UniqueProcess == spi->UniqueProcessId,
-                 "The owning pid of the thread (%p) doesn't equal the pid (%p) of the process\n",
-                 spi->ti[j].ClientId.UniqueProcess, spi->UniqueProcessId);
+        ok( !(last_pid & 3), "Unexpected PID low bits: %p\n", spi->UniqueProcessId );
 
-            tid = (DWORD_PTR)spi->ti[j].ClientId.UniqueThread;
-            ok(!(tid & 3), "Unexpected TID low bits: %p\n", spi->ti[j].ClientId.UniqueThread);
+        if (last_pid == GetCurrentProcessId())
+            current_process_found = TRUE;
+
+        if (extended && is_wow64 && spi->UniqueProcessId)
+        {
+            InitializeObjectAttributes( &attr, NULL, 0, NULL, NULL );
+            cid.UniqueProcess = spi->UniqueProcessId;
+            cid.UniqueThread = 0;
+            status = NtOpenProcess( &handle, PROCESS_QUERY_LIMITED_INFORMATION, &attr, &cid );
+            ok( status == STATUS_SUCCESS || status == STATUS_ACCESS_DENIED,
+                "Got unexpected status %#x, pid %p.\n", status, spi->UniqueProcessId );
+
+            if (!status)
+            {
+                ULONG_PTR info;
+
+                status = NtQueryInformationProcess( handle, ProcessWow64Information, &info, sizeof(info), NULL );
+                ok( status == STATUS_SUCCESS, "Got unexpected status %#x.\n", status );
+                is_process_wow64 = !!info;
+                NtClose( handle );
+            }
         }
 
-        if (!spi->NextEntryOffset) break;
+        for (j = 0; j < spi->dwThreadCount; j++)
+        {
+            ti = (SYSTEM_EXTENDED_THREAD_INFORMATION *)((BYTE *)spi->ti + j * thread_info_size);
 
+            k++;
+            ok ( ti->ThreadInfo.ClientId.UniqueProcess == spi->UniqueProcessId,
+                 "The owning pid of the thread (%p) doesn't equal the pid (%p) of the process\n",
+                 ti->ThreadInfo.ClientId.UniqueProcess, spi->UniqueProcessId );
+
+            tid = (DWORD_PTR)ti->ThreadInfo.ClientId.UniqueThread;
+            ok( !(tid & 3), "Unexpected TID low bits: %p\n", ti->ThreadInfo.ClientId.UniqueThread );
+
+            if (extended)
+            {
+                todo_wine ok( !!ti->StackBase, "Got NULL StackBase.\n" );
+                todo_wine ok( !!ti->StackLimit, "Got NULL StackLimit.\n" );
+                ok( !!ti->Win32StartAddress, "Got NULL Win32StartAddress.\n" );
+
+                cid.UniqueProcess = 0;
+                cid.UniqueThread = ti->ThreadInfo.ClientId.UniqueThread;
+
+                InitializeObjectAttributes( &attr, NULL, 0, NULL, NULL );
+                status = NtOpenThread( &handle, THREAD_QUERY_INFORMATION, &attr, &cid );
+                if (!status)
+                {
+                    THREAD_BASIC_INFORMATION tbi;
+
+                    status = pNtQueryInformationThread( handle, ThreadBasicInformation, &tbi, sizeof(tbi), NULL );
+                    ok( status == STATUS_SUCCESS, "Got unexpected status %#x.\n", status );
+                    expected_address = tbi.TebBaseAddress;
+                    if (is_wow64 && is_process_wow64)
+                        expected_address = (BYTE *)expected_address - 0x2000;
+                    if (!is_wow64 && !is_process_wow64 && !tbi.TebBaseAddress)
+                        win_skip( "Could not get TebBaseAddress, thread %u.\n", j );
+                    else
+                        ok( ti->TebBase == expected_address || (is_wow64 && !expected_address && !!ti->TebBase),
+                            "Got unexpected TebBase %p, expected %p.\n", ti->TebBase, expected_address );
+
+                    NtClose( handle );
+                }
+            }
+        }
+
+        if (!spi->NextEntryOffset)
+        {
+            winetest_pop_context();
+            break;
+        }
         one_before_last_pid = last_pid;
 
         spi = (SYSTEM_PROCESS_INFORMATION_PRIVATE*)((char*)spi + spi->NextEntryOffset);
+        winetest_pop_context();
     }
+    ok( current_process_found, "Test process not found.\n" );
     if (winetest_debug > 1) trace("%u processes, %u threads\n", i, k);
 
     if (one_before_last_pid == 0) one_before_last_pid = last_pid;
@@ -560,6 +652,7 @@ static void test_query_process(void)
 
         NtClose( handle );
     }
+    winetest_pop_context();
 }
 
 static void test_query_procperf(void)
@@ -1938,6 +2031,127 @@ static void test_query_process_debug_port(int argc, char **argv)
     ok(ret, "CloseHandle failed, last error %#x.\n", GetLastError());
 }
 
+static void subtest_query_process_debug_port_custom_dacl(int argc, char **argv, ACCESS_MASK access, PSID sid)
+{
+    HANDLE old_debug_obj, debug_obj;
+    OBJECT_ATTRIBUTES attr;
+    SECURITY_DESCRIPTOR sd;
+    union {
+        ACL acl;
+        DWORD buffer[(sizeof(ACL) +
+                      (offsetof(ACCESS_ALLOWED_ACE, SidStart) + SECURITY_MAX_SID_SIZE) +
+                      sizeof(DWORD) - 1) / sizeof(DWORD)];
+    } acl;
+    char cmdline[MAX_PATH];
+    PROCESS_INFORMATION pi;
+    STARTUPINFOA si;
+    DEBUG_EVENT ev;
+    NTSTATUS status;
+    BOOL ret;
+
+    InitializeAcl(&acl.acl, sizeof(acl), ACL_REVISION);
+    AddAccessAllowedAce(&acl.acl, ACL_REVISION, access, sid);
+    InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION);
+    SetSecurityDescriptorDacl(&sd, TRUE, &acl.acl, FALSE);
+
+    InitializeObjectAttributes(&attr, NULL, 0, NULL, &sd);
+    status = NtCreateDebugObject(&debug_obj, MAXIMUM_ALLOWED, &attr, DEBUG_KILL_ON_CLOSE);
+    ok(SUCCEEDED(status), "Failed to create debug object: %#010x\n", status);
+    if (!SUCCEEDED(status)) return;
+
+    old_debug_obj = pDbgUiGetThreadDebugObject();
+    pDbgUiSetThreadDebugObject(debug_obj);
+
+    sprintf(cmdline, "%s %s %s %u", argv[0], argv[1], "debuggee:dbgport", access);
+
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    ret = CreateProcessA(NULL, cmdline, NULL, NULL, FALSE,
+                         DEBUG_PROCESS, NULL, NULL, &si, &pi);
+    ok(ret, "CreateProcess failed, last error %#x.\n", GetLastError());
+    if (!ret) goto close_debug_obj;
+
+    do
+    {
+        ret = WaitForDebugEvent(&ev, INFINITE);
+        ok(ret, "WaitForDebugEvent failed, last error %#x.\n", GetLastError());
+        if (!ret) break;
+
+        ret = ContinueDebugEvent(ev.dwProcessId, ev.dwThreadId, DBG_CONTINUE);
+        ok(ret, "ContinueDebugEvent failed, last error %#x.\n", GetLastError());
+        if (!ret) break;
+    } while (ev.dwDebugEventCode != EXIT_PROCESS_DEBUG_EVENT);
+
+    wait_child_process(pi.hProcess);
+    ret = CloseHandle(pi.hThread);
+    ok(ret, "CloseHandle failed, last error %#x.\n", GetLastError());
+    ret = CloseHandle(pi.hProcess);
+    ok(ret, "CloseHandle failed, last error %#x.\n", GetLastError());
+
+close_debug_obj:
+    pDbgUiSetThreadDebugObject(old_debug_obj);
+    NtClose(debug_obj);
+}
+
+static TOKEN_OWNER *get_current_owner(void)
+{
+    TOKEN_OWNER *owner;
+    ULONG length = 0;
+    HANDLE token;
+    BOOL ret;
+
+    ret = OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &token);
+    ok(ret, "Failed to get process token: %u\n", GetLastError());
+
+    ret = GetTokenInformation(token, TokenOwner, NULL, 0, &length);
+    ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
+       "GetTokenInformation failed: %u\n", GetLastError());
+    ok(length != 0, "Failed to get token owner information length: %u\n", GetLastError());
+
+    owner = HeapAlloc(GetProcessHeap(), 0, length);
+    ret = GetTokenInformation(token, TokenOwner, owner, length, &length);
+    ok(ret, "Failed to get token owner information: %u)\n", GetLastError());
+
+    CloseHandle(token);
+    return owner;
+}
+
+static void test_query_process_debug_port_custom_dacl(int argc, char **argv)
+{
+    static const ACCESS_MASK all_access_masks[] = {
+        GENERIC_ALL,
+        DEBUG_ALL_ACCESS,
+        STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE,
+    };
+    TOKEN_OWNER *owner;
+    int i;
+
+    if (!pDbgUiSetThreadDebugObject)
+    {
+        skip("DbgUiGetThreadDebugObject not found\n");
+        return;
+    }
+
+    if (!pDbgUiGetThreadDebugObject)
+    {
+        skip("DbgUiSetThreadDebugObject not found\n");
+        return;
+    }
+
+    owner = get_current_owner();
+
+    for (i = 0; i < ARRAY_SIZE(all_access_masks); i++)
+    {
+        ACCESS_MASK access = all_access_masks[i];
+
+        winetest_push_context("debug object access %08x", access);
+        subtest_query_process_debug_port_custom_dacl(argc, argv, access, owner->Owner);
+        winetest_pop_context();
+    }
+
+    HeapFree(GetProcessHeap(), 0, owner);
+}
+
 static void test_query_process_priority(void)
 {
     PROCESS_PRIORITY_CLASS priority[2];
@@ -3285,6 +3499,41 @@ static void test_process_instrumentation_callback(void)
             "Got unexpected status %#x.\n", status );
 }
 
+static void test_debuggee_dbgport(int argc, char **argv)
+{
+    NTSTATUS status, expect_status;
+    DWORD_PTR debug_port = 0xdeadbeef;
+    DWORD debug_flags = 0xdeadbeef;
+    HANDLE handle;
+    ACCESS_MASK access;
+
+    if (argc < 2)
+    {
+        ok(0, "insufficient arguments for child process\n");
+        return;
+    }
+
+    access = strtoul(argv[1], NULL, 0);
+    winetest_push_context("debug object access %08x", access);
+
+    status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessDebugPort,
+                                         &debug_port, sizeof(debug_port), NULL );
+    ok( !status, "NtQueryInformationProcess ProcessDebugPort failed, status %#x.\n", status );
+    ok( debug_port == ~(DWORD_PTR)0, "Expected port %#lx, got %#lx.\n", ~(DWORD_PTR)0, debug_port );
+
+    status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessDebugFlags,
+                                         &debug_flags, sizeof(debug_flags), NULL );
+    ok( !status, "NtQueryInformationProcess ProcessDebugFlags failed, status %#x.\n", status );
+
+    expect_status = access ? STATUS_SUCCESS : STATUS_ACCESS_DENIED;
+    status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessDebugObjectHandle,
+                                         &handle, sizeof(handle), NULL );
+    ok( status == expect_status, "NtQueryInformationProcess ProcessDebugObjectHandle expected status %#x, actual %#x.\n", expect_status, status );
+    if (SUCCEEDED( status )) NtClose( handle );
+
+    winetest_pop_context();
+}
+
 START_TEST(info)
 {
     char **argv;
@@ -3293,14 +3542,19 @@ START_TEST(info)
     InitFunctionPtrs();
 
     argc = winetest_get_mainargs(&argv);
-    if (argc >= 3) return; /* Child */
+    if (argc >= 3)
+    {
+        if (strcmp(argv[2], "debuggee:dbgport") == 0) test_debuggee_dbgport(argc - 2, argv + 2);
+        return; /* Child */
+    }
 
     /* NtQuerySystemInformation */
     test_query_basic();
     test_query_cpu();
     test_query_performance();
     test_query_timeofday();
-    test_query_process();
+    test_query_process( TRUE );
+    test_query_process( FALSE );
     test_query_procperf();
     test_query_module();
     test_query_handle();
@@ -3326,6 +3580,7 @@ START_TEST(info)
     test_query_process_vm();
     test_query_process_times();
     test_query_process_debug_port(argc, argv);
+    test_query_process_debug_port_custom_dacl(argc, argv);
     test_query_process_priority();
     test_query_process_handlecount();
     test_query_process_wow64();

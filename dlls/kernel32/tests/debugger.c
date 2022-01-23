@@ -60,11 +60,11 @@ static HMODULE ntdll;
 
 static void WINAPIV __WINE_PRINTF_ATTR(2, 3) test_child_ok(int condition, const char *msg, ...)
 {
-    __ms_va_list valist;
+    va_list valist;
 
-    __ms_va_start(valist, msg);
+    va_start(valist, msg);
     winetest_vok(condition, msg, valist);
-    __ms_va_end(valist);
+    va_end(valist);
     if (!condition) ++child_failures;
 }
 
@@ -752,7 +752,11 @@ static void test_ExitCode(void)
         ok(0, "could not open the AeDebug key: %d\n", ret);
         return;
     }
-    else debugger_value.data = NULL;
+    else
+    {
+        auto_value.data = NULL;
+        debugger_value.data = NULL;
+    }
 
     if (debugger_value.data && debugger_value.type == REG_SZ &&
         strstr((char*)debugger_value.data, "winedbg --auto"))

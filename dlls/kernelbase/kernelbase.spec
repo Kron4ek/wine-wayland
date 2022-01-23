@@ -43,7 +43,7 @@
 # @ stub AppPolicyGetClrCompat
 # @ stub AppPolicyGetCreateFileAccess
 # @ stub AppPolicyGetLifecycleManagement
-# @ stub AppPolicyGetMediaFoundationCodecLoading
+@ stdcall AppPolicyGetMediaFoundationCodecLoading(ptr ptr)
 @ stdcall AppPolicyGetProcessTerminationMethod(ptr ptr)
 @ stdcall AppPolicyGetShowDeveloperDiagnostic(ptr ptr)
 @ stdcall AppPolicyGetThreadInitializationType(ptr ptr)
@@ -153,7 +153,7 @@
 @ stdcall CloseThreadpoolWork(ptr) ntdll.TpReleaseWork
 # @ stub CommitStateAtom
 @ stdcall CompareFileTime(ptr ptr)
-# @ stub CompareObjectHandles
+@ stdcall CompareObjectHandles(ptr ptr)
 @ stdcall CompareStringA(long long str long str long)
 @ stdcall CompareStringEx(wstr long wstr long wstr long ptr ptr long)
 @ stdcall CompareStringOrdinal(wstr long wstr long long)
@@ -174,7 +174,7 @@
 # @ stub CouldMultiUserAppsBehaviorBePossibleForPackage
 @ stdcall CreateActCtxW(ptr)
 # @ stub CreateAppContainerToken
-# @ stub CreateBoundaryDescriptorW
+@ stdcall CreateBoundaryDescriptorW(wstr long)
 @ stdcall CreateConsoleScreenBuffer(long long ptr long ptr)
 @ stdcall CreateDirectoryA(str ptr)
 @ stdcall CreateDirectoryExW(wstr wstr ptr)
@@ -437,8 +437,8 @@
 @ stdcall GetCommTimeouts(long ptr)
 @ stdcall GetCommandLineA()
 @ stdcall GetCommandLineW()
-@ stdcall GetCompressedFileSizeA(long ptr)
-@ stdcall GetCompressedFileSizeW(long ptr)
+@ stdcall GetCompressedFileSizeA(str ptr)
+@ stdcall GetCompressedFileSizeW(wstr ptr)
 @ stdcall GetComputerNameExA(long ptr ptr)
 @ stdcall GetComputerNameExW(long ptr ptr)
 @ stdcall GetConsoleCP()
@@ -1164,7 +1164,7 @@
 @ stdcall PerfStopProvider(long)
 # @ stub PoolPerAppKeyStateInternal
 @ stdcall PostQueuedCompletionStatus(long long ptr ptr)
-# @ stub PrefetchVirtualMemory
+@ stdcall PrefetchVirtualMemory(ptr ptr ptr long)
 @ stub PrivCopyFileExW
 @ stdcall PrivilegeCheck(ptr ptr ptr)
 @ stdcall PrivilegedServiceAuditAlarmW(wstr wstr long ptr long)
@@ -1393,7 +1393,7 @@
 @ stdcall SearchPathA(str str str long ptr ptr)
 @ stdcall SearchPathW(wstr wstr wstr long ptr ptr)
 @ stdcall SetAclInformation(ptr ptr long long)
-# @ stub SetCachedSigningLevel
+@ stdcall SetCachedSigningLevel(ptr long long long)
 @ stdcall SetCalendarInfoW(long long long wstr)
 # @ stub SetClientDynamicTimeZoneInformation
 # @ stub SetClientTimeZoneInformation

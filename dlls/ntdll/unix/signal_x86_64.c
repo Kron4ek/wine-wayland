@@ -25,7 +25,6 @@
 #ifdef __x86_64__
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <pthread.h>
@@ -35,9 +34,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/mman.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <unistd.h>
 #ifdef HAVE_MACHINE_SYSARCH_H
 # include <machine/sysarch.h>
 #endif
@@ -358,7 +355,7 @@ static inline struct amd64_thread_data *amd64_thread_data(void)
     return (struct amd64_thread_data *)ntdll_get_thread_data()->cpu_data;
 }
 
-static BOOL is_inside_syscall( ucontext_t *sigcontext )
+static BOOL is_inside_syscall( const ucontext_t *sigcontext )
 {
     return ((char *)RSP_sig(sigcontext) >= (char *)ntdll_get_thread_data()->kernel_stack &&
             (char *)RSP_sig(sigcontext) <= (char *)amd64_thread_data()->syscall_frame);
@@ -1418,12 +1415,13 @@ static NTSTATUS libunwind_virtual_unwind( ULONG64 ip, ULONG64 *frame, CONTEXT *c
     *frame = context->Rsp;
 
     rc = unw_get_proc_info(&cursor, &info);
-    if (rc != UNW_ESUCCESS && rc != UNW_ENOINFO)
+    if (UNW_ENOINFO < 0) rc = -rc;  /* LLVM libunwind has negative error codes */
+    if (rc != UNW_ESUCCESS && rc != -UNW_ENOINFO)
     {
         WARN( "failed to get info: %d\n", rc );
         return STATUS_INVALID_DISPOSITION;
     }
-    if (rc == UNW_ENOINFO || ip < info.start_ip || ip > info.end_ip || info.end_ip == info.start_ip + 1)
+    if (rc == -UNW_ENOINFO || ip < info.start_ip || ip > info.end_ip || info.end_ip == info.start_ip + 1)
         return STATUS_UNSUCCESSFUL;
 
     TRACE( "ip %#lx function %#lx-%#lx personality %#lx lsda %#lx fde %#lx\n",
@@ -1547,7 +1545,7 @@ static inline void init_handler( const ucontext_t *sigcontext )
 static inline void leave_handler( const ucontext_t *sigcontext )
 {
 #ifdef __linux__
-    if (fs32_sel && !is_inside_signal_stack( (void *)RSP_sig(sigcontext )))
+    if (fs32_sel && !is_inside_signal_stack( (void *)RSP_sig(sigcontext )) && !is_inside_syscall(sigcontext))
         __asm__ volatile( "movw %0,%%fs" :: "r" (fs32_sel) );
 #endif
 }
@@ -2174,6 +2172,7 @@ static void setup_raise_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec
         }
     }
 
+    CS_sig(sigcontext)  = cs64_sel;
     RIP_sig(sigcontext) = (ULONG_PTR)pKiUserExceptionDispatcher;
     RSP_sig(sigcontext) = (ULONG_PTR)stack;
     /* clear single-step, direction, and align check flag */
@@ -2294,6 +2293,14 @@ struct user_callback_frame
 NTSTATUS WINAPI KeUserModeCallback( ULONG id, const void *args, ULONG len, void **ret_ptr, ULONG *ret_len )
 {
     struct user_callback_frame callback_frame = { { 0 }, ret_ptr, ret_len };
+
+    /* if we have no syscall frame, call the callback directly */
+    if ((char *)&callback_frame < (char *)ntdll_get_thread_data()->kernel_stack ||
+        (char *)&callback_frame > (char *)amd64_thread_data()->syscall_frame)
+    {
+        NTSTATUS (WINAPI *func)(const void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+        return func( args, len );
+    }
 
     if ((char *)ntdll_get_thread_data()->kernel_stack + min_kernel_stack > (char *)&callback_frame)
         return STATUS_STACK_OVERFLOW;
@@ -3228,18 +3235,21 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
                    "testl $0x3,%edx\n\t"           /* CONTEXT_CONTROL | CONTEXT_INTEGER */
                    "jnz 1f\n\t"
                    "movq 0x88(%rcx),%rsp\n\t"
-                   "jmpq *0x70(%rcx)\n"            /* frame->rip */
+                   "movq 0x70(%rcx),%rcx\n\t"      /* frame->rip */
+                   "jmpq *%rcx\n\t"
                    "1:\tleaq 0x70(%rcx),%rsp\n\t"
                    "testl $0x2,%edx\n\t"           /* CONTEXT_INTEGER */
-                   "jz 1f\n\t"
-                   "movq 0x00(%rcx),%rax\n\t"
+                   "jnz 1f\n\t"
+                   "movq (%rsp),%rcx\n\t"          /* frame->rip */
+                   "iretq\n"
+                   "1:\tmovq 0x00(%rcx),%rax\n\t"
                    "movq 0x18(%rcx),%rdx\n\t"
                    "movq 0x30(%rcx),%r8\n\t"
                    "movq 0x38(%rcx),%r9\n\t"
                    "movq 0x40(%rcx),%r10\n\t"
                    "movq 0x48(%rcx),%r11\n\t"
                    "movq 0x10(%rcx),%rcx\n"
-                   "1:\tiretq\n"
+                   "iretq\n"
                    "5:\tmovl $0xc000000d,%edx\n\t" /* STATUS_INVALID_PARAMETER */
                    "movq %rsp,%rcx\n"
                    __ASM_NAME("__wine_syscall_dispatcher_return") ":\n\t"

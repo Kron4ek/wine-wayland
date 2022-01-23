@@ -707,7 +707,7 @@ static WCHAR *find_wine_gecko_reg(void)
     if(res != ERROR_SUCCESS)
         return NULL;
 
-    size = ARRAY_SIZE(buffer);
+    size = sizeof(buffer);
     res = RegQueryValueExW(hkey, L"GeckoPath", NULL, &type, (LPBYTE)buffer, &size);
     RegCloseKey(hkey);
     if(res != ERROR_SUCCESS || type != REG_SZ)
@@ -1013,7 +1013,8 @@ HRESULT variant_to_nsstr(VARIANT *v, BOOL hex_int, nsAString *nsstr)
         nsAString_Init(nsstr, buf);
         break;
 
-    case VT_R8: {
+    case VT_R8:
+    case VT_DISPATCH: {
         VARIANT strv;
         HRESULT hres;
 

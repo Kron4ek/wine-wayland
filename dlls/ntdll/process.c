@@ -552,5 +552,22 @@ void WINAPI DbgUiRemoteBreakin( void *arg )
  */
 NTSTATUS WINAPI DbgUiIssueRemoteBreakin( HANDLE process )
 {
-    return unix_funcs->DbgUiIssueRemoteBreakin( process );
+    HANDLE handle;
+    NTSTATUS status;
+    OBJECT_ATTRIBUTES attr = { sizeof(attr) };
+
+    status = NtCreateThreadEx( &handle, THREAD_ALL_ACCESS, &attr, process,
+                               DbgUiRemoteBreakin, NULL, 0, 0, 0, 0, NULL );
+#ifdef _WIN64
+    /* FIXME: hack for debugging 32-bit wow64 process without a 64-bit ntdll */
+    if (status == STATUS_INVALID_PARAMETER)
+    {
+        ULONG_PTR wow;
+        if (!NtQueryInformationProcess( process, ProcessWow64Information, &wow, sizeof(wow), NULL ) && wow)
+            status = NtCreateThreadEx( &handle, THREAD_ALL_ACCESS, &attr, process,
+                                       (void *)0x7ffe1000, NULL, 0, 0, 0, 0, NULL );
+    }
+#endif
+    if (!status) NtClose( handle );
+    return status;
 }

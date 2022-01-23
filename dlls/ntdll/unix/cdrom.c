@@ -26,29 +26,22 @@
 #endif
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <errno.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <stdlib.h>
+#include <unistd.h>
 #include <fcntl.h>
-#ifdef HAVE_SYS_STAT_H
-# include <sys/stat.h>
-#endif
+#include <sys/stat.h>
 #ifdef MAJOR_IN_MKDEV
 # include <sys/mkdev.h>
 #elif defined(MAJOR_IN_SYSMACROS)
 # include <sys/sysmacros.h>
 #endif
 #include <sys/types.h>
-
-#ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
-#endif
 #ifdef HAVE_SCSI_SG_H
 # include <scsi/sg.h>
 #endif

@@ -668,7 +668,7 @@ void output_res_o_file( DLLSPEC *spec )
     /* if the output file name is a .res too, don't run the results through windres */
     if (strendswith( output_file_name, ".res"))
     {
-        flush_output_buffer();
+        flush_output_buffer( output_file_name );
         return;
     }
 
@@ -685,9 +685,9 @@ void output_res_o_file( DLLSPEC *spec )
     strarray_add( &args, res_file );
     strarray_add( &args, "-o" );
     strarray_add( &args, output_file_name );
-    switch (target_cpu)
+    switch (target.cpu)
     {
-        case CPU_x86:
+        case CPU_i386:
             strarray_add( &args, "-F" );
             strarray_add( &args, "pe-i386" );
             break;

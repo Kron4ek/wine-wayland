@@ -40,26 +40,17 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <sys/types.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#ifdef HAVE_SYS_IOCTL_H
-# include <sys/ioctl.h>
-#endif
-#ifdef HAVE_POLL_H
+#include <sys/ioctl.h>
 #include <poll.h>
-#endif
-#ifdef HAVE_SYS_POLL_H
-#include <sys/poll.h>
-#endif
 #include <sys/soundcard.h>
 
 #include "windef.h"
@@ -68,7 +59,6 @@
 #include "winuser.h"
 #include "winnls.h"
 #include "mmddk.h"
-#include "wine/unicode.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(midi);

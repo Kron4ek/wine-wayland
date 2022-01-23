@@ -25,7 +25,6 @@
 #ifdef __i386__
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <errno.h>
 #include <signal.h>
@@ -34,9 +33,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <assert.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <unistd.h>
 #ifdef HAVE_SYS_PARAM_H
 # include <sys/param.h>
 #endif
@@ -1571,6 +1568,14 @@ struct user_callback_frame
 NTSTATUS WINAPI KeUserModeCallback( ULONG id, const void *args, ULONG len, void **ret_ptr, ULONG *ret_len )
 {
     struct user_callback_frame callback_frame = { { 0 }, ret_ptr, ret_len };
+
+    /* if we have no syscall frame, call the callback directly */
+    if ((char *)&callback_frame < (char *)ntdll_get_thread_data()->kernel_stack ||
+        (char *)&callback_frame > (char *)x86_thread_data()->syscall_frame)
+    {
+        NTSTATUS (WINAPI *func)(const void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+        return func( args, len );
+    }
 
     if ((char *)ntdll_get_thread_data()->kernel_stack + min_kernel_stack > (char *)&callback_frame)
         return STATUS_STACK_OVERFLOW;

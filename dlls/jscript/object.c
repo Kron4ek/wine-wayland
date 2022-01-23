@@ -196,22 +196,51 @@ static HRESULT Object_propertyIsEnumerable(script_ctx_t *ctx, vdisp_t *jsthis, W
 static HRESULT Object_isPrototypeOf(script_ctx_t *ctx, vdisp_t *jsthis, WORD flags, unsigned argc, jsval_t *argv,
         jsval_t *r)
 {
-    FIXME("\n");
-    return E_NOTIMPL;
+    jsdisp_t *jsdisp;
+    BOOL ret = FALSE;
+
+    if(!r)
+        return S_OK;
+
+    if(argc && is_jsdisp(jsthis) && is_object_instance(argv[0]) && (jsdisp = to_jsdisp(get_object(argv[0])))) {
+        while(jsdisp->prototype) {
+            if(jsdisp->prototype == jsthis->u.jsdisp) {
+                ret = TRUE;
+                break;
+            }
+            jsdisp = jsdisp->prototype;
+        }
+    }
+
+    *r = jsval_bool(ret);
+    return S_OK;
 }
 
-static HRESULT Object_get_value(script_ctx_t *ctx, jsdisp_t *jsthis, jsval_t *r)
+static HRESULT Object_get_proto_(script_ctx_t *ctx, jsdisp_t *jsthis, jsval_t *r)
 {
-    jsstr_t *ret;
+    TRACE("%p\n", jsthis);
 
-    TRACE("\n");
-
-    ret = jsstr_alloc(L"[object Object]");
-    if(!ret)
-        return E_OUTOFMEMORY;
-
-    *r = jsval_string(ret);
+    if(r)
+        *r = jsthis->prototype
+            ? jsval_obj(jsdisp_addref(jsthis->prototype))
+            : jsval_null();
     return S_OK;
+}
+
+static HRESULT Object_set_proto_(script_ctx_t *ctx, jsdisp_t *jsthis, jsval_t value)
+{
+    jsdisp_t *proto;
+
+    TRACE("%p\n", jsthis);
+
+    if(is_undefined(value) || is_null(value))
+        proto = NULL;
+    else if(!is_object_instance(value) || !(proto = to_jsdisp(get_object(value)))) {
+        FIXME("not an object\n");
+        return E_FAIL;
+    }
+
+    return jsdisp_change_prototype(jsthis, proto);
 }
 
 static void Object_destructor(jsdisp_t *dispex)
@@ -220,6 +249,7 @@ static void Object_destructor(jsdisp_t *dispex)
 }
 
 static const builtin_prop_t Object_props[] = {
+    {L"__proto__",             NULL, PROPF_ES6,              Object_get_proto_, Object_set_proto_},
     {L"hasOwnProperty",        Object_hasOwnProperty,        PROPF_METHOD|1},
     {L"isPrototypeOf",         Object_isPrototypeOf,         PROPF_METHOD|1},
     {L"propertyIsEnumerable",  Object_propertyIsEnumerable,  PROPF_METHOD|1},
@@ -230,7 +260,7 @@ static const builtin_prop_t Object_props[] = {
 
 static const builtin_info_t Object_info = {
     JSCLASS_OBJECT,
-    {NULL, NULL,0, Object_get_value},
+    NULL,
     ARRAY_SIZE(Object_props),
     Object_props,
     Object_destructor,
@@ -239,7 +269,7 @@ static const builtin_info_t Object_info = {
 
 static const builtin_info_t ObjectInst_info = {
     JSCLASS_OBJECT,
-    {NULL, NULL,0, Object_get_value},
+    NULL,
     0, NULL,
     Object_destructor,
     NULL
@@ -845,7 +875,7 @@ static const builtin_prop_t ObjectConstr_props[] = {
 
 static const builtin_info_t ObjectConstr_info = {
     JSCLASS_FUNCTION,
-    DEFAULT_FUNCTION_VALUE,
+    Function_value,
     ARRAY_SIZE(ObjectConstr_props),
     ObjectConstr_props,
     NULL,

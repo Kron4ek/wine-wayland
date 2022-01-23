@@ -101,6 +101,7 @@ static struct device *add_device(HDEVINFO set, SP_DEVICE_INTERFACE_DATA *iface)
     struct device *device = NULL;
     UINT32 handle;
     HANDLE file;
+    WCHAR *pos;
     DWORD i, size, type;
 
     SetupDiGetDeviceInterfaceDetailW(set, iface, NULL, 0, &size, &device_data);
@@ -124,6 +125,9 @@ static struct device *add_device(HDEVINFO set, SP_DEVICE_INTERFACE_DATA *iface)
     }
     detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
     SetupDiGetDeviceInterfaceDetailW(set, iface, detail, size, NULL, NULL);
+
+    /* upper case everything but the GUID */
+    for (pos = detail->DevicePath; *pos && *pos != '{'; pos++) *pos = towupper(*pos);
 
     file = CreateFileW(detail->DevicePath, GENERIC_READ | GENERIC_WRITE,
             FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, 0);
@@ -168,7 +172,7 @@ static struct device *add_device(HDEVINFO set, SP_DEVICE_INTERFACE_DATA *iface)
     return device;
 }
 
-static void find_devices(void)
+void rawinput_update_device_list(void)
 {
     SP_DEVICE_INTERFACE_DATA iface = { sizeof(iface) };
     struct device *device;
@@ -177,6 +181,8 @@ static void find_devices(void)
     GUID hid_guid;
     HDEVINFO set;
     DWORD idx;
+
+    TRACE("\n");
 
     HidD_GetHidGuid(&hid_guid);
 
@@ -259,7 +265,7 @@ static struct device *find_device_from_handle(HANDLE handle)
     for (i = 0; i < rawinput_devices_count; ++i)
         if (rawinput_devices[i].handle == handle)
             return rawinput_devices + i;
-    find_devices();
+    rawinput_update_device_list();
     for (i = 0; i < rawinput_devices_count; ++i)
         if (rawinput_devices[i].handle == handle)
             return rawinput_devices + i;
@@ -416,7 +422,8 @@ BOOL rawinput_from_hardware_message(RAWINPUT *rawinput, const struct hardware_ms
  */
 UINT WINAPI GetRawInputDeviceList(RAWINPUTDEVICELIST *devices, UINT *device_count, UINT size)
 {
-    UINT i;
+    static UINT last_check;
+    UINT i, ticks = GetTickCount();
 
     TRACE("devices %p, device_count %p, size %u.\n", devices, device_count, size);
 
@@ -432,7 +439,11 @@ UINT WINAPI GetRawInputDeviceList(RAWINPUTDEVICELIST *devices, UINT *device_coun
         return ~0U;
     }
 
-    find_devices();
+    if (ticks - last_check > 2000)
+    {
+        last_check = ticks;
+        rawinput_update_device_list();
+    }
 
     if (!devices)
     {

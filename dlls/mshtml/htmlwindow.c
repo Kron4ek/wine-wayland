@@ -68,9 +68,7 @@ static inline BOOL is_outer_window(HTMLWindow *window)
 
 static HRESULT get_location(HTMLInnerWindow *This, HTMLLocation **ret)
 {
-    if(This->location) {
-        IHTMLLocation_AddRef(&This->location->IHTMLLocation_iface);
-    }else {
+    if(!This->location) {
         HRESULT hres;
 
         hres = HTMLLocation_Create(This, &This->location);
@@ -78,6 +76,7 @@ static HRESULT get_location(HTMLInnerWindow *This, HTMLLocation **ret)
             return hres;
     }
 
+    IHTMLLocation_AddRef(&This->location->IHTMLLocation_iface);
     *ret = This->location;
     return S_OK;
 }
@@ -86,7 +85,7 @@ void get_top_window(HTMLOuterWindow *window, HTMLOuterWindow **ret)
 {
     HTMLOuterWindow *iter;
 
-    for(iter = window; iter->parent && iter->parent; iter = iter->parent);
+    for(iter = window; iter->parent; iter = iter->parent);
     *ret = iter;
 }
 

@@ -53,15 +53,16 @@ static void WINAPI read_cancel_routine(DEVICE_OBJECT *device, IRP *irp)
     IoCompleteRequest(irp, IO_NO_INCREMENT);
 }
 
-static struct hid_report *hid_report_create( HID_XFER_PACKET *packet )
+static struct hid_report *hid_report_create( HID_XFER_PACKET *packet, ULONG length )
 {
     struct hid_report *report;
 
-    if (!(report = malloc( offsetof( struct hid_report, buffer[packet->reportBufferLen] ) )))
+    if (!(report = malloc( offsetof( struct hid_report, buffer[length] ) )))
         return NULL;
     report->ref = 1;
-    report->length = packet->reportBufferLen;
-    memcpy( report->buffer, packet->reportBuffer, report->length );
+    report->length = length;
+    memcpy( report->buffer, packet->reportBuffer, packet->reportBufferLen );
+    memset( report->buffer + packet->reportBufferLen, 0, length - packet->reportBufferLen );
 
     return report;
 }
@@ -218,18 +219,19 @@ static struct hid_report *hid_queue_pop_report( struct hid_queue *queue )
 static void hid_device_queue_input( DEVICE_OBJECT *device, HID_XFER_PACKET *packet )
 {
     BASE_DEVICE_EXTENSION *ext = device->DeviceExtension;
+    HIDP_COLLECTION_DESC *desc = ext->u.pdo.device_desc.CollectionDesc;
     const BOOL polled = ext->u.pdo.information.Polled;
+    ULONG size, report_len = polled ? packet->reportBufferLen : desc->InputLength;
     struct hid_report *last_report, *report;
     struct hid_queue *queue;
     LIST_ENTRY completed, *entry;
     RAWINPUT *rawinput;
-    ULONG size;
     KIRQL irql;
     IRP *irp;
 
     if (IsEqualGUID( ext->class_guid, &GUID_DEVINTERFACE_HID ))
     {
-        size = offsetof( RAWINPUT, data.hid.bRawData[packet->reportBufferLen] );
+        size = offsetof( RAWINPUT, data.hid.bRawData[report_len] );
         if (!(rawinput = malloc( size ))) ERR( "Failed to allocate rawinput data!\n" );
         else
         {
@@ -240,8 +242,9 @@ static void hid_device_queue_input( DEVICE_OBJECT *device, HID_XFER_PACKET *pack
             rawinput->header.hDevice = ULongToHandle( ext->u.pdo.rawinput_handle );
             rawinput->header.wParam = RIM_INPUT;
             rawinput->data.hid.dwCount = 1;
-            rawinput->data.hid.dwSizeHid = packet->reportBufferLen;
+            rawinput->data.hid.dwSizeHid = report_len;
             memcpy( rawinput->data.hid.bRawData, packet->reportBuffer, packet->reportBufferLen );
+            memset( rawinput->data.hid.bRawData + packet->reportBufferLen, 0, report_len - packet->reportBufferLen );
 
             input.type = INPUT_HARDWARE;
             input.hi.uMsg = WM_INPUT;
@@ -253,7 +256,7 @@ static void hid_device_queue_input( DEVICE_OBJECT *device, HID_XFER_PACKET *pack
         }
     }
 
-    if (!(last_report = hid_report_create( packet )))
+    if (!(last_report = hid_report_create( packet, report_len )))
     {
         ERR( "Failed to allocate hid_report!\n" );
         return;
@@ -264,7 +267,7 @@ static void hid_device_queue_input( DEVICE_OBJECT *device, HID_XFER_PACKET *pack
     KeAcquireSpinLock( &ext->u.pdo.queues_lock, &irql );
     LIST_FOR_EACH_ENTRY( queue, &ext->u.pdo.queues, struct hid_queue, entry )
     {
-        hid_queue_push_report( queue, last_report );
+        if (!polled) hid_queue_push_report( queue, last_report );
 
         do
         {
@@ -313,18 +316,15 @@ static DWORD CALLBACK hid_device_thread(void *args)
     BASE_DEVICE_EXTENSION *ext = device->DeviceExtension;
     HIDP_COLLECTION_DESC *desc = ext->u.pdo.device_desc.CollectionDesc;
     BOOL polled = ext->u.pdo.information.Polled;
-    ULONG report_id = 0, timeout = 0;
     HIDP_REPORT_IDS *report;
     HID_XFER_PACKET *packet;
+    ULONG report_id = 0;
     IO_STATUS_BLOCK io;
     BYTE *buffer;
     DWORD res;
 
     packet = malloc( sizeof(*packet) + desc->InputLength );
     buffer = (BYTE *)(packet + 1);
-    packet->reportBuffer = buffer;
-
-    if (polled) timeout = ext->u.pdo.poll_interval;
 
     report = find_report_with_type_and_id( ext, HidP_Input, 0, TRUE );
     if (!report) WARN("no input report found.\n");
@@ -333,6 +333,7 @@ static DWORD CALLBACK hid_device_thread(void *args)
     do
     {
         packet->reportId = buffer[0] = report_id;
+        packet->reportBuffer = buffer;
         packet->reportBufferLen = desc->InputLength;
 
         if (!report_id)
@@ -347,16 +348,20 @@ static DWORD CALLBACK hid_device_thread(void *args)
         if (io.Status == STATUS_SUCCESS)
         {
             if (!report_id) io.Information++;
-            packet->reportId = buffer[0];
-            packet->reportBuffer = buffer;
-            packet->reportBufferLen = io.Information;
-
-            report = find_report_with_type_and_id( ext, HidP_Input, buffer[0], FALSE );
-            if (polled || (report && report->InputLength == io.Information))
+            if (!(report = find_report_with_type_and_id( ext, HidP_Input, buffer[0], FALSE )))
+                WARN( "dropping unknown input id %u\n", buffer[0] );
+            else if (!polled && io.Information < report->InputLength)
+                WARN( "dropping short report, len %u expected %u\n", (ULONG)io.Information, report->InputLength );
+            else
+            {
+                packet->reportId = buffer[0];
+                packet->reportBuffer = buffer;
+                packet->reportBufferLen = io.Information;
                 hid_device_queue_input( device, packet );
+            }
         }
 
-        res = WaitForSingleObject(ext->u.pdo.halt_event, timeout);
+        res = WaitForSingleObject(ext->u.pdo.halt_event, polled ? ext->u.pdo.poll_interval : 0);
     } while (res == WAIT_TIMEOUT);
 
     TRACE("device thread exiting, res %#x\n", res);

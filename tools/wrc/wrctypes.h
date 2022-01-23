@@ -68,17 +68,8 @@
 #define CT_SCROLLBAR	0x84
 #define CT_COMBOBOX	0x85
 
-/* Byteordering defines */
-#define WRC_BO_NATIVE	0x00
-#define WRC_BO_LITTLE	0x01
-#define WRC_BO_BIG	0x02
-
-#define WRC_LOBYTE(w)		((WORD)(w) & 0xff)
-#define WRC_HIBYTE(w)		(((WORD)(w) >> 8) & 0xff)
-#define WRC_LOWORD(d)		((DWORD)(d) & 0xffff)
-#define WRC_HIWORD(d)		(((DWORD)(d) >> 16) & 0xffff)
-#define BYTESWAP_WORD(w)	((WORD)(((WORD)WRC_LOBYTE(w) << 8) + (WORD)WRC_HIBYTE(w)))
-#define BYTESWAP_DWORD(d)	((DWORD)(((DWORD)BYTESWAP_WORD(WRC_LOWORD(d)) << 16) + ((DWORD)BYTESWAP_WORD(WRC_HIWORD(d)))))
+#define GET_WORD(ptr)  (((BYTE *)(ptr))[0] | (((BYTE *)(ptr))[1] << 8))
+#define GET_DWORD(ptr) (((BYTE *)(ptr))[0] | (((BYTE *)(ptr))[1] << 8) | (((BYTE *)(ptr))[2] << 16)  | (((BYTE *)(ptr))[3] << 24))
 
 typedef struct
 {
@@ -86,16 +77,6 @@ typedef struct
     int         line;
     int         col;
 } location_t;
-
-/* Binary resource structure */
-#define RES_BLOCKSIZE	512
-
-typedef struct res {
-	unsigned int	allocsize;	/* Allocated datablock size */
-	unsigned int	size;		/* Actual size of data */
-	unsigned int	dataidx;	/* Tag behind the resource-header */
-	unsigned char	*data;
-} res_t;
 
 /* Resource strings are slightly more complex because they include '\0' */
 enum str_e {str_char, str_unicode};
@@ -597,8 +578,6 @@ typedef struct resource {
 		versioninfo_t	*ver;
 		void		*overlay; /* To catch all types at once... */
 	} res;
-	res_t		*binres;	/* To binary converted resource */
-	char		*c_name;	/* BaseName in output */
 	DWORD		memopt;
 } resource_t;
 

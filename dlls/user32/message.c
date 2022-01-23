@@ -586,7 +586,7 @@ DWORD get_input_codepage( void )
 {
     DWORD cp;
     int ret;
-    HKL hkl = GetKeyboardLayout( 0 );
+    HKL hkl = NtUserGetKeyboardLayout( 0 );
 
     ret = GetLocaleInfoW( LOWORD(hkl), LOCALE_IDEFAULTANSICODEPAGE | LOCALE_RETURN_NUMBER,
                           (WCHAR *)&cp, sizeof(cp) / sizeof(WCHAR) );
@@ -2290,7 +2290,9 @@ static BOOL process_rawinput_message( MSG *msg, UINT hw_id, const struct hardwar
 {
     struct rawinput_thread_data *thread_data = rawinput_thread_data();
 
-    if (msg->message == WM_INPUT)
+    if (msg->message == WM_INPUT_DEVICE_CHANGE)
+        rawinput_update_device_list();
+    else
     {
         thread_data->buffer->header.dwSize = RAWINPUT_BUFFER_SIZE;
         if (!rawinput_from_hardware_message( thread_data->buffer, msg_data )) return FALSE;
@@ -2377,7 +2379,7 @@ static BOOL process_keyboard_message( MSG *msg, UINT hw_id, HWND hwnd_filter,
     msg->pt = point_phys_to_win_dpi( msg->hwnd, msg->pt );
 
     if ( remove && msg->message == WM_KEYDOWN )
-        if (ImmProcessKey(msg->hwnd, GetKeyboardLayout(0), msg->wParam, msg->lParam, 0) )
+        if (ImmProcessKey(msg->hwnd, NtUserGetKeyboardLayout(0), msg->wParam, msg->lParam, 0) )
             msg->wParam = VK_PROCESSKEY;
 
     return TRUE;
@@ -2486,7 +2488,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
            if ((msg->message == clk_msg.message) &&
                (msg->hwnd == clk_msg.hwnd) &&
                (msg->wParam == clk_msg.wParam) &&
-               (msg->time - clk_msg.time < GetDoubleClickTime()) &&
+               (msg->time - clk_msg.time < NtUserGetDoubleClickTime()) &&
                (abs(msg->pt.x - clk_msg.pt.x) < GetSystemMetrics(SM_CXDOUBLECLK)/2) &&
                (abs(msg->pt.y - clk_msg.pt.y) < GetSystemMetrics(SM_CYDOUBLECLK)/2))
            {
@@ -2695,7 +2697,7 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
     struct received_message_info info, *old_info;
     unsigned int hw_id = 0;  /* id of previous hardware message */
     void *buffer;
-    size_t buffer_size = 256;
+    size_t buffer_size = 1024;
 
     if (!(buffer = HeapAlloc( GetProcessHeap(), 0, buffer_size ))) return -1;
 
@@ -3920,7 +3922,7 @@ BOOL WINAPI TranslateMessage( const MSG *msg )
         return ImmTranslateMessage(msg->hwnd, msg->message, msg->wParam, msg->lParam);
     }
 
-    GetKeyboardState( state );
+    NtUserGetKeyboardState( state );
     len = ToUnicode(msg->wParam, HIWORD(msg->lParam), state, wp, ARRAY_SIZE(wp), 0);
     if (len == -1)
     {
@@ -4353,7 +4355,7 @@ static BOOL CALLBACK bcast_desktop( LPWSTR desktop, LPARAM lp )
     }
 
     ret = EnumDesktopWindows( hdesktop, bcast_childwindow, lp );
-    CloseDesktop(hdesktop);
+    NtUserCloseDesktop( hdesktop );
     TRACE("-->%d\n", ret);
     return parm->success;
 }
@@ -4367,7 +4369,7 @@ static BOOL CALLBACK bcast_winsta( LPWSTR winsta, LPARAM lp )
         return TRUE;
     ((BroadcastParm *)lp)->winsta = hwinsta;
     ret = EnumDesktopsW( hwinsta, bcast_desktop, lp );
-    CloseWindowStation( hwinsta );
+    NtUserCloseWindowStation( hwinsta );
     TRACE("-->%d\n", ret);
     return ret;
 }

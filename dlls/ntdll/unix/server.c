@@ -23,7 +23,6 @@
 #endif
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -41,26 +40,19 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#ifdef HAVE_SYS_SOCKET_H
-# include <sys/socket.h>
-#endif
-#ifdef HAVE_SYS_WAIT_H
+#include <sys/mman.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
-#endif
 #ifdef HAVE_SYS_UN_H
 #include <sys/un.h>
-#endif
-#ifdef HAVE_SYS_MMAN_H
-#include <sys/mman.h>
 #endif
 #ifdef HAVE_SYS_PRCTL_H
 # include <sys/prctl.h>
 #endif
-#ifdef HAVE_SYS_STAT_H
-# include <sys/stat.h>
-#endif
+#include <sys/stat.h>
 #ifdef HAVE_SYS_SYSCALL_H
 # include <sys/syscall.h>
 #endif
@@ -70,9 +62,7 @@
 #ifdef HAVE_SYS_THR_H
 #include <sys/thr.h>
 #endif
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <unistd.h>
 #ifdef __APPLE__
 #include <crt_externs.h>
 #include <spawn.h>
@@ -85,6 +75,7 @@
 #define WIN32_NO_STATUS
 #include "windef.h"
 #include "winnt.h"
+#include "winioctl.h"
 #include "wine/server.h"
 #include "wine/debug.h"
 #include "unix_private.h"
@@ -115,6 +106,7 @@ timeout_t server_start_time = 0;  /* time of server startup */
 
 sigset_t server_block_set;  /* signals to block during server calls */
 static int fd_socket = -1;  /* socket to exchange file descriptors with the server */
+static int initial_cwd = -1;
 static pid_t server_pid;
 pthread_mutex_t fd_cache_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -544,6 +536,10 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result, BOO
         if (reserve == call->create_thread.reserve && commit == call->create_thread.commit &&
             (ULONG_PTR)func == call->create_thread.func && (ULONG_PTR)arg == call->create_thread.arg)
         {
+#ifndef _WIN64
+            /* FIXME: hack for debugging 32-bit process without a 64-bit ntdll */
+            if (is_wow64 && func == (void *)0x7ffe1000) func = pDbgUiRemoteBreakin;
+#endif
             attr->TotalLength = sizeof(buffer);
             attr->Attributes[0].Attribute    = PS_ATTRIBUTE_CLIENT_ID;
             attr->Attributes[0].Size         = sizeof(id);
@@ -580,17 +576,6 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result, BOO
         if (!self) NtClose( wine_server_ptr_handle(call->dup_handle.dst_process) );
         break;
     }
-    case APC_BREAK_PROCESS:
-    {
-        HANDLE handle;
-
-        result->type = APC_BREAK_PROCESS;
-        result->break_process.status = NtCreateThreadEx( &handle, THREAD_ALL_ACCESS, NULL,
-                                                         NtCurrentProcess(), pDbgUiRemoteBreakin, NULL,
-                                                         0, 0, 0, 0, NULL );
-        if (!result->break_process.status) NtClose( handle );
-        break;
-    }
     default:
         server_protocol_error( "get_apc_request: bad type %d\n", call->type );
         break;
@@ -602,8 +587,7 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result, BOO
  *              server_select
  */
 unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT flags,
-                            timeout_t abs_timeout, context_t *context, pthread_mutex_t *mutex,
-                            user_apc_t *user_apc )
+                            timeout_t abs_timeout, context_t *context, user_apc_t *user_apc )
 {
     unsigned int ret;
     int cookie;
@@ -652,11 +636,6 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
                 size = offsetof( select_op_t, signal_and_wait.signal );
         }
         pthread_sigmask( SIG_SETMASK, &old_set, NULL );
-        if (mutex)
-        {
-            mutex_unlock( mutex );
-            mutex = NULL;
-        }
         if (signaled) break;
 
         ret = wait_select_reply( &cookie );
@@ -686,7 +665,7 @@ unsigned int server_wait( const select_op_t *select_op, data_size_t size, UINT f
         abs_timeout -= now.QuadPart;
     }
 
-    ret = server_select( select_op, size, flags, abs_timeout, NULL, NULL, &apc );
+    ret = server_select( select_op, size, flags, abs_timeout, NULL, &apc );
     if (ret == STATUS_USER_APC) return invoke_user_apc( NULL, &apc, ret );
 
     /* A test on Windows 2000 shows that Windows always yields during
@@ -707,7 +686,7 @@ NTSTATUS WINAPI NtContinue( CONTEXT *context, BOOLEAN alertable )
 
     if (alertable)
     {
-        status = server_select( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, 0, NULL, NULL, &apc );
+        status = server_select( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, 0, NULL, &apc );
         if (status == STATUS_USER_APC) return invoke_user_apc( context, &apc, status );
     }
     return signal_set_full_context( context );
@@ -722,7 +701,7 @@ NTSTATUS WINAPI NtTestAlert(void)
     user_apc_t apc;
     NTSTATUS status;
 
-    status = server_select( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, 0, NULL, NULL, &apc );
+    status = server_select( NULL, 0, SELECT_INTERRUPTIBLE | SELECT_ALERTABLE, 0, NULL, &apc );
     if (status == STATUS_USER_APC) invoke_user_apc( NULL, &apc, STATUS_SUCCESS );
     return STATUS_SUCCESS;
 }
@@ -1244,15 +1223,14 @@ static void server_connect_error( const char *serverdir )
  *           server_connect
  *
  * Attempt to connect to an existing server socket.
- * We need to be in the server directory already.
  */
 static int server_connect(void)
 {
     struct sockaddr_un addr;
     struct stat st;
-    int s, slen, retry, fd_cwd;
+    int s, slen, retry;
 
-    fd_cwd = setup_config_dir();
+    initial_cwd = setup_config_dir();
 
     /* chdir to the server directory */
     if (chdir( server_dir ) == -1)
@@ -1306,12 +1284,7 @@ static int server_connect(void)
 #endif
         if (connect( s, (struct sockaddr *)&addr, slen ) != -1)
         {
-            /* switch back to the starting directory */
-            if (fd_cwd != -1)
-            {
-                fchdir( fd_cwd );
-                close( fd_cwd );
-            }
+            fchdir( initial_cwd );  /* switch back to the starting directory */
             fcntl( s, F_SETFD, FD_CLOEXEC );
             return s;
         }
@@ -1573,9 +1546,11 @@ void server_init_process_done(void)
 {
     void *entry, *teb;
     NTSTATUS status;
-    int suspend, needs_close, unixdir;
+    int suspend;
+    FILE_FS_DEVICE_INFORMATION info;
 
-    TRACE("Begin unix esync load hack\n");  
+
+    TRACE("Begin unix esync load hack\n");
     //Hack hack hack
     activate_esync();
     if (do_esync())
@@ -1584,14 +1559,9 @@ void server_init_process_done(void)
     if (do_fsync())
       fsync_init();
 
-    if (peb->ProcessParameters->CurrentDirectory.Handle &&
-        !server_get_unix_fd( peb->ProcessParameters->CurrentDirectory.Handle,
-                             FILE_TRAVERSE, &unixdir, &needs_close, NULL, NULL ))
-    {
-        fchdir( unixdir );
-        if (needs_close) close( unixdir );
-    }
-    else chdir( "/" ); /* avoid locking removable devices */
+    if (!get_device_info( initial_cwd, &info ) && (info.Characteristics & FILE_REMOVABLE_MEDIA))
+        chdir( "/" );
+    close( initial_cwd );
 
 #ifdef __APPLE__
     send_server_task_port();
@@ -1654,23 +1624,6 @@ void server_init_thread( void *entry_point, BOOL *suspend )
 }
 
 
-/***********************************************************************
- *           DbgUiIssueRemoteBreakin
- */
-NTSTATUS WINAPI DbgUiIssueRemoteBreakin( HANDLE process )
-{
-    apc_call_t call;
-    apc_result_t result;
-    NTSTATUS status;
-
-    memset( &call, 0, sizeof(call) );
-    call.type = APC_BREAK_PROCESS;
-    status = server_queue_process_apc( process, &call, &result );
-    if (status) return status;
-    return result.break_process.status;
-}
-
-
 /******************************************************************************
  *           NtDuplicateObject
  */
@@ -1730,6 +1683,25 @@ NTSTATUS WINAPI NtDuplicateObject( HANDLE source_process, HANDLE source, HANDLE 
 
     if (fd != -1) close( fd );
     return ret;
+}
+
+
+/**************************************************************************
+ *           NtCompareObjects   (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCompareObjects( HANDLE first, HANDLE second )
+{
+    NTSTATUS status;
+
+    SERVER_START_REQ( compare_objects )
+    {
+        req->first = wine_server_obj_handle( first );
+        req->second = wine_server_obj_handle( second );
+        status = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+
+    return status;
 }
 
 

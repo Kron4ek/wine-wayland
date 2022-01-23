@@ -64,7 +64,9 @@ struct MSVCRT_JUMP_BUFFER
     ULONG64 R14;
     ULONG64 R15;
     ULONG64 Rip;
-    ULONG64 Spare;
+    ULONG  MxCsr;
+    USHORT FpCsr;
+    USHORT Spare;
     M128A   Xmm6;
     M128A   Xmm7;
     M128A   Xmm8;
@@ -566,12 +568,35 @@ NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
 }
 
 
+NTSTATUS WINAPI dispatch_wow_exception( EXCEPTION_RECORD *rec_ptr, CONTEXT *context_ptr )
+{
+    char buffer[sizeof(CONTEXT) + sizeof(CONTEXT_EX) + sizeof(XSTATE) + 128];
+    CONTEXT *context;
+    CONTEXT_EX *context_ex;
+    EXCEPTION_RECORD rec = *rec_ptr;
+
+    RtlInitializeExtendedContext( buffer, context_ptr->ContextFlags, &context_ex );
+    context = RtlLocateLegacyContext( context_ex, NULL );
+    RtlCopyContext( context, context_ptr->ContextFlags, context_ptr );
+    pWow64PrepareForException( &rec, context );
+    return dispatch_exception( &rec, context );
+}
+
+
 /*******************************************************************
  *		KiUserExceptionDispatcher (NTDLL.@)
  */
 __ASM_GLOBAL_FUNC( KiUserExceptionDispatcher,
                   "mov 0x98(%rsp),%rcx\n\t" /* context->Rsp */
-                  "mov 0xf8(%rsp),%rdx\n\t" /* context->Rip */
+                  "movw %cs,%ax\n\t"
+                  "cmpw %ax,0x38(%rsp)\n\t" /* context->SegCs */
+                  "je 1f\n\t"
+                  "mov %rsp,%rdx\n\t" /* context */
+                  "lea 0x4f0(%rsp),%rcx\n\t" /* rec */
+                  "movq %r14,%rsp\n\t"  /* switch to 64-bit stack */
+                  "call " __ASM_NAME("dispatch_wow_exception") "\n\t"
+                  "int3\n"
+                  "1:\tmov 0xf8(%rsp),%rdx\n\t" /* context->Rip */
                   "mov %rdx,-0x8(%rcx)\n\t"
                   "mov %rbp,-0x10(%rcx)\n\t"
                   "mov %rdi,-0x18(%rcx)\n\t"
@@ -1195,6 +1220,9 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
         context->u.s.Xmm13 = jmp->Xmm13;
         context->u.s.Xmm14 = jmp->Xmm14;
         context->u.s.Xmm15 = jmp->Xmm15;
+        context->MxCsr     = jmp->MxCsr;
+        context->u.FltSave.MxCsr = jmp->MxCsr;
+        context->u.FltSave.ControlWord = jmp->FpCsr;
     }
     else if (rec && rec->ExceptionCode == STATUS_UNWIND_CONSOLIDATE && rec->NumberParameters >= 1)
     {

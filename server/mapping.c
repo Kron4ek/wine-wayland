@@ -27,9 +27,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef HAVE_SYS_MMAN_H
-# include <sys/mman.h>
-#endif
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include "ntstatus.h"
@@ -416,6 +414,7 @@ static void add_process_view( struct thread *thread, struct memory_view *view )
             process->image = NULL;
             if (get_view_nt_name( view, &name ) && (process->image = memdup( name.str, name.len )))
                 process->imagelen = name.len;
+            process->image_info = view->image;
             return;
         }
     }

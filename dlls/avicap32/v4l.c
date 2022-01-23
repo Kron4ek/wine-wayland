@@ -28,12 +28,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <unistd.h>
-#ifdef HAVE_SYS_IOCTL_H
-# include <sys/ioctl.h>
-#endif
-#ifdef HAVE_SYS_STAT_H
-# include <sys/stat.h>
-#endif
+#include <sys/stat.h>
+#include <sys/ioctl.h>
 #ifdef HAVE_LINUX_VIDEODEV2_H
 # include <linux/videodev2.h>
 #endif
@@ -134,4 +130,13 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
     get_device_desc,
 };
 
-#endif /* HAVE_LINUX_VIDEODEV_2 */
+#ifdef _WIN64
+
+const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+{
+    get_device_desc,
+};
+
+#endif  /* _WIN64 */
+
+#endif /* HAVE_LINUX_VIDEODEV2_H */

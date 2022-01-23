@@ -44,11 +44,9 @@
  * - type management:
  *      + some bits of internal types are missing (like type casts and the address
  *        operator)
- *      + the type for an enum's value is always inferred as int (winedbg & dbghelp)
- *      + most of the code implies that sizeof(void*) = sizeof(int)
- *      + all computations should be made on long long
- *              o expr computations are in int:s
- *              o bitfield size is on a 4-bytes
+ *      + all computations should be made on 64bit
+ *              o bitfield spreading on more bytes than dbg_lgint_t isn't supported
+ *                (can happen on 128bit integers, of an ELF build...)
  * - execution:
  *      + set a better fix for gdb (proxy mode) than the step-mode hack
  *      + implement function call in debuggee
@@ -79,8 +77,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(winedbg);
 
 struct dbg_process*	dbg_curr_process = NULL;
 struct dbg_thread*	dbg_curr_thread = NULL;
-DWORD_PTR	        dbg_curr_tid = 0;
-DWORD_PTR	        dbg_curr_pid = 0;
+DWORD	                dbg_curr_tid = 0;
+DWORD	                dbg_curr_pid = 0;
 dbg_ctx_t               dbg_context;
 BOOL    	        dbg_interactiveP = FALSE;
 HANDLE                  dbg_houtput = 0;
@@ -147,12 +145,12 @@ void	dbg_outputW(const WCHAR* buffer, int len)
 int WINAPIV dbg_printf(const char* format, ...)
 {
     static    char	buf[4*1024];
-    __ms_va_list valist;
+    va_list valist;
     int		len;
 
-    __ms_va_start(valist, format);
+    va_start(valist, format);
     len = vsnprintf(buf, sizeof(buf), format, valist);
-    __ms_va_end(valist);
+    va_end(valist);
 
     if (len <= -1 || len >= sizeof(buf)) 
     {
@@ -242,7 +240,7 @@ const struct dbg_internal_var* dbg_get_internal_var(const char* name)
             struct dbg_internal_var*    ret = (void*)lexeme_alloc_size(sizeof(*ret));
             /* relocate register's field against current context */
             *ret = *div;
-            ret->pval = (DWORD_PTR*)((char*)&dbg_context + (DWORD_PTR)div->pval);
+            ret->pval = (char*)&dbg_context + (DWORD_PTR)div->pval;
             return ret;
         }
     }
@@ -564,19 +562,19 @@ static int dbg_winedbg_usage(BOOL advanced)
     return 0;
 }
 
-void dbg_start_interactive(HANDLE hFile)
+void dbg_start_interactive(const char* filename, HANDLE hFile)
 {
     struct dbg_process* p;
     struct dbg_process* p2;
 
     if (dbg_curr_process)
     {
-        dbg_printf("WineDbg starting on pid %04lx\n", dbg_curr_pid);
+        dbg_printf("WineDbg starting on pid %04x\n", dbg_curr_pid);
         if (dbg_curr_process->active_debuggee) dbg_active_wait_for_first_exception();
     }
 
     dbg_interactiveP = TRUE;
-    parser_handle(hFile);
+    parser_handle(filename, hFile);
 
     LIST_FOR_EACH_ENTRY_SAFE(p, p2, &dbg_process_list, struct dbg_process, entry)
         p->process_io->close_process(p, FALSE);
@@ -596,7 +594,6 @@ static void restart_if_wow64(void)
 
     if (IsWow64Process( GetCurrentProcess(), &is_wow64 ) && is_wow64)
     {
-        static const WCHAR winedbgW[] = {'\\','w','i','n','e','d','b','g','.','e','x','e',0};
         STARTUPINFOW si;
         PROCESS_INFORMATION pi;
         WCHAR filename[MAX_PATH];
@@ -606,7 +603,7 @@ static void restart_if_wow64(void)
         memset( &si, 0, sizeof(si) );
         si.cb = sizeof(si);
         GetSystemDirectoryW( filename, MAX_PATH );
-        lstrcatW( filename, winedbgW );
+        lstrcatW( filename, L"\\winedbg.exe" );
 
         Wow64DisableWow64FsRedirection( &redir );
         if (CreateProcessW( filename, GetCommandLineW(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi ))
@@ -627,6 +624,7 @@ int main(int argc, char** argv)
     int 	        retv = 0;
     HANDLE              hFile = INVALID_HANDLE_VALUE;
     enum dbg_start      ds;
+    const char*         filename = NULL;
 
     /* Initialize the output */
     dbg_houtput = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -676,7 +674,7 @@ int main(int argc, char** argv)
     /* parse options */
     while (argc > 0 && argv[0][0] == '-')
     {
-        if (!strcmp(argv[0], "--command"))
+        if (!strcmp(argv[0], "--command") && argc > 1)
         {
             argc--; argv++;
             hFile = parser_generate_command_file(argv[0], NULL);
@@ -688,9 +686,10 @@ int main(int argc, char** argv)
             argc--; argv++;
             continue;
         }
-        if (!strcmp(argv[0], "--file"))
+        if (!strcmp(argv[0], "--file") && argc > 1)
         {
             argc--; argv++;
+            filename = argv[0];
             hFile = CreateFileA(argv[0], GENERIC_READ|DELETE, 0, 
                                 NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
             if (hFile == INVALID_HANDLE_VALUE)
@@ -721,7 +720,7 @@ int main(int argc, char** argv)
 
     restart_if_wow64();
 
-    dbg_start_interactive(hFile);
+    dbg_start_interactive(filename, hFile);
 
     return 0;
 }

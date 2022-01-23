@@ -140,6 +140,7 @@
 @ stdcall -syscall NtAdjustPrivilegesToken(long long ptr long ptr ptr)
 @ stdcall -syscall NtAlertResumeThread(long ptr)
 @ stdcall -syscall NtAlertThread(long)
+@ stdcall -syscall NtAlertThreadByThreadId(ptr)
 @ stdcall -syscall NtAllocateLocallyUniqueId(ptr)
 # @ stub NtAllocateUserPhysicalPages
 @ stdcall -syscall NtAllocateUuids(ptr ptr ptr ptr)
@@ -156,6 +157,7 @@
 @ stdcall -syscall NtClose(long)
 # @ stub NtCloseObjectAuditAlarm
 # @ stub NtCompactKeys
+@ stdcall -syscall NtCompareObjects(ptr ptr)
 # @ stub NtCompareTokens
 @ stdcall -syscall NtCompleteConnectPort(ptr)
 # @ stub NtCompressKey
@@ -365,7 +367,7 @@
 # @ stub NtSetBootEntryOrder
 # @ stub NtSetBootOptions
 @ stdcall -syscall NtSetContextThread(long ptr)
-# @ stub NtSetDebugFilterState
+@ stdcall -syscall NtSetDebugFilterState(long long long)
 # @ stub NtSetDefaultHardErrorPort
 @ stdcall -syscall NtSetDefaultLocale(long long)
 @ stdcall -syscall NtSetDefaultUILanguage(long)
@@ -424,6 +426,7 @@
 @ stdcall -syscall NtUnmapViewOfSection(long ptr)
 # @ stub NtVdmControl
 # @ stub NtW32Call
+@ stdcall -syscall NtWaitForAlertByThreadId(ptr ptr)
 @ stdcall -syscall NtWaitForDebugEvent(long long ptr ptr)
 @ stdcall -syscall NtWaitForKeyedEvent(long ptr long ptr)
 @ stdcall -syscall NtWaitForMultipleObjects(long ptr long long ptr)
@@ -705,7 +708,7 @@
 @ stdcall RtlGetCurrentProcessorNumberEx(ptr)
 @ stdcall RtlGetCurrentTransaction()
 @ stdcall RtlGetDaclSecurityDescriptor(ptr ptr ptr ptr)
-@ stub RtlGetElementGenericTable
+@ stdcall RtlGetElementGenericTable(ptr long)
 # @ stub RtlGetElementGenericTableAvl
 @ stdcall RtlGetEnabledExtendedFeatures(int64)
 @ stdcall RtlGetExePath(wstr ptr)
@@ -850,7 +853,7 @@
 # @ stub RtlLockMemoryStreamRegion
 # @ stub RtlLogStackBackTrace
 @ stdcall RtlLookupAtomInAtomTable(ptr wstr ptr)
-@ stub RtlLookupElementGenericTable
+@ stdcall RtlLookupElementGenericTable(ptr ptr)
 # @ stub RtlLookupElementGenericTableAvl
 @ stdcall -arch=arm,arm64,x86_64 RtlLookupFunctionEntry(long ptr ptr)
 @ stdcall RtlMakeSelfRelativeSD(ptr ptr ptr)
@@ -941,7 +944,7 @@
 @ stdcall RtlRemoveVectoredContinueHandler(ptr)
 @ stdcall RtlRemoveVectoredExceptionHandler(ptr)
 @ stdcall RtlResetRtlTranslations(ptr)
-@ cdecl -arch=arm64,x86_64 RtlRestoreContext(ptr ptr)
+@ cdecl -arch=arm,arm64,x86_64 RtlRestoreContext(ptr ptr)
 @ stdcall RtlRestoreLastWin32Error(long) RtlSetLastWin32Error
 @ stub RtlRevertMemoryStream
 @ stub RtlRunDecodeUnicodeString
@@ -1044,7 +1047,7 @@
 @ stdcall RtlUnlockHeap(long)
 # @ stub RtlUnlockMemoryStreamRegion
 @ stdcall -norelay RtlUnwind(ptr ptr ptr ptr)
-@ stdcall -arch=arm64,x86_64 RtlUnwindEx(ptr ptr ptr ptr ptr ptr)
+@ stdcall -arch=arm,arm64,x86_64 RtlUnwindEx(ptr ptr ptr ptr ptr ptr)
 @ stdcall RtlUpcaseUnicodeChar(long)
 @ stdcall RtlUpcaseUnicodeString(ptr ptr long)
 @ stdcall RtlUpcaseUnicodeStringToAnsiString(ptr ptr long)
@@ -1067,7 +1070,7 @@
 @ stub RtlValidateProcessHeaps
 # @ stub RtlValidateUnicodeString
 @ stdcall RtlVerifyVersionInfo(ptr long int64)
-@ stdcall -arch=arm64,x86_64 RtlVirtualUnwind(long long long ptr ptr ptr ptr ptr)
+@ stdcall -arch=arm,arm64,x86_64 RtlVirtualUnwind(long long long ptr ptr ptr ptr ptr)
 @ stdcall RtlWaitOnAddress(ptr ptr long ptr)
 @ stdcall RtlWakeAddressAll(ptr)
 @ stdcall RtlWakeAddressSingle(ptr)
@@ -1161,6 +1164,7 @@
 @ stdcall -private -syscall ZwAdjustPrivilegesToken(long long ptr long ptr ptr) NtAdjustPrivilegesToken
 @ stdcall -private -syscall ZwAlertResumeThread(long ptr) NtAlertResumeThread
 @ stdcall -private -syscall ZwAlertThread(long) NtAlertThread
+@ stdcall -private -syscall ZwAlertThreadByThreadId(ptr) NtAlertThreadByThreadId
 @ stdcall -private -syscall ZwAllocateLocallyUniqueId(ptr) NtAllocateLocallyUniqueId
 # @ stub ZwAllocateUserPhysicalPages
 @ stdcall -private -syscall ZwAllocateUuids(ptr ptr ptr ptr) NtAllocateUuids
@@ -1177,6 +1181,7 @@
 @ stdcall -private -syscall ZwClose(long) NtClose
 # @ stub ZwCloseObjectAuditAlarm
 # @ stub ZwCompactKeys
+@ stdcall -private -syscall ZwCompareObjects(ptr ptr) NtCompareObjects
 # @ stub ZwCompareTokens
 @ stdcall -private -syscall ZwCompleteConnectPort(ptr) NtCompleteConnectPort
 # @ stub ZwCompressKey
@@ -1384,7 +1389,7 @@
 # @ stub ZwSetBootEntryOrder
 # @ stub ZwSetBootOptions
 @ stdcall -private -syscall ZwSetContextThread(long ptr) NtSetContextThread
-# @ stub ZwSetDebugFilterState
+@ stdcall -private -syscall ZwSetDebugFilterState(long long long) NtSetDebugFilterState
 # @ stub ZwSetDefaultHardErrorPort
 @ stdcall -private -syscall ZwSetDefaultLocale(long long) NtSetDefaultLocale
 @ stdcall -private -syscall ZwSetDefaultUILanguage(long) NtSetDefaultUILanguage
@@ -1443,6 +1448,7 @@
 @ stdcall -private -syscall ZwUnmapViewOfSection(long ptr) NtUnmapViewOfSection
 # @ stub ZwVdmControl
 # @ stub ZwW32Call
+@ stdcall -private -syscall ZwWaitForAlertByThreadId(ptr ptr) NtWaitForAlertByThreadId
 @ stdcall -private -syscall ZwWaitForDebugEvent(long long ptr ptr) NtWaitForDebugEvent
 @ stdcall -private -syscall ZwWaitForKeyedEvent(long ptr long ptr) NtWaitForKeyedEvent
 @ stdcall -private -syscall ZwWaitForMultipleObjects(long ptr long long ptr) NtWaitForMultipleObjects
@@ -1464,11 +1470,12 @@
 @ cdecl -private -arch=i386 _CIpow()
 @ cdecl -private -arch=i386 _CIsin()
 @ cdecl -private -arch=i386 _CIsqrt()
-@ stdcall -arch=x86_64,arm64 __C_specific_handler(ptr long ptr ptr)
+@ stdcall -arch=x86_64,arm,arm64 __C_specific_handler(ptr long ptr ptr)
 @ cdecl -arch=arm,arm64,x86_64 -norelay __chkstk()
 @ cdecl __isascii(long)
 @ cdecl __iscsym(long)
 @ cdecl __iscsymf(long)
+@ stdcall -arch=arm __jump_unwind(ptr ptr)
 @ cdecl __toascii(long)
 @ cdecl -norelay -arch=i386 -ret64 _alldiv(int64 int64)
 @ cdecl -arch=i386 -norelay _alldvrm(int64 int64)
@@ -1626,7 +1633,6 @@
 @ stdcall -syscall __wine_unix_call(int64 long ptr)
 @ stdcall -syscall __wine_unix_spawnvp(long ptr)
 @ cdecl __wine_set_unix_funcs(long ptr)
-@ cdecl __wine_init_unix_lib(long long ptr ptr)
 @ stdcall __wine_ctrl_routine(ptr)
 @ extern __wine_syscall_dispatcher
 @ extern -arch=i386 __wine_ldt_copy
@@ -1646,5 +1652,3 @@
 # Filesystem
 @ stdcall -syscall wine_nt_to_unix_file_name(ptr ptr ptr long)
 @ stdcall -syscall wine_unix_to_nt_file_name(str ptr ptr)
-
-@ cdecl wine_esync_set_queue_fd(long)

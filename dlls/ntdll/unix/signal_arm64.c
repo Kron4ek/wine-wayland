@@ -25,7 +25,6 @@
 #ifdef __aarch64__
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <pthread.h>
@@ -33,9 +32,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <sys/types.h>
+#include <unistd.h>
 #ifdef HAVE_SYS_PARAM_H
 # include <sys/param.h>
 #endif
@@ -86,7 +84,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(seh);
 # define FP_sig(context)            REGn_sig(29, context)    /* Frame pointer */
 # define LR_sig(context)            REGn_sig(30, context)    /* Link Register */
 
-static struct _aarch64_ctx *get_extended_sigcontext( ucontext_t *sigcontext, unsigned int magic )
+static struct _aarch64_ctx *get_extended_sigcontext( const ucontext_t *sigcontext, unsigned int magic )
 {
     struct _aarch64_ctx *ctx = (struct _aarch64_ctx *)sigcontext->uc_mcontext.__reserved;
     while ((char *)ctx < (char *)(&sigcontext->uc_mcontext + 1) && ctx->magic && ctx->size)
@@ -97,7 +95,7 @@ static struct _aarch64_ctx *get_extended_sigcontext( ucontext_t *sigcontext, uns
     return NULL;
 }
 
-static struct fpsimd_context *get_fpsimd_context( ucontext_t *sigcontext )
+static struct fpsimd_context *get_fpsimd_context( const ucontext_t *sigcontext )
 {
     return (struct fpsimd_context *)get_extended_sigcontext( sigcontext, FPSIMD_MAGIC );
 }
@@ -214,6 +212,7 @@ NTSTATUS CDECL unwind_builtin_dll( ULONG type, DISPATCHER_CONTEXT *dispatch, CON
         return STATUS_INVALID_DISPOSITION;
     }
     rc = unw_get_proc_info( &cursor, &info );
+    if (UNW_ENOINFO < 0) rc = -rc;  /* LLVM libunwind has negative error codes */
     if (rc != UNW_ESUCCESS && rc != -UNW_ENOINFO)
     {
         WARN( "failed to get info: %d\n", rc );
@@ -226,7 +225,6 @@ NTSTATUS CDECL unwind_builtin_dll( ULONG type, DISPATCHER_CONTEXT *dispatch, CON
         dispatch->LanguageHandler = NULL;
         dispatch->EstablisherFrame = context->Sp;
         context->Pc = context->u.s.Lr;
-        context->Sp = context->Sp + sizeof(ULONG64);
         context->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
         return STATUS_SUCCESS;
     }
@@ -321,46 +319,9 @@ NTSTATUS CDECL unwind_builtin_dll( ULONG type, DISPATCHER_CONTEXT *dispatch, CON
           context->u.s.X28, context->u.s.Fp, context->u.s.Lr, context->Sp );
     return STATUS_SUCCESS;
 #else
+    ERR("libunwind not available, unable to unwind\n");
     return STATUS_INVALID_DISPOSITION;
 #endif
-}
-
-
-/***********************************************************************
- *           save_context
- *
- * Set the register values from a sigcontext.
- */
-static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
-{
-    DWORD i;
-
-    context->ContextFlags = (CONTEXT_FULL & ~CONTEXT_FLOATING_POINT) |
-                             CONTEXT_ARM64;
-    context->u.s.Fp = FP_sig(sigcontext);     /* Frame pointer */
-    context->u.s.Lr = LR_sig(sigcontext);     /* Link register */
-    context->Sp     = SP_sig(sigcontext);     /* Stack pointer */
-    context->Pc     = PC_sig(sigcontext);     /* Program Counter */
-    context->Cpsr   = PSTATE_sig(sigcontext); /* Current State Register */
-    for (i = 0; i <= 28; i++) context->u.X[i] = REGn_sig( i, sigcontext );
-}
-
-
-/***********************************************************************
- *           restore_context
- *
- * Build a sigcontext from the register values.
- */
-static void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
-{
-    DWORD i;
-
-    FP_sig(sigcontext)     = context->u.s.Fp; /* Frame pointer */
-    LR_sig(sigcontext)     = context->u.s.Lr; /* Link register */
-    SP_sig(sigcontext)     = context->Sp;     /* Stack pointer */
-    PC_sig(sigcontext)     = context->Pc;     /* Program Counter */
-    PSTATE_sig(sigcontext) = context->Cpsr;   /* Current State Register */
-    for (i = 0; i <= 28; i++) REGn_sig( i, sigcontext ) = context->u.X[i];
 }
 
 
@@ -369,7 +330,7 @@ static void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
  *
  * Set the FPU context from a sigcontext.
  */
-static void save_fpu( CONTEXT *context, ucontext_t *sigcontext )
+static void save_fpu( CONTEXT *context, const ucontext_t *sigcontext )
 {
 #ifdef linux
     struct fpsimd_context *fp = get_fpsimd_context( sigcontext );
@@ -393,20 +354,59 @@ static void save_fpu( CONTEXT *context, ucontext_t *sigcontext )
  *
  * Restore the FPU context to a sigcontext.
  */
-static void restore_fpu( struct syscall_frame *frame, ucontext_t *sigcontext )
+static void restore_fpu( const CONTEXT *context, ucontext_t *sigcontext )
 {
 #ifdef linux
     struct fpsimd_context *fp = get_fpsimd_context( sigcontext );
 
     if (!fp) return;
-    fp->fpcr = frame->fpcr;
-    fp->fpsr = frame->fpsr;
-    memcpy( fp->vregs, frame->v, sizeof(fp->vregs) );
+    fp->fpcr = context->Fpcr;
+    fp->fpsr = context->Fpsr;
+    memcpy( fp->vregs, context->V, sizeof(fp->vregs) );
 #elif defined(__APPLE__)
-    sigcontext->uc_mcontext->__ns.__fpcr = frame->fpcr;
-    sigcontext->uc_mcontext->__ns.__fpsr = frame->fpsr;
-    memcpy( sigcontext->uc_mcontext->__ns.__v, frame->v, sizeof(frame->v) );
+    sigcontext->uc_mcontext->__ns.__fpcr = context->Fpcr;
+    sigcontext->uc_mcontext->__ns.__fpsr = context->Fpsr;
+    memcpy( sigcontext->uc_mcontext->__ns.__v, context->V, sizeof(context->V) );
 #endif
+}
+
+
+/***********************************************************************
+ *           save_context
+ *
+ * Set the register values from a sigcontext.
+ */
+static void save_context( CONTEXT *context, const ucontext_t *sigcontext )
+{
+    DWORD i;
+
+    context->ContextFlags = CONTEXT_FULL;
+    context->u.s.Fp = FP_sig(sigcontext);     /* Frame pointer */
+    context->u.s.Lr = LR_sig(sigcontext);     /* Link register */
+    context->Sp     = SP_sig(sigcontext);     /* Stack pointer */
+    context->Pc     = PC_sig(sigcontext);     /* Program Counter */
+    context->Cpsr   = PSTATE_sig(sigcontext); /* Current State Register */
+    for (i = 0; i <= 28; i++) context->u.X[i] = REGn_sig( i, sigcontext );
+    save_fpu( context, sigcontext );
+}
+
+
+/***********************************************************************
+ *           restore_context
+ *
+ * Build a sigcontext from the register values.
+ */
+static void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
+{
+    DWORD i;
+
+    FP_sig(sigcontext)     = context->u.s.Fp; /* Frame pointer */
+    LR_sig(sigcontext)     = context->u.s.Lr; /* Link register */
+    SP_sig(sigcontext)     = context->Sp;     /* Stack pointer */
+    PC_sig(sigcontext)     = context->Pc;     /* Program Counter */
+    PSTATE_sig(sigcontext) = context->Cpsr;   /* Current State Register */
+    for (i = 0; i <= 28; i++) REGn_sig( i, sigcontext ) = context->u.X[i];
+    restore_fpu( context, sigcontext );
 }
 
 
@@ -634,7 +634,6 @@ static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
 
     rec->ExceptionAddress = (void *)PC_sig(sigcontext);
     save_context( &context, sigcontext );
-    save_fpu( &context, sigcontext );
 
     status = send_debug_event( rec, &context, TRUE );
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
@@ -739,6 +738,14 @@ struct user_callback_frame
 NTSTATUS WINAPI KeUserModeCallback( ULONG id, const void *args, ULONG len, void **ret_ptr, ULONG *ret_len )
 {
     struct user_callback_frame callback_frame = { {{ 0 }}, ret_ptr, ret_len };
+
+    /* if we have no syscall frame, call the callback directly */
+    if ((char *)&callback_frame < (char *)ntdll_get_thread_data()->kernel_stack ||
+        (char *)&callback_frame > (char *)arm64_thread_data()->syscall_frame)
+    {
+        NTSTATUS (WINAPI *func)(const void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+        return func( args, len );
+    }
 
     if ((char *)ntdll_get_thread_data()->kernel_stack + min_kernel_stack > (char *)&callback_frame)
         return STATUS_STACK_OVERFLOW;
@@ -1058,7 +1065,22 @@ static void usr2_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     PC_sig(context)     = frame->pc;
     PSTATE_sig(context) = frame->cpsr;
     for (i = 0; i <= 28; i++) REGn_sig( i, context ) = frame->x[i];
-    restore_fpu( frame, context );
+
+#ifdef linux
+    {
+        struct fpsimd_context *fp = get_fpsimd_context( sigcontext );
+        if (fp)
+        {
+            fp->fpcr = frame->fpcr;
+            fp->fpsr = frame->fpsr;
+            memcpy( fp->vregs, frame->v, sizeof(fp->vregs) );
+        }
+    }
+#elif defined(__APPLE__)
+    context->uc_mcontext->__ns.__fpcr = frame->fpcr;
+    context->uc_mcontext->__ns.__fpsr = frame->fpsr;
+    memcpy( context->uc_mcontext->__ns.__v, frame->v, sizeof(frame->v) );
+#endif
 }
 
 

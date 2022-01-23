@@ -21,10 +21,7 @@
 #ifndef __WINE_SERVER_OBJECT_H
 #define __WINE_SERVER_OBJECT_H
 
-#ifdef HAVE_SYS_POLL_H
-#include <sys/poll.h>
-#endif
-
+#include <poll.h>
 #include <sys/time.h>
 #include "wine/server_protocol.h"
 #include "wine/list.h"
@@ -286,6 +283,8 @@ extern void init_directories( struct fd *intl_fd );
 
 /* symbolic link functions */
 
+extern struct object *create_root_symlink( struct object *root, const struct unicode_str *name,
+                                           unsigned int attr, const struct security_descriptor *sd );
 extern struct object *create_obj_symlink( struct object *root, const struct unicode_str *name,
                                           unsigned int attr, struct object *target,
                                           const struct security_descriptor *sd );

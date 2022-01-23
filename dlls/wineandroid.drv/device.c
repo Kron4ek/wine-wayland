@@ -19,13 +19,13 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 
 #define NONAMELESSUNION
 #define NONAMELESSSTRUCT

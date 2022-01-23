@@ -2811,8 +2811,9 @@ int evaluate_if_condition(WCHAR *p, WCHAR **command, int *test, int *negate)
     WCHAR *param = WCMD_parameter(p, 1+(*negate), NULL, FALSE, FALSE);
     int    len = lstrlenW(param);
 
+    if (!len) goto syntax_err;
     /* FindFirstFile does not like a directory path ending in '\', append a '.' */
-    if (len && param[len-1] == '\\') lstrcatW(param, L".");
+    if (param[len-1] == '\\') lstrcatW(param, L".");
 
     hff = FindFirstFileW(param, &fd);
     *test = (hff != INVALID_HANDLE_VALUE );
@@ -4763,7 +4764,7 @@ void WCMD_assoc (const WCHAR *args, BOOL assoc) {
     WCHAR   *newValue;
     LONG    rc = ERROR_SUCCESS;
     WCHAR    keyValue[MAXSTRING];
-    DWORD   valueLen = MAXSTRING;
+    DWORD   valueLen;
     HKEY    readKey;
 
     /* See if parameter includes '=' */
@@ -4803,7 +4804,7 @@ void WCMD_assoc (const WCHAR *args, BOOL assoc) {
 
             if (RegOpenKeyExW(key, subkey, 0, accessOptions, &readKey) == ERROR_SUCCESS) {
 
-              valueLen = ARRAY_SIZE(keyValue);
+              valueLen = sizeof(keyValue);
               rc = RegQueryValueExW(readKey, NULL, NULL, NULL, (LPBYTE)keyValue, &valueLen);
               WCMD_output_asis(keyName);
               WCMD_output_asis(L"=");
@@ -4836,6 +4837,7 @@ void WCMD_assoc (const WCHAR *args, BOOL assoc) {
 
         if (RegOpenKeyExW(key, subkey, 0, accessOptions, &readKey) == ERROR_SUCCESS) {
 
+          valueLen = sizeof(keyValue);
           rc = RegQueryValueExW(readKey, NULL, NULL, NULL, (LPBYTE)keyValue, &valueLen);
           WCMD_output_asis(args);
           WCMD_output_asis(L"=");

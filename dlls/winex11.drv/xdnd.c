@@ -20,12 +20,9 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <string.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <unistd.h>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -43,7 +40,6 @@
 #include "oleidl.h"
 #include "objidl.h"
 
-#include "wine/unicode.h"
 #include "wine/debug.h"
 #include "wine/list.h"
 

@@ -1248,6 +1248,7 @@ static void geometry_sink_check_(unsigned int line, const struct geometry_sink *
     const struct expected_geometry_figure *expected_figure;
     const struct geometry_figure *figure;
     unsigned int i, j;
+    unsigned int segment_count;
     BOOL match;
 
     ok_(__FILE__, line)(sink->fill_mode == fill_mode,
@@ -1276,7 +1277,10 @@ static void geometry_sink_check_(unsigned int line, const struct geometry_sink *
                 "Got unexpected figure %u segment count %u, expected %u.\n",
                 i, figure->segment_count, expected_figure->segment_count);
 
-        for (j = 0; j < figure->segment_count; ++j)
+        segment_count = expected_figure->segment_count < figure->segment_count ?
+            expected_figure->segment_count : figure->segment_count;
+
+        for (j = 0; j < segment_count; ++j)
         {
             expected_segment = &expected_figure->segments[j];
             segment = &figure->segments[j];
@@ -1312,6 +1316,44 @@ static void geometry_sink_check_(unsigned int line, const struct geometry_sink *
                             expected_segment->u.bezier.point1.x, expected_segment->u.bezier.point1.y,
                             expected_segment->u.bezier.point2.x, expected_segment->u.bezier.point2.y,
                             expected_segment->u.bezier.point3.x, expected_segment->u.bezier.point3.y);
+                    break;
+            }
+        }
+
+        for (j = segment_count; j < expected_figure->segment_count; ++j)
+        {
+            segment = &expected_figure->segments[j];
+            switch (segment->type)
+            {
+                case SEGMENT_LINE:
+                    ok_(__FILE__, line)(FALSE, "Missing figure %u segment %u {%.8e, %.8e}.\n",
+                            i, j, segment->u.line.x, segment->u.line.y);
+                    break;
+                case SEGMENT_BEZIER:
+                    ok_(__FILE__, line)(FALSE, "Missing figure %u segment %u "
+                            "{%.8e, %.8e, %.8e, %.8e, %.8e, %.8e}\n",
+                            i, j, segment->u.bezier.point1.x, segment->u.bezier.point1.y,
+                            segment->u.bezier.point2.x, segment->u.bezier.point2.y,
+                            segment->u.bezier.point3.x, segment->u.bezier.point3.y);
+                    break;
+            }
+        }
+
+        for (j = segment_count; j < figure->segment_count; ++j)
+        {
+            segment = &figure->segments[j];
+            switch (segment->type)
+            {
+                case SEGMENT_LINE:
+                    ok_(__FILE__, line)(FALSE, "Got unexpected figure %u segment %u {%.8e, %.8e}.\n",
+                            i, j, segment->u.line.x, segment->u.line.y);
+                    break;
+                case SEGMENT_BEZIER:
+                    ok_(__FILE__, line)(FALSE, "Got unexpected figure %u segment %u "
+                            "{%.8e, %.8e, %.8e, %.8e, %.8e, %.8e}\n",
+                            i, j, segment->u.bezier.point1.x, segment->u.bezier.point1.y,
+                            segment->u.bezier.point2.x, segment->u.bezier.point2.y,
+                            segment->u.bezier.point3.x, segment->u.bezier.point3.y);
                     break;
             }
         }
@@ -3041,6 +3083,23 @@ static void test_path_geometry(BOOL d3d11)
         /* Figure 28. */
         {SEGMENT_LINE,   {{{ 75.0f, 300.0f}}}},
         {SEGMENT_LINE,   {{{  5.0f, 300.0f}}}},
+        /* Figure 29. */
+        {SEGMENT_LINE,   {{{ 40.0f, 100.0f}}}},
+        {SEGMENT_BEZIER, {{{4.00000000e+01f, 7.66666666e+01f},
+                           {3.33333333e+01f, 7.00000000e+01f},
+                           {2.00000000e+01f, 8.00000000e+01f}}}},
+        {SEGMENT_LINE,   {{{ 60.0f,  40.0f}}}},
+        {SEGMENT_BEZIER, {{{8.33333333e+01f, 4.00000000e+01f},
+                           {9.00000000e+01f, 3.33333333e+01f},
+                           {8.00000000e+01f, 2.00000000e+01f}}}},
+        {SEGMENT_LINE,   {{{140.0f, 160.0f}}}},
+        {SEGMENT_BEZIER, {{{1.16666666e+02f, 1.60000000e+02f},
+                           {1.10000000e+02f, 1.66666666e+02f},
+                           {1.20000000e+02f, 1.80000000e+02f}}}},
+        {SEGMENT_LINE,   {{{170.0f, 110.0f}}}},
+        {SEGMENT_BEZIER, {{{1.70000000e+02f, 1.26666666e+02f},
+                           {1.73333333e+02f, 1.30000000e+02f},
+                           {1.80000000e+02f, 1.20000000e+02f}}}},
     };
     static const struct expected_geometry_figure expected_figures[] =
     {
@@ -3084,6 +3143,11 @@ static void test_path_geometry(BOOL d3d11)
         {D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED, { 20.0f, 612.0f},  8, &expected_segments[164]},
         /* 28 */
         {D2D1_FIGURE_BEGIN_HOLLOW, D2D1_FIGURE_END_OPEN,   { 40.0f,  20.0f},  2, &expected_segments[172]},
+        /* 29 */
+        {D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_OPEN,   {  20.0f,  80.0f},  2, &expected_segments[174]},
+        {D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_OPEN,   {  80.0f,  20.0f},  2, &expected_segments[176]},
+        {D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED, { 120.0f, 180.0f},  2, &expected_segments[178]},
+        {D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED, { 180.0f, 120.0f},  2, &expected_segments[180]},
     };
 
     if (!init_test_context(&ctx, d3d11))
@@ -3825,6 +3889,55 @@ static void test_path_geometry(BOOL d3d11)
             NULL, 0.0f, &simplify_sink.ID2D1SimplifiedGeometrySink_iface);
     ok(SUCCEEDED(hr), "Failed to simplify geometry, hr %#x.\n", hr);
     geometry_sink_check(&simplify_sink, D2D1_FILL_MODE_ALTERNATE, 1, &expected_figures[28], 1);
+    geometry_sink_cleanup(&simplify_sink);
+
+    ID2D1PathGeometry_Release(geometry);
+
+    hr = ID2D1Factory_CreatePathGeometry(factory, &geometry);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ID2D1PathGeometry_Open(geometry, &sink);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    set_point(&point, 20.0f,   80.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    line_to(sink, 40.0f, 100.0f);
+    quadratic_to(sink, 40.0f, 65.0f, 20.0f, 80.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_OPEN);
+
+    set_point(&point, 80.0f,   20.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    line_to(sink, 60.0f, 40.0f);
+    quadratic_to(sink, 95.0f, 40.0f, 80.0f, 20.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_OPEN);
+
+    set_point(&point, 120.0f,  180.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    line_to(sink, 140.0f, 160.0f);
+    quadratic_to(sink, 105.0f, 160.0f, 120.0f, 180.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_CLOSED);
+
+    set_point(&point, 180.0f,  120.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    line_to(sink, 170.0f, 110.0f);
+    quadratic_to(sink, 170.0f, 135.0f, 180.0f, 120.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_CLOSED);
+
+    hr = ID2D1GeometrySink_Close(sink);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ID2D1GeometrySink_Release(sink);
+
+    set_rect(&rect, 0.0f, 0.0f, 0.0f, 0.0f);
+    hr = ID2D1PathGeometry_GetBounds(geometry, NULL, &rect);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    match = compare_rect(&rect, 20.0f, 20.0f, 180.0f, 180.0f, 0);
+    ok(match, "Got unexpected rectangle {%.8e, %.8e, %.8e, %.8e}.\n",
+            rect.left, rect.top, rect.right, rect.bottom);
+
+    geometry_sink_init(&simplify_sink);
+    hr = ID2D1PathGeometry_Simplify(geometry, D2D1_GEOMETRY_SIMPLIFICATION_OPTION_CUBICS_AND_LINES,
+            NULL, 0.0f, &simplify_sink.ID2D1SimplifiedGeometrySink_iface);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    geometry_sink_check(&simplify_sink, D2D1_FILL_MODE_ALTERNATE, 4, &expected_figures[29], 1);
     geometry_sink_cleanup(&simplify_sink);
 
     ID2D1PathGeometry_Release(geometry);
@@ -6877,6 +6990,45 @@ static void test_draw_geometry(BOOL d3d11)
             "AjqGAjmIAjiIAiECFIkCFAIIBBSKAhQNFIsCFAwUjAIUCxSNAhQKFI4CFAkUjwIUBxWQAhQGFZEC"
             "FAUVkQIUBRWRAhQFFZECFQMVkwIUAxWTAhQDFZMCFAIVlAIVARWVAiqVAimWAimWAiiYAiaZAiaZ"
             "AiWaAiScAiKdAiGeAh+hAhyjAhmuAg3GxgEA");
+    ok(match, "Figure does not match.\n");
+
+    hr = ID2D1Factory_CreatePathGeometry(factory, &geometry);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ID2D1PathGeometry_Open(geometry, &sink);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    set_point(&point, 20.0f, 80.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_HOLLOW);
+    quadratic_to(sink, 20.0f, 160.0f,  60.0f, 160.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_CLOSED);
+
+    set_point(&point, 100.0f, 80.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_HOLLOW);
+    quadratic_to(sink, 100.0f, 160.0f, 140.0f, 160.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_OPEN);
+
+    hr = ID2D1GeometrySink_Close(sink);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ID2D1GeometrySink_Release(sink);
+
+    ID2D1RenderTarget_BeginDraw(rt);
+    ID2D1RenderTarget_Clear(rt, &color);
+    ID2D1RenderTarget_DrawGeometry(rt, (ID2D1Geometry *)geometry, (ID2D1Brush *)brush, 10.0f, NULL);
+    hr = ID2D1RenderTarget_EndDraw(rt, NULL, NULL);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ID2D1PathGeometry_Release(geometry);
+
+    match = compare_figure(&ctx,   0,   0, 160, 160, 0xff652e89, 32,
+            "3iUCngEEnAEGmgEImAEKlgEMlAEOkgEQkAESjgEUjAEWigEYiAEahgEchAEeggEggQEhfyN9JXsn"
+            "eih4KnYUAhZ1FAMWcxQFFnIUBhZwFQcWbxQJFm4UChZsFQsWaxUMFmoVDRZpFQ4WaBUPFmcVEBZm"
+            "FREWZhURFmUVEhZkFhIWZBYSFmQXERZkFxEWZBgQFmQaDhZlGwwWZh0JFmchBBZpOWw2bzN0Lnsn"
+            "2mEA");
+    ok(match, "Figure does not match.\n");
+
+    match = compare_figure(&ctx, 160,   0, 160, 160, 0xff652e89, 32,
+            "njIUjAEUjAEUjAEUjAEUjAEUjQEUjAEUjAEUjAEUjQEUjAEUjAEUjQEUjAEUjQEUjAEVjAEUjQEU"
+            "jAEVjAEVjAEVjAEVjAEVjAEVjAEVjQEVjAEVjAEWjAEWjAEXiwEXiwEYigEaiQEbiAEdhgEhgwEz"
+            "ci53KX4ihwEZ6GEA");
     ok(match, "Figure does not match.\n");
 
     ID2D1SolidColorBrush_Release(brush);
@@ -10134,6 +10286,275 @@ static void test_effect_crop(BOOL d3d11)
     release_test_context(&ctx);
 }
 
+static void test_stroke_contains_point(BOOL d3d11)
+{
+    ID2D1RectangleGeometry *rectangle;
+    ID2D1GeometrySink *sink;
+    ID2D1PathGeometry *path;
+    ID2D1Factory *factory;
+    D2D1_POINT_2F point;
+    D2D1_RECT_F rect;
+    unsigned int i;
+    BOOL contains;
+    HRESULT hr;
+
+    static const struct contains_point_test
+    {
+        D2D1_MATRIX_3X2_F transform;
+        D2D1_POINT_2F point;
+        float tolerance;
+        float stroke_width;
+        BOOL matrix;
+        BOOL contains;
+    }
+    rectangle_tests[] =
+    {
+        /* 0. Stroked area hittesting. Edge. */
+        {{{{0.0f}}}, { 0.4f, 10.0f},  0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, { 0.5f, 10.0f},  0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, { 0.6f, 10.0f},  0.0f, 1.0f, FALSE, FALSE},
+
+        /* 3. Negative tolerance. */
+        {{{{0.0f}}}, {-0.6f, 10.0f}, -1.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, { 0.6f, 10.0f}, -1.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, { 1.4f, 10.0f}, -1.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, { 1.5f, 10.0f}, -1.0f, 1.0f, FALSE, FALSE},
+
+        /* 7. Within tolerance limit around corner. */
+        {{{{0.0f}}}, {-D2D1_DEFAULT_FLATTENING_TOLERANCE - 1.00f, 0.0f}, 0.0f, 2.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {-D2D1_DEFAULT_FLATTENING_TOLERANCE - 1.01f, 0.0f}, 0.0f, 2.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {-D2D1_DEFAULT_FLATTENING_TOLERANCE, -D2D1_DEFAULT_FLATTENING_TOLERANCE},
+                0.0f, 2.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {-D2D1_DEFAULT_FLATTENING_TOLERANCE, -D2D1_DEFAULT_FLATTENING_TOLERANCE - 1.01f},
+                0.0f, 2.0f, FALSE, FALSE},
+
+        /* 11. Center point. */
+        {{{{0.0f}}}, { 5.0f, 10.0f},  0.0f, 1.0f, FALSE, FALSE},
+
+        /* 12. Center point, large stroke width. */
+        {{{{0.0f}}}, { 5.0f, 10.0f},  0.0f, 100.0f, FALSE, TRUE},
+
+        /* 13. Center point, large tolerance. */
+        {{{{0.0f}}}, { 5.0f, 10.0f}, 50.0f, 10.0f, FALSE, TRUE},
+
+        /* With transformation matrix. */
+
+        /* 14. */
+        {{{{0.0f, 0.0f, 0.0f, 1.0f}}}, {0.1f, 10.0f},  0.0f, 1.0f, TRUE, FALSE},
+        {{{{0.0f, 0.0f, 0.0f, 1.0f}}}, {5.0f, 10.0f},  5.0f, 1.0f, TRUE, FALSE},
+        {{{{0.0f, 0.0f, 0.0f, 1.0f}}}, {4.9f, 10.0f},  5.0f, 1.0f, TRUE, TRUE},
+        {{{{0.0f, 0.0f, 0.0f, 1.0f}}}, {5.0f, 10.0f}, -5.0f, 1.0f, TRUE, FALSE},
+        {{{{0.0f, 0.0f, 0.0f, 1.0f}}}, {4.9f, 10.0f}, -5.0f, 1.0f, TRUE, TRUE},
+
+        /* 19. */
+        {{{{1.0f, 0.0f, 0.0f, 1.0f}}}, {0.0f, 10.0f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f}}}, {0.1f, 10.0f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f}}}, {0.5f, 10.0f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f}}}, {0.0f, 10.0f}, 1.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f}}}, {0.59f, 10.0f}, 1.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f}}}, {-0.59f, 10.0f}, 1.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f}}}, {0.59f, 10.0f}, -1.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f}}}, {-0.59f, 10.0f}, -1.0f, 1.0f, TRUE, TRUE},
+
+        /* 27. */
+        {{{{1.0f, 1.0f, 0.0f, 1.0f}}}, {5.0f, 4.4f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 1.0f, 0.0f, 1.0f}}}, {5.0f, 4.6f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 1.0f, 0.0f, 1.0f}}}, {5.0f, 5.4f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 1.0f, 0.0f, 1.0f}}}, {5.0f, 5.6f}, 0.0f, 1.0f, TRUE, FALSE},
+
+        /* 31. */
+        {{{{1.0f, 1.0f, 0.0f, 1.0f}}}, {5.0f, 6.9f}, 1.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 1.0f, 0.0f, 1.0f}}}, {5.0f, 7.0f}, 1.0f, 1.0f, TRUE, FALSE},
+
+        /* 33. Offset matrix */
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, -11.0f,   0.0f}}}, { 5.0f,  20.0f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f,   0.0f,  21.0f}}}, {10.0f,  10.0f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f,  11.0f,   0.0f}}}, { 5.0f,   0.0f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f,   0.0f, -21.0f}}}, { 0.0f,  10.0f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, -11.0f,   0.0f}}}, {-6.0f,  20.0f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f,   0.0f,  21.0f}}}, {10.0f,  31.0f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f,  11.0f,   0.0f}}}, {16.0f,   0.0f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f,   0.0f, -21.0f}}}, { 0.0f, -11.0f}, 0.0f, 1.0f, TRUE, TRUE},
+    },
+    path_tests[] =
+    {
+        /* 0. Stroked area hittesting. Edge. */
+        {{{{0.0f}}}, {160.0f,  600.0f},  0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {239.24f, 600.0f},  0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {239.26f, 600.0f},  0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {240.74f, 600.0f},  0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {240.76f, 600.0f},  0.0f, 1.0f, FALSE, FALSE},
+
+        /* 5. Negative tolerance. */
+        {{{{0.0f}}}, {239.24f, 600.0f}, -1.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {239.26f, 600.0f}, -1.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {240.74f, 600.0f}, -1.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {240.76f, 600.0f}, -1.0f, 1.0f, FALSE, FALSE},
+
+        /* 9. Less than default tolerance. */
+        {{{{0.0f}}}, {239.39f, 600.0f},  0.1f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {239.41f, 600.0f},  0.1f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {240.59f, 600.0f},  0.1f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {240.61f, 600.0f},  0.1f, 1.0f, FALSE, FALSE},
+
+        /* 13. Curves. */
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {170.0f, 418.6f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {170.0f, 420.1f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {170.0f, 417.7f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, { 89.5f, 485.3f}, 0.1f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, { 90.5f, 485.3f}, 0.1f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, { 91.5f, 485.3f}, 0.1f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, { 89.0f, 485.3f}, 0.1f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {167.0f, 729.8f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {167.0f, 728.6f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {167.0f, 731.0f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {173.0f, 729.8f}, 0.0f, 1.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {173.0f, 728.6f}, 0.0f, 1.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 0.0f, 1.0f, 10.0f, 10.0f}}}, {173.0f, 731.0f}, 0.0f, 1.0f, TRUE, FALSE},
+
+        /* 26. A curve where the control points project beyond the endpoints
+         *     onto the line through the endpoints. */
+        {{{{0.0f}}}, {306.97f, 791.67f}, 0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {307.27f, 791.67f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {308.47f, 791.67f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {308.77f, 791.67f}, 0.0f, 1.0f, FALSE, FALSE},
+
+        {{{{0.0f}}}, {350.00f, 824.10f}, 0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {350.00f, 824.40f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {350.00f, 825.60f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {350.00f, 825.90f}, 0.0f, 1.0f, FALSE, FALSE},
+
+        {{{{0.0f}}}, {391.23f, 791.67f}, 0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {391.53f, 791.67f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {392.73f, 791.67f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {393.03f, 791.67f}, 0.0f, 1.0f, FALSE, FALSE},
+
+        /* 38. A curve where the endpoints coincide. */
+        {{{{0.0f}}}, {570.23f, 799.77f}, 0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {570.53f, 799.77f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {571.73f, 799.77f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {572.03f, 799.77f}, 0.0f, 1.0f, FALSE, FALSE},
+
+        {{{{0.0f}}}, {600.00f, 824.10f}, 0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {600.00f, 824.40f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {600.00f, 825.60f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {600.00f, 825.90f}, 0.0f, 1.0f, FALSE, FALSE},
+
+        {{{{0.0f}}}, {627.97f, 799.77f}, 0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {628.27f, 799.77f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {629.47f, 799.77f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {629.77f, 799.77f}, 0.0f, 1.0f, FALSE, FALSE},
+
+        /* 50. A curve with coinciding endpoints, as well as coinciding
+         *     control points. */
+        {{{{0.0f}}}, {825.00f, 800.00f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {861.00f, 824.00f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {861.00f, 826.00f}, 0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {862.50f, 825.00f}, 0.0f, 1.0f, FALSE, TRUE},
+        {{{{0.0f}}}, {864.00f, 824.00f}, 0.0f, 1.0f, FALSE, FALSE},
+        {{{{0.0f}}}, {864.00f, 826.00f}, 0.0f, 1.0f, FALSE, FALSE},
+
+        /* 56. Shear transforms. */
+        {{{{1.0f, 0.0f, 1.0f, 1.0f}}}, { 837.2f, 600.0f}, 0.1f, 5.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 1.0f, 1.0f}}}, { 837.5f, 600.0f}, 0.1f, 5.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 1.0f, 1.0f}}}, {1186.3f, 791.7f}, 0.1f, 5.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 1.0f, 1.0f}}}, {1186.6f, 791.7f}, 0.1f, 5.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 1.0f, 1.0f}}}, {1425.0f, 827.3f}, 0.1f, 5.0f, TRUE, TRUE},
+        {{{{1.0f, 0.0f, 1.0f, 1.0f}}}, {1425.0f, 827.6f}, 0.1f, 5.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 1.0f, 1.0f}}}, {1620.1f, 800.0f}, 0.1f, 5.0f, TRUE, FALSE},
+        {{{{1.0f, 0.0f, 1.0f, 1.0f}}}, {1620.4f, 800.0f}, 0.1f, 5.0f, TRUE, TRUE},
+    };
+
+    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &IID_ID2D1Factory, NULL, (void **)&factory);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    set_rect(&rect, 0.0f, 0.0f, 10.0f, 20.0f);
+    hr = ID2D1Factory_CreateRectangleGeometry(factory, &rect, &rectangle);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    for (i = 0; i < ARRAY_SIZE(rectangle_tests); ++i)
+    {
+        const struct contains_point_test *test = &rectangle_tests[i];
+
+        winetest_push_context("Test %u", i);
+
+        contains = !test->contains;
+        hr = ID2D1RectangleGeometry_StrokeContainsPoint(rectangle, test->point, test->stroke_width,
+                NULL, test->matrix ? &test->transform : NULL, test->tolerance, &contains);
+        ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+        ok(contains == test->contains, "Got unexpected result %#x.\n", contains);
+
+        winetest_pop_context();
+    }
+    ID2D1RectangleGeometry_Release(rectangle);
+
+    hr = ID2D1Factory_CreatePathGeometry(factory, &path);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ID2D1PathGeometry_Open(path, &sink);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+
+    /* A limaçon. */
+    set_point(&point, 160.0f, 720.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    cubic_to(sink, 119.0f, 720.0f,  83.0f, 600.0f,  80.0f, 474.0f);
+    cubic_to(sink,  78.0f, 349.0f, 108.0f, 245.0f, 135.0f, 240.0f);
+    cubic_to(sink, 163.0f, 235.0f, 180.0f, 318.0f, 176.0f, 370.0f);
+    cubic_to(sink, 171.0f, 422.0f, 149.0f, 422.0f, 144.0f, 370.0f);
+    cubic_to(sink, 140.0f, 318.0f, 157.0f, 235.0f, 185.0f, 240.0f);
+    cubic_to(sink, 212.0f, 245.0f, 242.0f, 349.0f, 240.0f, 474.0f);
+    cubic_to(sink, 238.0f, 600.0f, 201.0f, 720.0f, 160.0f, 720.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_CLOSED);
+
+    /* Some straight lines. */
+    set_point(&point, 160.0f, 240.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    line_to(sink, 240.0f, 240.0f);
+    line_to(sink, 240.0f, 720.0f);
+    line_to(sink, 160.0f, 720.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_OPEN);
+
+    /* Projected control points extending beyond the line segment through the
+     * endpoints. */
+    set_point(&point, 325.0f, 750.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    cubic_to(sink, 250.0f, 850.0f, 450.0f, 850.0f, 375.0f, 750.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_OPEN);
+
+    /* Coinciding endpoints. */
+    set_point(&point, 600.0f, 750.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    cubic_to(sink, 500.0f, 850.0f, 700.0f, 850.0f, 600.0f, 750.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_OPEN);
+
+    /* Coinciding endpoints, as well as coinciding control points. */
+    set_point(&point, 750.0f, 750.0f);
+    ID2D1GeometrySink_BeginFigure(sink, point, D2D1_FIGURE_BEGIN_FILLED);
+    cubic_to(sink, 900.0f, 850.0f, 900.0f, 850.0f, 750.0f, 750.0f);
+    ID2D1GeometrySink_EndFigure(sink, D2D1_FIGURE_END_OPEN);
+
+    hr = ID2D1GeometrySink_Close(sink);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ID2D1GeometrySink_Release(sink);
+
+    for (i = 0; i < ARRAY_SIZE(path_tests); ++i)
+    {
+        const struct contains_point_test *test = &path_tests[i];
+
+        winetest_push_context("Test %u", i);
+
+        contains = !test->contains;
+        hr = ID2D1PathGeometry_StrokeContainsPoint(path, test->point, test->stroke_width,
+                NULL, test->matrix ? &test->transform : NULL, test->tolerance, &contains);
+        ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+        ok(contains == test->contains, "Got unexpected result %#x.\n", contains);
+
+        winetest_pop_context();
+    }
+
+    ID2D1PathGeometry_Release(path);
+
+    ID2D1Factory_Release(factory);
+}
+
 START_TEST(d2d1)
 {
     HMODULE d2d1_dll = GetModuleHandleA("d2d1.dll");
@@ -10198,6 +10619,7 @@ START_TEST(d2d1)
     queue_test(test_effect);
     queue_test(test_effect_2d_affine);
     queue_test(test_effect_crop);
+    queue_d3d10_test(test_stroke_contains_point);
 
     run_queued_tests();
 }

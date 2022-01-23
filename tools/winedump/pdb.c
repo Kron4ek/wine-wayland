@@ -54,6 +54,21 @@ struct pdb_reader
     DWORD       file_used[1024];
 };
 
+static inline BOOL has_file_been_read(struct pdb_reader* reader, unsigned file_nr)
+{
+    return reader->file_used[file_nr / 32] & (1 << (file_nr % 32));
+}
+
+static inline void mark_file_been_read(struct pdb_reader* reader, unsigned file_nr)
+{
+    reader->file_used[file_nr / 32] |= 1 << (file_nr % 32);
+}
+
+static inline void clear_file_been_read(struct pdb_reader* reader, unsigned file_nr)
+{
+    reader->file_used[file_nr / 32] &= ~(1 << (file_nr % 32));
+}
+
 static void* pdb_jg_read(const struct PDB_JG_HEADER* pdb, const WORD* block_list, int size)
 {
     int                 i, nBlocks;
@@ -78,7 +93,7 @@ static void* pdb_jg_read_file(struct pdb_reader* reader, DWORD file_nr)
 
     if (!reader->u.jg.toc || file_nr >= reader->u.jg.toc->num_files) return NULL;
 
-    reader->file_used[file_nr / 32] |= 1 << (file_nr % 32);
+    mark_file_been_read(reader, file_nr);
     if (reader->u.jg.toc->file[file_nr].size == 0 ||
         reader->u.jg.toc->file[file_nr].size == 0xFFFFFFFF)
         return NULL;
@@ -125,7 +140,7 @@ static void pdb_exit(struct pdb_reader* reader)
 
     for (i = 0; i < pdb_get_num_files(reader); i++)
     {
-        if (reader->file_used[i / 32] & (1 << (i % 32))) continue;
+        if (has_file_been_read(reader, i)) continue;
 
         file = reader->read_file(reader, i);
         if (!file) continue;
@@ -458,7 +473,7 @@ static void pdb_dump_symbols(struct pdb_reader* reader, PDB_STREAM_INDEXES* sidx
     if (modimage)
     {
         printf("\t------------globals-------------\n"); 
-        codeview_dump_symbols(modimage, pdb_get_file_size(reader, symbols->gsym_file));
+        codeview_dump_symbols(modimage, 0, pdb_get_file_size(reader, symbols->gsym_file));
         free(modimage);
     }
 
@@ -466,19 +481,23 @@ static void pdb_dump_symbols(struct pdb_reader* reader, PDB_STREAM_INDEXES* sidx
     file = (const char*)symbols + sizeof(PDB_SYMBOLS);
     while (file - (const char*)symbols < sizeof(PDB_SYMBOLS) + symbols->module_size)
     {
-        int file_nr, symbol_size, lineno_size;
+        int file_nr, symbol_size, lineno_size, lineno2_size;
         const char* file_name;
-            
+        const char* lib_name;
+
         if (symbols->version < 19970000)
         {
             const PDB_SYMBOL_FILE*      sym_file = (const PDB_SYMBOL_FILE*) file;
             file_nr     = sym_file->file;
             file_name   = sym_file->filename;
+            lib_name    = file_name + strlen(file_name) + 1;
             symbol_size = sym_file->symbol_size;
             lineno_size = sym_file->lineno_size;
-            printf("\t--------symbol file----------- %s\n", file_name);
-            printf("\tgot symbol_file\n"
-                   "\t\tunknown1:   %08x\n"
+            lineno2_size = sym_file->lineno2_size;
+            printf("\t--------symbol file-----------\n");
+            printf("\tName: %s\n", file_name);
+            if (strcmp(file_name, lib_name)) printf("\tLibrary: %s\n", lib_name);
+            printf("\t\tunknown1:   %08x\n"
                    "\t\trange\n"
                    "\t\t\tsegment:         %04x\n"
                    "\t\t\tpad1:            %04x\n"
@@ -491,7 +510,7 @@ static void pdb_dump_symbols(struct pdb_reader* reader, PDB_STREAM_INDEXES* sidx
                    "\t\tfile:       %04x\n"
                    "\t\tsymb size:  %08x\n"
                    "\t\tline size:  %08x\n"
-                   "\t\tunknown2:   %08x\n"
+                   "\t\tline2 size:  %08x\n"
                    "\t\tnSrcFiles:  %08x\n"
                    "\t\tattribute:  %08x\n",
                    sym_file->unknown1,
@@ -506,18 +525,23 @@ static void pdb_dump_symbols(struct pdb_reader* reader, PDB_STREAM_INDEXES* sidx
                    sym_file->file,
                    sym_file->symbol_size,
                    sym_file->lineno_size,
-                   sym_file->unknown2,
+                   sym_file->lineno2_size,
                    sym_file->nSrcFiles,
                    sym_file->attribute);
         }
         else
         {
             const PDB_SYMBOL_FILE_EX*   sym_file = (const PDB_SYMBOL_FILE_EX*) file;
+
             file_nr     = sym_file->file;
             file_name   = sym_file->filename;
+            lib_name    = file_name + strlen(file_name) + 1;
             symbol_size = sym_file->symbol_size;
             lineno_size = sym_file->lineno_size;
-            printf("\t--------symbol file----------- %s\n", file_name);
+            lineno2_size = sym_file->lineno2_size;
+            printf("\t--------symbol file-----------\n");
+            printf("\tName: %s\n", file_name);
+            if (strcmp(file_name, lib_name)) printf("\tLibrary: %s\n", lib_name);
             printf("\t\tunknown1:   %08x\n"
                    "\t\trange\n"
                    "\t\t\tsegment:         %04x\n"
@@ -533,7 +557,7 @@ static void pdb_dump_symbols(struct pdb_reader* reader, PDB_STREAM_INDEXES* sidx
                    "\t\tfile:       %04x\n"
                    "\t\tsymb size:  %08x\n"
                    "\t\tline size:  %08x\n"
-                   "\t\tunknown2:   %08x\n"
+                   "\t\tline2 size: %08x\n"
                    "\t\tnSrcFiles:  %08x\n"
                    "\t\tattribute:  %08x\n"
                    "\t\treserved/0: %08x\n"
@@ -552,7 +576,7 @@ static void pdb_dump_symbols(struct pdb_reader* reader, PDB_STREAM_INDEXES* sidx
                    sym_file->file,
                    sym_file->symbol_size,
                    sym_file->lineno_size,
-                   sym_file->unknown2,
+                   sym_file->lineno2_size,
                    sym_file->nSrcFiles,
                    sym_file->attribute,
                    sym_file->reserved[0],
@@ -564,25 +588,22 @@ static void pdb_dump_symbols(struct pdb_reader* reader, PDB_STREAM_INDEXES* sidx
             int total_size = pdb_get_file_size(reader, file_nr);
 
             if (symbol_size)
-                codeview_dump_symbols((const char*)modimage + sizeof(DWORD), symbol_size);
+                codeview_dump_symbols((const char*)modimage, sizeof(DWORD), symbol_size);
 
             /* line number info */
             if (lineno_size)
                 codeview_dump_linetab((const char*)modimage + symbol_size, TRUE, "        ");
-            /* anyway, lineno_size doesn't see to really be the size of the line number information, and
-             * it's not clear yet when to call for linetab2...
-             */
-            codeview_dump_linetab2((const char*)modimage + symbol_size + lineno_size,
-                                   total_size - (symbol_size + lineno_size),
-                                   filesimage ? filesimage + 12 : NULL, filessize, "        ");
+            else if (lineno2_size) /* actually, only one of the 2 lineno should be present */
+                codeview_dump_linetab2((const char*)modimage + symbol_size, lineno2_size,
+                                       filesimage ? filesimage + 12 : NULL, filessize, "        ");
             /* what's that part ??? */
             if (0)
-                dump_data(modimage + symbol_size + lineno_size, total_size - (symbol_size + lineno_size), "    ");
+                dump_data(modimage + symbol_size + lineno_size + lineno2_size,
+                          total_size - (symbol_size + lineno_size + lineno2_size), "    ");
             free(modimage);
         }
 
-        file_name += strlen(file_name) + 1;
-        file = (char*)((DWORD_PTR)(file_name + strlen(file_name) + 1 + 3) & ~3);
+        file = (char*)((DWORD_PTR)(lib_name + strlen(lib_name) + 1 + 3) & ~3);
     }
     dump_global_symbol(reader, symbols->global_file);
     dump_public_symbol(reader, symbols->public_file);
@@ -609,7 +630,14 @@ static void pdb_dump_types_hash(struct pdb_reader* reader, unsigned file, const 
 static void pdb_dump_types(struct pdb_reader* reader, unsigned strmidx, const char* strmname)
 {
     PDB_TYPES*  types = NULL;
+    BOOL used = has_file_been_read(reader, strmidx);
 
+    if (pdb_get_file_size(reader, strmidx) < sizeof(*types))
+    {
+        if (strmidx == 2)
+            printf("-Too small type header\n");
+        return;
+    }
     types = reader->read_file(reader, strmidx);
     if (!types) return;
 
@@ -622,7 +650,12 @@ static void pdb_dump_types(struct pdb_reader* reader, unsigned strmidx, const ch
     case 20040203:      /* VC 8.0 */
         break;
     default:
-        printf("-Unknown type info version %d\n", types->version);
+        /* IPI stream is not always present in older PDB files */
+        if (strmidx == 2)
+            printf("-Unknown type info version %d\n", types->version);
+        free(types);
+        if (used) clear_file_been_read(reader, strmidx);
+        return;
     }
 
     /* Read type table */
@@ -864,7 +897,7 @@ static void* pdb_ds_read_file(struct pdb_reader* reader, DWORD file_number)
 
     if (!reader->u.ds.toc || file_number >= reader->u.ds.toc->num_files) return NULL;
 
-    reader->file_used[file_number / 32] |= 1 << (file_number % 32);
+    mark_file_been_read(reader, file_number);
     if (reader->u.ds.toc->file_size[file_number] == 0 ||
         reader->u.ds.toc->file_size[file_number] == 0xFFFFFFFF)
         return NULL;
@@ -926,7 +959,7 @@ static void pdb_ds_dump(void)
      * - segments
      * - extended FPO data
      */
-    reader.file_used[0] |= 1; /* mark stream #0 as read */
+    mark_file_been_read(&reader, 0); /* mark stream #0 as read */
     reader.u.ds.root = reader.read_file(&reader, 1);
     if (reader.u.ds.root)
     {

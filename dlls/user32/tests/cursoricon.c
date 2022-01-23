@@ -769,8 +769,9 @@ static void test_initial_cursor(void)
 }
 
 static void test_icon_info_(HICON hIcon, UINT exp_cx, UINT exp_cy,
-        UINT exp_mask_cy, UINT exp_bpp, UINT has_color, int line)
+        UINT exp_mask_cy, UINT exp_bpp, const BYTE *mask_bits, UINT has_color, int line)
 {
+    BYTE ret_bits[1024];
     ICONINFO info;
     DWORD ret;
     BITMAP bmMask, bmColor;
@@ -782,6 +783,15 @@ static void test_icon_info_(HICON hIcon, UINT exp_cx, UINT exp_cy,
     ok_(__FILE__, line)(info.xHotspot == exp_cx/2, "info.xHotspot = %u\n", info.xHotspot);
     ok_(__FILE__, line)(info.yHotspot == exp_cy/2, "info.yHotspot = %u\n", info.yHotspot);
     ok_(__FILE__, line)(info.hbmMask != 0, "info.hbmMask is NULL\n");
+
+    if (mask_bits)
+    {
+        unsigned int exp_stride = (exp_cx + 7) / 8;
+        exp_stride = (exp_stride + 1) & ~1;
+        ret = GetBitmapBits(info.hbmMask, sizeof(ret_bits), ret_bits);
+        ok_(__FILE__, line)(ret == exp_stride * exp_mask_cy, "GetBitmapBits returned %u\n", ret);
+        ok_(__FILE__, line)(!memcmp(ret_bits, mask_bits, ret), "mask bitmap didn't match\n");
+    }
 
     ret = GetObjectA(info.hbmMask, sizeof(bmMask), &bmMask);
     ok_(__FILE__, line)(ret == sizeof(bmMask), "GetObject(info.hbmMask) failed, ret %u\n", ret);
@@ -849,11 +859,11 @@ static void test_icon_info_(HICON hIcon, UINT exp_cx, UINT exp_cy,
     }
 }
 
-#define test_icon_info(a,b,c,d,e,f) test_icon_info_(a,b,c,d,e,f,__LINE__)
+#define test_icon_info(a,b,c,d,e,f,g) test_icon_info_(a,b,c,d,e,f,g,__LINE__)
 
 static void test_CreateIcon(void)
 {
-    static const BYTE bmp_bits[1024];
+    BYTE bmp_bits[1024];
     HICON hIcon;
     HBITMAP hbmMask, hbmColor;
     BITMAPINFO *bmpinfo;
@@ -863,6 +873,9 @@ static void test_CreateIcon(void)
     UINT display_bpp;
     int i;
 
+    for (i = 0; i < sizeof(bmp_bits); ++i)
+        bmp_bits[i] = 111 * i;
+
     hdc = GetDC(0);
     display_bpp = GetDeviceCaps(hdc, BITSPIXEL);
 
@@ -871,19 +884,19 @@ static void test_CreateIcon(void)
     hIcon = CreateIcon(0, 16, 16, 1, 1, NULL, bmp_bits);
     */
 
-    hIcon = CreateIcon(0, 16, 16, 1, 1, bmp_bits, bmp_bits);
+    hIcon = CreateIcon(0, 16, 16, 1, 1, bmp_bits, &bmp_bits[16 * 16 / 8]);
     ok(hIcon != 0, "CreateIcon failed\n");
-    test_icon_info(hIcon, 16, 16, 32, 1, FALSE);
+    test_icon_info(hIcon, 16, 16, 32, 1, bmp_bits, FALSE);
     DestroyIcon(hIcon);
 
-    hIcon = CreateCursor(0, 8, 8, 16, 16, bmp_bits, bmp_bits);
+    hIcon = CreateCursor(0, 8, 8, 16, 16, bmp_bits, &bmp_bits[16 * 16 / 8]);
     ok(hIcon != 0, "CreateCursor failed\n");
-    test_icon_info(hIcon, 16, 16, 32, 1, FALSE);
+    test_icon_info(hIcon, 16, 16, 32, 1, bmp_bits, FALSE);
     DestroyCursor(hIcon);
 
     hIcon = CreateIcon(0, 16, 16, 1, display_bpp, bmp_bits, bmp_bits);
     ok(hIcon != 0, "CreateIcon failed\n");
-    test_icon_info(hIcon, 16, 16, 16, display_bpp, TRUE);
+    test_icon_info(hIcon, 16, 16, 16, display_bpp, bmp_bits, TRUE);
     DestroyIcon(hIcon);
 
     hbmMask = CreateBitmap(16, 16, 1, 1, bmp_bits);
@@ -918,7 +931,7 @@ static void test_CreateIcon(void)
     info.hbmColor = hbmColor;
     hIcon = CreateIconIndirect(&info);
     ok(hIcon != 0, "CreateIconIndirect failed\n");
-    test_icon_info(hIcon, 16, 16, 16, display_bpp, TRUE);
+    test_icon_info(hIcon, 16, 16, 16, display_bpp, bmp_bits, TRUE);
     DestroyIcon(hIcon);
 
     DeleteObject(hbmMask);
@@ -935,7 +948,7 @@ static void test_CreateIcon(void)
     SetLastError(0xdeadbeaf);
     hIcon = CreateIconIndirect(&info);
     ok(hIcon != 0, "CreateIconIndirect failed\n");
-    test_icon_info(hIcon, 16, 16, 32, 1, FALSE);
+    test_icon_info(hIcon, 16, 16, 32, 1, bmp_bits, FALSE);
     DestroyIcon(hIcon);
 
     info.hbmMask = hbmMask;
@@ -943,7 +956,7 @@ static void test_CreateIcon(void)
     SetLastError(0xdeadbeaf);
     hIcon = CreateIconIndirect(&info);
     ok(hIcon != 0, "CreateIconIndirect failed\n");
-    test_icon_info(hIcon, 16, 32, 32, 1, TRUE);
+    test_icon_info(hIcon, 16, 32, 32, 1, bmp_bits, TRUE);
     DestroyIcon(hIcon);
 
     DeleteObject(hbmMask);
@@ -961,7 +974,7 @@ static void test_CreateIcon(void)
         SetLastError(0xdeadbeaf);
         hIcon = CreateIconIndirect(&info);
         ok(hIcon != 0, "CreateIconIndirect failed\n");
-        test_icon_info(hIcon, 1, i / 2, max(i,1), 1, FALSE);
+        test_icon_info(hIcon, 1, i / 2, max(i,1), 1, NULL, FALSE);
         DestroyIcon(hIcon);
         DeleteObject(hbmMask);
     }
@@ -974,7 +987,7 @@ static void test_CreateIcon(void)
     SetLastError(0xdeadbeaf);
     hIcon = CreateIconIndirect(&info);
     ok(hIcon != 0, "CreateIconIndirect failed\n");
-    test_icon_info(hIcon, 16, 16, 32, 1, FALSE);
+    test_icon_info(hIcon, 16, 16, 32, 1, NULL, FALSE);
     DestroyIcon(hIcon);
 
     DeleteObject(hbmMask);
@@ -1006,7 +1019,7 @@ static void test_CreateIcon(void)
     SetLastError(0xdeadbeaf);
     hIcon = CreateIconIndirect(&info);
     ok(hIcon != 0, "CreateIconIndirect failed\n");
-    test_icon_info(hIcon, 32, 32, 32, 8, TRUE);
+    test_icon_info(hIcon, 32, 32, 32, 8, NULL, TRUE);
     DestroyIcon(hIcon);
     DeleteObject(hbmColor);
 
@@ -1024,7 +1037,7 @@ static void test_CreateIcon(void)
     SetLastError(0xdeadbeaf);
     hIcon = CreateIconIndirect(&info);
     ok(hIcon != 0, "CreateIconIndirect failed\n");
-    test_icon_info(hIcon, 32, 32, 32, 8, TRUE);
+    test_icon_info(hIcon, 32, 32, 32, 8, NULL, TRUE);
     DestroyIcon(hIcon);
     DeleteObject(hbmColor);
 
@@ -1042,7 +1055,7 @@ static void test_CreateIcon(void)
     SetLastError(0xdeadbeaf);
     hIcon = CreateIconIndirect(&info);
     ok(hIcon != 0, "CreateIconIndirect failed\n");
-    test_icon_info(hIcon, 32, 32, 32, 8, TRUE);
+    test_icon_info(hIcon, 32, 32, 32, 8, NULL, TRUE);
     DestroyIcon(hIcon);
 
     DeleteObject(hbmMask);
@@ -1539,14 +1552,28 @@ static void test_LoadImage(void)
     test_LoadImage_working_directory();
 }
 
+static BOOL CALLBACK find_res_proc(HMODULE module, LPCSTR type, LPSTR name, LONG_PTR param)
+{
+    char **res_name = (char **)param;
+    *res_name = name;
+    return FALSE;
+}
+
 static void test_CreateIconFromResource(void)
 {
-    HANDLE handle;
+    HANDLE handle, old_handle;
     BOOL ret;
     DWORD error;
     BITMAPINFOHEADER *icon_header;
     INT16 *hotspot;
     ICONINFO icon_info;
+    HMODULE user32;
+    char *res_name;
+    HRSRC rsrc;
+    HGLOBAL res;
+    BYTE *bits;
+    UINT size;
+
 
 #define ICON_RES_WIDTH 32
 #define ICON_RES_HEIGHT 32
@@ -1575,6 +1602,8 @@ static void test_CreateIconFromResource(void)
     SetLastError(0xdeadbeef);
     handle = CreateIconFromResource((PBYTE) hotspot, CRSR_RES_SIZE, FALSE, 0x00030000);
     ok(handle != NULL, "Create cursor failed.\n");
+    ret = DestroyCursor(handle);
+    ok(ret, "Destroy cursor failed, error %u.\n", GetLastError());
 
     /* Test the icon information. */
     SetLastError(0xdeadbeef);
@@ -1604,18 +1633,13 @@ static void test_CreateIconFromResource(void)
         ok( infoex.szResName[0] == 0, "GetIconInfoEx wrong name %s\n", infoex.szResName );
     }
 
-    /* Clean up. */
-    SetLastError(0xdeadbeef);
-    ret = DestroyCursor(handle);
-    ok(ret, "DestroyCursor() failed.\n");
-    error = GetLastError();
-    ok(error == 0xdeadbeef, "Last error: %u\n", error);
-
     /* Test creating an icon. */
     SetLastError(0xdeadbeef);
     handle = CreateIconFromResource((PBYTE) icon_header, ICON_RES_SIZE, TRUE,
 				    0x00030000);
     ok(handle != NULL, "Create icon failed.\n");
+    ret = DestroyIcon(handle);
+    ok(ret, "Destroy icon failed, error %u.\n", GetLastError());
 
     /* Test the icon information. */
     SetLastError(0xdeadbeef);
@@ -1634,19 +1658,11 @@ static void test_CreateIconFromResource(void)
         ok(icon_info.hbmMask != NULL, "No hbmMask!\n");
     }
 
-    /* Clean up. */
-    SetLastError(0xdeadbeef);
-    ret = DestroyCursor(handle);
-    ok(ret, "DestroyCursor() failed.\n");
-    error = GetLastError();
-    ok(error == 0xdeadbeef, "Last error: %u\n", error);
-
     /* Rejection of NULL pointer crashes at least on WNT4WSSP6, W2KPROSP4, WXPPROSP3
      *
      * handle = CreateIconFromResource(NULL, ICON_RES_SIZE, TRUE, 0x00030000);
      * ok(handle == NULL, "Invalid pointer accepted (%p)\n", handle);
      */
-    HeapFree(GetProcessHeap(), 0, hotspot);
 
     /* Test creating an animated cursor. */
     empty_anicursor.frames[0].data.icon_info.idType = 2; /* type: cursor */
@@ -1654,12 +1670,16 @@ static void test_CreateIconFromResource(void)
     empty_anicursor.frames[0].data.icon_info.idEntries[0].yHotspot = 3;
     handle = CreateIconFromResource((PBYTE) &empty_anicursor, sizeof(empty_anicursor), FALSE, 0x00030000);
     ok(handle != NULL, "Create cursor failed.\n");
+    ret = DestroyCursor(handle);
+    ok(ret, "Destroy cursor failed, error %u.\n", GetLastError());
 
     /* Test the animated cursor's information. */
     SetLastError(0xdeadbeef);
     ret = GetIconInfo(handle, &icon_info);
+    todo_wine
     ok(ret, "GetIconInfo() failed.\n");
     error = GetLastError();
+    todo_wine
     ok(error == 0xdeadbeef, "Last error: %u\n", error);
 
     if (ret)
@@ -1672,12 +1692,67 @@ static void test_CreateIconFromResource(void)
         ok(icon_info.hbmMask != NULL, "No hbmMask!\n");
     }
 
-    /* Clean up. */
-    SetLastError(0xdeadbeef);
-    ret = DestroyCursor(handle);
-    ok(ret, "DestroyCursor() failed.\n");
-    error = GetLastError();
-    ok(error == 0xdeadbeef, "Last error: %u\n", error);
+    /* Test creating and destroying a non-shared icon. */
+    handle = CreateIconFromResourceEx((BYTE *)icon_header, ICON_RES_SIZE, TRUE, 0x00030000,
+                                       0, 0, LR_DEFAULTSIZE);
+    ok(handle != NULL, "Create icon failed, error %u.\n", GetLastError());
+    ret = DestroyIcon(handle);
+    ok(ret, "Destroy icon failed, error %u.\n", GetLastError());
+    ret = GetIconInfo(handle, &icon_info);
+    ok(!ret, "Get info succeeded.\n");
+    ok(GetLastError() == ERROR_INVALID_CURSOR_HANDLE, "Got unexpected error %u.\n", error);
+
+    /* Test creating and destroying a shared icon from heap bits. */
+    handle = CreateIconFromResourceEx((BYTE *)icon_header, ICON_RES_SIZE, TRUE, 0x00030000,
+                                       0, 0, LR_DEFAULTSIZE | LR_SHARED);
+    ok(handle != NULL, "Create icon failed, error %u.\n", GetLastError());
+    ret = DestroyIcon(handle);
+    ok(ret, "Destroy icon failed, error %u.\n", GetLastError());
+    ret = GetIconInfo(handle, &icon_info);
+    ok(ret, "Get info failed, error %u.\n", GetLastError());
+
+    /* Test creating a shared icon from heap bits that has been created before. */
+    old_handle = handle;
+    handle = CreateIconFromResourceEx((BYTE *)icon_header, ICON_RES_SIZE, TRUE, 0x00030000,
+                                       0, 0, LR_DEFAULTSIZE | LR_SHARED);
+    ok(handle != NULL, "Create icon failed, error %u.\n", GetLastError());
+    ok(handle != old_handle, "Expect a different handle.\n");
+
+    HeapFree(GetProcessHeap(), 0, hotspot);
+
+    /* Get icon resource bits */
+    user32 = GetModuleHandleA("user32.dll");
+    EnumResourceNamesA(user32, (const char *)RT_GROUP_ICON, find_res_proc, (LONG_PTR)&res_name);
+    rsrc = FindResourceA(user32, res_name, (const char *)RT_GROUP_ICON);
+    ok(rsrc != NULL, "Find resource failed, error %u.\n", GetLastError());
+    res = LoadResource(user32, rsrc);
+    ok(res != NULL, "Load resource failed, error %u.\n", GetLastError());
+    bits = LockResource(res);
+    ok(bits != NULL, "Lock resource failed, error %u.\n", GetLastError());
+
+    res_name = MAKEINTRESOURCEA(LookupIconIdFromDirectory(bits, TRUE));
+    rsrc = FindResourceA(user32, res_name, (const char *)RT_ICON);
+    ok(rsrc != NULL, "Find resource failed, error %u.\n", GetLastError());
+    size = SizeofResource(user32, rsrc);
+    ok(size != 0, "Get resource size failed, error %u.\n", GetLastError());
+    res = LoadResource(user32, rsrc);
+    ok(res != NULL, "Load resource failed, error %u.\n", GetLastError());
+    bits = LockResource(res);
+    ok(bits != NULL, "Lock resource failed, error %u.\n", GetLastError());
+
+    /* Test creating and destroying a shared icon from resource bits. */
+    handle = CreateIconFromResourceEx(bits, size, TRUE, 0x00030000, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+    ok(handle != NULL, "Create icon failed, error %u\n", GetLastError());
+    ret = DestroyIcon(handle);
+    ok(ret, "Destroy icon failed, error %u.\n", GetLastError());
+    ret = GetIconInfo(handle, &icon_info);
+    ok(ret, "Get info failed, error %u.\n", GetLastError());
+
+    /* Test creating a shared icon from resource bits that has been created before. */
+    old_handle = handle;
+    handle = CreateIconFromResourceEx(bits, size, TRUE, 0x00030000, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+    ok(handle != NULL, "Create icon failed, error %u.\n", GetLastError());
+    ok(handle != old_handle, "Expect a different handle.\n");
 }
 
 static int check_cursor_data( HDC hdc, HCURSOR hCursor, void *data, int length)
@@ -2505,7 +2580,7 @@ static void test_ShowCursor(void)
         memset( &info, 0, sizeof(info) );
         info.cbSize = sizeof(info);
         ok( pGetCursorInfo( &info ), "GetCursorInfo failed\n" );
-        ok( info.flags & CURSOR_SHOWING, "cursor not shown in info\n" );
+        ok( info.flags & (CURSOR_SHOWING | CURSOR_SUPPRESSED), "Got unexpected cursor state\n" );
     }
 
     event_start = CreateEventW( NULL, FALSE, FALSE, NULL );
@@ -2529,7 +2604,7 @@ static void test_ShowCursor(void)
         info.cbSize = sizeof(info);
         ok( pGetCursorInfo( &info ), "GetCursorInfo failed\n" );
         /* global show count is not affected since we don't have a window */
-        ok( info.flags & CURSOR_SHOWING, "cursor not shown in info\n" );
+        ok( info.flags & (CURSOR_SHOWING | CURSOR_SUPPRESSED), "Got unexpected cursor state\n" );
     }
 
     parent_id = 0;
@@ -2582,7 +2657,7 @@ static void test_ShowCursor(void)
     {
         info.cbSize = sizeof(info);
         ok( pGetCursorInfo( &info ), "GetCursorInfo failed\n" );
-        ok( info.flags & CURSOR_SHOWING, "cursor not shown in info\n" );
+        ok( info.flags & (CURSOR_SHOWING | CURSOR_SUPPRESSED), "Got unexpected cursor state\n" );
     }
 
     count = ShowCursor( TRUE );
@@ -2594,7 +2669,7 @@ static void test_ShowCursor(void)
     {
         info.cbSize = sizeof(info);
         ok( pGetCursorInfo( &info ), "GetCursorInfo failed\n" );
-        ok( info.flags & CURSOR_SHOWING, "cursor not shown in info\n" );
+        ok( info.flags & (CURSOR_SHOWING | CURSOR_SUPPRESSED), "Got unexpected cursor state\n" );
     }
 }
 
@@ -2750,7 +2825,7 @@ static void test_PrivateExtractIcons(void)
     ok(ret == 1, "PrivateExtractIconsA returned %u\n", ret);
     ok(icon != NULL, "icon == NULL\n");
 
-    test_icon_info(icon, 32, 32, 32, 32, TRUE);
+    test_icon_info(icon, 32, 32, 32, 32, NULL, TRUE);
     DestroyIcon(icon);
 
     DeleteFileA("extract.ico");

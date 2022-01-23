@@ -1468,6 +1468,7 @@ static void test_CreateTextFile(void)
     HANDLE file;
     HRESULT hr;
     BOOL ret;
+    DWORD r;
 
     get_temp_filepath(testfileW, pathW, dirW);
 
@@ -1517,20 +1518,97 @@ static void test_CreateTextFile(void)
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ITextStream_Release(stream);
 
-    /* File was created in Unicode mode, it contains 0xfffe BOM. Opening it in non-Unicode mode
-       treats BOM like a valuable data with appropriate CP_ACP -> WCHAR conversion. */
-    buffW[0] = 0;
-    MultiByteToWideChar(CP_ACP, 0, utf16bom, -1, buffW, ARRAY_SIZE(buffW));
+    /* check contents */
+    file = CreateFileW(pathW, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    ok(file != INVALID_HANDLE_VALUE, "got %p\n", file);
+    r = 0;
+    ret = ReadFile(file, buffW, sizeof(buffW), &r, NULL);
+    ok(ret && r == 2, "read %d, got %d, %d\n", r, ret, GetLastError());
 
-    hr = IFileSystem3_OpenTextFile(fs3, nameW, ForReading, VARIANT_FALSE, TristateFalse, &stream);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
-    hr = ITextStream_ReadAll(stream, &str);
-    ok(hr == S_FALSE || broken(hr == S_OK) /* win2k */, "got 0x%08x\n", hr);
-    ok(!lstrcmpW(str, buffW), "got %s, expected %s\n", wine_dbgstr_w(str), wine_dbgstr_w(buffW));
-    SysFreeString(str);
-    ITextStream_Release(stream);
+    ok( buffW[0] == 0xfeff, "got %04x\n", buffW[0] );
+    CloseHandle(file);
 
     DeleteFileW(nameW);
+    RemoveDirectoryW(dirW);
+    SysFreeString(nameW);
+}
+
+static void test_FolderCreateTextFile(void)
+{
+    WCHAR pathW[MAX_PATH], dirW[MAX_PATH], buffW[10], buff2W[10];
+    ITextStream *stream;
+    BSTR nameW, str;
+    HANDLE file;
+    IFolder *folder;
+    HRESULT hr;
+    BOOL ret;
+    DWORD r;
+
+    get_temp_filepath(testfileW, pathW, dirW);
+    nameW = SysAllocString(L"foo.txt");
+    lstrcpyW(pathW, dirW);
+    lstrcatW(pathW, nameW);
+
+    ret = CreateDirectoryW(dirW, NULL);
+    ok(ret, "got %d, %d\n", ret, GetLastError());
+
+    str = SysAllocString(dirW);
+    hr = IFileSystem3_GetFolder(fs3, str, &folder);
+    ok(ret, "got %d, %d\n", ret, GetLastError());
+    SysFreeString(str);
+
+    hr = IFolder_CreateTextFile(folder, nameW, VARIANT_FALSE, VARIANT_FALSE, &stream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    test_provideclassinfo(stream, &CLSID_TextStream);
+
+    hr = ITextStream_Read(stream, 1, &str);
+    ok(hr == CTL_E_BADFILEMODE, "got 0x%08x\n", hr);
+
+    hr = ITextStream_Close(stream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+
+    hr = ITextStream_Read(stream, 1, &str);
+    ok(hr == CTL_E_BADFILEMODE || hr == E_VAR_NOT_SET, "got 0x%08x\n", hr);
+
+    hr = ITextStream_Close(stream);
+    ok(hr == S_FALSE || hr == E_VAR_NOT_SET, "got 0x%08x\n", hr);
+
+    ITextStream_Release(stream);
+
+    /* check it's created */
+    file = CreateFileW(pathW, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    ok(file != INVALID_HANDLE_VALUE, "got %p\n", file);
+    CloseHandle(file);
+
+    /* try to create again with no-overwrite mode */
+    hr = IFolder_CreateTextFile(folder, nameW, VARIANT_FALSE, VARIANT_FALSE, &stream);
+    ok(hr == CTL_E_FILEALREADYEXISTS, "got 0x%08x\n", hr);
+
+    /* now overwrite */
+    hr = IFolder_CreateTextFile(folder, nameW, VARIANT_TRUE, VARIANT_FALSE, &stream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ITextStream_Release(stream);
+
+    /* overwrite in Unicode mode, check for BOM */
+    hr = IFolder_CreateTextFile(folder, nameW, VARIANT_TRUE, VARIANT_TRUE, &stream);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ITextStream_Release(stream);
+
+    /* check contents */
+    file = CreateFileW(pathW, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    ok(file != INVALID_HANDLE_VALUE, "got %p\n", file);
+    r = 0;
+    ret = ReadFile(file, buffW, sizeof(buffW), &r, NULL);
+    ok(ret && r==2, "read %d, got %d, %d\n", r, ret, GetLastError());
+    buffW[r/sizeof(WCHAR)] = 0;
+
+    buff2W[0] = 0xfeff;
+    buff2W[1] = 0;
+    ok(!lstrcmpW(buff2W, buffW), "got %s, expected %s\n", wine_dbgstr_w(buffW), wine_dbgstr_w(buff2W));
+    CloseHandle(file);
+
+    DeleteFileW(pathW);
     RemoveDirectoryW(dirW);
     SysFreeString(nameW);
 }
@@ -1606,9 +1684,11 @@ static void test_WriteLine(void)
 
 static void test_ReadAll(void)
 {
+    static const WCHAR firstlineW[] = L"first";
     static const WCHAR secondlineW[] = L"second";
     static const WCHAR aW[] = L"A";
     WCHAR pathW[MAX_PATH], dirW[MAX_PATH], buffW[500];
+    char buffA[MAX_PATH];
     ITextStream *stream;
     BSTR nameW;
     HRESULT hr;
@@ -1625,8 +1705,10 @@ static void test_ReadAll(void)
     hr = IFileSystem3_CreateTextFile(fs3, nameW, VARIANT_FALSE, VARIANT_TRUE, &stream);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
-    hr = ITextStream_WriteLine(stream, nameW);
+    str = SysAllocString(firstlineW);
+    hr = ITextStream_WriteLine(stream, str);
     ok(hr == S_OK, "got 0x%08x\n", hr);
+    SysFreeString(str);
 
     str = SysAllocString(secondlineW);
     hr = ITextStream_WriteLine(stream, str);
@@ -1654,7 +1736,9 @@ static void test_ReadAll(void)
     hr = ITextStream_ReadAll(stream, &str);
     ok(hr == S_FALSE || broken(hr == S_OK) /* win2k */, "got 0x%08x\n", hr);
     buffW[0] = 0;
-    MultiByteToWideChar(CP_ACP, 0, utf16bom, -1, buffW, ARRAY_SIZE(buffW));
+    lstrcpyA(buffA, utf16bom);
+    lstrcatA(buffA, "first");
+    MultiByteToWideChar(CP_ACP, 0, buffA, -1, buffW, ARRAY_SIZE(buffW));
     ok(str[0] == buffW[0] && str[1] == buffW[1], "got %s, %d\n", wine_dbgstr_w(str), SysStringLen(str));
     SysFreeString(str);
     ITextStream_Release(stream);
@@ -1663,7 +1747,7 @@ static void test_ReadAll(void)
     hr = IFileSystem3_OpenTextFile(fs3, nameW, ForReading, VARIANT_FALSE, TristateTrue, &stream);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
-    lstrcpyW(buffW, nameW);
+    lstrcpyW(buffW, firstlineW);
     lstrcatW(buffW, L"\r\n");
     lstrcatW(buffW, secondlineW);
     lstrcatW(buffW, L"\r\n");
@@ -1694,7 +1778,7 @@ static void test_ReadAll(void)
     hr = ITextStream_ReadLine(stream, &str);
     ok(hr == S_OK, "got 0x%08x\n", hr);
     ok(str != NULL, "got %p\n", str);
-    ok(!wcscmp(str, nameW), "got %s\n", wine_dbgstr_w(str));
+    ok(!wcscmp(str, firstlineW), "got %s\n", wine_dbgstr_w(str));
     SysFreeString(str);
 
     lstrcpyW(buffW, secondlineW);
@@ -1733,8 +1817,10 @@ static void test_ReadAll(void)
 
 static void test_Read(void)
 {
+    static const WCHAR firstlineW[] = L"first";
     static const WCHAR secondlineW[] = L"second";
     WCHAR pathW[MAX_PATH], dirW[MAX_PATH], buffW[500];
+    char buffA[MAX_PATH];
     ITextStream *stream;
     BSTR nameW;
     HRESULT hr;
@@ -1751,8 +1837,10 @@ static void test_Read(void)
     hr = IFileSystem3_CreateTextFile(fs3, nameW, VARIANT_FALSE, VARIANT_TRUE, &stream);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
-    hr = ITextStream_WriteLine(stream, nameW);
+    str = SysAllocString(firstlineW);
+    hr = ITextStream_WriteLine(stream, str);
     ok(hr == S_OK, "got 0x%08x\n", hr);
+    SysFreeString(str);
 
     str = SysAllocString(secondlineW);
     hr = ITextStream_WriteLine(stream, str);
@@ -1797,9 +1885,10 @@ static void test_Read(void)
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
     buffW[0] = 0;
-    MultiByteToWideChar(CP_ACP, 0, utf16bom, -1, buffW, ARRAY_SIZE(buffW));
-
-    ok(!lstrcmpW(str, buffW), "got %s, expected %s\n", wine_dbgstr_w(str), wine_dbgstr_w(buffW));
+    lstrcpyA(buffA, utf16bom);
+    lstrcatA(buffA, "first");
+    MultiByteToWideChar(CP_ACP, 0, buffA, -1, buffW, ARRAY_SIZE(buffW));
+    ok(str[0] == buffW[0] && str[1] == buffW[1], "got %s, expected %s, %d\n", wine_dbgstr_w(str), wine_dbgstr_w(buffW), SysStringLen(str));
     ok(SysStringLen(str) == 2, "got %d\n", SysStringLen(str));
     SysFreeString(str);
     ITextStream_Release(stream);
@@ -1808,7 +1897,7 @@ static void test_Read(void)
     hr = IFileSystem3_OpenTextFile(fs3, nameW, ForReading, VARIANT_FALSE, TristateTrue, &stream);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
-    lstrcpyW(buffW, nameW);
+    lstrcpyW(buffW, firstlineW);
     lstrcatW(buffW, L"\r\n");
     lstrcatW(buffW, secondlineW);
     lstrcatW(buffW, L"\r\n");
@@ -1854,7 +1943,7 @@ static void test_Read(void)
     hr = IFileSystem3_OpenTextFile(fs3, nameW, ForReading, VARIANT_FALSE, TristateUseDefault, &stream);
     ok(hr == S_OK, "got 0x%08x\n", hr);
 
-    lstrcpyW(buffW, nameW);
+    lstrcpyW(buffW, firstlineW);
     lstrcatW(buffW, L"\r\n");
     lstrcatW(buffW, secondlineW);
     lstrcatW(buffW, L"\r\n");
@@ -2516,6 +2605,7 @@ START_TEST(filesystem)
     test_FileCollection();
     test_DriveCollection();
     test_CreateTextFile();
+    test_FolderCreateTextFile();
     test_WriteLine();
     test_ReadAll();
     test_Read();

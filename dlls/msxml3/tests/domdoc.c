@@ -781,6 +781,20 @@ static const char complete7[] = {
     "</root>"
 };
 
+#define DECL_GBK \
+"<?xml version=\"1.0\" encoding=\"gbk\"?>"
+
+static const char gbkxml[] =
+DECL_GBK
+"<open></open>";
+
+#define DECL_WIN_936 \
+"<?xml version=\"1.0\" encoding=\"Windows-936\"?>"
+
+static const char win936xml[] =
+DECL_WIN_936
+"<open></open>";
+
 #define DECL_WIN_1252 \
 "<?xml version=\"1.0\" encoding=\"Windows-1252\"?>"
 
@@ -8592,8 +8606,28 @@ static void test_createProcessingInstruction(void)
     doc = create_document(&IID_IXMLDOMDocument);
 
     hr = IXMLDOMDocument_createProcessingInstruction(doc, _bstr_("xml"), _bstr_("version=\"1.0\" encoding=\"windows-1252\" dummy=\"value\""), &pi);
-todo_wine
     ok(hr == XML_E_UNEXPECTED_ATTRIBUTE, "got 0x%08x\n", hr);
+    hr = IXMLDOMDocument_createProcessingInstruction(doc, NULL, _bstr_("version=\"1.0\" encoding=\"UTF-8\""), &pi);
+    ok(hr == E_FAIL, "got 0x%08x\n", hr);
+    hr = IXMLDOMDocument_createProcessingInstruction(doc, _bstr_("xml"), NULL, &pi);
+    ok(hr == XML_E_XMLDECLSYNTAX, "got 0x%08x\n", hr);
+    hr = IXMLDOMDocument_createProcessingInstruction(doc, _bstr_("xml"), _bstr_("version=\"1.0\" encoding=UTF-8"), &pi);
+    ok(hr == XML_E_MISSINGQUOTE, "got 0x%08x\n", hr);
+    hr = IXMLDOMDocument_createProcessingInstruction(doc, _bstr_("xml"), _bstr_("version=\"1.0\" encoding='UTF-8\""), &pi);
+    ok(hr == XML_E_BADCHARINSTRING, "got 0x%08x\n", hr);
+    hr = IXMLDOMDocument_createProcessingInstruction(doc, _bstr_("xml"), _bstr_("version=\"1.0\" encoding=\"UTF-8"), &pi);
+    ok(hr == XML_E_BADCHARINSTRING, "got 0x%08x\n", hr);
+    pi = NULL;
+    hr = IXMLDOMDocument_createProcessingInstruction(doc, _bstr_("xml"), _bstr_("version=\"1.0\" encoding='UTF-8'"), &pi);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IXMLDOMProcessingInstruction_QueryInterface(pi, &IID_IXMLDOMNode, (void **)&node);
+    node_map = NULL;
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    hr = IXMLDOMNode_get_attributes(node, &node_map);
+    ok(hr == S_OK, "got 0x%08x\n", hr);
+    IXMLDOMNamedNodeMap_Release(node_map);
+    IXMLDOMNode_Release(node);
+    IXMLDOMProcessingInstruction_Release(pi);
 
     /* test for BSTR handling, pass broken BSTR */
     memcpy(&buff[2], L"test", 5 * sizeof(WCHAR));
@@ -10486,7 +10520,10 @@ static void write_to_file(const char *name, const char *data)
     CloseHandle(hfile);
 }
 
-static void test_doc_load_from_path(IXMLDOMDocument *doc, const char *path)
+#define TEST_DOC_LOAD_FROM_PATH(doc,path,expected_hr, expected_ret) \
+    _test_doc_load_from_path(doc, path, expected_hr, expected_ret, __LINE__)
+static void _test_doc_load_from_path(IXMLDOMDocument *doc, const char *path,
+        HRESULT expected_hr, VARIANT_BOOL expected_ret, int line)
 {
     IXMLDOMDocument *doc2;
     IXMLDOMElement *elem;
@@ -10500,29 +10537,32 @@ static void test_doc_load_from_path(IXMLDOMDocument *doc, const char *path)
     V_VT(&src) = VT_BSTR;
     V_BSTR(&src) = url;
     hr = IXMLDOMDocument_load(doc, src, &b);
-    ok(hr == S_OK, "Failed to load document, %#x.\n", hr);
-    ok(b == VARIANT_TRUE, "got %d\n", b);
+    ok_(__FILE__, line)(hr == expected_hr, "Failed to load document, %#x.\n", hr);
+    ok_(__FILE__, line)(b == expected_ret, "got %d\n", b);
 
     V_VT(&src) = VT_BSTR | VT_BYREF;
     V_BSTRREF(&src) = &url;
     hr = IXMLDOMDocument_load(doc, src, &b);
-    ok(hr == S_OK, "Failed to load document, %#x.\n", hr);
-    ok(b == VARIANT_TRUE, "got %d\n", b);
+    ok_(__FILE__, line)(hr == expected_hr, "Failed to load document, %#x.\n", hr);
+    ok_(__FILE__, line)(b == expected_ret, "got %d\n", b);
+
+    if (expected_hr != S_OK)
+        return;
 
     url = NULL;
     hr = IXMLDOMDocument_get_url(doc, &url);
-    ok(hr == S_OK, "Failed to get document url, hr %#x.\n", hr);
+    ok_(__FILE__, line)(hr == S_OK, "Failed to get document url, hr %#x.\n", hr);
 
     hr = IXMLDOMDocument_get_documentElement(doc, &elem);
-    ok(hr == S_OK, "got 0x%08x\n", hr);
+    ok_(__FILE__, line)(hr == S_OK, "got 0x%08x\n", hr);
 
     /* Create another instance for the same document, check url */
     hr = IXMLDOMElement_get_ownerDocument(elem, &doc2);
-    ok(hr == S_OK, "Failed to get owner document, hr %#x.\n", hr);
+    ok_(__FILE__, line)(hr == S_OK, "Failed to get owner document, hr %#x.\n", hr);
 
     hr = IXMLDOMDocument_get_url(doc2, &url2);
-    ok(hr == S_OK, "Failed to get document url, hr %#x.\n", hr);
-    ok(!lstrcmpW(url, url2), "Unexpected url %s.\n", wine_dbgstr_w(url2));
+    ok_(__FILE__, line)(hr == S_OK, "Failed to get document url, hr %#x.\n", hr);
+    ok_(__FILE__, line)(!lstrcmpW(url, url2), "Unexpected url %s.\n", wine_dbgstr_w(url2));
 
     IXMLDOMDocument_Release(doc2);
     IXMLDOMElement_Release(elem);
@@ -10554,6 +10594,18 @@ static void test_load(void)
     HRESULT hr;
     void* ptr;
     int n;
+    struct encoding_test
+    {
+        const char *xml;
+        HRESULT expected_hr;
+        VARIANT_BOOL expected_ret;
+    } encoding_tests[] =
+    {
+        { gbkxml,     S_OK,    VARIANT_TRUE  },
+        { win1252xml, S_OK,    VARIANT_TRUE  },
+        { win936xml,  S_FALSE, VARIANT_FALSE },
+    };
+
 
     GetTempPathA(MAX_PATH, path);
     strcat(path, "winetest.xml");
@@ -10573,23 +10625,23 @@ static void test_load(void)
     /* "file://" url */
     strcpy(path2, "file://");
     strcat(path2, path);
-    test_doc_load_from_path(doc, path2);
+    TEST_DOC_LOAD_FROM_PATH(doc, path2, S_OK, VARIANT_TRUE);
 
     /* file:// url, forward slashes */
     url_forward_slash(path2);
-    test_doc_load_from_path(doc, path2);
+    TEST_DOC_LOAD_FROM_PATH(doc, path2, S_OK, VARIANT_TRUE);
 
     /* "file:/" url */
     strcpy(path2, "file:/");
     strcat(path2, path);
-    test_doc_load_from_path(doc, path);
+    TEST_DOC_LOAD_FROM_PATH(doc, path, S_OK, VARIANT_TRUE);
 
     /* file:/ with forward slashes. */
     url_forward_slash(path2);
-    test_doc_load_from_path(doc, path2);
+    TEST_DOC_LOAD_FROM_PATH(doc, path2, S_OK, VARIANT_TRUE);
 
     /* Regular local path. */
-    test_doc_load_from_path(doc, path);
+    TEST_DOC_LOAD_FROM_PATH(doc, path, S_OK, VARIANT_TRUE);
 
     /* load from a path: VT_BSTR|VT_BYREF, null ptr */
     V_VT(&src) = VT_BSTR | VT_BYREF;
@@ -10607,16 +10659,16 @@ static void test_load(void)
     strcpy(path2, path);
     n = strlen(path2);
     strcpy(&path2[n-1], "%6C");  /* C:\path\to\winetest.xm%6C */
-    test_doc_load_from_path(doc, path2);
+    TEST_DOC_LOAD_FROM_PATH(doc, path2, S_OK, VARIANT_TRUE);
 
     /* Both spaces and %20s work. */
     GetTempPathA(MAX_PATH, path2);
     strcat(path2, "wine test.xml");
     write_to_file(path2, win1252xml);
-    test_doc_load_from_path(doc, path2);
+    TEST_DOC_LOAD_FROM_PATH(doc, path2, S_OK, VARIANT_TRUE);
     GetTempPathA(MAX_PATH, path2);
     strcat(path2, "wine%20test.xml");
-    test_doc_load_from_path(doc, path2);
+    TEST_DOC_LOAD_FROM_PATH(doc, path2, S_OK, VARIANT_TRUE);
     DeleteFileA(path2);
 
     DeleteFileA(path);
@@ -10750,6 +10802,18 @@ static void test_load(void)
     VariantClear(&src);
 
     IXMLDOMDocument_Release(doc);
+
+    /* Encoding tests. */
+    for (n = 0; n < ARRAY_SIZE(encoding_tests); n++)
+    {
+        GetTempPathA(MAX_PATH, path);
+        strcat(path, "codepage_test.xml");
+        write_to_file(path, encoding_tests[n].xml);
+        doc = create_document(&IID_IXMLDOMDocument);
+        TEST_DOC_LOAD_FROM_PATH(doc, path, encoding_tests[n].expected_hr, encoding_tests[n].expected_ret);
+        DeleteFileA(path);
+        IXMLDOMDocument_Release(doc);
+    }
 
     free_bstrs();
 }

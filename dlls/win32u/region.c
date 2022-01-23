@@ -451,7 +451,7 @@ static WINEREGION *alloc_region( INT n )
 
     if (rgn && !init_region( rgn, n ))
     {
-        free_region( rgn );
+        free( rgn );
         rgn = NULL;
     }
     return rgn;
@@ -1375,9 +1375,9 @@ INT mirror_region( HRGN dst, HRGN src, INT width )
 }
 
 /***********************************************************************
- *           MirrorRgn    (GDI32.@)
+ *           mirror_window_region
  */
-BOOL WINAPI MirrorRgn( HWND hwnd, HRGN hrgn )
+BOOL mirror_window_region( HWND hwnd, HRGN hrgn )
 {
     RECT rect;
 

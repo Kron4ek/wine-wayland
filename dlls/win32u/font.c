@@ -49,6 +49,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(font);
 
 static HKEY wine_fonts_key;
 static HKEY wine_fonts_cache_key;
+HKEY hkcu_key;
 
 struct font_physdev
 {
@@ -198,18 +199,6 @@ static struct font_gamma_ramp font_gamma_ramp;
 static void add_face_to_cache( struct gdi_font_face *face );
 static void remove_face_from_cache( struct gdi_font_face *face );
 
-static void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
-{
-    while (len--) *dst++ = (unsigned char)*src++;
-}
-
-static UINT asciiz_to_unicode( WCHAR *dst, const char *src )
-{
-    WCHAR *p = dst;
-    while ((*p++ = *src++));
-    return (p - dst) * sizeof(WCHAR);
-}
-
 UINT get_acp(void)
 {
     return ((const WORD *)NtCurrentTeb()->Peb->AnsiCodePageData)[1];
@@ -286,11 +275,6 @@ static inline INT INTERNAL_YWSTODS(DC *dc, INT height)
     pt[1].y = height;
     lp_to_dp(dc, pt, 2);
     return pt[1].y - pt[0].y;
-}
-
-static inline BOOL is_win9x(void)
-{
-    return NtCurrentTeb()->Peb->OSPlatformId == VER_PLATFORM_WIN32s;
 }
 
 static inline WCHAR *strdupW( const WCHAR *p )
@@ -552,7 +536,7 @@ static void get_fonts_win_dir_path( const WCHAR *file, WCHAR *path )
     if (file) lstrcatW( path, file );
 }
 
-static HKEY reg_open_key( HKEY root, const WCHAR *name, ULONG name_len )
+HKEY reg_open_key( HKEY root, const WCHAR *name, ULONG name_len )
 {
     UNICODE_STRING nameW = { name_len, name_len, (WCHAR *)name };
     OBJECT_ATTRIBUTES attr;
@@ -570,8 +554,8 @@ static HKEY reg_open_key( HKEY root, const WCHAR *name, ULONG name_len )
 }
 
 /* wrapper for NtCreateKey that creates the key recursively if necessary */
-static HKEY reg_create_key( HKEY root, const WCHAR *name, ULONG name_len,
-                            DWORD options, DWORD *disposition )
+HKEY reg_create_key( HKEY root, const WCHAR *name, ULONG name_len,
+                     DWORD options, DWORD *disposition )
 {
     UNICODE_STRING nameW = { name_len, name_len, (WCHAR *)name };
     OBJECT_ATTRIBUTES attr;
@@ -600,9 +584,11 @@ static HKEY reg_create_key( HKEY root, const WCHAR *name, ULONG name_len,
         if (i == len) return 0;
         for (;;)
         {
+            unsigned int subkey_options = options;
+            if (i < len) subkey_options &= ~(REG_OPTION_CREATE_LINK | REG_OPTION_OPEN_LINK);
             nameW.Buffer = (WCHAR *)name + pos;
             nameW.Length = (i - pos) * sizeof(WCHAR);
-            status = NtCreateKey( &ret, MAXIMUM_ALLOWED, &attr, 0, NULL, options, disposition );
+            status = NtCreateKey( &ret, MAXIMUM_ALLOWED, &attr, 0, NULL, subkey_options, disposition );
 
             if (attr.RootDirectory != root) NtClose( attr.RootDirectory );
             if (!NT_SUCCESS(status)) return 0;
@@ -616,22 +602,28 @@ static HKEY reg_create_key( HKEY root, const WCHAR *name, ULONG name_len,
     return ret;
 }
 
-static void set_reg_value( HKEY hkey, const WCHAR *name, UINT type, const void *value, DWORD count )
+HKEY reg_open_hkcu_key( const char *name )
+{
+    WCHAR nameW[128];
+    return reg_open_key( hkcu_key, nameW, asciiz_to_unicode( nameW, name ) - sizeof(WCHAR) );
+}
+
+BOOL set_reg_value( HKEY hkey, const WCHAR *name, UINT type, const void *value, DWORD count )
 {
     unsigned int name_size = name ? lstrlenW( name ) * sizeof(WCHAR) : 0;
     UNICODE_STRING nameW = { name_size, name_size, (WCHAR *)name };
-    NtSetValueKey( hkey, &nameW, 0, type, value, count );
+    return !NtSetValueKey( hkey, &nameW, 0, type, value, count );
 }
 
-static void set_reg_ascii_value( HKEY hkey, const char *name, const char *value )
+void set_reg_ascii_value( HKEY hkey, const char *name, const char *value )
 {
     WCHAR nameW[64], valueW[128];
     asciiz_to_unicode( nameW, name );
     set_reg_value( hkey, nameW, REG_SZ, valueW, asciiz_to_unicode( valueW, value ));
 }
 
-static ULONG query_reg_value( HKEY hkey, const WCHAR *name,
-                              KEY_VALUE_PARTIAL_INFORMATION *info, ULONG size )
+ULONG query_reg_value( HKEY hkey, const WCHAR *name,
+                       KEY_VALUE_PARTIAL_INFORMATION *info, ULONG size )
 {
     unsigned int name_size = name ? lstrlenW( name ) * sizeof(WCHAR) : 0;
     UNICODE_STRING nameW = { name_size, name_size, (WCHAR *)name };
@@ -643,8 +635,8 @@ static ULONG query_reg_value( HKEY hkey, const WCHAR *name,
     return size - FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data);
 }
 
-static ULONG query_reg_ascii_value( HKEY hkey, const char *name,
-                                    KEY_VALUE_PARTIAL_INFORMATION *info, ULONG size )
+ULONG query_reg_ascii_value( HKEY hkey, const char *name,
+                             KEY_VALUE_PARTIAL_INFORMATION *info, ULONG size )
 {
     WCHAR nameW[64];
     asciiz_to_unicode( nameW, name );
@@ -669,14 +661,14 @@ static BOOL reg_enum_value( HKEY hkey, unsigned int index, KEY_VALUE_FULL_INFORM
     return TRUE;
 }
 
-static void reg_delete_value( HKEY hkey, const WCHAR *name )
+void reg_delete_value( HKEY hkey, const WCHAR *name )
 {
     unsigned int name_size = lstrlenW( name ) * sizeof(WCHAR);
     UNICODE_STRING nameW = { name_size, name_size, (WCHAR *)name };
     NtDeleteValueKey( hkey, &nameW );
 }
 
-static BOOL reg_delete_tree( HKEY parent, const WCHAR *name, ULONG name_len )
+BOOL reg_delete_tree( HKEY parent, const WCHAR *name, ULONG name_len )
 {
     char buffer[4096];
     KEY_NODE_INFORMATION *key_info = (KEY_NODE_INFORMATION *)buffer;
@@ -1807,17 +1799,17 @@ static struct gdi_font_face *find_best_matching_face( const struct gdi_font_fami
 
 static struct gdi_font_face *find_matching_face_by_name( const WCHAR *name, const WCHAR *subst,
                                                          const LOGFONTW *lf, FONTSIGNATURE fs,
-                                                         BOOL can_use_bitmap )
+                                                         BOOL can_use_bitmap, const WCHAR **orig_name )
 {
     struct gdi_font_family *family;
     struct gdi_font_face *face;
 
     family = find_family_from_any_name( name );
-    if (family && (face = find_best_matching_face( family, lf, fs, can_use_bitmap ))) return face;
+    if (family && (face = find_best_matching_face( family, lf, fs, can_use_bitmap ))) goto found;
     if (subst)
     {
         family = find_family_from_any_name( subst );
-        if (family && (face = find_best_matching_face( family, lf, fs, can_use_bitmap ))) return face;
+        if (family && (face = find_best_matching_face( family, lf, fs, can_use_bitmap ))) goto found;
     }
 
     /* search by full face name */
@@ -1832,6 +1824,11 @@ static struct gdi_font_face *find_matching_face_by_name( const WCHAR *name, cons
         if ((face = find_best_matching_face( family, lf, fs, can_use_bitmap ))) return face;
     }
     return NULL;
+
+found:
+    if (orig_name && family != face->family)
+        *orig_name = family->family_name;
+    return face;
 }
 
 static struct gdi_font_face *find_any_face( const LOGFONTW *lf, FONTSIGNATURE fs,
@@ -1871,7 +1868,7 @@ static struct gdi_font_face *find_any_face( const LOGFONTW *lf, FONTSIGNATURE fs
 }
 
 static struct gdi_font_face *find_matching_face( const LOGFONTW *lf, CHARSETINFO *csi, BOOL can_use_bitmap,
-                                                 const WCHAR **orig_name )
+                                                 BOOL *substituted, const WCHAR **orig_name )
 {
     BOOL want_vertical = (lf->lfFaceName[0] == '@');
     struct gdi_font_face *face;
@@ -1893,13 +1890,13 @@ static struct gdi_font_face *find_matching_face( const LOGFONTW *lf, CHARSETINFO
                    debugstr_w(subst), (subst_charset != -1) ? subst_charset : lf->lfCharSet );
 	    if (subst_charset != -1)
                 translate_charset_info( (DWORD *)(INT_PTR)subst_charset, csi, TCI_SRCCHARSET );
-            *orig_name = lf->lfFaceName;
+            *substituted = TRUE;
 	}
 
-        if ((face = find_matching_face_by_name( lf->lfFaceName, subst, lf, csi->fs, can_use_bitmap )))
+        if ((face = find_matching_face_by_name( lf->lfFaceName, subst, lf, csi->fs, can_use_bitmap, orig_name )))
             return face;
     }
-    *orig_name = NULL; /* substitution is no longer relevant */
+    *substituted = FALSE; /* substitution is no longer relevant */
 
     /* If requested charset was DEFAULT_CHARSET then try using charset
        corresponding to the current ansi codepage */
@@ -2060,7 +2057,7 @@ static void free_gdi_font( struct gdi_font *font )
 
 static inline const WCHAR *get_gdi_font_name( struct gdi_font *font )
 {
-    return (WCHAR *)font->otm.otmpFamilyName;
+    return font->use_logfont_name ? font->lf.lfFaceName : (WCHAR *)font->otm.otmpFamilyName;
 }
 
 static struct gdi_font *create_gdi_font( const struct gdi_font_face *face, const WCHAR *family_name,
@@ -2468,7 +2465,7 @@ static void add_child_font( struct gdi_font *font, const WCHAR *family_name )
     struct gdi_font *child;
     struct gdi_font_face *face;
 
-    if (!(face = find_matching_face_by_name( family_name, NULL, &font->lf, fs, FALSE ))) return;
+    if (!(face = find_matching_face_by_name( family_name, NULL, &font->lf, fs, FALSE, NULL ))) return;
 
     if (!(child = create_gdi_font( face, family_name, &font->lf ))) return;
     child->matrix = font->matrix;
@@ -2486,10 +2483,7 @@ static void create_child_font_list( struct gdi_font *font )
 {
     struct gdi_font_link *font_link;
     struct gdi_font_link_entry *entry;
-    const WCHAR* font_name;
-
-    if (!(font_name = get_gdi_font_subst( get_gdi_font_name(font), -1, NULL )))
-        font_name = get_gdi_font_name( font );
+    const WCHAR* font_name = (WCHAR *)font->otm.otmpFaceName;
 
     if ((font_link = find_gdi_font_link( font_name )))
     {
@@ -2589,22 +2583,24 @@ static struct gdi_font *find_cached_gdi_font( const LOGFONTW *lf, const FMAT2 *m
 static void release_gdi_font( struct gdi_font *font )
 {
     if (!font) return;
-    if (--font->refcount) return;
 
     TRACE( "font %p\n", font );
 
     /* add it to the unused list */
     pthread_mutex_lock( &font_lock );
-    list_add_head( &unused_gdi_font_list, &font->unused_entry );
-    if (unused_font_count > UNUSED_CACHE_SIZE)
+    if (!--font->refcount)
     {
-        font = LIST_ENTRY( list_tail( &unused_gdi_font_list ), struct gdi_font, unused_entry );
-        TRACE( "freeing %p\n", font );
-        list_remove( &font->entry );
-        list_remove( &font->unused_entry );
-        free_gdi_font( font );
+        list_add_head( &unused_gdi_font_list, &font->unused_entry );
+        if (unused_font_count > UNUSED_CACHE_SIZE)
+        {
+            font = LIST_ENTRY( list_tail( &unused_gdi_font_list ), struct gdi_font, unused_entry );
+            TRACE( "freeing %p\n", font );
+            list_remove( &font->entry );
+            list_remove( &font->unused_entry );
+            free_gdi_font( font );
+        }
+        else unused_font_count++;
     }
-    else unused_font_count++;
     pthread_mutex_unlock( &font_lock );
 }
 
@@ -3956,6 +3952,7 @@ static BOOL CDECL font_GetTextExtentExPointI( PHYSDEV dev, const WORD *indices, 
 static INT CDECL font_GetTextFace( PHYSDEV dev, INT count, WCHAR *str )
 {
     struct font_physdev *physdev = get_font_dev( dev );
+    const WCHAR *font_name;
     INT len;
 
     if (!physdev->font)
@@ -3963,10 +3960,11 @@ static INT CDECL font_GetTextFace( PHYSDEV dev, INT count, WCHAR *str )
         dev = GET_NEXT_PHYSDEV( dev, pGetTextFace );
         return dev->funcs->pGetTextFace( dev, count, str );
     }
-    len = lstrlenW( get_gdi_font_name(physdev->font) ) + 1;
+    font_name = get_gdi_font_name( physdev->font );
+    len = lstrlenW( font_name ) + 1;
     if (str)
     {
-        lstrcpynW( str, get_gdi_font_name(physdev->font), count );
+        lstrcpynW( str, font_name, count );
         len = min( count, len );
     }
     return len;
@@ -4085,6 +4083,7 @@ static struct gdi_font *select_font( LOGFONTW *lf, FMAT2 dcmat, BOOL can_use_bit
     INT height;
     CHARSETINFO csi;
     const WCHAR *orig_name = NULL;
+    BOOL substituted = FALSE;
 
     static const WCHAR symbolW[] = {'S','y','m','b','o','l',0};
 
@@ -4100,7 +4099,7 @@ static struct gdi_font *select_font( LOGFONTW *lf, FMAT2 dcmat, BOOL can_use_bit
         TRACE( "returning cached gdiFont(%p)\n", font );
         return font;
     }
-    if (!(face = find_matching_face( lf, &csi, can_use_bitmap, &orig_name )))
+    if (!(face = find_matching_face( lf, &csi, can_use_bitmap, &substituted, &orig_name )))
     {
         FIXME( "can't find a single appropriate font - bailing\n" );
         return NULL;
@@ -4108,6 +4107,7 @@ static struct gdi_font *select_font( LOGFONTW *lf, FMAT2 dcmat, BOOL can_use_bit
     height = lf->lfHeight;
 
     font = create_gdi_font( face, orig_name, lf );
+    font->use_logfont_name = substituted;
     font->matrix = dcmat;
     font->can_use_bitmap = can_use_bitmap;
     if (!csi.fs.fsCsb[0]) get_nearest_charset( face->family->family_name, face, &csi );
@@ -4352,7 +4352,6 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pD3DKMTCheckVidPnExclusiveOwnership */
     NULL,                           /* pD3DKMTSetVidPnSourceOwner */
     NULL,                           /* wine_get_wgl_driver */
-    NULL,                           /* wine_get_vulkan_driver */
     GDI_PRIORITY_FONT_DRV           /* priority */
 };
 
@@ -4371,16 +4370,13 @@ static BOOL get_key_value( HKEY key, const char *name, DWORD *value )
     return !!count;
 }
 
-static UINT init_font_options( HKEY hkcu )
+static UINT init_font_options(void)
 {
     char value_buffer[FIELD_OFFSET(KEY_VALUE_PARTIAL_INFORMATION, Data[20 * sizeof(WCHAR)])];
     KEY_VALUE_PARTIAL_INFORMATION *info = (void *)value_buffer;
     HKEY key;
     DWORD i, val, gamma = 1400;
     UINT dpi = 0;
-
-    static const WCHAR desktop_keyW[] =
-        { 'C','o','n','t','r','o','l',' ','P','a','n','e','l','\\','D','e','s','k','t','o','p' };
 
     if (query_reg_ascii_value( wine_fonts_key, "AntialiasFakeBoldOrItalic",
                                info, sizeof(value_buffer) ) && info->Type == REG_SZ)
@@ -4389,7 +4385,7 @@ static UINT init_font_options( HKEY hkcu )
         antialias_fakes = (wcschr( valsW, *(const WCHAR *)info->Data ) != NULL);
     }
 
-    if ((key = reg_open_key( hkcu, desktop_keyW, sizeof(desktop_keyW) )))
+    if ((key = reg_open_hkcu_key( "Control Panel\\Desktop" )))
     {
         /* FIXME: handle vertical orientations even though Windows doesn't */
         if (get_key_value( key, "FontSmoothingOrientation", &val ))
@@ -6355,7 +6351,7 @@ UINT font_init(void)
 {
     OBJECT_ATTRIBUTES attr = { sizeof(attr) };
     UNICODE_STRING name;
-    HANDLE mutex, hkcu;
+    HANDLE mutex;
     DWORD disposition;
     UINT dpi = 0;
 
@@ -6366,10 +6362,9 @@ UINT font_init(void)
         {'S','o','f','t','w','a','r','e','\\','W','i','n','e','\\','F','o','n','t','s'};
     static const WCHAR cacheW[] = {'C','a','c','h','e'};
 
-    if (!(hkcu = open_hkcu())) return 0;
-    wine_fonts_key = reg_create_key( hkcu, wine_fonts_keyW, sizeof(wine_fonts_keyW), 0, NULL );
-    if (wine_fonts_key) dpi = init_font_options( hkcu );
-    NtClose( hkcu );
+    if (!(hkcu_key = open_hkcu())) return 0;
+    wine_fonts_key = reg_create_key( hkcu_key, wine_fonts_keyW, sizeof(wine_fonts_keyW), 0, NULL );
+    if (wine_fonts_key) dpi = init_font_options();
     if (!dpi) return 96;
     update_codepage( dpi );
 

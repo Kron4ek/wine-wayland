@@ -18,9 +18,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-
 #include "config.h"
-#include "wine/port.h"
 #include "wined3d_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
@@ -444,9 +442,11 @@ ULONG CDECL wined3d_query_decref(struct wined3d_query *query)
     {
         struct wined3d_device *device = query->device;
 
+        wined3d_mutex_lock();
         query->parent_ops->wined3d_object_destroyed(query->parent);
         wined3d_cs_destroy_object(device->cs, wined3d_query_destroy_object, query);
         device->adapter->adapter_ops->adapter_destroy_query(query);
+        wined3d_mutex_unlock();
     }
 
     return refcount;

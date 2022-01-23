@@ -354,6 +354,7 @@
 @ stub IoConnectInterrupt
 @ stub IoCreateController
 @ stdcall IoCreateDevice(ptr long ptr long long long ptr)
+@ stdcall IoCreateDeviceSecure(ptr long ptr long long long ptr ptr ptr)
 @ stub IoCreateDisk
 @ stdcall IoCreateDriver(ptr ptr)
 @ stdcall IoCreateFile(ptr long ptr ptr ptr long long long long ptr long long ptr long)
@@ -1097,7 +1098,7 @@
 @ stdcall RtlGetControlSecurityDescriptor(ptr ptr ptr)
 @ stdcall RtlGetDaclSecurityDescriptor(ptr ptr ptr ptr)
 @ stub RtlGetDefaultCodePage
-@ stub RtlGetElementGenericTable
+@ stdcall RtlGetElementGenericTable(ptr long)
 @ stub RtlGetElementGenericTableAvl
 @ stdcall RtlGetExtendedContextLength(long ptr)
 @ stdcall RtlGetExtendedContextLength2(long ptr int64)
@@ -1182,7 +1183,7 @@
 @ stdcall RtlLocateLegacyContext(ptr ptr)
 @ stub RtlLockBootStatusData
 @ stdcall RtlLookupAtomInAtomTable(ptr wstr ptr)
-@ stub RtlLookupElementGenericTable
+@ stdcall RtlLookupElementGenericTable(ptr ptr)
 @ stub RtlLookupElementGenericTableAvl
 @ stub RtlLookupElementGenericTableFull
 @ stub RtlLookupElementGenericTableFullAvl

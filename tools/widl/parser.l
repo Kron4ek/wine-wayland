@@ -43,7 +43,6 @@ double	[0-9]+\.[0-9]+([eE][+-]?[0-9]+)*
 %{
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,12 +51,7 @@ double	[0-9]+\.[0-9]+([eE][+-]?[0-9]+)*
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
-
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#else
 #define YY_NO_UNISTD_H
-#endif
 
 #include "widl.h"
 #include "utils.h"

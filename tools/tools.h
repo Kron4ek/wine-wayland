@@ -30,11 +30,8 @@
 #include <fcntl.h>
 #include <time.h>
 #include <errno.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
 
-#if defined(_WIN32) && !defined(__CYGWIN__)
+#ifdef _WIN32
 # include <direct.h>
 # include <io.h>
 # include <process.h>
@@ -80,6 +77,23 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #endif
 
+struct target
+{
+    enum { CPU_i386, CPU_x86_64, CPU_ARM, CPU_ARM64 } cpu;
+
+    enum
+    {
+        PLATFORM_UNSPECIFIED,
+        PLATFORM_APPLE,
+        PLATFORM_ANDROID,
+        PLATFORM_LINUX,
+        PLATFORM_FREEBSD,
+        PLATFORM_SOLARIS,
+        PLATFORM_WINDOWS,
+        PLATFORM_MINGW,
+        PLATFORM_CYGWIN
+    } platform;
+};
 
 static inline void *xmalloc( size_t size )
 {
@@ -201,7 +215,7 @@ static inline struct strarray strarray_fromstring( const char *str, const char *
 static inline struct strarray strarray_frompath( const char *path )
 {
     if (!path) return empty_strarray;
-#if defined(_WIN32) && !defined(__CYGWIN__)
+#ifdef _WIN32
     return strarray_fromstring( path, ";" );
 #else
     return strarray_fromstring( path, ":" );
@@ -253,7 +267,7 @@ static inline void strarray_trace( struct strarray args )
 
 static inline int strarray_spawn( struct strarray args )
 {
-#if defined(_WIN32) && !defined(__CYGWIN__)
+#ifdef _WIN32
     strarray_add( &args, NULL );
     return _spawnvp( _P_WAIT, args.str[0], args.str );
 #else
@@ -335,6 +349,297 @@ static inline int make_temp_file( const char *prefix, const char *suffix, char *
     exit(1);
 }
 
+
+static inline struct target get_default_target(void)
+{
+    struct target target;
+#ifdef __i386__
+    target.cpu = CPU_i386;
+#elif defined(__x86_64__)
+    target.cpu = CPU_x86_64;
+#elif defined(__arm__)
+    target.cpu = CPU_ARM;
+#elif defined(__aarch64__)
+    target.cpu = CPU_ARM64;
+#else
+#error Unsupported CPU
+#endif
+
+#ifdef __APPLE__
+    target.platform = PLATFORM_APPLE;
+#elif defined(__ANDROID__)
+    target.platform = PLATFORM_ANDROID;
+#elif defined(__linux__)
+    target.platform = PLATFORM_LINUX;
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+    target.platform = PLATFORM_FREEBSD;
+#elif defined(__sun)
+    target.platform = PLATFORM_SOLARIS;
+#elif defined(__CYGWIN__)
+    target.platform = PLATFORM_CYGWIN;
+#elif defined(_WIN32)
+    target.platform = PLATFORM_MINGW;
+#else
+    target.platform = PLATFORM_UNSPECIFIED;
+#endif
+
+    return target;
+}
+
+
+static inline unsigned int get_target_ptr_size( struct target target )
+{
+    static const unsigned int sizes[] =
+    {
+        [CPU_i386]      = 4,
+        [CPU_x86_64]    = 8,
+        [CPU_ARM]       = 4,
+        [CPU_ARM64]     = 8,
+    };
+    return sizes[target.cpu];
+}
+
+
+static inline void set_target_ptr_size( struct target *target, unsigned int size )
+{
+    switch (target->cpu)
+    {
+    case CPU_i386:
+        if (size == 8) target->cpu = CPU_x86_64;
+        break;
+    case CPU_x86_64:
+        if (size == 4) target->cpu = CPU_i386;
+        break;
+    case CPU_ARM:
+        if (size == 8) target->cpu = CPU_ARM64;
+        break;
+    case CPU_ARM64:
+        if (size == 4) target->cpu = CPU_ARM;
+        break;
+    }
+}
+
+
+static inline int get_cpu_from_name( const char *name )
+{
+    static const struct
+    {
+        const char *name;
+        int         cpu;
+    } cpu_names[] =
+    {
+        { "i386",      CPU_i386 },
+        { "i486",      CPU_i386 },
+        { "i586",      CPU_i386 },
+        { "i686",      CPU_i386 },
+        { "i786",      CPU_i386 },
+        { "x86_64",    CPU_x86_64 },
+        { "amd64",     CPU_x86_64 },
+        { "aarch64",   CPU_ARM64 },
+        { "arm64",     CPU_ARM64 },
+        { "arm",       CPU_ARM },
+    };
+    unsigned int i;
+
+    for (i = 0; i < ARRAY_SIZE(cpu_names); i++)
+        if (!strncmp( cpu_names[i].name, name, strlen(cpu_names[i].name) )) return cpu_names[i].cpu;
+    return -1;
+}
+
+
+static inline int get_platform_from_name( const char *name )
+{
+    static const struct
+    {
+        const char *name;
+        int         platform;
+    } platform_names[] =
+    {
+        { "macos",       PLATFORM_APPLE },
+        { "darwin",      PLATFORM_APPLE },
+        { "android",     PLATFORM_ANDROID },
+        { "linux",       PLATFORM_LINUX },
+        { "freebsd",     PLATFORM_FREEBSD },
+        { "solaris",     PLATFORM_SOLARIS },
+        { "mingw32",     PLATFORM_MINGW },
+        { "windows-gnu", PLATFORM_MINGW },
+        { "winnt",       PLATFORM_MINGW },
+        { "windows",     PLATFORM_WINDOWS },
+        { "cygwin",      PLATFORM_CYGWIN },
+    };
+    unsigned int i;
+
+    for (i = 0; i < ARRAY_SIZE(platform_names); i++)
+        if (!strncmp( platform_names[i].name, name, strlen(platform_names[i].name) ))
+            return platform_names[i].platform;
+    return -1;
+};
+
+
+static inline const char *get_arch_dir( struct target target )
+{
+    static const char *cpu_names[] =
+    {
+        [CPU_i386]   = "i386",
+        [CPU_x86_64] = "x86_64",
+        [CPU_ARM]    = "arm",
+        [CPU_ARM64]  = "aarch64"
+    };
+
+    if (!cpu_names[target.cpu]) return "";
+
+    switch (target.platform)
+    {
+    case PLATFORM_WINDOWS:
+    case PLATFORM_CYGWIN:
+    case PLATFORM_MINGW:
+        return strmake( "/%s-windows", cpu_names[target.cpu] );
+    default:
+        return strmake( "/%s-unix", cpu_names[target.cpu] );
+    }
+}
+
+static inline int parse_target( const char *name, struct target *target )
+{
+    int res;
+    char *p, *spec = xstrdup( name );
+
+    /* target specification is in the form CPU-MANUFACTURER-OS or CPU-MANUFACTURER-KERNEL-OS */
+
+    /* get the CPU part */
+
+    if ((p = strchr( spec, '-' )))
+    {
+        *p++ = 0;
+        if ((res = get_cpu_from_name( spec )) == -1)
+        {
+            free( spec );
+            return 0;
+        }
+        target->cpu = res;
+    }
+    else if (!strcmp( spec, "mingw32" ))
+    {
+        target->cpu = CPU_i386;
+        p = spec;
+    }
+    else
+    {
+        free( spec );
+        return 0;
+    }
+
+    /* get the OS part */
+
+    target->platform = PLATFORM_UNSPECIFIED;  /* default value */
+    for (;;)
+    {
+        if ((res = get_platform_from_name( p )) != -1)
+        {
+            target->platform = res;
+            break;
+        }
+        if (!(p = strchr( p, '-' ))) break;
+        p++;
+    }
+
+    free( spec );
+    return 1;
+}
+
+
+static inline struct target init_argv0_target( const char *argv0 )
+{
+    char *name = get_basename( argv0 );
+    struct target target;
+
+    if (!strchr( name, '-' ) || !parse_target( name, &target ))
+        target = get_default_target();
+
+    free( name );
+    return target;
+}
+
+
+/* output buffer management */
+
+extern unsigned char *output_buffer;
+extern size_t output_buffer_pos;
+extern size_t output_buffer_size;
+
+static inline void check_output_buffer_space( size_t size )
+{
+    if (output_buffer_pos + size >= output_buffer_size)
+    {
+        output_buffer_size = max( output_buffer_size * 2, output_buffer_pos + size );
+        output_buffer = xrealloc( output_buffer, output_buffer_size );
+    }
+}
+
+static inline void init_output_buffer(void)
+{
+    output_buffer_size = 1024;
+    output_buffer_pos = 0;
+    output_buffer = xmalloc( output_buffer_size );
+}
+
+static inline void put_data( const void *data, size_t size )
+{
+    check_output_buffer_space( size );
+    memcpy( output_buffer + output_buffer_pos, data, size );
+    output_buffer_pos += size;
+}
+
+static inline void put_byte( unsigned char val )
+{
+    check_output_buffer_space( 1 );
+    output_buffer[output_buffer_pos++] = val;
+}
+
+static inline void put_word( unsigned short val )
+{
+    check_output_buffer_space( 2 );
+    output_buffer[output_buffer_pos++] = val;
+    output_buffer[output_buffer_pos++] = val >> 8;
+}
+
+static inline void put_dword( unsigned int val )
+{
+    check_output_buffer_space( 4 );
+    output_buffer[output_buffer_pos++] = val;
+    output_buffer[output_buffer_pos++] = val >> 8;
+    output_buffer[output_buffer_pos++] = val >> 16;
+    output_buffer[output_buffer_pos++] = val >> 24;
+}
+
+static inline void put_qword( unsigned int val )
+{
+    put_dword( val );
+    put_dword( 0 );
+}
+
+static inline void align_output( unsigned int align )
+{
+    size_t size = align - (output_buffer_pos % align);
+
+    if (size == align) return;
+    check_output_buffer_space( size );
+    memset( output_buffer + output_buffer_pos, 0, size );
+    output_buffer_pos += size;
+}
+
+static inline void flush_output_buffer( const char *name )
+{
+    int fd = open( name, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0666 );
+
+    if (fd == -1 || write( fd, output_buffer, output_buffer_pos ) != output_buffer_pos)
+    {
+        perror( name );
+        exit(1);
+    }
+    close( fd );
+    free( output_buffer );
+}
 
 /* command-line option parsing */
 /* partly based on the Glibc getopt() implementation */

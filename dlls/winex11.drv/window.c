@@ -21,14 +21,11 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <unistd.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xresource.h>
@@ -36,6 +33,9 @@
 #ifdef HAVE_LIBXSHAPE
 #include <X11/extensions/shape.h>
 #endif /* HAVE_LIBXSHAPE */
+#ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+#include <X11/extensions/XInput2.h>
+#endif
 
 /* avoid conflict with field names in included win32 headers */
 #undef Status
@@ -991,10 +991,13 @@ void update_net_wm_states( struct x11drv_win_data *data )
     ex_style = GetWindowLongW( data->hwnd, GWL_EXSTYLE );
     if (ex_style & WS_EX_TOPMOST)
         new_state |= (1 << NET_WM_STATE_ABOVE);
-    if (ex_style & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE))
-        new_state |= (1 << NET_WM_STATE_SKIP_TASKBAR) | (1 << NET_WM_STATE_SKIP_PAGER);
-    if (!(ex_style & WS_EX_APPWINDOW) && GetWindow( data->hwnd, GW_OWNER ))
-        new_state |= (1 << NET_WM_STATE_SKIP_TASKBAR);
+    if (!data->add_taskbar)
+    {
+        if (data->skip_taskbar || (ex_style & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)))
+            new_state |= (1 << NET_WM_STATE_SKIP_TASKBAR) | (1 << NET_WM_STATE_SKIP_PAGER);
+        else if (!(ex_style & WS_EX_APPWINDOW) && GetWindow( data->hwnd, GW_OWNER ))
+            new_state |= (1 << NET_WM_STATE_SKIP_TASKBAR);
+    }
 
     if (!data->mapped)  /* set the _NET_WM_STATE atom directly */
     {
@@ -1446,7 +1449,7 @@ static void move_window_bits( HWND hwnd, Window window, const RECT *old_rect, co
  *
  * Create a dummy parent window for child windows that don't have a true X11 parent.
  */
-static Window get_dummy_parent(void)
+Window get_dummy_parent(void)
 {
     static Window dummy_parent;
 
@@ -1855,6 +1858,8 @@ BOOL CDECL X11DRV_CreateDesktopWindow( HWND hwnd )
 static WNDPROC desktop_orig_wndproc;
 
 #define WM_WINE_NOTIFY_ACTIVITY WM_USER
+#define WM_WINE_DELETE_TAB      (WM_USER + 1)
+#define WM_WINE_ADD_TAB         (WM_USER + 2)
 
 static LRESULT CALLBACK desktop_wndproc_wrapper( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
 {
@@ -1874,6 +1879,12 @@ static LRESULT CALLBACK desktop_wndproc_wrapper( HWND hwnd, UINT msg, WPARAM wp,
         }
         break;
     }
+    case WM_WINE_DELETE_TAB:
+        SendNotifyMessageW( (HWND)wp, WM_X11DRV_DELETE_TAB, 0, 0 );
+        break;
+    case WM_WINE_ADD_TAB:
+        SendNotifyMessageW( (HWND)wp, WM_X11DRV_ADD_TAB, 0, 0 );
+        break;
     }
     return desktop_orig_wndproc( hwnd, msg, wp, lp );
 }
@@ -2705,7 +2716,7 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
     RECT rect, src_rect;
     HDC hdc = 0;
     HBITMAP dib;
-    BOOL ret = FALSE;
+    BOOL mapped, ret = FALSE;
 
     if (!(data = get_win_data( hwnd ))) return FALSE;
 
@@ -2726,7 +2737,17 @@ BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO 
     else set_surface_color_key( surface, color_key );
 
     if (surface) window_surface_add_ref( surface );
+    mapped = data->mapped;
     release_win_data( data );
+
+    /* layered windows are mapped only once their attributes are set */
+    if (!mapped)
+    {
+        DWORD style = GetWindowLongW( hwnd, GWL_STYLE );
+
+        if ((style & WS_VISIBLE) && ((style & WS_MINIMIZE) || is_window_rect_mapped( window_rect )))
+            map_window( hwnd, style );
+    }
 
     if (!surface) return FALSE;
     if (!info->hdcSrc)
@@ -2774,6 +2795,39 @@ done:
     return ret;
 }
 
+/* Add a window to taskbar */
+static void taskbar_add_tab( HWND hwnd )
+{
+    struct x11drv_win_data *data;
+
+    TRACE("hwnd %p\n", hwnd);
+
+    data = get_win_data( hwnd );
+    if (!data)
+        return;
+
+    data->add_taskbar = TRUE;
+    data->skip_taskbar = FALSE;
+    update_net_wm_states( data );
+    release_win_data( data );
+}
+
+/* Delete a window from taskbar */
+static void taskbar_delete_tab( HWND hwnd )
+{
+    struct x11drv_win_data *data;
+
+    TRACE("hwnd %p\n", hwnd);
+
+    data = get_win_data( hwnd );
+    if (!data)
+        return;
+
+    data->skip_taskbar = TRUE;
+    data->add_taskbar = FALSE;
+    update_net_wm_states( data );
+    release_win_data( data );
+}
 
 /**********************************************************************
  *           X11DRV_WindowMessage   (X11DRV.@)
@@ -2810,6 +2864,12 @@ LRESULT CDECL X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
         return clip_cursor_notify( hwnd, (HWND)wp, (HWND)lp );
     case WM_X11DRV_CLIP_CURSOR_REQUEST:
         return clip_cursor_request( hwnd, (BOOL)wp, (BOOL)lp );
+    case WM_X11DRV_DELETE_TAB:
+        taskbar_delete_tab( hwnd );
+        return 0;
+    case WM_X11DRV_ADD_TAB:
+        taskbar_add_tab( hwnd );
+        return 0;
     default:
         FIXME( "got window msg %x hwnd %p wp %lx lp %lx\n", msg, hwnd, wp, lp );
         return 0;

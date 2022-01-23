@@ -104,23 +104,12 @@ extern void     (WINAPI *pLdrInitializeThunk)(CONTEXT*,void**,ULONG_PTR,ULONG_PT
 extern void     (WINAPI *pRtlUserThreadStart)( PRTL_THREAD_START_ROUTINE entry, void *arg ) DECLSPEC_HIDDEN;
 extern void     (WINAPI *p__wine_ctrl_routine)(void *) DECLSPEC_HIDDEN;
 extern SYSTEM_DLL_INIT_BLOCK *pLdrSystemDllInitBlock DECLSPEC_HIDDEN;
-
-extern NTSTATUS CDECL fast_RtlpWaitForCriticalSection( RTL_CRITICAL_SECTION *crit, int timeout ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlpUnWaitCriticalSection( RTL_CRITICAL_SECTION *crit ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlDeleteCriticalSection( RTL_CRITICAL_SECTION *crit ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlTryAcquireSRWLockExclusive( RTL_SRWLOCK *lock ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlAcquireSRWLockExclusive( RTL_SRWLOCK *lock ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlTryAcquireSRWLockShared( RTL_SRWLOCK *lock ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlAcquireSRWLockShared( RTL_SRWLOCK *lock ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlReleaseSRWLockExclusive( RTL_SRWLOCK *lock ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlReleaseSRWLockShared( RTL_SRWLOCK *lock ) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_RtlWakeConditionVariable( RTL_CONDITION_VARIABLE *variable, int count ) DECLSPEC_HIDDEN;
 extern LONGLONG CDECL fast_RtlGetSystemTimePrecise(void) DECLSPEC_HIDDEN;
-extern NTSTATUS CDECL fast_wait_cv( RTL_CONDITION_VARIABLE *variable, const void *value,
-                                    const LARGE_INTEGER *timeout ) DECLSPEC_HIDDEN;
 
 extern NTSTATUS CDECL unwind_builtin_dll( ULONG type, struct _DISPATCHER_CONTEXT *dispatch,
                                           CONTEXT *context ) DECLSPEC_HIDDEN;
+
+struct _FILE_FS_DEVICE_INFORMATION;
 
 extern const char wine_build[] DECLSPEC_HIDDEN;
 
@@ -130,6 +119,7 @@ extern const char *build_dir DECLSPEC_HIDDEN;
 extern const char *config_dir DECLSPEC_HIDDEN;
 extern const char *user_name DECLSPEC_HIDDEN;
 extern const char **dll_paths DECLSPEC_HIDDEN;
+extern const char **system_dll_paths DECLSPEC_HIDDEN;
 extern PEB *peb DECLSPEC_HIDDEN;
 extern USHORT *uctable DECLSPEC_HIDDEN;
 extern USHORT *lctable DECLSPEC_HIDDEN;
@@ -174,8 +164,7 @@ extern unsigned int server_call_unlocked( void *req_ptr ) DECLSPEC_HIDDEN;
 extern void server_enter_uninterrupted_section( pthread_mutex_t *mutex, sigset_t *sigset ) DECLSPEC_HIDDEN;
 extern void server_leave_uninterrupted_section( pthread_mutex_t *mutex, sigset_t *sigset ) DECLSPEC_HIDDEN;
 extern unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT flags,
-                                   timeout_t abs_timeout, context_t *context, pthread_mutex_t *mutex,
-                                   user_apc_t *user_apc ) DECLSPEC_HIDDEN;
+                                   timeout_t abs_timeout, context_t *context, user_apc_t *user_apc ) DECLSPEC_HIDDEN;
 extern unsigned int server_wait( const select_op_t *select_op, data_size_t size, UINT flags,
                                  const LARGE_INTEGER *timeout ) DECLSPEC_HIDDEN;
 extern unsigned int server_queue_process_apc( HANDLE process, const apc_call_t *call,
@@ -238,9 +227,7 @@ extern void virtual_fill_image_information( const pe_image_info_t *pe_info,
                                             SECTION_IMAGE_INFORMATION *info ) DECLSPEC_HIDDEN;
 extern void release_builtin_module( void *module ) DECLSPEC_HIDDEN;
 extern void *get_builtin_so_handle( void *module ) DECLSPEC_HIDDEN;
-extern NTSTATUS get_builtin_unix_info( void *module, const char **name, void **handle, void **entry ) DECLSPEC_HIDDEN;
-extern NTSTATUS set_builtin_unix_handle( void *module, const char *name, void *handle ) DECLSPEC_HIDDEN;
-extern NTSTATUS set_builtin_unix_entry( void *module, void *entry ) DECLSPEC_HIDDEN;
+extern NTSTATUS load_builtin_unixlib( void *module, const char *name ) DECLSPEC_HIDDEN;
 
 extern NTSTATUS get_thread_ldt_entry( HANDLE handle, void *data, ULONG len, ULONG *ret_len ) DECLSPEC_HIDDEN;
 extern void *get_native_context( CONTEXT *context ) DECLSPEC_HIDDEN;
@@ -287,6 +274,7 @@ extern NTSTATUS get_full_path( const WCHAR *name, const WCHAR *curdir, WCHAR **p
 extern NTSTATUS open_unix_file( HANDLE *handle, const char *unix_name, ACCESS_MASK access,
                                 OBJECT_ATTRIBUTES *attr, ULONG attributes, ULONG sharing, ULONG disposition,
                                 ULONG options, void *ea_buffer, ULONG ea_length ) DECLSPEC_HIDDEN;
+extern NTSTATUS get_device_info( int fd, struct _FILE_FS_DEVICE_INFORMATION *info ) DECLSPEC_HIDDEN;
 extern void init_files(void) DECLSPEC_HIDDEN;
 extern void init_cpu_info(void) DECLSPEC_HIDDEN;
 extern void add_completion( HANDLE handle, ULONG_PTR value, NTSTATUS status, ULONG info, BOOL async ) DECLSPEC_HIDDEN;
@@ -362,11 +350,19 @@ static inline NTSTATUS wait_async( HANDLE handle, BOOL alertable )
     return NtWaitForSingleObject( handle, alertable, NULL );
 }
 
+static inline BOOL in_wow64_call(void)
+{
+#ifdef _WIN64
+    return !!NtCurrentTeb()->WowTebOffset;
+#endif
+    return FALSE;
+}
+
 static inline void set_async_iosb( client_ptr_t iosb, NTSTATUS status, ULONG_PTR info )
 {
     if (!iosb) return;
-#ifdef _WIN64
-    if (NtCurrentTeb()->WowTebOffset)
+
+    if (in_wow64_call())
     {
         struct iosb32
         {
@@ -377,7 +373,6 @@ static inline void set_async_iosb( client_ptr_t iosb, NTSTATUS status, ULONG_PTR
         io->Information = info;
     }
     else
-#endif
     {
         IO_STATUS_BLOCK *io = wine_server_get_ptr( iosb );
 #ifdef NONAMELESSUNION
@@ -391,12 +386,10 @@ static inline void set_async_iosb( client_ptr_t iosb, NTSTATUS status, ULONG_PTR
 
 static inline client_ptr_t iosb_client_ptr( IO_STATUS_BLOCK *io )
 {
-#ifdef _WIN64
 #ifdef NONAMELESSUNION
-    if (io && NtCurrentTeb()->WowTebOffset) return wine_server_client_ptr( io->u.Pointer );
+    if (io && in_wow64_call()) return wine_server_client_ptr( io->u.Pointer );
 #else
-    if (io && NtCurrentTeb()->WowTebOffset) return wine_server_client_ptr( io->Pointer );
-#endif
+    if (io && in_wow64_call()) return wine_server_client_ptr( io->Pointer );
 #endif
     return wine_server_client_ptr( io );
 }
@@ -428,72 +421,6 @@ enum loadorder
 extern void set_load_order_app_name( const WCHAR *app_name ) DECLSPEC_HIDDEN;
 extern enum loadorder get_load_order( const UNICODE_STRING *nt_name ) DECLSPEC_HIDDEN;
 
-static inline size_t ntdll_wcslen( const WCHAR *str )
-{
-    const WCHAR *s = str;
-    while (*s) s++;
-    return s - str;
-}
-
-static inline WCHAR *ntdll_wcscpy( WCHAR *dst, const WCHAR *src )
-{
-    WCHAR *p = dst;
-    while ((*p++ = *src++));
-    return dst;
-}
-
-static inline WCHAR *ntdll_wcscat( WCHAR *dst, const WCHAR *src )
-{
-    ntdll_wcscpy( dst + ntdll_wcslen(dst), src );
-    return dst;
-}
-
-static inline int ntdll_wcscmp( const WCHAR *str1, const WCHAR *str2 )
-{
-    while (*str1 && (*str1 == *str2)) { str1++; str2++; }
-    return *str1 - *str2;
-}
-
-static inline int ntdll_wcsncmp( const WCHAR *str1, const WCHAR *str2, int n )
-{
-    if (n <= 0) return 0;
-    while ((--n > 0) && *str1 && (*str1 == *str2)) { str1++; str2++; }
-    return *str1 - *str2;
-}
-
-static inline WCHAR *ntdll_wcschr( const WCHAR *str, WCHAR ch )
-{
-    do { if (*str == ch) return (WCHAR *)(ULONG_PTR)str; } while (*str++);
-    return NULL;
-}
-
-static inline WCHAR *ntdll_wcsrchr( const WCHAR *str, WCHAR ch )
-{
-    WCHAR *ret = NULL;
-    do { if (*str == ch) ret = (WCHAR *)(ULONG_PTR)str; } while (*str++);
-    return ret;
-}
-
-static inline WCHAR *ntdll_wcspbrk( const WCHAR *str, const WCHAR *accept )
-{
-    for ( ; *str; str++) if (ntdll_wcschr( accept, *str )) return (WCHAR *)(ULONG_PTR)str;
-    return NULL;
-}
-
-static inline SIZE_T ntdll_wcsspn( const WCHAR *str, const WCHAR *accept )
-{
-    const WCHAR *ptr;
-    for (ptr = str; *ptr; ptr++) if (!ntdll_wcschr( accept, *ptr )) break;
-    return ptr - str;
-}
-
-static inline SIZE_T ntdll_wcscspn( const WCHAR *str, const WCHAR *reject )
-{
-    const WCHAR *ptr;
-    for (ptr = str; *ptr; ptr++) if (ntdll_wcschr( reject, *ptr )) break;
-    return ptr - str;
-}
-
 static inline WCHAR ntdll_towupper( WCHAR ch )
 {
     return ch + uctable[uctable[uctable[ch >> 8] + ((ch >> 4) & 0x0f)] + (ch & 0x0f)];
@@ -511,37 +438,6 @@ static inline WCHAR *ntdll_wcsupr( WCHAR *str )
     return ret;
 }
 
-static inline int ntdll_wcsicmp( const WCHAR *str1, const WCHAR *str2 )
-{
-    int ret;
-    for (;;)
-    {
-        if ((ret = ntdll_towupper( *str1 ) - ntdll_towupper( *str2 )) || !*str1) return ret;
-        str1++;
-        str2++;
-    }
-}
-
-static inline int ntdll_wcsnicmp( const WCHAR *str1, const WCHAR *str2, int n )
-{
-    int ret;
-    for (ret = 0; n > 0; n--, str1++, str2++)
-        if ((ret = ntdll_towupper(*str1) - ntdll_towupper(*str2)) || !*str1) break;
-    return ret;
-}
-
-#define wcslen(str)        ntdll_wcslen(str)
-#define wcscpy(dst,src)    ntdll_wcscpy(dst,src)
-#define wcscat(dst,src)    ntdll_wcscat(dst,src)
-#define wcscmp(s1,s2)      ntdll_wcscmp(s1,s2)
-#define wcsncmp(s1,s2,n)   ntdll_wcsncmp(s1,s2,n)
-#define wcschr(str,ch)     ntdll_wcschr(str,ch)
-#define wcsrchr(str,ch)    ntdll_wcsrchr(str,ch)
-#define wcspbrk(str,ac)    ntdll_wcspbrk(str,ac)
-#define wcsspn(str,ac)     ntdll_wcsspn(str,ac)
-#define wcscspn(str,rej)   ntdll_wcscspn(str,rej)
-#define wcsicmp(s1, s2)    ntdll_wcsicmp(s1,s2)
-#define wcsnicmp(s1, s2,n) ntdll_wcsnicmp(s1,s2,n)
 #define wcsupr(str)        ntdll_wcsupr(str)
 #define towupper(c)        ntdll_towupper(c)
 #define towlower(c)        ntdll_towlower(c)

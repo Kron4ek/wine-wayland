@@ -23,7 +23,6 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 #include "wined3d_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
@@ -585,8 +584,10 @@ ULONG CDECL wined3d_stateblock_decref(struct wined3d_stateblock *stateblock)
 
     if (!refcount)
     {
+        wined3d_mutex_lock();
         wined3d_stateblock_state_cleanup(&stateblock->stateblock_state);
         heap_free(stateblock);
+        wined3d_mutex_unlock();
     }
 
     return refcount;

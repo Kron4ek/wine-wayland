@@ -29,16 +29,116 @@
 #include "windef.h"
 #include "winnt.h"
 #include "ntgdi_private.h"
+#include "ntuser.h"
 #include "wine/unixlib.h"
 
 
 static void * const syscalls[] =
 {
+    NtGdiAddFontMemResourceEx,
+    NtGdiAddFontResourceW,
+    NtGdiCombineRgn,
+    NtGdiCreateBitmap,
+    NtGdiCreateClientObj,
     NtGdiCreateDIBBrush,
+    NtGdiCreateDIBSection,
+    NtGdiCreateEllipticRgn,
+    NtGdiCreateHalftonePalette,
     NtGdiCreateHatchBrushInternal,
+    NtGdiCreatePaletteInternal,
     NtGdiCreatePatternBrushInternal,
+    NtGdiCreatePen,
+    NtGdiCreateRectRgn,
+    NtGdiCreateRoundRectRgn,
     NtGdiCreateSolidBrush,
+    NtGdiDdDDICloseAdapter,
+    NtGdiDdDDICreateDevice,
+    NtGdiDdDDIOpenAdapterFromDeviceName,
+    NtGdiDdDDIOpenAdapterFromHdc,
+    NtGdiDdDDIOpenAdapterFromLuid,
+    NtGdiDdDDIQueryStatistics,
+    NtGdiDdDDISetQueuedLimit,
+    NtGdiDeleteClientObj,
+    NtGdiDescribePixelFormat,
+    NtGdiDrawStream,
+    NtGdiEqualRgn,
+    NtGdiExtCreatePen,
+    NtGdiExtCreateRegion,
+    NtGdiExtGetObjectW,
+    NtGdiFlattenPath,
     NtGdiFlush,
+    NtGdiGetBitmapBits,
+    NtGdiGetBitmapDimension,
+    NtGdiGetColorAdjustment,
+    NtGdiGetDCObject,
+    NtGdiGetFontFileData,
+    NtGdiGetFontFileInfo,
+    NtGdiGetNearestPaletteIndex,
+    NtGdiGetPath,
+    NtGdiGetRegionData,
+    NtGdiGetRgnBox,
+    NtGdiGetSpoolMessage,
+    NtGdiGetSystemPaletteUse,
+    NtGdiGetTransform,
+    NtGdiHfontCreate,
+    NtGdiInitSpool,
+    NtGdiOffsetRgn,
+    NtGdiPathToRegion,
+    NtGdiPtInRegion,
+    NtGdiRectInRegion,
+    NtGdiRemoveFontMemResourceEx,
+    NtGdiRemoveFontResourceW,
+    NtGdiSaveDC,
+    NtGdiSetBitmapBits,
+    NtGdiSetBitmapDimension,
+    NtGdiSetBrushOrg,
+    NtGdiSetColorAdjustment,
+    NtGdiSetMagicColors,
+    NtGdiSetMetaRgn,
+    NtGdiSetPixelFormat,
+    NtGdiSetRectRgn,
+    NtGdiSetTextJustification,
+    NtGdiSetVirtualResolution,
+    NtGdiSwapBuffers,
+    NtGdiTransformPoints,
+    NtUserAddClipboardFormatListener,
+    NtUserAttachThreadInput,
+    NtUserBuildHwndList,
+    NtUserCloseDesktop,
+    NtUserCloseWindowStation,
+    NtUserCreateDesktopEx,
+    NtUserCreateWindowStation,
+    NtUserGetClipboardFormatName,
+    NtUserGetClipboardOwner,
+    NtUserGetClipboardSequenceNumber,
+    NtUserGetClipboardViewer,
+    NtUserGetCursor,
+    NtUserGetDoubleClickTime,
+    NtUserGetDpiForMonitor,
+    NtUserGetKeyState,
+    NtUserGetKeyboardLayout,
+    NtUserGetKeyboardLayoutName,
+    NtUserGetKeyboardState,
+    NtUserGetLayeredWindowAttributes,
+    NtUserGetMouseMovePointsEx,
+    NtUserGetObjectInformation,
+    NtUserGetOpenClipboardWindow,
+    NtUserGetProcessDpiAwarenessContext,
+    NtUserGetProcessWindowStation,
+    NtUserGetProp,
+    NtUserGetSystemDpiForProcess,
+    NtUserGetThreadDesktop,
+    NtUserOpenDesktop,
+    NtUserOpenInputDesktop,
+    NtUserOpenWindowStation,
+    NtUserRemoveClipboardFormatListener,
+    NtUserRemoveProp,
+    NtUserSetKeyboardState,
+    NtUserSetObjectInformation,
+    NtUserSetProcessDpiAwarenessContext,
+    NtUserSetProcessWindowStation,
+    NtUserSetProp,
+    NtUserSetThreadDesktop,
 };
 
 static BYTE arguments[ARRAY_SIZE(syscalls)];
@@ -55,7 +155,10 @@ static NTSTATUS init( void *dispatcher )
 {
     NTSTATUS status;
     if ((status = ntdll_init_syscalls( 1, &syscall_table, dispatcher ))) return status;
-    return gdi_init();
+    if ((status = gdi_init())) return status;
+    winstation_init();
+    sysparams_init();
+    return STATUS_SUCCESS;
 }
 
 unixlib_entry_t __wine_unix_call_funcs[] =
@@ -63,3 +166,21 @@ unixlib_entry_t __wine_unix_call_funcs[] =
     init,
     callbacks_init,
 };
+
+#ifdef _WIN64
+
+WINE_DEFAULT_DEBUG_CHANNEL(win32u);
+
+static NTSTATUS wow64_init( void *args )
+{
+    FIXME( "\n" );
+    return STATUS_NOT_SUPPORTED;
+}
+
+const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
+{
+    init,
+    wow64_init,
+};
+
+#endif /* _WIN64 */

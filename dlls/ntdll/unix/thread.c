@@ -23,20 +23,19 @@
 #endif
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 #include <signal.h>
 #include <sys/types.h>
-#ifdef HAVE_SYS_MMAN_H
+#include <unistd.h>
 #include <sys/mman.h>
-#endif
 #ifdef HAVE_SYS_TIMES_H
 #include <sys/times.h>
 #endif
@@ -754,7 +753,7 @@ static NTSTATUS context_from_server( void *dst, const context_t *from, USHORT ma
     {
         AMD64_CONTEXT *to = dst;
 
-        to_flags = to->ContextFlags & ~CONTEXT_i386;
+        to_flags = to->ContextFlags & ~CONTEXT_AMD64;
         if ((from->flags & SERVER_CTX_CONTROL) && (to_flags & CONTEXT_AMD64_CONTROL))
         {
             to->ContextFlags |= CONTEXT_AMD64_CONTROL;
@@ -829,7 +828,7 @@ static NTSTATUS context_from_server( void *dst, const context_t *from, USHORT ma
     {
         AMD64_CONTEXT *to = dst;
 
-        to_flags = to->ContextFlags & ~CONTEXT_i386;
+        to_flags = to->ContextFlags & ~CONTEXT_AMD64;
         if ((from->flags & SERVER_CTX_CONTROL) && (to_flags & CONTEXT_AMD64_CONTROL))
         {
             to->ContextFlags |= CONTEXT_AMD64_CONTROL;
@@ -849,14 +848,6 @@ static NTSTATUS context_from_server( void *dst, const context_t *from, USHORT ma
             to->Rbx = from->integer.i386_regs.ebx;
             to->Rsi = from->integer.i386_regs.esi;
             to->Rdi = from->integer.i386_regs.edi;
-            to->R8  = 0;
-            to->R9  = 0;
-            to->R10 = 0;
-            to->R11 = 0;
-            to->R12 = 0;
-            to->R13 = 0;
-            to->R14 = 0;
-            to->R15 = 0;
         }
         if ((from->flags & SERVER_CTX_SEGMENTS) && (to_flags & CONTEXT_AMD64_SEGMENTS))
         {
@@ -1253,6 +1244,7 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
                                   ULONG flags, ULONG_PTR zero_bits, SIZE_T stack_commit,
                                   SIZE_T stack_reserve, PS_ATTRIBUTE_LIST *attr_list )
 {
+    static const ULONG supported_flags = THREAD_CREATE_FLAGS_CREATE_SUSPENDED | THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER;
     sigset_t sigset;
     pthread_t pthread_id;
     pthread_attr_t pthread_attr;
@@ -1263,6 +1255,9 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     int request_pipe[2];
     TEB *teb;
     NTSTATUS status;
+
+    if (flags & ~supported_flags)
+        FIXME( "Unsupported flags %#x.\n", flags );
 
     if (zero_bits > 21 && zero_bits < 32) return STATUS_INVALID_PARAMETER_3;
 #ifndef _WIN64
@@ -1313,7 +1308,7 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     {
         req->process    = wine_server_obj_handle( process );
         req->access     = access;
-        req->suspend    = flags & THREAD_CREATE_FLAGS_CREATE_SUSPENDED;
+        req->flags      = flags;
         req->request_fd = request_pipe[0];
         wine_server_add_data( req, objattr, len );
         if (!(status = wine_server_call( req )))
@@ -1445,7 +1440,7 @@ void wait_suspend( CONTEXT *context )
 
     contexts_to_server( server_contexts, context );
     /* wait with 0 timeout, will only return once the thread is no longer suspended */
-    server_select( NULL, 0, SELECT_INTERRUPTIBLE, 0, server_contexts, NULL, NULL );
+    server_select( NULL, 0, SELECT_INTERRUPTIBLE, 0, server_contexts, NULL );
     contexts_from_server( context, server_contexts );
     errno = saved_errno;
 }
@@ -1494,7 +1489,7 @@ NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_c
 
         contexts_to_server( server_contexts, context );
         server_select( &select_op, offsetof( select_op_t, wait.handles[1] ), SELECT_INTERRUPTIBLE,
-                       TIMEOUT_INFINITE, server_contexts, NULL, NULL );
+                       TIMEOUT_INFINITE, server_contexts, NULL );
 
         SERVER_START_REQ( get_exception_status )
         {
@@ -2048,9 +2043,9 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
         SERVER_END_REQ;
         return status;
 
-    case ThreadDescription:
+    case ThreadNameInformation:
     {
-        THREAD_DESCRIPTION_INFORMATION *info = data;
+        THREAD_NAME_INFORMATION *info = data;
         data_size_t len, desc_len = 0;
         WCHAR *ptr;
 
@@ -2069,8 +2064,8 @@ NTSTATUS WINAPI NtQueryInformationThread( HANDLE handle, THREADINFOCLASS class,
         if (!info) status = STATUS_BUFFER_TOO_SMALL;
         else if (status == STATUS_SUCCESS)
         {
-            info->Description.Length = info->Description.MaximumLength = desc_len;
-            info->Description.Buffer = ptr;
+            info->ThreadName.Length = info->ThreadName.MaximumLength = desc_len;
+            info->ThreadName.Buffer = ptr;
         }
 
         if (ret_len && (status == STATUS_SUCCESS || status == STATUS_BUFFER_TOO_SMALL))
@@ -2241,20 +2236,20 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
         return status;
     }
 
-    case ThreadDescription:
+    case ThreadNameInformation:
     {
-        const THREAD_DESCRIPTION_INFORMATION *info = data;
+        const THREAD_NAME_INFORMATION *info = data;
 
         if (length != sizeof(*info)) return STATUS_INFO_LENGTH_MISMATCH;
         if (!info) return STATUS_ACCESS_VIOLATION;
-        if (info->Description.Length != info->Description.MaximumLength) return STATUS_INVALID_PARAMETER;
-        if (info->Description.Length && !info->Description.Buffer) return STATUS_ACCESS_VIOLATION;
+        if (info->ThreadName.Length != info->ThreadName.MaximumLength) return STATUS_INVALID_PARAMETER;
+        if (info->ThreadName.Length && !info->ThreadName.Buffer) return STATUS_ACCESS_VIOLATION;
 
         SERVER_START_REQ( set_thread_info )
         {
             req->handle = wine_server_obj_handle( handle );
             req->mask   = SET_THREAD_INFO_DESCRIPTION;
-            wine_server_add_data( req, info->Description.Buffer, info->Description.Length );
+            wine_server_add_data( req, info->ThreadName.Buffer, info->ThreadName.Length );
             status = wine_server_call( req );
         }
         SERVER_END_REQ;

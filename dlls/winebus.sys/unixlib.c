@@ -61,6 +61,15 @@ BOOL is_xbox_gamepad(WORD vid, WORD pid)
     return FALSE;
 }
 
+BOOL is_dualshock4_gamepad(WORD vid, WORD pid)
+{
+    if (vid != 0x054c) return FALSE;
+    if (pid == 0x05c4) return TRUE; /* DualShock 4 [CUH-ZCT1x] */
+    if (pid == 0x09cc) return TRUE; /* DualShock 4 [CUH-ZCT2x] */
+    if (pid == 0x0ba0) return TRUE; /* Dualshock 4 Wireless Adaptor */
+    return FALSE;
+}
+
 struct mouse_device
 {
     struct unix_device unix_device;
@@ -97,6 +106,11 @@ static NTSTATUS mouse_physical_device_control(struct unix_device *iface, USAGE c
     return STATUS_NOT_SUPPORTED;
 }
 
+static NTSTATUS mouse_physical_device_set_gain(struct unix_device *iface, BYTE percent)
+{
+    return STATUS_NOT_SUPPORTED;
+}
+
 static NTSTATUS mouse_physical_effect_control(struct unix_device *iface, BYTE index,
                                               USAGE control, BYTE iterations)
 {
@@ -116,6 +130,7 @@ static const struct hid_device_vtbl mouse_vtbl =
     mouse_stop,
     mouse_haptics_start,
     mouse_physical_device_control,
+    mouse_physical_device_set_gain,
     mouse_physical_effect_control,
     mouse_physical_effect_update,
 };
@@ -174,6 +189,11 @@ static NTSTATUS keyboard_physical_device_control(struct unix_device *iface, USAG
     return STATUS_NOT_SUPPORTED;
 }
 
+static NTSTATUS keyboard_physical_device_set_gain(struct unix_device *iface, BYTE percent)
+{
+    return STATUS_NOT_SUPPORTED;
+}
+
 static NTSTATUS keyboard_physical_effect_control(struct unix_device *iface, BYTE index,
                                                  USAGE control, BYTE iterations)
 {
@@ -193,6 +213,7 @@ static const struct hid_device_vtbl keyboard_vtbl =
     keyboard_stop,
     keyboard_haptics_start,
     keyboard_physical_device_control,
+    keyboard_physical_device_set_gain,
     keyboard_physical_effect_control,
     keyboard_physical_effect_update,
 };

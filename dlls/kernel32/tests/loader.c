@@ -718,7 +718,8 @@ static NTSTATUS map_image_section( const IMAGE_NT_HEADERS *nt_header, const IMAG
     else
     {
         ok( ldr_status == expect_status ||
-            broken(il_only && !expect_status && ldr_status == STATUS_INVALID_IMAGE_FORMAT),
+            broken(il_only && !expect_status && ldr_status == STATUS_INVALID_IMAGE_FORMAT) ||
+            broken(nt_header->Signature == IMAGE_OS2_SIGNATURE && ldr_status == STATUS_INVALID_IMAGE_NE_FORMAT),
             "%u: wrong status %x/%x\n", line, ldr_status, expect_status );
         ok( !expect_fallback || broken(il_only) || broken(wrong_machine),
             "%u: failed with %x expected fallback\n", line, ldr_status );
@@ -1930,9 +1931,11 @@ static void test_section_access(void)
     char temp_path[MAX_PATH];
     char dll_name[MAX_PATH];
     SIZE_T size;
+    SECTION_IMAGE_INFORMATION image_info;
     MEMORY_BASIC_INFORMATION info;
     STARTUPINFOA sti;
     PROCESS_INFORMATION pi;
+    NTSTATUS status;
     DWORD ret;
 
     /* prevent displaying of the "Unable to load this DLL" message box */
@@ -1967,12 +1970,6 @@ static void test_section_access(void)
         nt_header.OptionalHeader.FileAlignment = 0x200;
         nt_header.OptionalHeader.SizeOfImage = sizeof(dos_header) + sizeof(nt_header) + sizeof(IMAGE_SECTION_HEADER) + page_size;
         nt_header.OptionalHeader.SizeOfHeaders = sizeof(dos_header) + sizeof(nt_header) + sizeof(IMAGE_SECTION_HEADER);
-        SetLastError(0xdeadbeef);
-        ret = WriteFile(hfile, &nt_header, sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER), &dummy, NULL);
-        ok(ret, "WriteFile error %d\n", GetLastError());
-        SetLastError(0xdeadbeef);
-        ret = WriteFile(hfile, &nt_header.OptionalHeader, sizeof(IMAGE_OPTIONAL_HEADER), &dummy, NULL);
-        ok(ret, "WriteFile error %d\n", GetLastError());
 
         section.SizeOfRawData = sizeof(section_data);
         section.PointerToRawData = nt_header.OptionalHeader.FileAlignment;
@@ -1980,6 +1977,16 @@ static void test_section_access(void)
         section.Misc.VirtualSize = section.SizeOfRawData;
         section.Characteristics = td[i].scn_file_access;
         SetLastError(0xdeadbeef);
+
+        nt_header.OptionalHeader.AddressOfEntryPoint = section.VirtualAddress;
+
+        SetLastError(0xdeadbeef);
+        ret = WriteFile(hfile, &nt_header, sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER), &dummy, NULL);
+        ok(ret, "WriteFile error %d\n", GetLastError());
+        SetLastError(0xdeadbeef);
+        ret = WriteFile(hfile, &nt_header.OptionalHeader, sizeof(IMAGE_OPTIONAL_HEADER), &dummy, NULL);
+        ok(ret, "WriteFile error %d\n", GetLastError());
+
         ret = WriteFile(hfile, &section, sizeof(section), &dummy, NULL);
         ok(ret, "WriteFile error %d\n", GetLastError());
 
@@ -1997,7 +2004,7 @@ static void test_section_access(void)
         CloseHandle(hfile);
 
         SetLastError(0xdeadbeef);
-        hlib = LoadLibraryA(dll_name);
+        hlib = LoadLibraryExA(dll_name, NULL, DONT_RESOLVE_DLL_REFERENCES);
         ok(hlib != 0, "LoadLibrary error %d\n", GetLastError());
 
         SetLastError(0xdeadbeef);
@@ -2078,6 +2085,19 @@ static void test_section_access(void)
             ok(ret, "ReadProcessMemory() error %d\n", GetLastError());
             ok(!memcmp(buf, section_data, section.SizeOfRawData), "wrong section data\n");
         }
+
+        status = NtQueryInformationProcess(pi.hProcess, ProcessImageInformation,
+                &image_info, sizeof(image_info), NULL );
+        ok(!status, "Got unexpected status %#x.\n", status);
+        ok(!(image_info.ImageCharacteristics & IMAGE_FILE_DLL),
+                "Got unexpected characteristics %#x.\n", nt_header.FileHeader.Characteristics);
+        status = NtUnmapViewOfSection(pi.hProcess, info.BaseAddress);
+        ok(!status, "Got unexpected status %#x.\n", status);
+        status = NtQueryInformationProcess(pi.hProcess, ProcessImageInformation,
+                &image_info, sizeof(image_info), NULL );
+        ok(!status, "Got unexpected status %#x.\n", status);
+        ok(!(image_info.ImageCharacteristics & IMAGE_FILE_DLL),
+                "Got unexpected characteristics %#x.\n", nt_header.FileHeader.Characteristics);
 
         SetLastError(0xdeadbeef);
         ret = TerminateProcess(pi.hProcess, 0);

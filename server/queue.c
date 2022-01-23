@@ -25,9 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#ifdef HAVE_POLL_H
-# include <poll.h>
-#endif
+#include <poll.h>
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -1475,7 +1473,7 @@ static int queue_hotkey_message( struct desktop *desktop, struct message *msg )
     struct hotkey *hotkey;
     unsigned int modifiers = 0;
 
-    if (msg->msg != WM_KEYDOWN) return 0;
+    if (msg->msg != WM_KEYDOWN && msg->msg != WM_SYSKEYDOWN) return 0;
 
     if (desktop->keystate[VK_MENU] & 0x80) modifiers |= MOD_ALT;
     if (desktop->keystate[VK_CONTROL] & 0x80) modifiers |= MOD_CONTROL;
@@ -1844,12 +1842,12 @@ static int queue_mouse_message( struct desktop *desktop, user_handle_t win, cons
 
     if ((foreground = get_foreground_thread( desktop, win )))
     {
+        memset( &raw_msg, 0, sizeof(raw_msg) );
         raw_msg.foreground = foreground;
         raw_msg.desktop    = desktop;
         raw_msg.source     = source;
         raw_msg.time       = time;
         raw_msg.message    = WM_INPUT;
-        raw_msg.hid_report = NULL;
 
         msg_data = &raw_msg.data;
         msg_data->info                = input->mouse.info;
@@ -1981,12 +1979,12 @@ static int queue_keyboard_message( struct desktop *desktop, user_handle_t win, c
 
     if ((foreground = get_foreground_thread( desktop, win )))
     {
+        memset( &raw_msg, 0, sizeof(raw_msg) );
         raw_msg.foreground = foreground;
         raw_msg.desktop    = desktop;
         raw_msg.source     = source;
         raw_msg.time       = time;
         raw_msg.message    = WM_INPUT;
-        raw_msg.hid_report = NULL;
 
         msg_data = &raw_msg.data;
         msg_data->info                 = input->kbd.info;
@@ -2052,12 +2050,10 @@ static void queue_custom_hardware_message( struct desktop *desktop, user_handle_
     {
     case WM_INPUT:
     case WM_INPUT_DEVICE_CHANGE:
-        raw_msg.foreground = NULL;
-        raw_msg.desktop    = NULL;
+        memset( &raw_msg, 0, sizeof(raw_msg) );
         raw_msg.source     = source;
         raw_msg.time       = get_tick_count();
         raw_msg.message    = input->hw.msg;
-        raw_msg.hid_report = NULL;
 
         if (input->hw.rawinput.type == RIM_TYPEHID)
         {
@@ -2072,9 +2068,7 @@ static void queue_custom_hardware_message( struct desktop *desktop, user_handle_
         }
 
         msg_data = &raw_msg.data;
-        msg_data->info     = 0;
         msg_data->size     = sizeof(*msg_data) + report_size;
-        msg_data->flags    = 0;
         msg_data->rawinput = input->hw.rawinput;
 
         enum_processes( queue_rawinput_message, &raw_msg );
@@ -2202,6 +2196,14 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
             clear_bits &= ~get_hardware_msg_bit( msg );
             continue;
         }
+
+        reply->total = msg->data_size;
+        if (msg->data_size > get_reply_max_size())
+        {
+            set_error( STATUS_BUFFER_OVERFLOW );
+            return 1;
+        }
+
         /* now we can return it */
         if (!msg->unique_id) msg->unique_id = get_unique_id();
         reply->type   = MSG_HARDWARE;

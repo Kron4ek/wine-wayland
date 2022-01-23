@@ -23,16 +23,21 @@
 #endif
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <signal.h>
-#ifdef HAVE_LINK_H
-# include <link.h>
-#endif
+#include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <dlfcn.h>
 #ifdef HAVE_PWD_H
 # include <pwd.h>
 #endif
@@ -45,14 +50,12 @@
 #ifdef HAVE_SYS_AUXV_H
 # include <sys/auxv.h>
 #endif
-#ifdef HAVE_SYS_MMAN_H
-# include <sys/mman.h>
-#endif
 #ifdef HAVE_SYS_RESOURCE_H
 # include <sys/resource.h>
 #endif
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
+#include <limits.h>
+#ifdef HAVE_SYS_SYSCTL_H
+# include <sys/sysctl.h>
 #endif
 #ifdef __APPLE__
 # include <CoreFoundation/CoreFoundation.h>
@@ -88,9 +91,6 @@
 #include "unix_private.h"
 #include "wine/list.h"
 #include "wine/debug.h"
-
-#include "esync.h"
-#include "fsync.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(module);
 
@@ -129,6 +129,7 @@ static void * const syscalls[] =
     NtAdjustPrivilegesToken,
     NtAlertResumeThread,
     NtAlertThread,
+    NtAlertThreadByThreadId,
     NtAllocateLocallyUniqueId,
     NtAllocateUuids,
     NtAllocateVirtualMemory,
@@ -141,6 +142,7 @@ static void * const syscalls[] =
     NtCancelTimer,
     NtClearEvent,
     NtClose,
+    NtCompareObjects,
     NtCompleteConnectPort,
     NtConnectPort,
     NtContinue,
@@ -293,6 +295,7 @@ static void * const syscalls[] =
     NtSaveKey,
     NtSecureConnectPort,
     NtSetContextThread,
+    NtSetDebugFilterState,
     NtSetDefaultLocale,
     NtSetDefaultUILanguage,
     NtSetEaFile,
@@ -331,6 +334,7 @@ static void * const syscalls[] =
     NtUnlockFile,
     NtUnlockVirtualMemory,
     NtUnmapViewOfSection,
+    NtWaitForAlertByThreadId,
     NtWaitForDebugEvent,
     NtWaitForKeyedEvent,
     NtWaitForMultipleObjects,
@@ -383,6 +387,7 @@ const char *data_dir = NULL;
 const char *build_dir = NULL;
 const char *config_dir = NULL;
 const char **dll_paths = NULL;
+const char **system_dll_paths = NULL;
 const char *user_name = NULL;
 SECTION_IMAGE_INFORMATION main_image_info = { NULL };
 static HMODULE ntdll_module;
@@ -541,6 +546,27 @@ static void set_dll_path(void)
 }
 
 
+static void set_system_dll_path(void)
+{
+    const char *p, *path = SYSTEMDLLPATH;
+    int count = 0;
+
+    if (path && *path) for (p = path, count = 1; *p; p++) if (*p == ':') count++;
+
+    system_dll_paths = malloc( (count + 1) * sizeof(*system_dll_paths) );
+    count = 0;
+
+    if (path && *path)
+    {
+        char *path_copy = strdup(path);
+        for (p = strtok( path_copy, ":" ); p; p = strtok( NULL, ":" ))
+            system_dll_paths[count++] = strdup( p );
+        free( path_copy );
+    }
+    system_dll_paths[count] = NULL;
+}
+
+
 static void set_home_dir(void)
 {
     const char *home = getenv( "HOME" );
@@ -599,7 +625,14 @@ static void init_paths( char *argv[] )
 #if (defined(__linux__) && !defined(__ANDROID__)) || defined(__FreeBSD_kernel__) || defined(__NetBSD__)
         bin_dir = realpath_dirname( "/proc/self/exe" );
 #elif defined (__FreeBSD__) || defined(__DragonFly__)
-        bin_dir = realpath_dirname( "/proc/curproc/file" );
+        {
+            static int pathname[] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
+            size_t path_size = PATH_MAX;
+            char *path = malloc( path_size );
+            if (path && !sysctl( pathname, sizeof(pathname)/sizeof(pathname[0]), path, &path_size, NULL, 0 ))
+                bin_dir = realpath_dirname( path );
+            free( path );
+        }
 #else
         bin_dir = realpath_dirname( argv0 );
 #endif
@@ -608,6 +641,7 @@ static void init_paths( char *argv[] )
     }
 
     set_dll_path();
+    set_system_dll_path();
     set_home_dir();
     set_config_dir();
 }
@@ -983,21 +1017,6 @@ static ULONG_PTR find_named_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY
     return 0;
 }
 
-static ULONG_PTR find_pe_export( HMODULE module, const IMAGE_EXPORT_DIRECTORY *exports,
-                                 const IMAGE_IMPORT_BY_NAME *name )
-{
-    const WORD *ordinals = (const WORD *)((BYTE *)module + exports->AddressOfNameOrdinals);
-    const DWORD *names = (const DWORD *)((BYTE *)module + exports->AddressOfNames);
-
-    if (name->Hint < exports->NumberOfNames)
-    {
-        char *ename = (char *)module + names[name->Hint];
-        if (!strcmp( ename, (char *)name->Name ))
-            return find_ordinal_export( module, exports, ordinals[name->Hint] );
-    }
-    return find_named_export( module, exports, (char *)name->Name );
-}
-
 static inline void *get_rva( void *module, ULONG_PTR addr )
 {
     return (BYTE *)module + addr;
@@ -1017,49 +1036,6 @@ static const void *get_module_data_dir( HMODULE module, ULONG dir, ULONG *size )
     if (!data->VirtualAddress || !data->Size) return NULL;
     if (size) *size = data->Size;
     return get_rva( module, data->VirtualAddress );
-}
-
-static NTSTATUS fixup_ntdll_imports( const char *name, HMODULE module )
-{
-    const IMAGE_IMPORT_DESCRIPTOR *descr;
-    const IMAGE_THUNK_DATA *import_list;
-    IMAGE_THUNK_DATA *thunk_list;
-
-    if (!(descr = get_module_data_dir( module, IMAGE_FILE_IMPORT_DIRECTORY, NULL ))) return STATUS_SUCCESS;
-    for (; descr->Name && descr->FirstThunk; descr++)
-    {
-        thunk_list = get_rva( module, descr->FirstThunk );
-
-        /* ntdll must be the only import */
-        if (strcmp( get_rva( module, descr->Name ), "ntdll.dll" ))
-        {
-            ERR( "module %s is importing %s\n", debugstr_a(name), (char *)get_rva( module, descr->Name ));
-            return STATUS_PROCEDURE_NOT_FOUND;
-        }
-        if (descr->u.OriginalFirstThunk)
-            import_list = get_rva( module, descr->u.OriginalFirstThunk );
-        else
-            import_list = thunk_list;
-
-        while (import_list->u1.Ordinal)
-        {
-            if (IMAGE_SNAP_BY_ORDINAL( import_list->u1.Ordinal ))
-            {
-                int ordinal = IMAGE_ORDINAL( import_list->u1.Ordinal ) - ntdll_exports->Base;
-                thunk_list->u1.Function = find_ordinal_export( ntdll_module, ntdll_exports, ordinal );
-                if (!thunk_list->u1.Function) ERR( "%s: ntdll.%u not found\n", debugstr_a(name), ordinal );
-            }
-            else  /* import by name */
-            {
-                IMAGE_IMPORT_BY_NAME *pe_name = get_rva( module, import_list->u1.AddressOfData );
-                thunk_list->u1.Function = find_pe_export( ntdll_module, ntdll_exports, pe_name );
-                if (!thunk_list->u1.Function) ERR( "%s: ntdll.%s not found\n", debugstr_a(name), pe_name->Name );
-            }
-            import_list++;
-            thunk_list++;
-        }
-    }
-    return STATUS_SUCCESS;
 }
 
 static void load_ntdll_functions( HMODULE module )
@@ -1346,38 +1322,6 @@ already_loaded:
     *ret_module = module;
     dlclose( handle );
     return STATUS_SUCCESS;
-}
-
-
-/***********************************************************************
- *           init_unix_lib
- */
-static NTSTATUS CDECL init_unix_lib( void *module, DWORD reason, const void *ptr_in, void *ptr_out )
-{
-    NTSTATUS (CDECL *init_func)( HMODULE, DWORD, const void *, void * );
-    const IMAGE_NT_HEADERS *nt;
-    const char *name;
-    void *handle, *entry, *unix_module;
-    NTSTATUS status;
-
-    if ((status = get_builtin_unix_info( module, &name, &handle, &entry ))) return status;
-
-    if (!entry)
-    {
-        if (!name || !handle) return STATUS_DLL_NOT_FOUND;
-
-        if (!(nt = dlsym( handle, "__wine_spec_nt_header" )) ||
-            !(entry = dlsym( handle, "__wine_init_unix_lib" )))
-            return STATUS_INVALID_IMAGE_FORMAT;
-
-        TRACE( "loaded %s for %p\n", debugstr_a(name), module );
-        unix_module = (void *)((nt->OptionalHeader.ImageBase + 0xffff) & ~0xffff);
-        map_so_dll( nt, unix_module );
-        fixup_ntdll_imports( name, unix_module );
-        set_builtin_unix_entry( module, entry );
-    }
-    init_func = entry;
-    return init_func( module, reason, ptr_in, ptr_out );
 }
 
 
@@ -1681,13 +1625,8 @@ static NTSTATUS find_builtin_dll( UNICODE_STRING *nt_name, void **module, SIZE_T
 done:
     if (status >= 0 && ext)
     {
-        void *handle;
-
         strcpy( ext, ".so" );
-        if ((handle = dlopen( ptr, RTLD_NOW )))
-        {
-            if (set_builtin_unix_handle( *module, ptr, handle )) dlclose( handle );
-        }
+        load_builtin_unixlib( *module, ptr );
     }
     free( file );
     return status;
@@ -1709,16 +1648,6 @@ NTSTATUS load_builtin( const pe_image_info_t *image_info, WCHAR *filename,
     SECTION_IMAGE_INFORMATION info;
     enum loadorder loadorder;
 
-    /* remove .fake extension if present */
-    if (image_info->image_flags & IMAGE_FLAGS_WineFakeDll)
-    {
-        static const WCHAR fakeW[] = {'.','f','a','k','e',0};
-        WCHAR *ext = wcsrchr( filename, '.' );
-
-        TRACE( "%s is a fake Wine dll\n", debugstr_w(filename) );
-        if (ext && !wcsicmp( ext, fakeW )) *ext = 0;
-    }
-
     init_unicode_string( &nt_name, filename );
     loadorder = get_load_order( &nt_name );
 
@@ -1731,6 +1660,7 @@ NTSTATUS load_builtin( const pe_image_info_t *image_info, WCHAR *filename,
     }
     else if (image_info->image_flags & IMAGE_FLAGS_WineFakeDll)
     {
+        TRACE( "%s is a fake Wine dll\n", debugstr_w(filename) );
         if (loadorder == LO_NATIVE) return STATUS_DLL_NOT_FOUND;
         loadorder = LO_BUILTIN;  /* builtin with no fallback since mapping a fake dll is not useful */
     }
@@ -2125,58 +2055,18 @@ static ULONG_PTR get_image_address(void)
 }
 
 
-/* math function wrappers */
-static double CDECL ntdll_atan( double d )  { return atan( d ); }
-static double CDECL ntdll_ceil( double d )  { return ceil( d ); }
-static double CDECL ntdll_cos( double d )   { return cos( d ); }
-static double CDECL ntdll_fabs( double d )  { return fabs( d ); }
-static double CDECL ntdll_floor( double d ) { return floor( d ); }
-static double CDECL ntdll_log( double d )   { return log( d ); }
-static double CDECL ntdll_pow( double x, double y ) { return pow( x, y ); }
-static double CDECL ntdll_sin( double d )   { return sin( d ); }
-static double CDECL ntdll_sqrt( double d )  { return sqrt( d ); }
-static double CDECL ntdll_tan( double d )   { return tan( d ); }
-
-
 /***********************************************************************
  *           unix_funcs
  */
 static struct unix_funcs unix_funcs =
 {
+    load_so_dll,
+    init_builtin_dll,
+    unwind_builtin_dll,
+    RtlGetSystemTimePrecise,
 #ifdef __aarch64__
     NtCurrentTeb,
 #endif
-    DbgUiIssueRemoteBreakin,
-    RtlGetSystemTimePrecise,
-    RtlWaitOnAddress,
-    RtlWakeAddressAll,
-    RtlWakeAddressSingle,
-    fast_RtlpWaitForCriticalSection,
-    fast_RtlpUnWaitCriticalSection,
-    fast_RtlDeleteCriticalSection,
-    fast_RtlTryAcquireSRWLockExclusive,
-    fast_RtlAcquireSRWLockExclusive,
-    fast_RtlTryAcquireSRWLockShared,
-    fast_RtlAcquireSRWLockShared,
-    fast_RtlReleaseSRWLockExclusive,
-    fast_RtlReleaseSRWLockShared,
-    fast_RtlWakeConditionVariable,
-    fast_wait_cv,
-    ntdll_atan,
-    ntdll_ceil,
-    ntdll_cos,
-    ntdll_fabs,
-    ntdll_floor,
-    ntdll_log,
-    ntdll_pow,
-    ntdll_sin,
-    ntdll_sqrt,
-    ntdll_tan,
-    load_so_dll,
-    init_builtin_dll,
-    init_unix_lib,
-    unwind_builtin_dll,
-    esync_set_queue_fd,
 };
 
 

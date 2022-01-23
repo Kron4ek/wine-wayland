@@ -20,7 +20,6 @@
 
 #include "config.h"
 
-#define _GNU_SOURCE /* sched_affinity */
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -32,10 +31,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <time.h>
-#ifdef HAVE_POLL_H
 #include <poll.h>
-#endif
 #ifdef HAVE_SCHED_H
+/* FreeBSD needs this for cpu_set_t instead of its cpuset_t */
+#define _WITH_CPU_SET_T
 #include <sched.h>
 #endif
 
@@ -1422,7 +1421,8 @@ DECL_HANDLER(new_thread)
     if ((thread = create_thread( request_fd, process, sd )))
     {
         thread->system_regs = current->system_regs;
-        if (req->suspend) thread->suspend++;
+        if (req->flags & THREAD_CREATE_FLAGS_CREATE_SUSPENDED) thread->suspend++;
+        thread->dbg_hidden = !!(req->flags & THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER);
         reply->tid = get_thread_id( thread );
         if ((reply->handle = alloc_handle_no_access_check( current->process, thread,
                                                            req->access, objattr->attributes )))
@@ -1801,7 +1801,6 @@ DECL_HANDLER(queue_apc)
         }
         break;
     case APC_CREATE_THREAD:
-    case APC_BREAK_PROCESS:
         process = get_process_from_handle( req->handle, PROCESS_CREATE_THREAD );
         break;
     case APC_DUP_HANDLE:

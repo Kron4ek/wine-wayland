@@ -1565,6 +1565,13 @@ ok(arr["test1"] === true, "arr[test1] !== true");
 ok(arr["test2"] === true, "arr[test2] !== true");
 ok(arr["test3"] === true, "arr[test3] !== true");
 
+ok((delete inobj.test1) === true, "delete inobj.test1 returned false");
+ok(!("test1" in inobj), "test1 is still in inobj after delete");
+ok((delete inobj.test3) === true, "delete inobj.test3 returned false");
+ok("test3" in inobj, "test3 is not in inobj after delete");
+ok((delete forinTestObj.prototype.test3) === true, "delete forinTestObj.prototype.test3 returned false");
+ok(!("test3" in inobj), "test3 is still in inobj after delete on prototype");
+
 tmp = new Object();
 tmp.test = false;
 ok((delete tmp.test) === true, "delete returned false");
@@ -1581,6 +1588,13 @@ tmp.test = false;
 ok((delete tmp["test"]) === true, "delete returned false");
 ok(typeof(tmp.test) === "undefined", "tmp.test type = " + typeof(tmp.test));
 ok(!("test" in tmp), "test is still in tmp after delete?");
+
+arr = [1, 2, 3];
+ok(arr.length === 3, "arr.length = " + arr.length);
+ok((delete arr.length) === false, "delete arr.length returned true");
+ok("reverse" in arr, "reverse not in arr");
+ok((delete Array.prototype.reverse) === true, "delete Array.prototype.reverse returned false");
+ok(!("reverse" in arr), "reverse is still in arr after delete from prototype");
 
 tmp.testWith = true;
 with(tmp)
@@ -1679,14 +1693,28 @@ tmp = new instanceOfTest();
 ok((tmp instanceof instanceOfTest) === true, "tmp is not instance of instanceOfTest");
 ok((tmp instanceof Object) === true, "tmp is not instance of Object");
 ok((tmp instanceof String) === false, "tmp is instance of String");
+ok(instanceOfTest.isPrototypeOf(tmp) === false, "instanceOfTest is prototype of tmp");
+ok(instanceOfTest.prototype.isPrototypeOf(tmp) === true, "instanceOfTest.prototype is not prototype of tmp");
+ok(Object.prototype.isPrototypeOf(tmp) === true, "Object.prototype is not prototype of tmp");
 
 instanceOfTest.prototype = new Object();
 ok((tmp instanceof instanceOfTest) === false, "tmp is instance of instanceOfTest");
 ok((tmp instanceof Object) === true, "tmp is not instance of Object");
+ok(instanceOfTest.prototype.isPrototypeOf(tmp) === false, "instanceOfTest.prototype is prototype of tmp");
 
 ok((1 instanceof Object) === false, "1 is instance of Object");
 ok((false instanceof Boolean) === false, "false is instance of Boolean");
 ok(("" instanceof Object) === false, "'' is instance of Object");
+ok(Number.prototype.isPrototypeOf(1) === false, "Number.prototype is prototype of 1");
+ok(String.prototype.isPrototypeOf("") === false, "String.prototype is prototype of ''");
+
+ok(tmp.isPrototypeOf(null) === false, "tmp is prototype of null");
+ok(tmp.isPrototypeOf(undefined) === false, "tmp is prototype of undefined");
+ok(Object.prototype.isPrototypeOf.call(tmp) === false, "tmp is prototype of no argument");
+ok(Object.prototype.isPrototypeOf.call(test, Object) === false, "test is prototype of Object");
+ok(Object.prototype.isPrototypeOf.call(testObj, Object) === false, "testObj is prototype of Object");
+ok(Object.prototype.isPrototypeOf(test) === false, "Object.prototype is prototype of test");
+ok(Object.prototype.isPrototypeOf(testObj) === false, "Object.prototype is prototype of testObj");
 
 (function () {
     ok((arguments instanceof Object) === true, "argument is not instance of Object");

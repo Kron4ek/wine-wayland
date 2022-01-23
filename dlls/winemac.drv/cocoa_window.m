@@ -25,8 +25,8 @@
 #import <CoreVideo/CoreVideo.h>
 #ifdef HAVE_METAL_METAL_H
 #import <Metal/Metal.h>
-#import <QuartzCore/QuartzCore.h>
 #endif
+#import <QuartzCore/QuartzCore.h>
 
 #import "cocoa_window.h"
 
@@ -34,20 +34,6 @@
 #import "cocoa_app.h"
 #import "cocoa_event.h"
 #import "cocoa_opengl.h"
-
-
-#if !defined(MAC_OS_X_VERSION_10_7) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_7
-enum {
-    NSWindowCollectionBehaviorFullScreenPrimary = 1 << 7,
-    NSWindowCollectionBehaviorFullScreenAuxiliary = 1 << 8,
-    NSWindowFullScreenButton = 7,
-    NSWindowStyleMaskFullScreen = 1 << 14,
-};
-
-@interface NSWindow (WineFullScreenExtensions)
-    - (void) toggleFullScreen:(id)sender;
-@end
-#endif
 
 
 #if !defined(MAC_OS_X_VERSION_10_12) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_12
@@ -395,6 +381,7 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
 @property (readwrite, nonatomic) BOOL noActivate;
 @property (readwrite, nonatomic) BOOL floating;
 @property (readwrite, nonatomic) BOOL drawnSinceShown;
+@property (readwrite, nonatomic) BOOL closing;
 @property (readwrite, getter=isFakingClose, nonatomic) BOOL fakingClose;
 @property (retain, nonatomic) NSWindow* latentParentWindow;
 
@@ -506,7 +493,7 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
         if ([window contentView] != self)
             return;
 
-        if (!window.surface || !window.surface_mutex)
+        if (window.closing || !window.surface || !window.surface_mutex)
             return;
 
         pthread_mutex_lock(window.surface_mutex);
@@ -955,7 +942,7 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
 
     static WineWindow* causing_becomeKeyWindow;
 
-    @synthesize disabled, noActivate, floating, fullscreen, fakingClose, latentParentWindow, hwnd, queue;
+    @synthesize disabled, noActivate, floating, fullscreen, fakingClose, closing, latentParentWindow, hwnd, queue;
     @synthesize drawnSinceShown;
     @synthesize surface, surface_mutex;
     @synthesize shapeChangedSinceLastDraw;
@@ -1091,11 +1078,8 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
             [[self standardWindowButton:NSWindowMiniaturizeButton] setEnabled:!self.disabled];
         if (style & NSWindowStyleMaskResizable)
             [[self standardWindowButton:NSWindowZoomButton] setEnabled:!self.disabled];
-        if ([self respondsToSelector:@selector(toggleFullScreen:)])
-        {
-            if ([self collectionBehavior] & NSWindowCollectionBehaviorFullScreenPrimary)
-                [[self standardWindowButton:NSWindowFullScreenButton] setEnabled:!self.disabled];
-        }
+        if ([self collectionBehavior] & NSWindowCollectionBehaviorFullScreenPrimary)
+            [[self standardWindowButton:NSWindowFullScreenButton] setEnabled:!self.disabled];
 
         if ([self preventResizing])
         {
@@ -1115,24 +1099,21 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
 
     - (void) adjustFullScreenBehavior:(NSWindowCollectionBehavior)behavior
     {
-        if ([self respondsToSelector:@selector(toggleFullScreen:)])
-        {
-            NSUInteger style = [self styleMask];
+        NSUInteger style = [self styleMask];
 
-            if (behavior & NSWindowCollectionBehaviorParticipatesInCycle &&
-                style & NSWindowStyleMaskResizable && !(style & NSWindowStyleMaskUtilityWindow) && !maximized &&
-                !(self.parentWindow || self.latentParentWindow))
-            {
-                behavior |= NSWindowCollectionBehaviorFullScreenPrimary;
-                behavior &= ~NSWindowCollectionBehaviorFullScreenAuxiliary;
-            }
-            else
-            {
-                behavior &= ~NSWindowCollectionBehaviorFullScreenPrimary;
-                behavior |= NSWindowCollectionBehaviorFullScreenAuxiliary;
-                if (style & NSWindowStyleMaskFullScreen)
-                    [super toggleFullScreen:nil];
-            }
+        if (behavior & NSWindowCollectionBehaviorParticipatesInCycle &&
+            style & NSWindowStyleMaskResizable && !(style & NSWindowStyleMaskUtilityWindow) && !maximized &&
+            !(self.parentWindow || self.latentParentWindow))
+        {
+            behavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+            behavior &= ~NSWindowCollectionBehaviorFullScreenAuxiliary;
+        }
+        else
+        {
+            behavior &= ~NSWindowCollectionBehaviorFullScreenPrimary;
+            behavior |= NSWindowCollectionBehaviorFullScreenAuxiliary;
+            if (style & NSWindowStyleMaskFullScreen)
+                [super toggleFullScreen:nil];
         }
 
         if (behavior != [self collectionBehavior])
@@ -2480,12 +2461,7 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
 
                     for (i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++)
                     {
-                        NSButton* button;
-
-                        if (buttons[i] == NSWindowFullScreenButton && ![self respondsToSelector:@selector(toggleFullScreen:)])
-                            continue;
-
-                        button = [self standardWindowButton:buttons[i]];
+                        NSButton* button = [self standardWindowButton:buttons[i]];
                         if ([button hitTest:[button.superview convertPoint:event.locationInWindow fromView:nil]])
                         {
                             hitButton = YES;
@@ -2896,9 +2872,16 @@ static CVReturn WineDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTi
 
     - (void)windowDidMiniaturize:(NSNotification *)notification
     {
+        macdrv_event* event;
+
         if (fullscreen && [self isOnActiveSpace])
             [[WineApplicationController sharedController] updateFullscreenWindows];
+
         [self checkWineDisplayLink];
+
+        event = macdrv_create_event(WINDOW_DID_MINIMIZE, self);
+        [queue postEvent:event];
+        macdrv_release_event(event);
     }
 
     - (void)windowDidMove:(NSNotification *)notification
@@ -3250,6 +3233,7 @@ void macdrv_destroy_cocoa_window(macdrv_window w)
     WineWindow* window = (WineWindow*)w;
 
     OnMainThread(^{
+        window.closing = TRUE;
         [window doOrderOut];
         [window close];
     });

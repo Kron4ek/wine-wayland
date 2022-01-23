@@ -80,11 +80,11 @@ struct wg_parser
     pthread_cond_t read_cond, read_done_cond;
     struct
     {
-        void *data;
+        GstBuffer *buffer;
         uint64_t offset;
         uint32_t size;
         bool done;
-        bool ret;
+        GstFlowReturn ret;
     } read_request;
 
     bool flushing, sink_connected;
@@ -450,7 +450,7 @@ static GstCaps *wg_format_to_caps_video(const struct wg_format *format)
     if ((video_format = wg_video_format_to_gst(format->u.video.format)) == GST_VIDEO_FORMAT_UNKNOWN)
         return NULL;
 
-    gst_video_info_set_format(&info, video_format, format->u.video.width, format->u.video.height);
+    gst_video_info_set_format(&info, video_format, format->u.video.width, abs(format->u.video.height));
     if ((caps = gst_video_info_to_caps(&info)))
     {
         /* Clear some fields that shouldn't prevent us from connecting. */
@@ -497,7 +497,7 @@ static bool wg_format_compare(const struct wg_format *a, const struct wg_format 
             /* Do not compare FPS. */
             return a->u.video.format == b->u.video.format
                     && a->u.video.width == b->u.video.width
-                    && a->u.video.height == b->u.video.height;
+                    && abs(a->u.video.height) == abs(b->u.video.height);
     }
 
     assert(0);
@@ -556,7 +556,7 @@ static NTSTATUS wg_parser_get_next_read_offset(void *args)
 
     pthread_mutex_lock(&parser->mutex);
 
-    while (parser->sink_connected && !parser->read_request.data)
+    while (parser->sink_connected && !parser->read_request.size)
         pthread_cond_wait(&parser->read_cond, &parser->mutex);
 
     if (!parser->sink_connected)
@@ -580,12 +580,35 @@ static NTSTATUS wg_parser_push_data(void *args)
     uint32_t size = params->size;
 
     pthread_mutex_lock(&parser->mutex);
-    parser->read_request.size = size;
-    parser->read_request.done = true;
-    parser->read_request.ret = !!data;
+
     if (data)
-        memcpy(parser->read_request.data, data, size);
-    parser->read_request.data = NULL;
+    {
+        if (size)
+        {
+            GstMapInfo map_info;
+
+            /* Note that we don't allocate the buffer until we have a size.
+             * midiparse passes a NULL buffer and a size of UINT_MAX, in an
+             * apparent attempt to read the whole input stream at once. */
+            if (!parser->read_request.buffer)
+                parser->read_request.buffer = gst_buffer_new_and_alloc(size);
+            gst_buffer_map(parser->read_request.buffer, &map_info, GST_MAP_WRITE);
+            memcpy(map_info.data, data, size);
+            gst_buffer_unmap(parser->read_request.buffer, &map_info);
+            parser->read_request.ret = GST_FLOW_OK;
+        }
+        else
+        {
+            parser->read_request.ret = GST_FLOW_EOS;
+        }
+    }
+    else
+    {
+        parser->read_request.ret = GST_FLOW_ERROR;
+    }
+    parser->read_request.done = true;
+    parser->read_request.size = 0;
+
     pthread_mutex_unlock(&parser->mutex);
     pthread_cond_signal(&parser->read_done_cond);
 
@@ -611,6 +634,8 @@ static NTSTATUS wg_parser_stream_enable(void *args)
 
     if (format->major_type == WG_MAJOR_TYPE_VIDEO)
     {
+        bool flip = (format->u.video.height < 0);
+
         switch (format->u.video.format)
         {
             case WG_VIDEO_FORMAT_BGRA:
@@ -618,7 +643,7 @@ static NTSTATUS wg_parser_stream_enable(void *args)
             case WG_VIDEO_FORMAT_BGR:
             case WG_VIDEO_FORMAT_RGB15:
             case WG_VIDEO_FORMAT_RGB16:
-                gst_util_set_object_arg(G_OBJECT(stream->flip), "method", "vertical-flip");
+                flip = !flip;
                 break;
 
             case WG_VIDEO_FORMAT_AYUV:
@@ -630,9 +655,10 @@ static NTSTATUS wg_parser_stream_enable(void *args)
             case WG_VIDEO_FORMAT_YVYU:
             case WG_VIDEO_FORMAT_UNKNOWN:
             case WG_VIDEO_FORMAT_CINEPAK:
-                gst_util_set_object_arg(G_OBJECT(stream->flip), "method", "none");
                 break;
         }
+
+        gst_util_set_object_arg(G_OBJECT(stream->flip), "method", flip ? "vertical-flip" : "none");
     }
 
     gst_pad_push_event(stream->my_sink, gst_event_new_reconfigure());
@@ -1276,9 +1302,7 @@ static GstFlowReturn src_getrange_cb(GstPad *pad, GstObject *parent,
         guint64 offset, guint size, GstBuffer **buffer)
 {
     struct wg_parser *parser = gst_pad_get_element_private(pad);
-    GstBuffer *new_buffer = NULL;
-    GstMapInfo map_info;
-    bool ret;
+    GstFlowReturn ret;
 
     GST_LOG("pad %p, offset %" G_GINT64_MODIFIER "u, size %u, buffer %p.", pad, offset, size, *buffer);
 
@@ -1286,25 +1310,22 @@ static GstFlowReturn src_getrange_cb(GstPad *pad, GstObject *parent,
         offset = parser->next_pull_offset;
     parser->next_pull_offset = offset + size;
 
-    if (!*buffer)
-        *buffer = new_buffer = gst_buffer_new_and_alloc(size);
-
     if (!size)
     {
         /* asfreader occasionally asks for zero bytes. gst_buffer_map() will
          * return NULL in this case. Avoid confusing the read thread by asking
          * it for zero bytes. */
+        if (!*buffer)
+            *buffer = gst_buffer_new_and_alloc(0);
         gst_buffer_set_size(*buffer, 0);
         GST_LOG("Returning empty buffer.");
         return GST_FLOW_OK;
     }
 
-    gst_buffer_map(*buffer, &map_info, GST_MAP_WRITE);
-
     pthread_mutex_lock(&parser->mutex);
 
-    assert(!parser->read_request.data);
-    parser->read_request.data = map_info.data;
+    assert(!parser->read_request.size);
+    parser->read_request.buffer = *buffer;
     parser->read_request.offset = offset;
     parser->read_request.size = size;
     parser->read_request.done = false;
@@ -1317,21 +1338,14 @@ static GstFlowReturn src_getrange_cb(GstPad *pad, GstObject *parent,
     while (!parser->read_request.done)
         pthread_cond_wait(&parser->read_done_cond, &parser->mutex);
 
+    *buffer = parser->read_request.buffer;
     ret = parser->read_request.ret;
-    gst_buffer_set_size(*buffer, parser->read_request.size);
 
     pthread_mutex_unlock(&parser->mutex);
 
-    gst_buffer_unmap(*buffer, &map_info);
+    GST_LOG("Request returned %s.", gst_flow_get_name(ret));
 
-    GST_LOG("Request returned %d.", ret);
-
-    if ((!ret || !size) && new_buffer)
-        gst_buffer_unref(new_buffer);
-
-    if (ret)
-        return size ? GST_FLOW_OK : GST_FLOW_EOS;
-    return GST_FLOW_ERROR;
+    return ret;
 }
 
 static gboolean src_query_cb(GstPad *pad, GstObject *parent, GstQuery *query)

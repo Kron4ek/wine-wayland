@@ -21,12 +21,7 @@
 
 #include "config.h"
 
-#ifdef HAVE_POLL_H
 #include <poll.h>
-#endif
-#ifdef HAVE_SYS_POLL_H
-#include <sys/poll.h>
-#endif
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
 #include <X11/Xlib.h>
@@ -42,8 +37,6 @@
 
 #include "windef.h"
 #include "winbase.h"
-#include "winuser.h"
-#include "wingdi.h"
 
 #include "x11drv.h"
 

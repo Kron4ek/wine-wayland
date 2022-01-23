@@ -307,13 +307,13 @@ static void     get_file_name(char* buf)
  */
 static void WINAPIV __WINE_PRINTF_ATTR(2,3) childPrintf(HANDLE h, const char* fmt, ...)
 {
-    __ms_va_list valist;
+    va_list valist;
     char        buffer[1024+4*MAX_LISTED_ENV_VAR];
     DWORD       w;
 
-    __ms_va_start(valist, fmt);
+    va_start(valist, fmt);
     vsprintf(buffer, fmt, valist);
-    __ms_va_end(valist);
+    va_end(valist);
     WriteFile(h, buffer, strlen(buffer), &w, NULL);
 }
 
@@ -1644,8 +1644,6 @@ static void test_Console(void)
 
     ok(modeInC == (modeIn ^ 1), "Wrong console mode\n");
     ok(modeOutC == (modeOut ^ 1), "Wrong console-SB mode\n");
-    trace("cursor position(X): %d/%d\n",sbi.dwCursorPosition.X, sbiC.dwCursorPosition.X);
-    ok(sbiC.dwCursorPosition.Y == (sbi.dwCursorPosition.Y ^ 1), "Wrong cursor position\n");
 
     release_memory();
     DeleteFileA(resfile);
@@ -3772,7 +3770,7 @@ static void test_process_info(HANDLE hproc)
         sizeof(PROCESS_JOB_MEMORY_INFO) /* ProcessJobMemoryInformation */,
 #endif
     };
-    ULONG i, status, ret_len, size;
+    ULONG i, status, ret_len;
     BOOL is_current = hproc == GetCurrentProcess();
 
     if (!pNtQueryInformationProcess)
@@ -3783,8 +3781,6 @@ static void test_process_info(HANDLE hproc)
 
     for (i = 0; i < MaxProcessInfoClass; i++)
     {
-        size = info_size[i];
-        if (!size) size = sizeof(buf);
         ret_len = 0;
         status = pNtQueryInformationProcess(hproc, i, buf, info_size[i], &ret_len);
         if (status == STATUS_NOT_IMPLEMENTED) continue;

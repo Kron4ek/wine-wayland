@@ -22,9 +22,9 @@
 #endif
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <stdarg.h>
+#include <sys/types.h>
 
 #if defined(HAVE_IOKIT_HID_IOHIDLIB_H)
 #define DWORD UInt32
@@ -97,7 +97,7 @@
 
 #include "unix_private.h"
 
-WINE_DEFAULT_DEBUG_CHANNEL(plugplay);
+WINE_DEFAULT_DEBUG_CHANNEL(hid);
 #ifdef HAVE_IOHIDMANAGERCREATE
 
 static pthread_mutex_t iohid_cs = PTHREAD_MUTEX_INITIALIZER;

@@ -789,6 +789,8 @@ static LRESULT COMBO_ThemedPaint(HTHEME theme, HEADCOMBO *lphc, HDC hdc)
 
     if ((lphc->dwStyle & CBS_DROPDOWNLIST) == CBS_DROPDOWNLIST)
         CBPaintText(lphc, hdc);
+    else
+        InvalidateRect(lphc->hWndEdit, NULL, TRUE);
 
     return 0;
 }
@@ -1001,8 +1003,7 @@ static void CBDropDown( LPHEADCOMBO lphc )
 
 
    if( !(lphc->wState & CBF_NOREDRAW) )
-     RedrawWindow( lphc->self, NULL, 0, RDW_INVALIDATE |
-			   RDW_ERASE | RDW_UPDATENOW | RDW_NOCHILDREN );
+     RedrawWindow( lphc->self, NULL, 0, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW );
 
    EnableWindow( lphc->hWndLBox, TRUE );
    if (GetCapture() != lphc->self)

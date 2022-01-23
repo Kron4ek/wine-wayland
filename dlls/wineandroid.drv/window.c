@@ -24,7 +24,6 @@
 #define NONAMELESSSTRUCT
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -33,16 +32,13 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <unistd.h>
 
 #define OEMRESOURCE
 #include "windef.h"
 #include "winbase.h"
 #include "wingdi.h"
 #include "winuser.h"
-#include "wine/unicode.h"
 
 #include "android.h"
 #include "wine/server.h"

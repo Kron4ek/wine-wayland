@@ -143,6 +143,7 @@ DECL_HANDLER(get_apc_result);
 DECL_HANDLER(close_handle);
 DECL_HANDLER(set_handle_info);
 DECL_HANDLER(dup_handle);
+DECL_HANDLER(compare_objects);
 DECL_HANDLER(make_temporary);
 DECL_HANDLER(open_process);
 DECL_HANDLER(open_thread);
@@ -173,7 +174,6 @@ DECL_HANDLER(get_volume_info);
 DECL_HANDLER(lock_file);
 DECL_HANDLER(unlock_file);
 DECL_HANDLER(recv_socket);
-DECL_HANDLER(poll_socket);
 DECL_HANDLER(send_socket);
 DECL_HANDLER(get_next_console_request);
 DECL_HANDLER(read_directory_changes);
@@ -433,6 +433,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_close_handle,
     (req_handler)req_set_handle_info,
     (req_handler)req_dup_handle,
+    (req_handler)req_compare_objects,
     (req_handler)req_make_temporary,
     (req_handler)req_open_process,
     (req_handler)req_open_thread,
@@ -463,7 +464,6 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_lock_file,
     (req_handler)req_unlock_file,
     (req_handler)req_recv_socket,
-    (req_handler)req_poll_socket,
     (req_handler)req_send_socket,
     (req_handler)req_get_next_console_request,
     (req_handler)req_read_directory_changes,
@@ -747,7 +747,7 @@ C_ASSERT( FIELD_OFFSET(struct get_new_process_info_reply, exit_code) == 12 );
 C_ASSERT( sizeof(struct get_new_process_info_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct new_thread_request, process) == 12 );
 C_ASSERT( FIELD_OFFSET(struct new_thread_request, access) == 16 );
-C_ASSERT( FIELD_OFFSET(struct new_thread_request, suspend) == 20 );
+C_ASSERT( FIELD_OFFSET(struct new_thread_request, flags) == 20 );
 C_ASSERT( FIELD_OFFSET(struct new_thread_request, request_fd) == 24 );
 C_ASSERT( sizeof(struct new_thread_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct new_thread_reply, tid) == 8 );
@@ -894,6 +894,9 @@ C_ASSERT( FIELD_OFFSET(struct dup_handle_request, options) == 32 );
 C_ASSERT( sizeof(struct dup_handle_request) == 40 );
 C_ASSERT( FIELD_OFFSET(struct dup_handle_reply, handle) == 8 );
 C_ASSERT( sizeof(struct dup_handle_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct compare_objects_request, first) == 12 );
+C_ASSERT( FIELD_OFFSET(struct compare_objects_request, second) == 16 );
+C_ASSERT( sizeof(struct compare_objects_request) == 24 );
 C_ASSERT( FIELD_OFFSET(struct make_temporary_request, handle) == 12 );
 C_ASSERT( sizeof(struct make_temporary_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct open_process_request, pid) == 12 );
@@ -1065,13 +1068,6 @@ C_ASSERT( sizeof(struct recv_socket_request) == 64 );
 C_ASSERT( FIELD_OFFSET(struct recv_socket_reply, wait) == 8 );
 C_ASSERT( FIELD_OFFSET(struct recv_socket_reply, options) == 12 );
 C_ASSERT( sizeof(struct recv_socket_reply) == 16 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_request, exclusive) == 12 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_request, async) == 16 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_request, timeout) == 56 );
-C_ASSERT( sizeof(struct poll_socket_request) == 64 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_reply, wait) == 8 );
-C_ASSERT( FIELD_OFFSET(struct poll_socket_reply, options) == 12 );
-C_ASSERT( sizeof(struct poll_socket_reply) == 16 );
 C_ASSERT( FIELD_OFFSET(struct send_socket_request, async) == 16 );
 C_ASSERT( FIELD_OFFSET(struct send_socket_request, status) == 56 );
 C_ASSERT( FIELD_OFFSET(struct send_socket_request, total) == 60 );
@@ -1147,7 +1143,9 @@ C_ASSERT( sizeof(struct get_mapping_filename_reply) == 16 );
 C_ASSERT( sizeof(struct list_processes_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct list_processes_reply, info_size) == 8 );
 C_ASSERT( FIELD_OFFSET(struct list_processes_reply, process_count) == 12 );
-C_ASSERT( sizeof(struct list_processes_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct list_processes_reply, total_thread_count) == 16 );
+C_ASSERT( FIELD_OFFSET(struct list_processes_reply, total_name_len) == 20 );
+C_ASSERT( sizeof(struct list_processes_reply) == 24 );
 C_ASSERT( FIELD_OFFSET(struct create_debug_obj_request, access) == 12 );
 C_ASSERT( FIELD_OFFSET(struct create_debug_obj_request, flags) == 16 );
 C_ASSERT( sizeof(struct create_debug_obj_request) == 24 );

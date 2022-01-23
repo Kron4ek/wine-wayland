@@ -2418,7 +2418,7 @@ static void test_WSASocket(void)
     {
         SetLastError( 0xdeadbeef );
         sock = WSASocketA( tests[i].family, tests[i].type, tests[i].protocol, NULL, 0, 0 );
-        todo_wine_if (!tests[i].error || i == 7)
+        todo_wine_if (i == 7)
             ok(WSAGetLastError() == tests[i].error, "Test %u: got wrong error %u\n", i, WSAGetLastError());
         if (tests[i].error)
         {
@@ -3151,16 +3151,17 @@ static void test_select(void)
 {
     static char tmp_buf[1024];
 
-    SOCKET fdListen, fdRead, fdWrite;
-    fd_set readfds, writefds, exceptfds;
-    unsigned int maxfd;
+    fd_set readfds, writefds, exceptfds, *alloc_fds;
+    SOCKET fdListen, fdRead, fdWrite, sockets[200];
     int ret, len;
     char buffer;
     struct timeval select_timeout;
     struct sockaddr_in address;
     select_thread_params thread_params;
     HANDLE thread_handle;
-    DWORD ticks, id;
+    DWORD ticks, id, old_protect;
+    unsigned int maxfd, i;
+    char *page_pair;
 
     fdRead = socket(AF_INET, SOCK_STREAM, 0);
     ok( (fdRead != INVALID_SOCKET), "socket failed unexpectedly: %d\n", WSAGetLastError() );
@@ -3181,7 +3182,7 @@ static void test_select(void)
     ret = select(maxfd+1, &readfds, &writefds, &exceptfds, &select_timeout);
     ticks = GetTickCount() - ticks;
     ok(ret == 0, "select should not return any socket handles\n");
-    ok(ticks < 10, "select was blocking for %u ms, expected < 10 ms\n", ticks);
+    ok(ticks < 100, "select was blocking for %u ms\n", ticks);
     ok(!FD_ISSET(fdRead, &readfds), "FD should not be set\n");
     ok(!FD_ISSET(fdWrite, &writefds), "FD should not be set\n");
     ok(!FD_ISSET(fdRead, &exceptfds), "FD should not be set\n");
@@ -3271,6 +3272,16 @@ static void test_select(void)
     ok(ret == 1, "select returned %d\n", ret);
     ok(FD_ISSET(fdWrite, &writefds), "fdWrite socket is not in the set\n");
 
+    /* select the same socket twice */
+    writefds.fd_count = 2;
+    writefds.fd_array[0] = fdWrite;
+    writefds.fd_array[1] = fdWrite;
+    ret = select(0, NULL, &writefds, NULL, &select_timeout);
+    ok(ret == 1, "select returned %d\n", ret);
+    ok(writefds.fd_count == 1, "got count %u\n", writefds.fd_count);
+    ok(writefds.fd_array[0] == fdWrite, "got fd %#Ix\n", writefds.fd_array[0]);
+    ok(writefds.fd_array[1] == fdWrite, "got fd %#Ix\n", writefds.fd_array[1]);
+
     /* tests for overlapping fd_set pointers */
     FD_ZERO(&readfds);
     FD_SET(fdWrite, &readfds);
@@ -3326,8 +3337,34 @@ static void test_select(void)
     ok(FD_ISSET(fdWrite, &readfds), "fdWrite socket is not in the set\n");
     ok(FD_ISSET(fdRead, &readfds), "fdRead socket is not in the set\n");
 
+    page_pair = VirtualAlloc(NULL, 0x1000 * 2, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    VirtualProtect(page_pair + 0x1000, 0x1000, PAGE_NOACCESS, &old_protect);
+    alloc_fds = (fd_set *)((page_pair + 0x1000) - offsetof(fd_set, fd_array[1]));
+    alloc_fds->fd_count = 1;
+    alloc_fds->fd_array[0] = fdRead;
+    ret = select(fdRead+1, alloc_fds, NULL, NULL, &select_timeout);
+    ok(ret == 1, "select returned %d\n", ret);
+    VirtualFree(page_pair, 0, MEM_RELEASE);
+
     closesocket(fdRead);
     closesocket(fdWrite);
+
+    alloc_fds = malloc(offsetof(fd_set, fd_array[ARRAY_SIZE(sockets)]));
+    alloc_fds->fd_count = ARRAY_SIZE(sockets);
+    for (i = 0; i < ARRAY_SIZE(sockets); i += 2)
+    {
+        tcp_socketpair(&sockets[i], &sockets[i + 1]);
+        alloc_fds->fd_array[i] = sockets[i];
+        alloc_fds->fd_array[i + 1] = sockets[i + 1];
+    }
+    ret = select(0, NULL, alloc_fds, NULL, &select_timeout);
+    ok(ret == ARRAY_SIZE(sockets), "got %d\n", ret);
+    for (i = 0; i < ARRAY_SIZE(sockets); ++i)
+    {
+        ok(alloc_fds->fd_array[i] == sockets[i], "got socket %#Ix at index %u\n", alloc_fds->fd_array[i], i);
+        closesocket(sockets[i]);
+    }
+    free(alloc_fds);
 
     /* select() works in 3 distinct states:
      * - to check if a connection attempt ended with success or error;
@@ -5096,6 +5133,41 @@ static void test_accept_events(struct event_test_ctx *ctx)
     closesocket(server);
     closesocket(client);
 
+    /* As above, but select on a subset containing FD_ACCEPT first. */
+
+    if (!ctx->is_message)
+    {
+        select_events(ctx, listener, FD_CONNECT | FD_READ | FD_OOB | FD_ACCEPT);
+
+        client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        ok(client != -1, "failed to create socket, error %u\n", WSAGetLastError());
+        ret = connect(client, (struct sockaddr *)&destaddr, sizeof(destaddr));
+        ok(!ret, "failed to connect, error %u\n", WSAGetLastError());
+
+        ret = WaitForSingleObject(ctx->event, 200);
+        ok(!ret, "wait timed out\n");
+
+        select_events(ctx, listener, FD_CONNECT | FD_READ | FD_OOB);
+        ret = WaitForSingleObject(ctx->event, 0);
+        ok(!ret, "wait timed out\n");
+
+        ResetEvent(ctx->event);
+
+        select_events(ctx, listener, FD_CONNECT | FD_READ | FD_OOB);
+        ret = WaitForSingleObject(ctx->event, 0);
+        ok(ret == WAIT_TIMEOUT, "expected timeout\n");
+
+        select_events(ctx, listener, FD_CONNECT | FD_READ | FD_OOB | FD_ACCEPT);
+        ret = WaitForSingleObject(ctx->event, 0);
+        ok(!ret, "wait timed out\n");
+        check_events(ctx, FD_ACCEPT, 0, 0);
+
+        server = accept(listener, NULL, NULL);
+        ok(server != -1, "failed to accept, error %u\n", WSAGetLastError());
+        closesocket(server);
+        closesocket(client);
+    }
+
     /* As above, but select on a subset not containing FD_ACCEPT first. */
 
     select_events(ctx, listener, FD_CONNECT | FD_READ | FD_OOB);
@@ -5127,6 +5199,37 @@ static void test_accept_events(struct event_test_ctx *ctx)
 
     select_events(ctx, listener, FD_CONNECT | FD_READ | FD_OOB | FD_ACCEPT);
     check_events(ctx, 0, 0, 200);
+
+    closesocket(server);
+    closesocket(client);
+
+    closesocket(listener);
+
+    /* The socket returned from accept() inherits the same parameters. */
+
+    listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ok(listener != -1, "failed to create socket, error %u\n", WSAGetLastError());
+    ret = bind(listener, (const struct sockaddr *)&addr, sizeof(addr));
+    ok(!ret, "failed to bind, error %u\n", WSAGetLastError());
+    len = sizeof(destaddr);
+    ret = getsockname(listener, (struct sockaddr *)&destaddr, &len);
+    ok(!ret, "failed to get address, error %u\n", WSAGetLastError());
+    ret = listen(listener, 2);
+    ok(!ret, "failed to listen, error %u\n", WSAGetLastError());
+
+    client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ok(client != -1, "failed to create socket, error %u\n", WSAGetLastError());
+    ret = connect(client, (struct sockaddr *)&destaddr, sizeof(destaddr));
+    ok(!ret, "failed to connect, error %u\n", WSAGetLastError());
+
+    select_events(ctx, listener, FD_CONNECT | FD_READ | FD_OOB | FD_ACCEPT | FD_WRITE);
+    check_events(ctx, FD_ACCEPT, 0, 200);
+
+    server = accept(listener, NULL, NULL);
+    ok(server != -1, "failed to accept, error %u\n", WSAGetLastError());
+    ctx->socket = server;
+    check_events(ctx, FD_WRITE, 0, 200);
+    check_events(ctx, 0, 0, 0);
 
     closesocket(server);
     closesocket(client);
@@ -5650,7 +5753,7 @@ static void test_ipv6only(void)
 
     enabled = 2;
     ret = getsockopt(v6, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, &len);
-    ok(!ret, "getsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "getsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
     ok(enabled == 1, "expected 1, got %d\n", enabled);
 
     ret = bind(v6, (struct sockaddr*)&sin6, sizeof(sin6));
@@ -5662,26 +5765,26 @@ static void test_ipv6only(void)
 todo_wine {
     enabled = 2;
     ret = getsockopt(v4, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, &len);
-    ok(!ret, "getsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "getsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
     ok(enabled == 1, "expected 1, got %d\n", enabled);
 }
 
     enabled = 0;
     len = sizeof(enabled);
     ret = setsockopt(v4, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, len);
-    ok(!ret, "setsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "setsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
 
 todo_wine {
     enabled = 2;
     ret = getsockopt(v4, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, &len);
-    ok(!ret, "getsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "getsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
     ok(!enabled, "expected 0, got %d\n", enabled);
 }
 
     enabled = 1;
     len = sizeof(enabled);
     ret = setsockopt(v4, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, len);
-    ok(!ret, "setsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "setsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
 
     /* bind on IPv4 socket should succeed - IPV6_V6ONLY is enabled by default */
     ret = bind(v4, (struct sockaddr*)&sin4, sizeof(sin4));
@@ -5690,26 +5793,26 @@ todo_wine {
 todo_wine {
     enabled = 2;
     ret = getsockopt(v4, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, &len);
-    ok(!ret, "getsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "getsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
     ok(enabled == 1, "expected 1, got %d\n", enabled);
 }
 
     enabled = 0;
     len = sizeof(enabled);
     ret = setsockopt(v4, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, len);
-    ok(ret, "setsockopt(IPV6_ONLY) succeeded (LastError: %d)\n", WSAGetLastError());
+    ok(ret, "setsockopt(IPV6_V6ONLY) succeeded (LastError: %d)\n", WSAGetLastError());
 
 todo_wine {
     enabled = 0;
     ret = getsockopt(v4, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, &len);
-    ok(!ret, "getsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "getsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
     ok(enabled == 1, "expected 1, got %d\n", enabled);
 }
 
     enabled = 1;
     len = sizeof(enabled);
     ret = setsockopt(v4, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, len);
-    ok(ret, "setsockopt(IPV6_ONLY) succeeded (LastError: %d)\n", WSAGetLastError());
+    ok(ret, "setsockopt(IPV6_V6ONLY) succeeded (LastError: %d)\n", WSAGetLastError());
 
     closesocket(v4);
     closesocket(v6);
@@ -5728,7 +5831,7 @@ todo_wine {
 
     enabled = 2;
     ret = getsockopt(v6, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, &len);
-    ok(!ret, "getsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "getsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
     ok(!enabled, "expected 0, got %d\n", enabled);
 
     /*
@@ -5749,7 +5852,7 @@ todo_wine {
     enabled = 2;
     len = sizeof(enabled);
     getsockopt(v6, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&enabled, &len);
-    ok(!ret, "getsockopt(IPV6_ONLY) failed (LastError: %d)\n", WSAGetLastError());
+    ok(!ret, "getsockopt(IPV6_V6ONLY) failed (LastError: %d)\n", WSAGetLastError());
     ok(!enabled, "IPV6_V6ONLY is enabled after bind\n");
 
     v4 = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -6727,7 +6830,7 @@ static void test_WSAPoll(void)
         fds[0].events = POLLRDNORM | POLLRDBAND | POLLWRNORM;
         fds[0].revents = 0xdead;
         ret = pWSAPoll(fds, 1, 10000);
-        todo_wine ok(ret == 1, "got %d\n", ret);
+        ok(ret == 1, "got %d\n", ret);
         todo_wine ok(fds[0].revents == (POLLWRNORM | POLLHUP | POLLERR), "got events %#x\n", fds[0].revents);
 
         len = sizeof(err);
@@ -10794,7 +10897,18 @@ static void test_bind(void)
     WSASetLastError(0xdeadbeef);
     ret = bind(s, NULL, 0);
     ok(ret == -1, "expected failure\n");
-    todo_wine ok(WSAGetLastError() == WSAEFAULT, "got error %u\n", WSAGetLastError());
+    ok(WSAGetLastError() == WSAEFAULT, "got error %u\n", WSAGetLastError());
+
+    WSASetLastError(0xdeadbeef);
+    ret = bind(s, NULL, sizeof(addr));
+    ok(ret == -1, "expected failure\n");
+    ok(WSAGetLastError() == WSAEFAULT, "got error %u\n", WSAGetLastError());
+
+    addr.sa_family = AF_INET;
+    WSASetLastError(0xdeadbeef);
+    ret = bind(s, &addr, 0);
+    ok(ret == -1, "expected failure\n");
+    ok(WSAGetLastError() == WSAEFAULT, "got error %u\n", WSAGetLastError());
 
     addr.sa_family = 0xdead;
     WSASetLastError(0xdeadbeef);
@@ -11372,6 +11486,57 @@ static void test_nonblocking_async_recv(void)
     CloseHandle(overlapped.hEvent);
 }
 
+static void test_simultaneous_async_recv(void)
+{
+    SOCKET client, server;
+    OVERLAPPED overlappeds[2] = {{0}};
+    HANDLE events[2];
+    WSABUF wsabufs[2];
+    DWORD flags[2] = {0};
+    size_t num_io = 2, stride = 16, i;
+    char resbuf[32] = "";
+    static const char msgstr[32] = "-- Lorem ipsum dolor sit amet -";
+    int ret;
+
+    for (i = 0; i < num_io; i++) events[i] = CreateEventW(NULL, TRUE, FALSE, NULL);
+
+    tcp_socketpair(&client, &server);
+
+    for (i = 0; i < num_io; i++)
+    {
+        wsabufs[i].buf = resbuf + i * stride;
+        wsabufs[i].len = stride;
+        overlappeds[i].hEvent = events[i];
+        ret = WSARecv(client, &wsabufs[i], 1, NULL, &flags[i], &overlappeds[i], NULL);
+        ok(ret == -1, "got %d\n", ret);
+        ok(WSAGetLastError() == ERROR_IO_PENDING, "got error %u\n", WSAGetLastError());
+    }
+
+    ret = send(server, msgstr, sizeof(msgstr), 0);
+    ok(ret == sizeof(msgstr), "got %d\n", ret);
+
+    for (i = 0; i < num_io; i++)
+    {
+        const void *expect = msgstr + i * stride;
+        const void *actual = resbuf + i * stride;
+        DWORD size;
+
+        ret = WaitForSingleObject(events[i], 1000);
+        ok(!ret, "wait timed out\n");
+
+        size = 0;
+        ret = GetOverlappedResult((HANDLE)client, &overlappeds[i], &size, FALSE);
+        ok(ret, "got error %u\n", GetLastError());
+        ok(size == stride, "got size %u\n", size);
+        ok(!memcmp(expect, actual, stride), "expected %s, got %s\n", debugstr_an(expect, stride), debugstr_an(actual, stride));
+    }
+
+    closesocket(client);
+    closesocket(server);
+
+    for (i = 0; i < num_io; i++) CloseHandle(events[i]);
+}
+
 static void test_empty_recv(void)
 {
     OVERLAPPED overlapped = {0};
@@ -11930,6 +12095,7 @@ START_TEST( sock )
     test_connecting_socket();
     test_WSAGetOverlappedResult();
     test_nonblocking_async_recv();
+    test_simultaneous_async_recv();
     test_empty_recv();
     test_timeout();
 

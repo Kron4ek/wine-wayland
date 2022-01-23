@@ -20,19 +20,15 @@
  */
 
 #include "config.h"
-#include "wine/port.h"
 
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef HAVE_SYS_TIME_H
-# include <sys/time.h>
-#endif
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
+#include <sys/time.h>
+#include <unistd.h>
+#include <dlfcn.h>
 #include <X11/cursorfont.h>
 #include <X11/Xlib.h>
 #ifdef HAVE_XKB
@@ -631,6 +627,7 @@ static BOOL process_attach(void)
     X11DRV_InitKeyboard( gdi_display );
     if (use_xim) use_xim = X11DRV_InitXIM( input_style );
 
+    init_user_driver();
     X11DRV_DisplayDevices_Init(FALSE);
     return TRUE;
 }
@@ -645,6 +642,7 @@ void CDECL X11DRV_ThreadDetach(void)
 
     if (data)
     {
+        vulkan_thread_detach();
         if (data->xim) XCloseIM( data->xim );
         if (data->font_set) XFreeFontSet( data->display, data->font_set );
         XCloseDisplay( data->display );

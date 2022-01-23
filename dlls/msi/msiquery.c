@@ -146,11 +146,11 @@ UINT WINAPIV MSI_OpenQuery( MSIDATABASE *db, MSIQUERY **view, LPCWSTR fmt, ... )
     /* construct the string */
     for (;;)
     {
-        __ms_va_list va;
+        va_list va;
         query = msi_alloc( size*sizeof(WCHAR) );
-        __ms_va_start(va, fmt);
+        va_start(va, fmt);
         res = vswprintf(query, size, fmt, va);
-        __ms_va_end(va);
+        va_end(va);
         if (res == -1) size *= 2;
         else if (res >= size) size = res + 1;
         else break;
@@ -211,11 +211,11 @@ MSIRECORD * WINAPIV MSI_QueryGetRecord( MSIDATABASE *db, LPCWSTR fmt, ... )
     /* construct the string */
     for (;;)
     {
-        __ms_va_list va;
+        va_list va;
         query = msi_alloc( size*sizeof(WCHAR) );
-        __ms_va_start(va, fmt);
+        va_start(va, fmt);
         res = vswprintf(query, size, fmt, va);
-        __ms_va_end(va);
+        va_end(va);
         if (res == -1) size *= 2;
         else if (res >= size) size = res + 1;
         else break;
@@ -393,6 +393,11 @@ UINT MSI_ViewFetch(MSIQUERY *query, MSIRECORD **prec)
         query->row ++;
         (*prec)->cookie = (UINT64)(ULONG_PTR)query;
         MSI_RecordSetInteger(*prec, 0, 1);
+    }
+    else if (r == ERROR_NO_MORE_ITEMS)
+    {
+        /* end of view; reset cursor to first row */
+        query->row = 0;
     }
 
     return r;

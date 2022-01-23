@@ -30,17 +30,20 @@
     SYSCALL_ENTRY( NtAdjustPrivilegesToken ) \
     SYSCALL_ENTRY( NtAlertResumeThread ) \
     SYSCALL_ENTRY( NtAlertThread ) \
+    SYSCALL_ENTRY( NtAlertThreadByThreadId ) \
     SYSCALL_ENTRY( NtAllocateLocallyUniqueId ) \
     SYSCALL_ENTRY( NtAllocateUuids ) \
     SYSCALL_ENTRY( NtAllocateVirtualMemory ) \
     SYSCALL_ENTRY( NtAllocateVirtualMemoryEx ) \
     SYSCALL_ENTRY( NtAreMappedFilesTheSame ) \
     SYSCALL_ENTRY( NtAssignProcessToJobObject ) \
+    SYSCALL_ENTRY( NtCallbackReturn ) \
     SYSCALL_ENTRY( NtCancelIoFile ) \
     SYSCALL_ENTRY( NtCancelIoFileEx ) \
     SYSCALL_ENTRY( NtCancelTimer ) \
     SYSCALL_ENTRY( NtClearEvent ) \
     SYSCALL_ENTRY( NtClose ) \
+    SYSCALL_ENTRY( NtCompareObjects ) \
     SYSCALL_ENTRY( NtCompleteConnectPort ) \
     SYSCALL_ENTRY( NtConnectPort ) \
     SYSCALL_ENTRY( NtContinue ) \
@@ -193,6 +196,7 @@
     SYSCALL_ENTRY( NtSaveKey ) \
     SYSCALL_ENTRY( NtSecureConnectPort ) \
     SYSCALL_ENTRY( NtSetContextThread ) \
+    SYSCALL_ENTRY( NtSetDebugFilterState ) \
     SYSCALL_ENTRY( NtSetDefaultLocale ) \
     SYSCALL_ENTRY( NtSetDefaultUILanguage ) \
     SYSCALL_ENTRY( NtSetEaFile ) \
@@ -231,6 +235,7 @@
     SYSCALL_ENTRY( NtUnlockFile ) \
     SYSCALL_ENTRY( NtUnlockVirtualMemory ) \
     SYSCALL_ENTRY( NtUnmapViewOfSection ) \
+    SYSCALL_ENTRY( NtWaitForAlertByThreadId ) \
     SYSCALL_ENTRY( NtWaitForDebugEvent ) \
     SYSCALL_ENTRY( NtWaitForKeyedEvent ) \
     SYSCALL_ENTRY( NtWaitForMultipleObjects ) \

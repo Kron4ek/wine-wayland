@@ -24,10 +24,6 @@
 #include <limits.h>
 #include <math.h>
 #include <stdlib.h>
-#include <stdarg.h>
-#include "windef.h"
-#include "winbase.h"
-#include "ntgdi.h"
 #include "win32u_private.h"
 
 /* extra stock object: default 1x1 bitmap for memory DCs */
@@ -217,7 +213,6 @@ extern const struct gdi_dc_funcs dib_driver DECLSPEC_HIDDEN;
 extern const struct gdi_dc_funcs path_driver DECLSPEC_HIDDEN;
 extern const struct gdi_dc_funcs font_driver DECLSPEC_HIDDEN;
 extern const struct gdi_dc_funcs *get_display_driver(void) DECLSPEC_HIDDEN;
-extern void CDECL set_display_driver( void *proc ) DECLSPEC_HIDDEN;
 
 /* font.c */
 
@@ -275,6 +270,7 @@ struct gdi_font
     BOOL                   fake_italic : 1;
     BOOL                   fake_bold : 1;
     BOOL                   scalable : 1;
+    BOOL                   use_logfont_name : 1;
     struct gdi_font       *base_font;
     void                  *gsub_table;
     void                  *vert_feature;
@@ -305,26 +301,26 @@ struct gdi_font
 
 struct font_backend_funcs
 {
-    void  (CDECL *load_fonts)(void);
-    BOOL  (CDECL *enum_family_fallbacks)( DWORD pitch_and_family, int index, WCHAR buffer[LF_FACESIZE] );
-    INT   (CDECL *add_font)( const WCHAR *file, DWORD flags );
-    INT   (CDECL *add_mem_font)( void *ptr, SIZE_T size, DWORD flags );
+    void  (*load_fonts)(void);
+    BOOL  (*enum_family_fallbacks)( DWORD pitch_and_family, int index, WCHAR buffer[LF_FACESIZE] );
+    INT   (*add_font)( const WCHAR *file, DWORD flags );
+    INT   (*add_mem_font)( void *ptr, SIZE_T size, DWORD flags );
 
-    BOOL  (CDECL *load_font)( struct gdi_font *gdi_font );
-    DWORD (CDECL *get_font_data)( struct gdi_font *gdi_font, DWORD table, DWORD offset,
-                                  void *buf, DWORD count );
-    UINT  (CDECL *get_aa_flags)( struct gdi_font *font, UINT aa_flags, BOOL antialias_fakes );
-    BOOL  (CDECL *get_glyph_index)( struct gdi_font *gdi_font, UINT *glyph, BOOL use_encoding );
-    UINT  (CDECL *get_default_glyph)( struct gdi_font *gdi_font );
-    DWORD (CDECL *get_glyph_outline)( struct gdi_font *font, UINT glyph, UINT format,
-                                      GLYPHMETRICS *gm, ABC *abc, DWORD buflen, void *buf,
-                                      const MAT2 *mat, BOOL tategaki );
-    DWORD (CDECL *get_unicode_ranges)( struct gdi_font *font, GLYPHSET *gs );
-    BOOL  (CDECL *get_char_width_info)( struct gdi_font *font, struct char_width_info *info );
-    BOOL  (CDECL *set_outline_text_metrics)( struct gdi_font *font );
-    BOOL  (CDECL *set_bitmap_text_metrics)( struct gdi_font *font );
-    DWORD (CDECL *get_kerning_pairs)( struct gdi_font *gdi_font, KERNINGPAIR **kern_pair );
-    void  (CDECL *destroy_font)( struct gdi_font *font );
+    BOOL  (*load_font)( struct gdi_font *gdi_font );
+    DWORD (*get_font_data)( struct gdi_font *gdi_font, DWORD table, DWORD offset,
+                            void *buf, DWORD count );
+    UINT  (*get_aa_flags)( struct gdi_font *font, UINT aa_flags, BOOL antialias_fakes );
+    BOOL  (*get_glyph_index)( struct gdi_font *gdi_font, UINT *glyph, BOOL use_encoding );
+    UINT  (*get_default_glyph)( struct gdi_font *gdi_font );
+    DWORD (*get_glyph_outline)( struct gdi_font *font, UINT glyph, UINT format,
+                                GLYPHMETRICS *gm, ABC *abc, DWORD buflen, void *buf,
+                                const MAT2 *mat, BOOL tategaki );
+    DWORD (*get_unicode_ranges)( struct gdi_font *font, GLYPHSET *gs );
+    BOOL  (*get_char_width_info)( struct gdi_font *font, struct char_width_info *info );
+    BOOL  (*set_outline_text_metrics)( struct gdi_font *font );
+    BOOL  (*set_bitmap_text_metrics)( struct gdi_font *font );
+    DWORD (*get_kerning_pairs)( struct gdi_font *gdi_font, KERNINGPAIR **kern_pair );
+    void  (*destroy_font)( struct gdi_font *font );
 };
 
 extern int add_gdi_face( const WCHAR *family_name, const WCHAR *second_name,
@@ -376,9 +372,9 @@ extern void GDI_ReleaseObj( HGDIOBJ ) DECLSPEC_HIDDEN;
 extern UINT GDI_get_ref_count( HGDIOBJ handle ) DECLSPEC_HIDDEN;
 extern HGDIOBJ GDI_inc_ref_count( HGDIOBJ handle ) DECLSPEC_HIDDEN;
 extern BOOL GDI_dec_ref_count( HGDIOBJ handle ) DECLSPEC_HIDDEN;
-extern DWORD get_system_dpi(void) DECLSPEC_HIDDEN;
 extern HGDIOBJ get_stock_object( INT obj ) DECLSPEC_HIDDEN;
 extern DWORD get_gdi_object_type( HGDIOBJ obj ) DECLSPEC_HIDDEN;
+extern void make_gdi_object_system( HGDIOBJ handle, BOOL set ) DECLSPEC_HIDDEN;
 
 /* mapping.c */
 extern BOOL dp_to_lp( DC *dc, POINT *points, INT count ) DECLSPEC_HIDDEN;
@@ -403,10 +399,10 @@ extern BOOL PATH_RestorePath( DC *dst, DC *src ) DECLSPEC_HIDDEN;
 extern POINT *GDI_Bezier( const POINT *Points, INT count, INT *nPtsOut ) DECLSPEC_HIDDEN;
 
 /* palette.c */
-extern HPALETTE WINAPI GDISelectPalette( HDC hdc, HPALETTE hpal, WORD wBkg) DECLSPEC_HIDDEN;
 extern HPALETTE PALETTE_Init(void) DECLSPEC_HIDDEN;
 extern UINT get_palette_entries( HPALETTE hpalette, UINT start, UINT count,
                                  PALETTEENTRY *entries ) DECLSPEC_HIDDEN;
+extern UINT realize_palette( HDC hdc ) DECLSPEC_HIDDEN;
 
 /* pen.c */
 extern HPEN create_pen( INT style, INT width, COLORREF color ) DECLSPEC_HIDDEN;
@@ -414,6 +410,7 @@ extern HPEN create_pen( INT style, INT width, COLORREF color ) DECLSPEC_HIDDEN;
 /* region.c */
 extern BOOL add_rect_to_region( HRGN rgn, const RECT *rect ) DECLSPEC_HIDDEN;
 extern INT mirror_region( HRGN dst, HRGN src, INT width ) DECLSPEC_HIDDEN;
+extern BOOL mirror_window_region( HWND hwnd, HRGN hrgn ) DECLSPEC_HIDDEN;
 extern BOOL REGION_FrameRgn( HRGN dest, HRGN src, INT x, INT y ) DECLSPEC_HIDDEN;
 extern HRGN create_polypolygon_region( const POINT *pts, const INT *count, INT nbpolygons,
                                        INT mode, const RECT *clip_rect ) DECLSPEC_HIDDEN;
@@ -598,6 +595,30 @@ static inline void reset_bounds( RECT *bounds )
     bounds->right = bounds->bottom = INT_MIN;
 }
 
+static inline void union_rect( RECT *dest, const RECT *src1, const RECT *src2 )
+{
+    if (is_rect_empty( src1 ))
+    {
+        if (is_rect_empty( src2 ))
+        {
+            reset_bounds( dest );
+            return;
+        }
+        else *dest = *src2;
+    }
+    else
+    {
+        if (is_rect_empty( src2 )) *dest = *src1;
+        else
+        {
+            dest->left   = min( src1->left, src2->left );
+            dest->right  = max( src1->right, src2->right );
+            dest->top    = min( src1->top, src2->top );
+            dest->bottom = max( src1->bottom, src2->bottom );
+        }
+    }
+}
+
 static inline void add_bounds_rect( RECT *bounds, const RECT *rect )
 {
     if (is_rect_empty( rect )) return;
@@ -644,6 +665,5 @@ extern void CDECL free_heap_bits( struct gdi_image_bits *bits ) DECLSPEC_HIDDEN;
 void set_gdi_client_ptr( HGDIOBJ handle, void *ptr ) DECLSPEC_HIDDEN;
 
 extern SYSTEM_BASIC_INFORMATION system_info DECLSPEC_HIDDEN;
-extern const struct user_callbacks *user_callbacks DECLSPEC_HIDDEN;
 
 #endif /* __WINE_NTGDI_PRIVATE_H */

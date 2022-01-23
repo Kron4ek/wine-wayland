@@ -22,6 +22,7 @@
 #define COBJMACROS
 #include "amstream_private.h"
 #include "wine/debug.h"
+#include "wine/list.h"
 #include "wine/strmbase.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(quartz);
@@ -547,6 +548,10 @@ static HRESULT WINAPI ddraw_IDirectDrawMediaStream_SetFormat(IDirectDrawMediaStr
 
     if (format->dwSize != sizeof(DDSURFACEDESC))
         return E_INVALIDARG;
+
+    TRACE("flags %#x, pixel format flags %#x, bit count %u, size %ux%u.\n",
+            format->dwFlags, format->ddpfPixelFormat.dwFlags,
+            format->ddpfPixelFormat.u1.dwRGBBitCount, format->dwWidth, format->dwHeight);
 
     if (format->dwFlags & DDSD_PIXELFORMAT)
     {

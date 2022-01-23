@@ -486,8 +486,7 @@ enum apc_type
     APC_MAP_VIEW,
     APC_UNMAP_VIEW,
     APC_CREATE_THREAD,
-    APC_DUP_HANDLE,
-    APC_BREAK_PROCESS
+    APC_DUP_HANDLE
 };
 
 typedef struct
@@ -872,7 +871,7 @@ typedef struct
 @REQ(new_thread)
     obj_handle_t process;      /* process in which to create thread */
     unsigned int access;       /* wanted access rights */
-    int          suspend;      /* new thread should be suspended on creation */
+    unsigned int flags;        /* thread creation flags */
     int          request_fd;   /* fd for request pipe */
     VARARG(objattr,object_attributes); /* object attributes */
 @REPLY
@@ -1119,6 +1118,13 @@ typedef struct
     unsigned int options;      /* duplicate options */
 @REPLY
     obj_handle_t handle;       /* duplicated handle in dst process */
+@END
+
+
+/* Test if two handles refer to the same object */
+@REQ(compare_objects)
+    obj_handle_t first;         /* first object handle */
+    obj_handle_t second;        /* second object handle */
 @END
 
 
@@ -1437,31 +1443,6 @@ enum server_fd_type
 @END
 
 
-struct poll_socket_input
-{
-    obj_handle_t socket;        /* socket handle */
-    int flags;                  /* events to poll for */
-};
-
-struct poll_socket_output
-{
-    int flags;                  /* events signaled */
-    unsigned int status;        /* socket status */
-};
-
-/* Perform an async poll on a socket */
-@REQ(poll_socket)
-    int          exclusive;     /* is the poll exclusive? */
-    async_data_t async;         /* async I/O parameters */
-    timeout_t    timeout;       /* timeout */
-    VARARG(sockets,poll_socket_input); /* list of sockets to poll */
-@REPLY
-    obj_handle_t wait;          /* handle to wait on for blocking poll */
-    unsigned int options;       /* file open options */
-    VARARG(sockets,poll_socket_output); /* data returned */
-@END
-
-
 /* Perform a send on a socket */
 @REQ(send_socket)
     async_data_t async;         /* async I/O parameters */
@@ -1602,6 +1583,8 @@ struct thread_info
     int             base_priority;
     int             current_priority;
     int             unix_tid;
+    client_ptr_t    teb;
+    client_ptr_t    entry_point;
 };
 
 struct process_info
@@ -1624,6 +1607,8 @@ struct process_info
 @REPLY
     data_size_t     info_size;
     int             process_count;
+    int             total_thread_count;
+    data_size_t     total_name_len;
     VARARG(data,process_info,info_size);
 @END
 

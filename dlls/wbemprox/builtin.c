@@ -215,6 +215,7 @@ static const struct column col_networkadapterconfig[] =
     { L"DefaultIPGateway",     CIM_STRING|CIM_FLAG_ARRAY|COL_FLAG_DYNAMIC },
     { L"Description",          CIM_STRING|COL_FLAG_DYNAMIC },
     { L"DHCPEnabled",          CIM_BOOLEAN },
+    { L"DNSDomain",            CIM_STRING },
     { L"DNSHostName",          CIM_STRING|COL_FLAG_DYNAMIC },
     { L"DNSServerSearchOrder", CIM_STRING|CIM_FLAG_ARRAY|COL_FLAG_DYNAMIC },
     { L"Index",                CIM_UINT32|COL_FLAG_KEY },
@@ -251,6 +252,7 @@ static const struct column col_operatingsystem[] =
     { L"SerialNumber",            CIM_STRING|COL_FLAG_DYNAMIC },
     { L"ServicePackMajorVersion", CIM_UINT16 },
     { L"ServicePackMinorVersion", CIM_UINT16 },
+    { L"Status",                  CIM_STRING },
     { L"SuiteMask",               CIM_UINT32 },
     { L"SystemDirectory",         CIM_STRING|COL_FLAG_DYNAMIC },
     { L"SystemDrive",             CIM_STRING|COL_FLAG_DYNAMIC },
@@ -286,7 +288,9 @@ static const struct column col_physicalmemory[] =
 };
 static const struct column col_pnpentity[] =
 {
-    { L"DeviceId", CIM_STRING|COL_FLAG_DYNAMIC },
+    { L"DeviceId",             CIM_STRING|COL_FLAG_DYNAMIC },
+    { L"Manufacturer",         CIM_STRING },
+    { L"Name",                 CIM_STRING },
 };
 static const struct column col_printer[] =
 {
@@ -353,6 +357,10 @@ static const struct column col_quickfixengineering[] =
 {
     { L"Caption",  CIM_STRING },
     { L"HotFixID", CIM_STRING|COL_FLAG_KEY },
+};
+static const struct column col_rawsmbiostables[] =
+{
+    { L"SMBiosData", CIM_UINT8|CIM_FLAG_ARRAY },
 };
 static const struct column col_service[] =
 {
@@ -629,6 +637,7 @@ struct record_networkadapterconfig
     const struct array *defaultipgateway;
     const WCHAR        *description;
     int                 dhcpenabled;
+    const WCHAR        *dnsdomain;
     const WCHAR        *dnshostname;
     const struct array *dnsserversearchorder;
     UINT32              index;
@@ -665,6 +674,7 @@ struct record_operatingsystem
     const WCHAR *serialnumber;
     UINT16       servicepackmajor;
     UINT16       servicepackminor;
+    const WCHAR *status;
     UINT32       suitemask;
     const WCHAR *systemdirectory;
     const WCHAR *systemdrive;
@@ -701,6 +711,8 @@ struct record_physicalmemory
 struct record_pnpentity
 {
     const WCHAR *device_id;
+    const WCHAR *manufacturer;
+    const WCHAR *name;
 };
 struct record_printer
 {
@@ -767,6 +779,10 @@ struct record_quickfixengineering
 {
     const WCHAR *caption;
     const WCHAR *hotfixid;
+};
+struct record_rawsmbiostables
+{
+    const struct array *smbiosdata;
 };
 struct record_service
 {
@@ -945,11 +961,18 @@ static const struct record_physicalmedia data_physicalmedia[] =
 {
     { L"WINEHDISK", L"\\\\.\\PHYSICALDRIVE0" }
 };
+
+static const struct record_rawsmbiostables data_rawsmbiostables[] =
+{
+    { 0 },
+};
+
 static const struct record_qualifier data_qualifier[] =
 {
     { L"__WIN32_PROCESS_GETOWNER_OUT", L"User", CIM_SINT32, FLAVOR_ID, L"ID", 0 },
     { L"__WIN32_PROCESS_GETOWNER_OUT", L"Domain", CIM_SINT32, FLAVOR_ID, L"ID", 1 }
 };
+
 static const struct record_quickfixengineering data_quickfixengineering[] =
 {
     { L"http://winehq.org", L"KB1234567" },
@@ -2983,6 +3006,7 @@ static enum fill_status fill_networkadapterconfig( struct table *table, const st
         rec->defaultipgateway     = get_defaultipgateway( aa->FirstGatewayAddress );
         rec->description          = heap_strdupW( aa->Description );
         rec->dhcpenabled          = -1;
+        rec->dnsdomain            = L"";
         rec->dnshostname          = get_dnshostname( aa->FirstUnicastAddress );
         rec->dnsserversearchorder = get_dnsserversearchorder( aa->FirstDnsServerAddress );
         rec->index                = aa->u.s.IfIndex;
@@ -3063,6 +3087,8 @@ static enum fill_status fill_pnpentity( struct table *table, const struct expr *
                     ARRAY_SIZE(device_id), NULL ))
         {
             rec->device_id = heap_strdupW( device_id );
+            rec->manufacturer = L"The Wine Project";
+            rec->name = L"Wine PnP Device";
 
             table->num_rows++;
             if (!match_row( table, table->num_rows - 1, cond, &status ))
@@ -3592,6 +3618,7 @@ static enum fill_status fill_operatingsystem( struct table *table, const struct 
     rec->serialnumber           = get_osserialnumber();
     rec->servicepackmajor       = ver.wServicePackMajor;
     rec->servicepackminor       = ver.wServicePackMinor;
+    rec->status                 = L"OK";
     rec->suitemask              = 272;     /* Single User + Terminal */
     rec->systemdirectory        = get_systemdirectory();
     rec->systemdrive            = get_systemdrive();
@@ -4116,6 +4143,11 @@ static struct table cimv2_builtin_classes[] =
     { L"Win32_VideoController", C(col_videocontroller), 0, 0, NULL, fill_videocontroller },
     { L"Win32_WinSAT", C(col_winsat), D(data_winsat) },
 };
+
+static struct table wmi_builtin_classes[] =
+{
+    { L"MSSMBios_RawSMBiosTables", C(col_rawsmbiostables), D(data_rawsmbiostables) },
+};
 #undef C
 #undef D
 
@@ -4129,6 +4161,7 @@ builtin_namespaces[WBEMPROX_NAMESPACE_LAST] =
 {
     {L"cimv2", cimv2_builtin_classes, ARRAY_SIZE(cimv2_builtin_classes)},
     {L"Microsoft\\Windows\\Storage", NULL, 0},
+    {L"wmi", wmi_builtin_classes, ARRAY_SIZE(wmi_builtin_classes)},
 };
 
 void init_table_list( void )

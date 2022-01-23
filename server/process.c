@@ -31,12 +31,25 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#ifdef HAVE_SYS_SOCKET_H
-# include <sys/socket.h>
-#endif
+#include <sys/socket.h>
 #include <unistd.h>
-#ifdef HAVE_POLL_H
 #include <poll.h>
+#ifdef HAVE_SYS_PARAM_H
+# include <sys/param.h>
+#endif
+#ifdef HAVE_SYS_QUEUE_H
+# include <sys/queue.h>
+#endif
+#ifdef HAVE_SYS_SYSCTL_H
+# include <sys/sysctl.h>
+#endif
+#ifdef HAVE_SYS_USER_H
+# define thread __unix_thread
+# include <sys/user.h>
+# undef thread
+#endif
+#ifdef HAVE_LIBPROCSTAT
+# include <libprocstat.h>
 #endif
 
 #include "ntstatus.h"
@@ -607,10 +620,20 @@ static void process_died( struct process *process )
 static void process_sigkill( void *private )
 {
     struct process *process = private;
+    int signal = 0;
 
-    process->sigkill_timeout = NULL;
-    kill( process->unix_pid, SIGKILL );
-    process_died( process );
+    process->sigkill_delay *= 2;
+    if (process->sigkill_delay >= TICKS_PER_SEC / 2)
+        signal = SIGKILL;
+
+    if (!kill( process->unix_pid, signal ) && !signal)
+        process->sigkill_timeout = add_timeout_user( -process->sigkill_delay, process_sigkill, process );
+    else
+    {
+        process->sigkill_delay = TICKS_PER_SEC / 64;
+        process->sigkill_timeout = NULL;
+        process_died( process );
+    }
 }
 
 /* start the sigkill timer for a process upon exit */
@@ -618,7 +641,7 @@ static void start_sigkill_timer( struct process *process )
 {
     grab_object( process );
     if (process->unix_pid != -1)
-        process->sigkill_timeout = add_timeout_user( -TICKS_PER_SEC, process_sigkill, process );
+        process->sigkill_timeout = add_timeout_user( -process->sigkill_delay, process_sigkill, process );
     else
         process_died( process );
 }
@@ -642,6 +665,7 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     process->handles         = NULL;
     process->msg_fd          = NULL;
     process->sigkill_timeout = NULL;
+    process->sigkill_delay   = TICKS_PER_SEC / 64;
     process->unix_pid        = -1;
     process->exit_code       = STILL_ACTIVE;
     process->running_threads = 0;
@@ -666,9 +690,10 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     process->trace_data      = 0;
     process->rawinput_mouse  = NULL;
     process->rawinput_kbd    = NULL;
-    list_init( &process->kernel_object );
     process->esync_fd        = -1;
     process->fsync_idx       = 0;
+    memset( &process->image_info, 0, sizeof(process->image_info) );
+    list_init( &process->kernel_object );
     list_init( &process->thread_list );
     list_init( &process->locks );
     list_init( &process->asyncs );
@@ -1514,15 +1539,8 @@ DECL_HANDLER(get_process_info)
         reply->machine          = process->machine;
         if (get_reply_max_size())
         {
-            client_ptr_t base;
-            const pe_image_info_t *info;
-            struct memory_view *view = get_exe_view( process );
-            if (view)
-            {
-                if ((info = get_view_image_info( view, &base )))
-                    set_reply_data( info, min( sizeof(*info), get_reply_max_size() ));
-            }
-            else set_error( STATUS_PROCESS_IS_TERMINATING );
+            if (!process->running_threads) set_error( STATUS_PROCESS_IS_TERMINATING );
+            else set_reply_data( &process->image_info, min( sizeof(process->image_info), get_reply_max_size() ));
         }
         release_object( process );
     }
@@ -1537,7 +1555,7 @@ DECL_HANDLER(get_process_debug_info)
 
     reply->debug_children = process->debug_children;
     if (!process->debug_obj) set_error( STATUS_PORT_NOT_SET );
-    else reply->debug = alloc_handle( current->process, process->debug_obj, DEBUG_ALL_ACCESS, 0 );
+    else reply->debug = alloc_handle( current->process, process->debug_obj, MAXIMUM_ALLOWED, 0 );
     release_object( process );
 }
 
@@ -1576,9 +1594,9 @@ DECL_HANDLER(get_process_vm_counters)
     struct process *process = get_process_from_handle( req->handle, PROCESS_QUERY_LIMITED_INFORMATION );
 
     if (!process) return;
-#ifdef linux
     if (process->unix_pid != -1)
     {
+#ifdef linux
         FILE *f;
         char proc_path[32], line[256];
         unsigned long value;
@@ -1605,9 +1623,28 @@ DECL_HANDLER(get_process_vm_counters)
             fclose( f );
         }
         else set_error( STATUS_ACCESS_DENIED );
+#elif defined(HAVE_LIBPROCSTAT)
+        struct procstat *procstat;
+        unsigned int count;
+
+        if ((procstat = procstat_open_sysctl()))
+        {
+            struct kinfo_proc *kp = procstat_getprocs( procstat, KERN_PROC_PID, process->unix_pid, &count );
+            if (kp)
+            {
+                reply->virtual_size = kp->ki_size;
+                reply->peak_virtual_size = reply->virtual_size;
+                reply->working_set_size = kp->ki_rssize << PAGE_SHIFT;
+                reply->peak_working_set_size = kp->ki_rusage.ru_maxrss * 1024;
+                procstat_freeprocs( procstat, kp );
+            }
+            else set_error( STATUS_ACCESS_DENIED );
+            procstat_close( procstat );
+        }
+        else set_error( STATUS_ACCESS_DENIED );
+#endif
     }
     else set_error( STATUS_ACCESS_DENIED );
-#endif
     release_object( process );
 }
 
@@ -1903,6 +1940,8 @@ DECL_HANDLER(list_processes)
     char *buffer;
 
     reply->process_count = 0;
+    reply->total_thread_count = 0;
+    reply->total_name_len = 0;
     reply->info_size = 0;
 
     LIST_FOR_EACH_ENTRY( process, &process_list, struct process, entry )
@@ -1912,6 +1951,8 @@ DECL_HANDLER(list_processes)
         reply->info_size = (reply->info_size + 7) & ~7;
         reply->info_size += process->running_threads * sizeof(struct thread_info);
         reply->process_count++;
+        reply->total_thread_count += process->running_threads;
+        reply->total_name_len += process->imagelen;
     }
 
     if (reply->info_size > get_reply_max_size())
@@ -1951,6 +1992,8 @@ DECL_HANDLER(list_processes)
             thread_info->base_priority = thread->priority;
             thread_info->current_priority = thread->priority; /* FIXME */
             thread_info->unix_tid = thread->unix_tid;
+            thread_info->entry_point = thread->entry_point;
+            thread_info->teb = thread->teb;
             pos += sizeof(*thread_info);
         }
     }

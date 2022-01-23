@@ -104,6 +104,7 @@ HRESULT get_dispatch_typeinfo(ITypeInfo**) DECLSPEC_HIDDEN;
 #define PROPF_VERSION_SHIFT 16
 #define PROPF_HTML          (SCRIPTLANGUAGEVERSION_HTML << PROPF_VERSION_SHIFT)
 #define PROPF_ES5           ((SCRIPTLANGUAGEVERSION_HTML|SCRIPTLANGUAGEVERSION_ES5) << PROPF_VERSION_SHIFT)
+#define PROPF_ES6           ((SCRIPTLANGUAGEVERSION_HTML|SCRIPTLANGUAGEVERSION_ES6) << PROPF_VERSION_SHIFT)
 
 /*
  * This is our internal dispatch flag informing calee that it's called directly from interpreter.
@@ -231,7 +232,7 @@ typedef struct {
 
 typedef struct {
     jsclass_t class;
-    builtin_prop_t value_prop;
+    builtin_invoke_t call;
     DWORD props_cnt;
     const builtin_prop_t *props;
     void (*destructor)(jsdisp_t*);
@@ -326,6 +327,7 @@ HRESULT jsdisp_define_property(jsdisp_t*,const WCHAR*,property_desc_t*) DECLSPEC
 HRESULT jsdisp_define_data_property(jsdisp_t*,const WCHAR*,unsigned,jsval_t) DECLSPEC_HIDDEN;
 HRESULT jsdisp_next_prop(jsdisp_t*,DISPID,enum jsdisp_enum_type,DISPID*) DECLSPEC_HIDDEN;
 HRESULT jsdisp_get_prop_name(jsdisp_t*,DISPID,jsstr_t**);
+HRESULT jsdisp_change_prototype(jsdisp_t*,jsdisp_t*) DECLSPEC_HIDDEN;
 void jsdisp_freeze(jsdisp_t*,BOOL) DECLSPEC_HIDDEN;
 BOOL jsdisp_is_frozen(jsdisp_t*,BOOL) DECLSPEC_HIDDEN;
 
@@ -338,7 +340,6 @@ HRESULT Function_invoke(jsdisp_t*,IDispatch*,WORD,unsigned,jsval_t*,jsval_t*) DE
 HRESULT Function_value(script_ctx_t*,vdisp_t*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT Function_get_value(script_ctx_t*,jsdisp_t*,jsval_t*) DECLSPEC_HIDDEN;
 struct _function_code_t *Function_get_code(jsdisp_t*) DECLSPEC_HIDDEN;
-#define DEFAULT_FUNCTION_VALUE {NULL, Function_value,0, Function_get_value}
 
 HRESULT throw_error(script_ctx_t*,HRESULT,const WCHAR*) DECLSPEC_HIDDEN;
 jsdisp_t *create_builtin_error(script_ctx_t *ctx) DECLSPEC_HIDDEN;

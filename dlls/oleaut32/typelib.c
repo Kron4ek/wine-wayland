@@ -629,10 +629,6 @@ HRESULT WINAPI RegisterTypeLib(ITypeLib *ptlib, const WCHAR *szFullPath, const W
     if (FAILED(ITypeLib_GetLibAttr(ptlib, &attr)))
         return E_FAIL;
 
-#ifndef _WIN64
-    if (attr->syskind == SYS_WIN64) return TYPE_E_BADMODULEKIND;
-#endif
-
     get_typelib_key( &attr->guid, attr->wMajorVerNum, attr->wMinorVerNum, keyName );
 
     res = S_OK;
@@ -640,17 +636,22 @@ HRESULT WINAPI RegisterTypeLib(ITypeLib *ptlib, const WCHAR *szFullPath, const W
         KEY_WRITE, NULL, &key, NULL) == ERROR_SUCCESS)
     {
         LPOLESTR doc;
+        LPOLESTR libName;
 
-        /* Set the human-readable name of the typelib */
-        if (FAILED(ITypeLib_GetDocumentation(ptlib, -1, NULL, &doc, NULL, NULL)))
+        /* Set the human-readable name of the typelib to
+           the typelib's doc, if it exists, else to the typelib's name. */
+        if (FAILED(ITypeLib_GetDocumentation(ptlib, -1, &libName, &doc, NULL, NULL)))
             res = E_FAIL;
-        else if (doc)
+        else if (doc || libName)
         {
+            WCHAR *name = doc ? doc : libName;
+
             if (RegSetValueExW(key, NULL, 0, REG_SZ,
-                (BYTE *)doc, (lstrlenW(doc)+1) * sizeof(OLECHAR)) != ERROR_SUCCESS)
+                (BYTE *)name, (lstrlenW(name)+1) * sizeof(OLECHAR)) != ERROR_SUCCESS)
                 res = E_FAIL;
 
             SysFreeString(doc);
+            SysFreeString(libName);
         }
 
         /* Make up the name of the typelib path subkey */
@@ -7877,44 +7878,6 @@ static HRESULT ITypeInfoImpl_GetDispatchRefTypeInfo( ITypeInfo *iface,
         return E_FAIL;
 }
 
-struct search_res_tlb_params
-{
-    const GUID *guid;
-    ITypeLib *pTLib;
-};
-
-static BOOL CALLBACK search_res_tlb(HMODULE hModule, LPCWSTR lpszType, LPWSTR lpszName, LONG_PTR lParam)
-{
-    struct search_res_tlb_params *params = (LPVOID)lParam;
-    WCHAR szPath[MAX_PATH+1];
-    ITypeLib *pTLib = NULL;
-    HRESULT ret;
-    DWORD len;
-
-    if (IS_INTRESOURCE(lpszName) == FALSE)
-        return TRUE;
-
-    if (!(len = GetModuleFileNameW(hModule, szPath, MAX_PATH)))
-        return TRUE;
-
-    if (swprintf(szPath + len, ARRAY_SIZE(szPath) - len, L"\\%d", LOWORD(lpszName)) < 0)
-        return TRUE;
-
-    ret = LoadTypeLibEx(szPath, REGKIND_NONE, &pTLib);
-    if (SUCCEEDED(ret))
-    {
-        ITypeLibImpl *impl = impl_from_ITypeLib(pTLib);
-        if (IsEqualGUID(params->guid, impl->guid))
-        {
-            params->pTLib = pTLib;
-            return FALSE; /* stop enumeration */
-        }
-        ITypeLib_Release(pTLib);
-    }
-
-    return TRUE;
-}
-
 /* ITypeInfo::GetRefTypeInfo
  *
  * If a type description references other type descriptions, it retrieves
@@ -8031,23 +7994,6 @@ static HRESULT WINAPI ITypeInfo_fnGetRefTypeInfo(
                     }
                 }
                 LeaveCriticalSection(&cache_section);
-
-                if (!pTLib)
-                {
-                    struct search_res_tlb_params params;
-
-                    TRACE("typeinfo in imported typelib that isn't already loaded\n");
-
-                    /* Search in resource table */
-                    params.guid  = TLB_get_guid_null(ref_type->pImpTLInfo->guid);
-                    params.pTLib = NULL;
-                    EnumResourceNamesW(NULL, L"TYPELIB", search_res_tlb, (LONG_PTR)&params);
-                    if(params.pTLib)
-                    {
-                        pTLib  = params.pTLib;
-                        result = S_OK;
-                    }
-                }
 
                 if (!pTLib)
                 {

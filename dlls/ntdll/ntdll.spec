@@ -7,6 +7,7 @@
 @ stdcall A_SHAInit(ptr)
 @ stdcall A_SHAUpdate(ptr ptr long)
 @ stdcall ApiSetQueryApiSetPresence(ptr ptr)
+@ stdcall ApiSetQueryApiSetPresenceEx(ptr ptr ptr)
 @ stub CsrAllocateCaptureBuffer
 @ stub CsrAllocateCapturePointer
 @ stub CsrAllocateMessagePointer
@@ -52,7 +53,7 @@
 @ stdcall EtwEventSetInformation(int64 long ptr long)
 @ stdcall EtwEventUnregister(int64)
 @ stdcall EtwEventWrite(int64 ptr long ptr)
-@ stdcall EtwEventWriteString(int64 long int64 ptr)
+@ stdcall EtwEventWriteString(int64 long int64 wstr)
 @ stdcall EtwEventWriteTransfer(int64 ptr ptr ptr long ptr)
 @ stdcall EtwGetTraceEnableFlags(int64)
 @ stdcall EtwGetTraceEnableLevel(int64)
@@ -234,6 +235,7 @@
 @ stdcall -syscall NtImpersonateAnonymousToken(long)
 # @ stub NtImpersonateClientOfPort
 # @ stub NtImpersonateThread
+@ stdcall -syscall NtInitializeNlsFiles(ptr ptr ptr)
 # @ stub NtInitializeRegistry
 @ stdcall -syscall NtInitiatePowerAction (long long long long)
 @ stdcall -syscall NtIsProcessInJob(long long)
@@ -594,7 +596,7 @@
 @ stub RtlDeleteNoSplay
 @ stub RtlDeleteOwnersRanges
 @ stub RtlDeleteRange
-@ stdcall RtlDeleteRegistryValue(long ptr ptr)
+@ stdcall RtlDeleteRegistryValue(long ptr wstr)
 @ stdcall RtlDeleteResource(ptr)
 @ stdcall RtlDeleteSecurityObject(ptr)
 @ stdcall RtlDeleteTimer(ptr ptr ptr)
@@ -724,6 +726,7 @@
 # @ stub RtlGetLengthWithoutLastFullDosOrNtPathElement
 # Yes, Microsoft really misspelled this one!
 # @ stub RtlGetLengthWithoutTrailingPathSeperators
+@ stdcall RtlGetLocaleFileMappingAddress(ptr ptr ptr)
 @ stdcall RtlGetLongestNtPathLength()
 @ stdcall -syscall -arch=win32 RtlGetNativeSystemInformation(long ptr long ptr) NtWow64GetNativeSystemInformation
 @ stdcall -syscall -arch=win64 RtlGetNativeSystemInformation(long ptr long ptr) NtQuerySystemInformation
@@ -831,6 +834,7 @@
 # @ stub RtlIsThreadWithinLoaderCallout
 @ stdcall RtlIsValidHandle(ptr ptr)
 @ stdcall RtlIsValidIndexHandle(ptr long ptr)
+@ stdcall RtlIsValidLocaleName(wstr long)
 @ stdcall -arch=win32 -ret64 RtlLargeIntegerAdd(int64 int64)
 @ stdcall -arch=win32 -ret64 RtlLargeIntegerArithmeticShift(int64 long)
 @ stdcall -arch=win32 -ret64 RtlLargeIntegerDivide(int64 int64 ptr)
@@ -839,6 +843,7 @@
 @ stdcall -arch=win32 -ret64 RtlLargeIntegerShiftRight(int64 long)
 @ stdcall -arch=win32 -ret64 RtlLargeIntegerSubtract(int64 int64)
 @ stdcall RtlLargeIntegerToChar(ptr long long ptr)
+@ stdcall RtlLcidToLocaleName(long ptr long long)
 @ stdcall RtlLeaveCriticalSection(ptr)
 @ stdcall RtlLengthRequiredSid(long)
 @ stdcall RtlLengthSecurityDescriptor(ptr)
@@ -1089,7 +1094,7 @@
 @ stdcall RtlWow64IsWowGuestMachineSupported(long ptr)
 @ stdcall -arch=win64 RtlWow64SetThreadContext(long ptr)
 @ stub RtlWriteMemoryStream
-@ stdcall RtlWriteRegistryValue(long ptr ptr long ptr long)
+@ stdcall RtlWriteRegistryValue(long ptr wstr long ptr long)
 @ stub RtlZeroHeap
 @ stdcall RtlZeroMemory(ptr long)
 @ stdcall RtlZombifyActivationContext(ptr)
@@ -1256,6 +1261,7 @@
 @ stdcall -private -syscall ZwImpersonateAnonymousToken(long) NtImpersonateAnonymousToken
 # @ stub ZwImpersonateClientOfPort
 # @ stub ZwImpersonateThread
+@ stdcall -private -syscall ZwInitializeNlsFiles(ptr ptr ptr) NtInitializeNlsFiles
 # @ stub ZwInitializeRegistry
 @ stdcall -private -syscall ZwInitiatePowerAction(long long long long) NtInitiatePowerAction
 @ stdcall -private -syscall ZwIsProcessInJob(long long) NtIsProcessInJob
@@ -1609,6 +1615,7 @@
 @ cdecl wcsncat(wstr wstr long)
 @ cdecl wcsncmp(wstr wstr long)
 @ cdecl wcsncpy(ptr wstr long)
+@ cdecl wcsnlen(ptr long)
 @ cdecl wcspbrk(wstr wstr)
 @ cdecl wcsrchr(wstr long)
 @ cdecl wcsspn(wstr wstr)

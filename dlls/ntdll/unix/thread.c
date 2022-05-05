@@ -71,10 +71,6 @@
 WINE_DEFAULT_DEBUG_CHANNEL(thread);
 WINE_DECLARE_DEBUG_CHANNEL(seh);
 
-#ifndef PTHREAD_STACK_MIN
-#define PTHREAD_STACK_MIN 16384
-#endif
-
 static int nb_threads = 1;
 
 static inline int get_unix_exit_code( NTSTATUS status )
@@ -1068,8 +1064,6 @@ static void start_thread( TEB *teb )
     BOOL suspend;
 
     thread_data->pthread_id = pthread_self();
-    thread_data->esync_queue_fd = -1;
-    thread_data->esync_apc_fd = -1;
     thread_data->fsync_apc_futex = NULL;
     signal_init_thread( teb );
     server_init_thread( thread_data->start, &suspend );
@@ -1159,7 +1153,8 @@ NTSTATUS init_thread_stack( TEB *teb, ULONG_PTR zero_bits, SIZE_T reserve_size, 
 
 #ifdef _WIN64
         /* 32-bit stack */
-        if ((status = virtual_alloc_thread_stack( &stack, zero_bits, reserve_size, commit_size, 0 )))
+        if ((status = virtual_alloc_thread_stack( &stack, zero_bits ? zero_bits : 0x7fffffff,
+                                                  reserve_size, commit_size, 0 )))
             return status;
         wow_teb->Tib.StackBase = PtrToUlong( stack.StackBase );
         wow_teb->Tib.StackLimit = PtrToUlong( stack.StackLimit );
@@ -1343,8 +1338,6 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     thread_data->request_fd  = request_pipe[1];
     thread_data->start = start;
     thread_data->param = param;
-    thread_data->esync_queue_fd = -1;
-    thread_data->esync_apc_fd = -1;
     thread_data->fsync_apc_futex = NULL;
 
     pthread_attr_init( &pthread_attr );
@@ -2242,7 +2235,6 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
 
         if (length != sizeof(*info)) return STATUS_INFO_LENGTH_MISMATCH;
         if (!info) return STATUS_ACCESS_VIOLATION;
-        if (info->ThreadName.Length != info->ThreadName.MaximumLength) return STATUS_INVALID_PARAMETER;
         if (info->ThreadName.Length && !info->ThreadName.Buffer) return STATUS_ACCESS_VIOLATION;
 
         SERVER_START_REQ( set_thread_info )

@@ -20,8 +20,6 @@
 
 #include <windows.h>
 #include <commctrl.h>
-#include <uxtheme.h>
-#include <vsstyle.h>
 #include "msg.h"
 
 #include "resources.h"
@@ -45,13 +43,8 @@ static HPROPSHEETPAGE (WINAPI *pCreatePropertySheetPageW)(const PROPSHEETPAGEW *
 static BOOL (WINAPI *pDestroyPropertySheetPage)(HPROPSHEETPAGE proppage);
 static INT_PTR (WINAPI *pPropertySheetA)(const PROPSHEETHEADERA *header);
 
-static HRESULT (WINAPI *pCloseThemeData)(HTHEME);
-static HRESULT (WINAPI *pEnableThemeDialogTexture)(HWND, DWORD);
-static HRESULT (WINAPI *pGetThemePartSize)(HTHEME, HDC, int, int, RECT *, THEMESIZE, SIZE *);
-static HTHEME (WINAPI *pGetWindowTheme)(HWND);
 static BOOL (WINAPI *pIsThemeActive)(void);
 static BOOL (WINAPI *pIsThemeDialogTextureEnabled)(HWND);
-static HTHEME (WINAPI *pOpenThemeData)(HWND, LPCWSTR);
 
 static void detect_locale(void)
 {
@@ -96,7 +89,7 @@ static int CALLBACK sheet_callback(HWND hwnd, UINT msg, LPARAM lparam)
          * Arabic Windows 10 allocates 2 * size - 32,
          * all others allocate exactly 2 * size */
         ok(buffer_size >= 2 * size || broken(buffer_size == 2 * size - 32),
-                "Unexpected template buffer size %u, resource size %u\n",
+                "Unexpected template buffer size %lu, resource size %lu\n",
                 buffer_size, size);
         break;
       }
@@ -180,7 +173,7 @@ static void test_title(void)
     style = GetWindowLongA(hdlg, GWL_STYLE);
     ok(style == (WS_POPUP|WS_VISIBLE|WS_CLIPSIBLINGS|WS_CAPTION|WS_SYSMENU|
                  DS_CONTEXTHELP|DS_MODALFRAME|DS_SETFONT|DS_3DLOOK),
-       "got unexpected style: %x\n", style);
+       "got unexpected style: %lx\n", style);
 
     DestroyWindow(hdlg);
 }
@@ -222,7 +215,7 @@ static void test_nopage(void)
         (HWND)SendMessageA(hdlg, PSM_GETCURRENTPAGEHWND, 0, 0);
     active_page = /* PropSheet_HwndToIndex(hdlg, hpage)); */
         (int)SendMessageA(hdlg, PSM_HWNDTOINDEX, (WPARAM)hpage, 0);
-    ok(hpage == NULL, "expected no current page, got %p, index=%d\n", hpage, active_page);
+    ok(hpage == NULL, "expected no current page, got %p, index=%ld\n", hpage, active_page);
     flush_events();
     RedrawWindow(hdlg,NULL,NULL,RDW_UPDATENOW|RDW_ERASENOW);
 
@@ -294,7 +287,7 @@ static void test_disableowner(void)
     psh.pfnCallback = disableowner_callback;
 
     p = pPropertySheetA(&psh);
-    ok(p == 0, "Expected 0, got %ld\n", p);
+    ok(p == 0, "Expected 0, got %Id\n", p);
     ok(IsWindowEnabled(parenthwnd) != 0, "parent window should be enabled\n");
     DestroyWindow(parenthwnd);
 }
@@ -409,26 +402,26 @@ static void test_wiznavigation(void)
     hdlg = (HWND)pPropertySheetA(&psh);
     ok(hdlg != INVALID_HANDLE_VALUE, "got invalid handle %p\n", hdlg);
 
-    ok(active_page == 0, "Active page should be 0. Is: %d\n", active_page);
+    ok(active_page == 0, "Active page should be 0. Is: %ld\n", active_page);
 
     style = GetWindowLongA(hdlg, GWL_STYLE) & ~(DS_CONTEXTHELP|WS_SYSMENU);
     ok(style == (WS_POPUP|WS_VISIBLE|WS_CLIPSIBLINGS|WS_CAPTION|
                  DS_MODALFRAME|DS_SETFONT|DS_3DLOOK),
-       "got unexpected style: %x\n", style);
+       "got unexpected style: %lx\n", style);
 
     control = GetFocus();
     controlID = GetWindowLongPtrA(control, GWLP_ID);
-    ok(controlID == nextID, "Focus should have been set to the Next button. Expected: %d, Found: %ld\n", nextID, controlID);
+    ok(controlID == nextID, "Focus should have been set to the Next button. Expected: %d, Found: %Id\n", nextID, controlID);
 
     /* simulate pressing the Next button */
     SendMessageA(hdlg, PSM_PRESSBUTTON, PSBTN_NEXT, 0);
     if (!active_page) hwndtoindex_supported = FALSE;
     if (hwndtoindex_supported)
-        ok(active_page == 1, "Active page should be 1 after pressing Next. Is: %d\n", active_page);
+        ok(active_page == 1, "Active page should be 1 after pressing Next. Is: %ld\n", active_page);
 
     control = GetFocus();
     controlID = GetWindowLongPtrA(control, GWLP_ID);
-    ok(controlID == IDC_PS_EDIT1, "Focus should be set to the first item on the second page. Expected: %d, Found: %ld\n", IDC_PS_EDIT1, controlID);
+    ok(controlID == IDC_PS_EDIT1, "Focus should be set to the first item on the second page. Expected: %d, Found: %Id\n", IDC_PS_EDIT1, controlID);
 
     defidres = SendMessageA(hdlg, DM_GETDEFID, 0, 0);
     ok(defidres == MAKELRESULT(nextID, DC_HASDEFID), "Expected default button ID to be %d, is %d\n", nextID, LOWORD(defidres));
@@ -439,20 +432,20 @@ static void test_wiznavigation(void)
     /* press next again */
     SendMessageA(hdlg, PSM_PRESSBUTTON, PSBTN_NEXT, 0);
     if (hwndtoindex_supported)
-        ok(active_page == 2, "Active page should be 2 after pressing Next. Is: %d\n", active_page);
+        ok(active_page == 2, "Active page should be 2 after pressing Next. Is: %ld\n", active_page);
 
     control = GetFocus();
     controlID = GetWindowLongPtrA(control, GWLP_ID);
-    ok(controlID == IDC_PS_RADIO1, "Focus should have been set to item on third page. Expected: %d, Found %ld\n", IDC_PS_RADIO1, controlID);
+    ok(controlID == IDC_PS_RADIO1, "Focus should have been set to item on third page. Expected: %d, Found %Id\n", IDC_PS_RADIO1, controlID);
 
     /* back button */
     SendMessageA(hdlg, PSM_PRESSBUTTON, PSBTN_BACK, 0);
     if (hwndtoindex_supported)
-        ok(active_page == 1, "Active page should be 1 after pressing Back. Is: %d\n", active_page);
+        ok(active_page == 1, "Active page should be 1 after pressing Back. Is: %ld\n", active_page);
 
     control = GetFocus();
     controlID = GetWindowLongPtrA(control, GWLP_ID);
-    ok(controlID == IDC_PS_EDIT1, "Focus should have been set to the first item on second page. Expected: %d, Found %ld\n", IDC_PS_EDIT1, controlID);
+    ok(controlID == IDC_PS_EDIT1, "Focus should have been set to the first item on second page. Expected: %d, Found %Id\n", IDC_PS_EDIT1, controlID);
 
     defidres = SendMessageA(hdlg, DM_GETDEFID, 0, 0);
     ok(defidres == MAKELRESULT(backID, DC_HASDEFID), "Expected default button ID to be %d, is %d\n", backID, LOWORD(defidres));
@@ -460,20 +453,20 @@ static void test_wiznavigation(void)
     /* press next twice */
     SendMessageA(hdlg, PSM_PRESSBUTTON, PSBTN_NEXT, 0);
     if (hwndtoindex_supported)
-        ok(active_page == 2, "Active page should be 2 after pressing Next. Is: %d\n", active_page);
+        ok(active_page == 2, "Active page should be 2 after pressing Next. Is: %ld\n", active_page);
     SendMessageA(hdlg, PSM_PRESSBUTTON, PSBTN_NEXT, 0);
     if (hwndtoindex_supported)
-        ok(active_page == 3, "Active page should be 3 after pressing Next. Is: %d\n", active_page);
+        ok(active_page == 3, "Active page should be 3 after pressing Next. Is: %ld\n", active_page);
     else
         active_page = 3;
 
     control = GetFocus();
     controlID = GetWindowLongPtrA(control, GWLP_ID);
-    ok(controlID == nextID, "Focus should have been set to the Next button. Expected: %d, Found: %ld\n", nextID, controlID);
+    ok(controlID == nextID, "Focus should have been set to the Next button. Expected: %d, Found: %Id\n", nextID, controlID);
 
     /* try to navigate away, but shouldn't be able to */
     SendMessageA(hdlg, PSM_PRESSBUTTON, PSBTN_BACK, 0);
-    ok(active_page == 3, "Active page should still be 3 after pressing Back. Is: %d\n", active_page);
+    ok(active_page == 3, "Active page should still be 3 after pressing Back. Is: %ld\n", active_page);
 
     defidres = SendMessageA(hdlg, DM_GETDEFID, 0, 0);
     ok(defidres == MAKELRESULT(nextID, DC_HASDEFID), "Expected default button ID to be %d, is %d\n", nextID, LOWORD(defidres));
@@ -899,34 +892,34 @@ if (0)
     tab = (HWND)SendMessageA(hdlg, PSM_GETTABCONTROL, 0, 0);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 2, "got %d\n", r);
+    ok(r == 2, "got %ld\n", r);
 
     ret = SendMessageA(hdlg, PSM_ADDPAGE, 0, (LPARAM)hpsp[2]);
     ok(ret == TRUE, "got %d\n", ret);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 3, "got %d\n", r);
+    ok(r == 3, "got %ld\n", r);
 
     /* add property sheet page that can't be created */
     ret = SendMessageA(hdlg, PSM_ADDPAGE, 0, (LPARAM)hpsp[3]);
     ok(ret == TRUE, "got %d\n", ret);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 4, "got %d\n", r);
+    ok(r == 4, "got %ld\n", r);
 
     /* select page that can't be created */
     ret = SendMessageA(hdlg, PSM_SETCURSEL, 3, 1);
     ok(ret == TRUE, "got %d\n", ret);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 3, "got %d\n", r);
+    ok(r == 3, "got %ld\n", r);
 
     /* test PSP_PREMATURE flag with incorrect property sheet page */
     ret = SendMessageA(hdlg, PSM_ADDPAGE, 0, (LPARAM)hpsp[4]);
     ok(ret == FALSE, "got %d\n", ret);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 3, "got %d\n", r);
+    ok(r == 3, "got %ld\n", r);
 
     pDestroyPropertySheetPage(hpsp[4]);
     DestroyWindow(hdlg);
@@ -993,34 +986,34 @@ if (0)
     tab = (HWND)SendMessageA(hdlg, PSM_GETTABCONTROL, 0, 0);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 2, "got %d\n", r);
+    ok(r == 2, "got %ld\n", r);
 
     ret = SendMessageA(hdlg, PSM_INSERTPAGE, (WPARAM)hpsp[1], (LPARAM)hpsp[2]);
     ok(ret == TRUE, "got %d\n", ret);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 3, "got %d\n", r);
+    ok(r == 3, "got %ld\n", r);
 
     /* add property sheet page that can't be created */
     ret = SendMessageA(hdlg, PSM_INSERTPAGE, 1, (LPARAM)hpsp[3]);
     ok(ret == TRUE, "got %d\n", ret);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 4, "got %d\n", r);
+    ok(r == 4, "got %ld\n", r);
 
     /* select page that can't be created */
     ret = SendMessageA(hdlg, PSM_SETCURSEL, 1, 0);
     ok(ret == TRUE, "got %d\n", ret);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 3, "got %d\n", r);
+    ok(r == 3, "got %ld\n", r);
 
     /* test PSP_PREMATURE flag with incorrect property sheet page */
     ret = SendMessageA(hdlg, PSM_INSERTPAGE, 0, (LPARAM)hpsp[4]);
     ok(ret == FALSE, "got %d\n", ret);
 
     r = SendMessageA(tab, TCM_GETITEMCOUNT, 0, 0);
-    ok(r == 3, "got %d\n", r);
+    ok(r == 3, "got %ld\n", r);
 
     pDestroyPropertySheetPage(hpsp[4]);
     DestroyWindow(hdlg);
@@ -1044,7 +1037,7 @@ static UINT CALLBACK proppage_callback_a(HWND hwnd, UINT msg, PROPSHEETPAGEA *ps
 
     ok(hwnd == NULL, "Expected NULL hwnd, got %p\n", hwnd);
 
-    ok(psp->lParam && psp->lParam != (LPARAM)psp, "Expected newly allocated page description, got %lx, %p\n",
+    ok(psp->lParam && psp->lParam != (LPARAM)psp, "Expected newly allocated page description, got %Ix, %p\n",
             psp->lParam, psp);
     ok(psp_orig->pszTitle == psp->pszTitle, "Expected same page title pointer\n");
     ok(!lstrcmpA(psp_orig->pszTitle, psp->pszTitle), "Expected same page title string\n");
@@ -1052,11 +1045,11 @@ static UINT CALLBACK proppage_callback_a(HWND hwnd, UINT msg, PROPSHEETPAGEA *ps
     switch (msg)
     {
     case PSPCB_ADDREF:
-        ok(psp->dwSize > PROPSHEETPAGEA_V1_SIZE, "Expected ADDREF for V2+ only, got size %u\n", psp->dwSize);
+        ok(psp->dwSize > PROPSHEETPAGEA_V1_SIZE, "Expected ADDREF for V2+ only, got size %lu\n", psp->dwSize);
         cpage->addref_called++;
         break;
     case PSPCB_RELEASE:
-        ok(psp->dwSize >= PROPSHEETPAGEA_V1_SIZE, "Unexpected RELEASE, got size %u\n", psp->dwSize);
+        ok(psp->dwSize >= PROPSHEETPAGEA_V1_SIZE, "Unexpected RELEASE, got size %lu\n", psp->dwSize);
         cpage->release_called++;
         break;
     default:
@@ -1072,7 +1065,7 @@ static UINT CALLBACK proppage_callback_w(HWND hwnd, UINT msg, PROPSHEETPAGEW *ps
     PROPSHEETPAGEW *psp_orig = &cpage->u.pageW;
 
     ok(hwnd == NULL, "Expected NULL hwnd, got %p\n", hwnd);
-    ok(psp->lParam && psp->lParam != (LPARAM)psp, "Expected newly allocated page description, got %lx, %p\n",
+    ok(psp->lParam && psp->lParam != (LPARAM)psp, "Expected newly allocated page description, got %Ix, %p\n",
             psp->lParam, psp);
     ok(psp_orig->pszTitle == psp->pszTitle, "Expected same page title pointer\n");
     ok(!lstrcmpW(psp_orig->pszTitle, psp->pszTitle), "Expected same page title string\n");
@@ -1080,11 +1073,11 @@ static UINT CALLBACK proppage_callback_w(HWND hwnd, UINT msg, PROPSHEETPAGEW *ps
     switch (msg)
     {
     case PSPCB_ADDREF:
-        ok(psp->dwSize > PROPSHEETPAGEW_V1_SIZE, "Expected ADDREF for V2+ only, got size %u\n", psp->dwSize);
+        ok(psp->dwSize > PROPSHEETPAGEW_V1_SIZE, "Expected ADDREF for V2+ only, got size %lu\n", psp->dwSize);
         cpage->addref_called++;
         break;
     case PSPCB_RELEASE:
-        ok(psp->dwSize >= PROPSHEETPAGEW_V1_SIZE, "Unexpected RELEASE, got size %u\n", psp->dwSize);
+        ok(psp->dwSize >= PROPSHEETPAGEW_V1_SIZE, "Unexpected RELEASE, got size %lu\n", psp->dwSize);
         cpage->release_called++;
         break;
     default:
@@ -1114,10 +1107,10 @@ static void test_CreatePropertySheetPage(void)
         hpsp = pCreatePropertySheetPageA(&page.u.pageA);
 
         if (page.u.pageA.dwSize < PROPSHEETPAGEA_V1_SIZE)
-            ok(hpsp == NULL, "Expected failure, size %u\n", page.u.pageA.dwSize);
+            ok(hpsp == NULL, "Expected failure, size %lu\n", page.u.pageA.dwSize);
         else
         {
-            ok(hpsp != NULL, "Failed to create a page, size %u\n", page.u.pageA.dwSize);
+            ok(hpsp != NULL, "Failed to create a page, size %lu\n", page.u.pageA.dwSize);
             ok(page.addref_called == (page.u.pageA.dwSize > PROPSHEETPAGEA_V1_SIZE) ? 1 : 0, "Expected ADDREF callback message\n");
         }
 
@@ -1143,10 +1136,10 @@ static void test_CreatePropertySheetPage(void)
         hpsp = pCreatePropertySheetPageW(&page.u.pageW);
 
         if (page.u.pageW.dwSize < PROPSHEETPAGEW_V1_SIZE)
-            ok(hpsp == NULL, "Expected failure, size %u\n", page.u.pageW.dwSize);
+            ok(hpsp == NULL, "Expected failure, size %lu\n", page.u.pageW.dwSize);
         else
         {
-            ok(hpsp != NULL, "Failed to create a page, size %u\n", page.u.pageW.dwSize);
+            ok(hpsp != NULL, "Failed to create a page, size %lu\n", page.u.pageW.dwSize);
             ok(page.addref_called == (page.u.pageW.dwSize > PROPSHEETPAGEW_V1_SIZE) ? 1 : 0, "Expected ADDREF callback message\n");
         }
 
@@ -1183,7 +1176,7 @@ static void test_bad_control_class(void)
     U3(psh).phpage = &hpsp;
 
     ret = pPropertySheetA(&psh);
-    ok(ret == 0, "got %ld\n", ret);
+    ok(ret == 0, "got %Id\n", ret);
 
     /* Need to recreate hpsp otherwise the test fails under Windows */
     hpsp = pCreatePropertySheetPageA(&psp);
@@ -1192,32 +1185,18 @@ static void test_bad_control_class(void)
 
     psh.dwFlags = PSH_MODELESS;
     ret = pPropertySheetA(&psh);
-    ok(ret != 0, "got %ld\n", ret);
+    ok(ret != 0, "got %Id\n", ret);
 
-    ok(IsWindow((HWND)ret), "bad window handle %#lx\n", ret);
+    ok(IsWindow((HWND)ret), "bad window handle %#Ix\n", ret);
     DestroyWindow((HWND)ret);
 }
 
-static BOOL handle_WM_CTLCOLORSTATIC;
-
 static INT_PTR CALLBACK test_WM_CTLCOLORSTATIC_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-    static HWND child;
-
     switch(msg)
     {
     case WM_INITDIALOG:
         sheethwnd = hwnd;
-        child = CreateWindowA(WC_STATICA, "child", WS_CHILD | WS_VISIBLE, 1, 2, 50, 50, hwnd,
-                              (HMENU)100, 0, NULL);
-        ok(child != NULL, "CreateWindowA failed, error %d.\n", GetLastError());
-        return FALSE;
-
-    case WM_CTLCOLORSTATIC:
-        return (INT_PTR)(handle_WM_CTLCOLORSTATIC ? GetSysColorBrush(COLOR_MENU) : 0);
-
-    case WM_CLOSE:
-        DestroyWindow(child);
         return FALSE;
 
     default:
@@ -1225,26 +1204,16 @@ static INT_PTR CALLBACK test_WM_CTLCOLORSTATIC_proc(HWND hwnd, UINT msg, WPARAM 
     }
 }
 
-static void test_WM_CTLCOLORSTATIC(void)
+static void test_page_dialog_texture(void)
 {
-    HWND hdlg, child, parent, hwnd;
-    COLORREF color, old_color;
-    int mode, old_mode, count;
-    HBRUSH hbrush, hbrush2;
     HPROPSHEETPAGE hpsp[1];
     PROPSHEETHEADERA psh;
-    HDC child_hdc, hdc;
-    LOGBRUSH log_brush;
     PROPSHEETPAGEA psp;
     ULONG_PTR dlgproc;
-    WNDCLASSA cls;
-    HTHEME theme;
-    DWORD error;
-    BITMAP bmp;
-    HRESULT hr;
-    POINT org;
-    SIZE size;
+    HWND hdlg, hwnd;
+    HBRUSH hbrush;
     BOOL ret;
+    HDC hdc;
 
     memset(&psp, 0, sizeof(psp));
     psp.dwSize = sizeof(psp);
@@ -1265,193 +1234,28 @@ static void test_WM_CTLCOLORSTATIC(void)
     ok(hdlg != INVALID_HANDLE_VALUE, "Got invalid handle value %p.\n", hdlg);
     flush_events();
 
-    child = GetDlgItem(sheethwnd, 100);
-    ok(child != NULL, "Failed to get child static control, error %d.\n", GetLastError());
-    parent = GetParent(child);
-    ok(parent == sheethwnd, "Expected parent %p, got %p.\n", sheethwnd, parent);
-    ok(sheethwnd != hdlg, "Expected handles not equal.\n");
-
     /* Test that page dialog procedure is unchanged */
     dlgproc = GetWindowLongPtrA(sheethwnd, DWLP_DLGPROC);
-    ok(dlgproc == (ULONG_PTR)test_WM_CTLCOLORSTATIC_proc, "Unexpected dlgproc %#lx.\n", dlgproc);
-
-    child_hdc = GetDC(child);
-    old_mode = SetBkMode(child_hdc, OPAQUE);
-    ok(old_mode != 0, "SetBkMode failed.\n");
-    old_color = SetBkColor(child_hdc, 0xaa5511);
-    ok(old_color != CLR_INVALID, "SetBkColor failed.\n");
-
-    /* Test that brush origin is at (0,0) */
-    ret = GetBrushOrgEx(child_hdc, &org);
-    ok(ret, "GetBrushOrgEx failed, error %u.\n", GetLastError());
-    ok(org.x == 0 && org.y == 0, "Expected (0,0), got %s.\n", wine_dbgstr_point(&org));
+    ok(dlgproc == (ULONG_PTR)test_WM_CTLCOLORSTATIC_proc, "Unexpected dlgproc %#Ix.\n", dlgproc);
 
     /* Test that theme dialog texture is enabled for comctl32 v6, even when theming is off */
     ret = pIsThemeDialogTextureEnabled(sheethwnd);
     todo_wine_if(!is_v6)
     ok(ret == is_v6, "Wrong theme dialog texture status.\n");
 
-    hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
+    hwnd = CreateWindowA(WC_EDITA, "child", WS_POPUP | WS_VISIBLE, 1, 2, 50, 50, 0, 0, 0, NULL);
+    ok(hwnd != NULL, "CreateWindowA failed, error %ld.\n", GetLastError());
+    hdc = GetDC(hwnd);
+
+    hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)hdc, (LPARAM)hwnd);
     if (is_v6 && is_theme_active)
     {
-        /* Test that brush origin is changed after WM_CTLCOLORSTATIC */
-        ret = GetBrushOrgEx(child_hdc, &org);
-        ok(ret, "GetBrushOrgEx failed, error %u.\n", GetLastError());
-        ok(org.x == -1 && org.y == -2, "Expected (-1,-2), got %s.\n", wine_dbgstr_point(&org));
-
-        /* Test that device context is set to transparent after WM_CTLCOLORSTATIC */
-        mode = SetBkMode(child_hdc, old_mode);
-        ok(mode == TRANSPARENT, "Expected mode %#x, got %#x.\n", TRANSPARENT, mode);
-
-        /* Test that the brush is a pattern brush created from the tab body bitmap in the theme */
+        /* Test that dialog tab texture is enabled even without any child controls in the dialog */
         ok(hbrush != GetSysColorBrush(COLOR_BTNFACE), "Expected a different brush.\n");
-        ok(hbrush != GetStockObject(NULL_BRUSH), "Expected a different brush.\n");
-        hbrush2 = SelectObject(child_hdc, GetSysColorBrush(COLOR_BTNFACE));
-        ok(hbrush2 != hbrush, "Expected a different brush.\n");
-
-        memset(&log_brush, 0, sizeof(log_brush));
-        count = GetObjectA(hbrush, sizeof(log_brush), &log_brush);
-        ok(count == sizeof(log_brush), "GetObjectA failed, error %u.\n", GetLastError());
-        ok(log_brush.lbColor == 0, "Expected brush color %#x, got %#x.\n", 0, log_brush.lbColor);
-        ok(log_brush.lbStyle == BS_PATTERN, "Expected brush style %#x, got %#x.\n", BS_PATTERN,
-           log_brush.lbStyle);
-
-        memset(&bmp, 0, sizeof(bmp));
-        count = GetObjectA((HBITMAP)log_brush.lbHatch, sizeof(bmp), &bmp);
-        ok(count == sizeof(bmp), "GetObjectA failed, error %u.\n", GetLastError());
-
-        ok(pGetWindowTheme(hdlg) == NULL, "Expected NULL theme handle.\n");
-        ok(pGetWindowTheme(sheethwnd) == NULL, "Expected NULL theme handle.\n");
-
-        memset(&cls, 0, sizeof(cls));
-        cls.lpfnWndProc = DefWindowProcA;
-        cls.hInstance = GetModuleHandleA(NULL);
-        cls.hCursor = LoadCursorA(0, (LPCSTR)IDC_ARROW);
-        cls.hbrBackground = GetStockObject(WHITE_BRUSH);
-        cls.lpszClassName = "TestClass";
-        RegisterClassA(&cls);
-
-        hwnd = CreateWindowA("TestClass", "test", WS_POPUP | WS_VISIBLE, 0, 0, 4, 4, 0, 0, 0, NULL);
-        ok(hwnd != NULL, "CreateWindowA failed, error %d.\n", GetLastError());
-        theme = pOpenThemeData(hwnd, L"Tab");
-        ok(theme != NULL, "OpenThemeData failed.\n");
-
-        size.cx = 0;
-        size.cy = 0;
-        hr = pGetThemePartSize(theme, NULL, TABP_BODY, 0, NULL, TS_TRUE, &size);
-        ok(hr == S_OK, "GetThemePartSize failed, hr %#x.\n", hr);
-        ok(bmp.bmWidth == size.cx, "Expected width %d, got %d.\n", size.cx, bmp.bmWidth);
-        ok(bmp.bmHeight == size.cy, "Expected height %d, got %d.\n", size.cy, bmp.bmHeight);
-
-        pCloseThemeData(theme);
-
-        /* Test that other controls besides static controls also get the same brush */
-        hdc = GetDC(hwnd);
-        old_mode = SetBkMode(hdc, OPAQUE);
-        ok(old_mode != 0, "SetBkMode failed.\n");
-        hbrush2 = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)hdc, (LPARAM)hwnd);
-        ok(hbrush2 == hbrush, "Expected the same brush.\n");
-        mode = SetBkMode(hdc, old_mode);
-        ok(mode == TRANSPARENT, "Expected mode %#x, got %#x.\n", TRANSPARENT, mode);
-        ReleaseDC(hwnd, hdc);
-        DestroyWindow(hwnd);
-        UnregisterClassA("TestClass", GetModuleHandleA(NULL));
-
-        /* Test disabling theme dialog texture should change the brush */
-        hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        hr = pEnableThemeDialogTexture(sheethwnd, ETDT_DISABLE);
-        ok(hr == S_OK, "EnableThemeDialogTexture failed, hr %#x.\n", hr);
-        hbrush2 = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        ok(hbrush2 != hbrush, "Expected a different brush.\n");
-        ok(hbrush2 == GetSysColorBrush(COLOR_BTNFACE), "Expected brush %p, got %p.\n",
-           GetSysColorBrush(COLOR_BTNFACE), hbrush2);
-
-        /* Test re-enabling theme dialog texture with ETDT_ENABLE doesn't change the brush*/
-        hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        hr = pEnableThemeDialogTexture(sheethwnd, ETDT_ENABLE);
-        ok(hr == S_OK, "EnableThemeDialogTexture failed, hr %#x.\n", hr);
-        hbrush2 = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        todo_wine_if(hbrush2 != hbrush)
-        ok(hbrush2 == hbrush, "Expected the same brush.\n");
-
-        /* Test ETDT_ENABLE | ETDT_USETABTEXTURE should change the brush */
-        hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        hr = pEnableThemeDialogTexture(sheethwnd, ETDT_ENABLE | ETDT_USETABTEXTURE);
-        ok(hr == S_OK, "EnableThemeDialogTexture failed, hr %#x.\n", hr);
-        hbrush2 = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        todo_wine_if(hbrush2 == hbrush)
-        ok(hbrush2 != hbrush, "Expected a different brush.\n");
-
-        /* Test ETDT_ENABLE | ETDT_USEAEROWIZARDTABTEXTURE should change the brush */
-        hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        hr = pEnableThemeDialogTexture(sheethwnd, ETDT_ENABLE | ETDT_USEAEROWIZARDTABTEXTURE);
-        ok(hr == S_OK, "EnableThemeDialogTexture failed, hr %#x.\n", hr);
-        hbrush2 = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        /* ETDT_USEAEROWIZARDTABTEXTURE is supported only on Vista+ */
-        if (LOBYTE(LOWORD(GetVersion())) < 6)
-            ok(hbrush2 == hbrush, "Expected the same brush.\n");
-        else
-            todo_wine_if(hbrush2 == hbrush)
-            ok(hbrush2 != hbrush, "Expected a different brush.\n");
-
-        hr = pEnableThemeDialogTexture(sheethwnd, ETDT_DISABLE);
-        ok(hr == S_OK, "EnableThemeDialogTexture failed, hr %#x.\n", hr);
-        hr = pEnableThemeDialogTexture(sheethwnd, ETDT_ENABLE | ETDT_USETABTEXTURE);
-        ok(hr == S_OK, "EnableThemeDialogTexture failed, hr %#x.\n", hr);
-
-        /* Test that the page procedure should take precedence if WM_CTLCOLORSTATIC is handled */
-        handle_WM_CTLCOLORSTATIC = TRUE;
-        hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        ok(hbrush == GetSysColorBrush(COLOR_MENU), "Expected brush %p, got %p.\n",
-           GetSysColorBrush(COLOR_MENU), hbrush);
-        handle_WM_CTLCOLORSTATIC = FALSE;
-
-        /* Test that the brush is not a system object and has only one reference and shouldn't be freed */
-        hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        ret = DeleteObject(hbrush);
-        ok(ret, "DeleteObject failed, error %u.\n", GetLastError());
-        SetLastError(0xdeadbeef);
-        ret = GetObjectA(hbrush, sizeof(log_brush), &log_brush);
-        error = GetLastError();
-        ok(!ret, "GetObjectA succeeded.\n");
-        todo_wine
-        ok(error == ERROR_INVALID_PARAMETER, "Expected error %u, got %u.\n",
-           ERROR_INVALID_PARAMETER, error);
-        ret = DeleteObject(hbrush);
-        ok(!ret, "DeleteObject succeeded.\n");
-
-        /* Should still report the same brush handle after the brush handle was freed */
-        hbrush2 = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        ok(hbrush2 == hbrush, "Expected the same brush.\n");
-
-        /* Test that WM_THEMECHANGED should recreate the brush */
-        hbrush = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        SendMessageW(sheethwnd, WM_THEMECHANGED, 0, 0);
-        hbrush2 = (HBRUSH)SendMessageW(sheethwnd, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-        ok(hbrush2 != hbrush, "Expected a different brush.\n");
-        ret = GetObjectA(hbrush, sizeof(log_brush), &log_brush);
-        ok(!ret, "GetObjectA succeeded.\n");
     }
-    else
-    {
-        /* Test that brush origin is at (0,0) */
-        ret = GetBrushOrgEx(child_hdc, &org);
-        ok(ret, "GetBrushOrgEx failed, error %u.\n", GetLastError());
-        todo_wine_if(is_theme_active)
-        ok(org.x == 0 && org.y == 0, "Expected (0,0), got %s.\n", wine_dbgstr_point(&org));
 
-        todo_wine_if(is_theme_active)
-        ok(hbrush == GetSysColorBrush(COLOR_BTNFACE), "Expected brush %p, got %p.\n",
-           GetSysColorBrush(COLOR_BTNFACE), hbrush);
-        mode = SetBkMode(child_hdc, old_mode);
-        todo_wine_if(is_theme_active)
-        ok(mode == OPAQUE, "Expected mode %#x, got %#x.\n", OPAQUE, mode);
-    }
-    color = SetBkColor(child_hdc, old_color);
-    ok(color == GetSysColor(COLOR_BTNFACE), "Expected background color %#x, got %#x.\n",
-       GetSysColor(COLOR_BTNFACE), color);
-
-    ReleaseDC(child, child_hdc);
+    ReleaseDC(hwnd, hdc);
+    DestroyWindow(hwnd);
     DestroyWindow(hdlg);
 }
 
@@ -1472,13 +1276,8 @@ static void init_uxtheme_functions(void)
     HMODULE uxtheme = LoadLibraryA("uxtheme.dll");
 
 #define X(f) p##f = (void *)GetProcAddress(uxtheme, #f);
-    X(CloseThemeData)
-    X(EnableThemeDialogTexture)
-    X(GetThemePartSize)
-    X(GetWindowTheme)
     X(IsThemeActive)
     X(IsThemeDialogTextureEnabled)
-    X(OpenThemeData)
 #undef X
 }
 
@@ -1511,7 +1310,7 @@ START_TEST(propsheet)
     test_PSM_ADDPAGE();
     test_PSM_INSERTPAGE();
     test_CreatePropertySheetPage();
-    test_WM_CTLCOLORSTATIC();
+    test_page_dialog_texture();
 
     if (!load_v6_module(&ctx_cookie, &ctx))
         return;
@@ -1519,7 +1318,7 @@ START_TEST(propsheet)
     init_comctl32_functions();
     is_v6 = TRUE;
 
-    test_WM_CTLCOLORSTATIC();
+    test_page_dialog_texture();
 
     unload_v6_module(ctx_cookie, ctx);
 }

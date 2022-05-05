@@ -119,9 +119,6 @@
 /* Define to 1 if you have the <gssapi/gssapi.h> header file. */
 #undef HAVE_GSSAPI_GSSAPI_H
 
-/* Define to 1 if you have the <ieeefp.h> header file. */
-#undef HAVE_IEEEFP_H
-
 /* Define to 1 if you have the <ifaddrs.h> header file. */
 #undef HAVE_IFADDRS_H
 
@@ -136,15 +133,6 @@
 
 /* Define to 1 if you have the <IOKit/IOKitLib.h> header file. */
 #undef HAVE_IOKIT_IOKITLIB_H
-
-/* Define to 1 if you have the `isfinite' function. */
-#undef HAVE_ISFINITE
-
-/* Define to 1 if you have the `isinf' function. */
-#undef HAVE_ISINF
-
-/* Define to 1 if you have the `isnan' function. */
-#undef HAVE_ISNAN
 
 /* Define to 1 if you have the `kqueue' function. */
 #undef HAVE_KQUEUE
@@ -356,9 +344,6 @@
 /* Define to 1 if you have the `posix_fallocate' function. */
 #undef HAVE_POSIX_FALLOCATE
 
-/* Define to 1 if you have the `ppoll' function. */
-#undef HAVE_PPOLL
-
 /* Define to 1 if you have the `prctl' function. */
 #undef HAVE_PRCTL
 
@@ -430,9 +415,6 @@
 
 /* Define to 1 if `interface_id' is a member of `sg_io_hdr_t'. */
 #undef HAVE_SG_IO_HDR_T_INTERFACE_ID
-
-/* Define to 1 if you have the `shm_open' function. */
-#undef HAVE_SHM_OPEN
 
 /* Define if sigaddset is supported */
 #undef HAVE_SIGADDSET
@@ -573,9 +555,6 @@
 
 /* Define to 1 if you have the <sys/epoll.h> header file. */
 #undef HAVE_SYS_EPOLL_H
-
-/* Define to 1 if you have the <sys/eventfd.h> header file. */
-#undef HAVE_SYS_EVENTFD_H
 
 /* Define to 1 if you have the <sys/event.h> header file. */
 #undef HAVE_SYS_EVENT_H
@@ -853,12 +832,6 @@
 /* Define to the soname of the libv4l2 library. */
 #undef SONAME_LIBV4L2
 
-/* Define to the soname of the libvkd3d library. */
-#undef SONAME_LIBVKD3D
-
-/* Define to the soname of the libvkd3d-shader library. */
-#undef SONAME_LIBVKD3D_SHADER
-
 /* Define to the soname of the libvulkan library. */
 #undef SONAME_LIBVULKAN
 
@@ -911,6 +884,9 @@
 
 /* Define for large files, on AIX-style hosts. */
 #undef _LARGE_FILES
+
+/* Define to 64 to enable 64-bit time_t on Linux */
+#undef _TIME_BITS
 
 /* Define to `__inline__' or `__inline' if that's what the C compiler
    calls it, or to nothing if 'inline' is not supported under any name.  */

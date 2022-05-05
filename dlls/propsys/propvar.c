@@ -416,6 +416,22 @@ PCWSTR WINAPI PropVariantToStringWithDefault(REFPROPVARIANT propvarIn, LPCWSTR p
     return pszDefault;
 }
 
+/******************************************************************
+ *  VariantToStringWithDefault   (PROPSYS.@)
+ */
+PCWSTR WINAPI VariantToStringWithDefault(const VARIANT *pvar, const WCHAR *default_value)
+{
+    TRACE("%s, %s.\n", debugstr_variant(pvar), debugstr_w(default_value));
+
+    if (V_VT(pvar) == (VT_BYREF | VT_VARIANT)) pvar = V_VARIANTREF(pvar);
+    if (V_VT(pvar) == (VT_BYREF | VT_BSTR) || V_VT(pvar) == VT_BSTR)
+    {
+        BSTR ret = V_ISBYREF(pvar) ? *V_BSTRREF(pvar) : V_BSTR(pvar);
+        return ret ? ret : L"";
+    }
+
+    return default_value;
+}
 
 /******************************************************************
  *  PropVariantChangeType   (PROPSYS.@)
@@ -669,6 +685,21 @@ HRESULT WINAPI InitVariantFromBuffer(const VOID *pv, UINT cb, VARIANT *pvar)
 
     V_VT(pvar) = VT_ARRAY|VT_UI1;
     V_ARRAY(pvar) = arr;
+    return S_OK;
+}
+
+HRESULT WINAPI InitVariantFromFileTime(const FILETIME *ft, VARIANT *var)
+{
+    SYSTEMTIME st;
+
+    TRACE("%p, %p\n", ft, var);
+
+    VariantInit(var);
+    if (!FileTimeToSystemTime(ft, &st))
+        return E_INVALIDARG;
+    if (!SystemTimeToVariantTime(&st, &V_DATE(var)))
+        return E_INVALIDARG;
+    V_VT(var) = VT_DATE;
     return S_OK;
 }
 

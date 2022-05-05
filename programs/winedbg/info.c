@@ -392,7 +392,7 @@ static void info_window(HWND hWnd, int indent)
         if (!GetWindowTextA(hWnd, wndName, sizeof(wndName)))
             strcpy(wndName, "-- Empty --");
 
-        dbg_printf("%*s%08Ix%*s %-17.17s %08x %0*Ix %08x %.14s\n",
+        dbg_printf("%*s%08Ix%*s %-17.17s %08lx %0*Ix %08lx %.14s\n",
                    indent, "", (DWORD_PTR)hWnd, 12 - indent, "",
                    clsName, GetWindowLongW(hWnd, GWL_STYLE),
                    ADDRWIDTH, (ULONG_PTR)GetWindowLongPtrW(hWnd, GWLP_WNDPROC),
@@ -435,8 +435,8 @@ void info_win32_window(HWND hWnd, BOOL detailed)
     /* FIXME missing fields: hmemTaskQ, hrgnUpdate, dce, flags, pProp, scroll */
     dbg_printf("next=%p  child=%p  parent=%p  owner=%p  class='%s'\n"
                "inst=%p  active=%p  idmenu=%08Ix\n"
-               "style=0x%08x  exstyle=0x%08x  wndproc=%p  text='%s'\n"
-               "client=%d,%d-%d,%d  window=%d,%d-%d,%d sysmenu=%p\n",
+               "style=0x%08lx  exstyle=0x%08lx  wndproc=%p  text='%s'\n"
+               "client=%ld,%ld-%ld,%ld  window=%ld,%ld-%ld,%ld sysmenu=%p\n",
                GetWindow(hWnd, GW_HWNDNEXT),
                GetWindow(hWnd, GW_CHILD),
                GetParent(hWnd),
@@ -502,7 +502,7 @@ static void dump_proc_info(const struct dump_proc* dp, unsigned idx, unsigned de
     {
         assert(idx < dp->count);
         dpe = &dp->entries[idx];
-        dbg_printf("%c%08x %-8d ",
+        dbg_printf("%c%08lx %-8ld ",
                    (dpe->proc.th32ProcessID == (dbg_curr_process ?
                                                 dbg_curr_process->pid : 0)) ? '>' : ' ',
                    dpe->proc.th32ProcessID, dpe->proc.cntThreads);
@@ -565,7 +565,7 @@ void info_win32_processes(void)
     }
 }
 
-static BOOL get_process_name(DWORD pid, PROCESSENTRY32* entry)
+static BOOL get_process_name(DWORD pid, PROCESSENTRY32W* entry)
 {
     BOOL   ret = FALSE;
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -573,9 +573,9 @@ static BOOL get_process_name(DWORD pid, PROCESSENTRY32* entry)
     if (snap != INVALID_HANDLE_VALUE)
     {
         entry->dwSize = sizeof(*entry);
-        if (Process32First(snap, entry))
+        if (Process32FirstW(snap, entry))
             while (!(ret = (entry->th32ProcessID == pid)) &&
-                   Process32Next(snap, entry));
+                   Process32NextW(snap, entry));
         CloseHandle(snap);
     }
     return ret;
@@ -589,12 +589,14 @@ void info_win32_threads(void)
         THREADENTRY32	entry;
         BOOL 		ok;
 	DWORD		lastProcessId = 0;
+        struct dbg_process* p = NULL;
+        struct dbg_thread* t = NULL;
 
 	entry.dwSize = sizeof(entry);
 	ok = Thread32First(snap, &entry);
 
-        dbg_printf("%-8.8s %-8.8s %s (all id:s are in hex)\n",
-                   "process", "tid", "prio");
+        dbg_printf("%-8.8s %-8.8s %s    %s (all IDs are in hex)\n",
+                   "process", "tid", "prio", "name");
         while (ok)
         {
             if (entry.th32OwnerProcessID != GetCurrentProcessId())
@@ -605,24 +607,26 @@ void info_win32_threads(void)
 		 */
 		if (entry.th32OwnerProcessID != lastProcessId)
 		{
-		    struct dbg_process*	p = dbg_get_process(entry.th32OwnerProcessID);
-                    PROCESSENTRY32 pcs_entry;
-                    const char* exename;
+                    PROCESSENTRY32W pcs_entry;
+                    const WCHAR* exename;
 
+                    p = dbg_get_process(entry.th32OwnerProcessID);
                     if (p)
-                        exename = dbg_W2A(p->imageName, -1);
+                        exename = p->imageName;
                     else if (get_process_name(entry.th32OwnerProcessID, &pcs_entry))
                         exename = pcs_entry.szExeFile;
                     else
-                        exename = "";
+                        exename = L"";
 
-		    dbg_printf("%08x%s %s\n",
+		    dbg_printf("%08lx%s %ls\n",
                                entry.th32OwnerProcessID, p ? " (D)" : "", exename);
                     lastProcessId = entry.th32OwnerProcessID;
 		}
-                dbg_printf("\t%08x %4d%s\n",
+                t = dbg_get_thread(p, entry.th32ThreadID);
+                dbg_printf("\t%08lx %4ld%s %s\n",
                            entry.th32ThreadID, entry.tpBasePri,
-                           (entry.th32ThreadID == dbg_curr_tid) ? " <==" : "");
+                           (entry.th32ThreadID == dbg_curr_tid) ? " <==" : "    ",
+                           t ? t->name : "");
 
 	    }
             ok = Thread32Next(snap, &entry);
@@ -657,12 +661,12 @@ void info_win32_frame_exceptions(DWORD tid)
 
         if (!thread)
         {
-            dbg_printf("Unknown thread id (%04x) in current process\n", tid);
+            dbg_printf("Unknown thread id (%04lx) in current process\n", tid);
             return;
         }
         if (SuspendThread(thread->handle) == -1)
         {
-            dbg_printf("Can't suspend thread id (%04x)\n", tid);
+            dbg_printf("Can't suspend thread id (%04lx)\n", tid);
             return;
         }
     }
@@ -715,7 +719,7 @@ void info_win32_segments(DWORD start, int length)
             flags[1] = (le.HighWord.Bits.Type & 0x2) ? 'w' : '-';
             flags[2] = '-';
         }
-        dbg_printf("%04x: sel=%04x base=%08x limit=%08x %d-bit %c%c%c\n",
+        dbg_printf("%04lx: sel=%04lx base=%08x limit=%08x %d-bit %c%c%c\n",
                    i, (i << 3) | 7,
                    (le.HighWord.Bits.BaseHi << 24) +
                    (le.HighWord.Bits.BaseMid << 16) + le.BaseLow,
@@ -749,7 +753,7 @@ void info_win32_virtual(DWORD pid)
         hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
         if (hProc == NULL)
         {
-            dbg_printf("Cannot open process <%04x>\n", pid);
+            dbg_printf("Cannot open process <%04lx>\n", pid);
             return;
         }
     }
@@ -968,11 +972,11 @@ void info_win32_exception(void)
                        (void*)rec->ExceptionInformation[1], (void*)rec->ExceptionInformation[2],
                        (void*)rec->ExceptionInformation[3]);
         else
-            dbg_printf("C++ exception with strange parameter count %d or magic 0x%0*Ix",
+            dbg_printf("C++ exception with strange parameter count %ld or magic 0x%0*Ix",
                        rec->NumberParameters, ADDRWIDTH, rec->ExceptionInformation[0]);
         break;
     default:
-        dbg_printf("0x%08x", rec->ExceptionCode);
+        dbg_printf("0x%08lx", rec->ExceptionCode);
         break;
     }
     if (rec->ExceptionFlags & EH_STACK_INVALID)
@@ -981,7 +985,7 @@ void info_win32_exception(void)
     switch (addr.Mode)
     {
     case AddrModeFlat:
-        dbg_printf(" in %d-bit code (%s)",
+        dbg_printf(" in %ld-bit code (%s)",
                    dbg_curr_process->be_cpu->pointer_size * 8,
                    memory_offset_to_string(hexbuf, addr.Offset, 0));
         break;

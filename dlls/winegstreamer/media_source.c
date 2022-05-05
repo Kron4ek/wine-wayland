@@ -105,6 +105,7 @@ struct media_source
         SOURCE_RUNNING,
         SOURCE_SHUTDOWN,
     } state;
+    float rate;
 
     HANDLE read_thread;
     bool read_thread_shutdown;
@@ -304,7 +305,7 @@ static void flush_token_queue(struct media_stream *stream, BOOL send)
                         &stream->parent_source->async_commands_callback, &command->IUnknown_iface);
             }
             if (FAILED(hr))
-                WARN("Could not enqueue sample request, hr %#x\n", hr);
+                WARN("Could not enqueue sample request, hr %#lx\n", hr);
         }
         else if (stream->token_queue[i])
             IUnknown_Release(stream->token_queue[i]);
@@ -362,6 +363,10 @@ static void start_pipeline(struct media_source *source, struct source_async_comm
             IMFMediaType_Release(current_mt);
             IMFMediaTypeHandler_Release(mth);
         }
+        else
+        {
+            wg_parser_stream_disable(stream->wg_stream);
+        }
 
         if (position->vt != VT_EMPTY)
             stream->eos = FALSE;
@@ -387,7 +392,6 @@ static void start_pipeline(struct media_source *source, struct source_async_comm
     if (position->vt == VT_I8)
         wg_parser_stream_seek(source->streams[0]->wg_stream, 1.0, position->hVal.QuadPart, 0,
                 AM_SEEKING_AbsolutePositioning, AM_SEEKING_NoPositioning);
-    wg_parser_end_flush(source->wg_parser);
 
     for (i = 0; i < source->stream_count; i++)
         flush_token_queue(source->streams[i], position->vt == VT_EMPTY);
@@ -415,16 +419,11 @@ static void stop_pipeline(struct media_source *source)
 {
     unsigned int i;
 
-    wg_parser_begin_flush(source->wg_parser);
-
     for (i = 0; i < source->stream_count; i++)
     {
         struct media_stream *stream = source->streams[i];
         if (stream->state != STREAM_INACTIVE)
-        {
             IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEStreamStopped, &GUID_NULL, S_OK, NULL);
-            wg_parser_stream_disable(stream->wg_stream);
-        }
     }
 
     IMFMediaEventQueue_QueueEventParamVar(source->event_queue, MESourceStopped, &GUID_NULL, S_OK, NULL);
@@ -452,7 +451,7 @@ static void dispatch_end_of_presentation(struct media_source *source)
     IMFMediaEventQueue_QueueEventParamVar(source->event_queue, MEEndOfPresentation, &GUID_NULL, S_OK, &empty);
 }
 
-static void send_buffer(struct media_stream *stream, const struct wg_parser_event *event, IUnknown *token)
+static void send_buffer(struct media_stream *stream, const struct wg_parser_buffer *wg_buffer, IUnknown *token)
 {
     IMFMediaBuffer *buffer;
     IMFSample *sample;
@@ -461,36 +460,36 @@ static void send_buffer(struct media_stream *stream, const struct wg_parser_even
 
     if (FAILED(hr = MFCreateSample(&sample)))
     {
-        ERR("Failed to create sample, hr %#x.\n", hr);
+        ERR("Failed to create sample, hr %#lx.\n", hr);
         return;
     }
 
-    if (FAILED(hr = MFCreateMemoryBuffer(event->u.buffer.size, &buffer)))
+    if (FAILED(hr = MFCreateMemoryBuffer(wg_buffer->size, &buffer)))
     {
-        ERR("Failed to create buffer, hr %#x.\n", hr);
+        ERR("Failed to create buffer, hr %#lx.\n", hr);
         IMFSample_Release(sample);
         return;
     }
 
     if (FAILED(hr = IMFSample_AddBuffer(sample, buffer)))
     {
-        ERR("Failed to add buffer, hr %#x.\n", hr);
+        ERR("Failed to add buffer, hr %#lx.\n", hr);
         goto out;
     }
 
-    if (FAILED(hr = IMFMediaBuffer_SetCurrentLength(buffer, event->u.buffer.size)))
+    if (FAILED(hr = IMFMediaBuffer_SetCurrentLength(buffer, wg_buffer->size)))
     {
-        ERR("Failed to set size, hr %#x.\n", hr);
+        ERR("Failed to set size, hr %#lx.\n", hr);
         goto out;
     }
 
     if (FAILED(hr = IMFMediaBuffer_Lock(buffer, &data, NULL, NULL)))
     {
-        ERR("Failed to lock buffer, hr %#x.\n", hr);
+        ERR("Failed to lock buffer, hr %#lx.\n", hr);
         goto out;
     }
 
-    if (!wg_parser_stream_copy_buffer(stream->wg_stream, data, 0, event->u.buffer.size))
+    if (!wg_parser_stream_copy_buffer(stream->wg_stream, data, 0, wg_buffer->size))
     {
         wg_parser_stream_release_buffer(stream->wg_stream);
         IMFMediaBuffer_Unlock(buffer);
@@ -500,19 +499,19 @@ static void send_buffer(struct media_stream *stream, const struct wg_parser_even
 
     if (FAILED(hr = IMFMediaBuffer_Unlock(buffer)))
     {
-        ERR("Failed to unlock buffer, hr %#x.\n", hr);
+        ERR("Failed to unlock buffer, hr %#lx.\n", hr);
         goto out;
     }
 
-    if (FAILED(hr = IMFSample_SetSampleTime(sample, event->u.buffer.pts)))
+    if (FAILED(hr = IMFSample_SetSampleTime(sample, wg_buffer->pts)))
     {
-        ERR("Failed to set sample time, hr %#x.\n", hr);
+        ERR("Failed to set sample time, hr %#lx.\n", hr);
         goto out;
     }
 
-    if (FAILED(hr = IMFSample_SetSampleDuration(sample, event->u.buffer.duration)))
+    if (FAILED(hr = IMFSample_SetSampleDuration(sample, wg_buffer->duration)))
     {
-        ERR("Failed to set sample duration, hr %#x.\n", hr);
+        ERR("Failed to set sample duration, hr %#lx.\n", hr);
         goto out;
     }
 
@@ -530,35 +529,19 @@ out:
 static void wait_on_sample(struct media_stream *stream, IUnknown *token)
 {
     PROPVARIANT empty_var = {.vt = VT_EMPTY};
-    struct wg_parser_event event;
+    struct wg_parser_buffer buffer;
 
     TRACE("%p, %p\n", stream, token);
 
-    for (;;)
+    if (wg_parser_stream_get_buffer(stream->wg_stream, &buffer))
     {
-        if (!wg_parser_stream_get_event(stream->wg_stream, &event))
-            return;
-
-        TRACE("Got event of type %#x.\n", event.type);
-
-        switch (event.type)
-        {
-            case WG_PARSER_EVENT_BUFFER:
-                send_buffer(stream, &event, token);
-                return;
-
-            case WG_PARSER_EVENT_EOS:
-                stream->eos = TRUE;
-                IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEEndOfStream, &GUID_NULL, S_OK, &empty_var);
-                dispatch_end_of_presentation(stream->parent_source);
-                return;
-
-            case WG_PARSER_EVENT_SEGMENT:
-                break;
-
-            case WG_PARSER_EVENT_NONE:
-                assert(0);
-        }
+        send_buffer(stream, &buffer, token);
+    }
+    else
+    {
+        stream->eos = TRUE;
+        IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEEndOfStream, &GUID_NULL, S_OK, &empty_var);
+        dispatch_end_of_presentation(stream->parent_source);
     }
 }
 
@@ -658,9 +641,9 @@ static DWORD CALLBACK read_thread(void *arg)
         if (SUCCEEDED(hr = IMFByteStream_SetCurrentPosition(byte_stream, offset)))
             hr = IMFByteStream_Read(byte_stream, data, size, &ret_size);
         if (FAILED(hr))
-            ERR("Failed to read %u bytes at offset %I64u, hr %#x.\n", size, offset, hr);
+            ERR("Failed to read %u bytes at offset %I64u, hr %#lx.\n", size, offset, hr);
         else if (ret_size != size)
-            ERR("Unexpected short read: requested %u bytes, got %u.\n", size, ret_size);
+            ERR("Unexpected short read: requested %u bytes, got %lu.\n", size, ret_size);
         wg_parser_push_data(source->wg_parser, SUCCEEDED(hr) ? data : NULL, ret_size);
     }
 
@@ -697,7 +680,7 @@ static ULONG WINAPI media_stream_AddRef(IMFMediaStream *iface)
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
     ULONG ref = InterlockedIncrement(&stream->ref);
 
-    TRACE("%p, refcount %u.\n", iface, ref);
+    TRACE("%p, refcount %lu.\n", iface, ref);
 
     return ref;
 }
@@ -707,7 +690,7 @@ static ULONG WINAPI media_stream_Release(IMFMediaStream *iface)
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
     ULONG ref = InterlockedDecrement(&stream->ref);
 
-    TRACE("%p, refcount %u.\n", iface, ref);
+    TRACE("%p, refcount %lu.\n", iface, ref);
 
     if (!ref)
     {
@@ -724,7 +707,7 @@ static HRESULT WINAPI media_stream_GetEvent(IMFMediaStream *iface, DWORD flags, 
 {
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
 
-    TRACE("%p, %#x, %p.\n", iface, flags, event);
+    TRACE("%p, %#lx, %p.\n", iface, flags, event);
 
     return IMFMediaEventQueue_GetEvent(stream->event_queue, flags, event);
 }
@@ -752,7 +735,7 @@ static HRESULT WINAPI media_stream_QueueEvent(IMFMediaStream *iface, MediaEventT
 {
     struct media_stream *stream = impl_from_IMFMediaStream(iface);
 
-    TRACE("%p, %d, %s, %#x, %p.\n", iface, event_type, debugstr_guid(ext_type), hr, value);
+    TRACE("%p, %lu, %s, %#lx, %p.\n", iface, event_type, debugstr_guid(ext_type), hr, value);
 
     return IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, event_type, ext_type, hr, value);
 }
@@ -843,7 +826,7 @@ static HRESULT new_media_stream(struct media_source *source,
     struct media_stream *object = calloc(1, sizeof(*object));
     HRESULT hr;
 
-    TRACE("source %p, wg_stream %p, stream_id %u.\n", source, wg_stream, stream_id);
+    TRACE("source %p, wg_stream %p, stream_id %lu.\n", source, wg_stream, stream_id);
 
     object->IMFMediaStream_iface.lpVtbl = &media_stream_vtbl;
     object->ref = 1;
@@ -1109,6 +1092,9 @@ static ULONG WINAPI media_source_rate_control_Release(IMFRateControl *iface)
 
 static HRESULT WINAPI media_source_rate_control_SetRate(IMFRateControl *iface, BOOL thin, float rate)
 {
+    struct media_source *source = impl_from_IMFRateControl(iface);
+    HRESULT hr;
+
     FIXME("%p, %d, %f.\n", iface, thin, rate);
 
     if (rate < 0.0f)
@@ -1117,20 +1103,24 @@ static HRESULT WINAPI media_source_rate_control_SetRate(IMFRateControl *iface, B
     if (thin)
         return MF_E_THINNING_UNSUPPORTED;
 
-    if (rate != 1.0f)
-        return MF_E_UNSUPPORTED_RATE;
+    if (FAILED(hr = IMFRateSupport_IsRateSupported(&source->IMFRateSupport_iface, thin, rate, NULL)))
+        return hr;
 
-    return S_OK;
+    source->rate = rate;
+
+    return IMFMediaEventQueue_QueueEventParamVar(source->event_queue, MESourceRateChanged, &GUID_NULL, S_OK, NULL);
 }
 
 static HRESULT WINAPI media_source_rate_control_GetRate(IMFRateControl *iface, BOOL *thin, float *rate)
 {
+    struct media_source *source = impl_from_IMFRateControl(iface);
+
     TRACE("%p, %p, %p.\n", iface, thin, rate);
 
     if (thin)
         *thin = FALSE;
 
-    *rate = 1.0f;
+    *rate = source->rate;
 
     return S_OK;
 }
@@ -1176,7 +1166,7 @@ static ULONG WINAPI media_source_AddRef(IMFMediaSource *iface)
     struct media_source *source = impl_from_IMFMediaSource(iface);
     ULONG ref = InterlockedIncrement(&source->ref);
 
-    TRACE("%p, refcount %u.\n", iface, ref);
+    TRACE("%p, refcount %lu.\n", iface, ref);
 
     return ref;
 }
@@ -1186,7 +1176,7 @@ static ULONG WINAPI media_source_Release(IMFMediaSource *iface)
     struct media_source *source = impl_from_IMFMediaSource(iface);
     ULONG ref = InterlockedDecrement(&source->ref);
 
-    TRACE("%p, refcount %u.\n", iface, ref);
+    TRACE("%p, refcount %lu.\n", iface, ref);
 
     if (!ref)
     {
@@ -1202,7 +1192,7 @@ static HRESULT WINAPI media_source_GetEvent(IMFMediaSource *iface, DWORD flags, 
 {
     struct media_source *source = impl_from_IMFMediaSource(iface);
 
-    TRACE("%p, %#x, %p.\n", iface, flags, event);
+    TRACE("%p, %#lx, %p.\n", iface, flags, event);
 
     return IMFMediaEventQueue_GetEvent(source->event_queue, flags, event);
 }
@@ -1230,7 +1220,7 @@ static HRESULT WINAPI media_source_QueueEvent(IMFMediaSource *iface, MediaEventT
 {
     struct media_source *source = impl_from_IMFMediaSource(iface);
 
-    TRACE("%p, %d, %s, %#x, %p.\n", iface, event_type, debugstr_guid(ext_type), hr, value);
+    TRACE("%p, %lu, %s, %#lx, %p.\n", iface, event_type, debugstr_guid(ext_type), hr, value);
 
     return IMFMediaEventQueue_QueueEventParamVar(source->event_queue, event_type, ext_type, hr, value);
 }
@@ -1410,7 +1400,7 @@ static HRESULT media_source_constructor(IMFByteStream *bytestream, struct media_
 
     if (FAILED(hr = IMFByteStream_GetLength(bytestream, &file_size)))
     {
-        FIXME("Failed to get byte stream length, hr %#x.\n", hr);
+        FIXME("Failed to get byte stream length, hr %#lx.\n", hr);
         return hr;
     }
 
@@ -1425,6 +1415,7 @@ static HRESULT media_source_constructor(IMFByteStream *bytestream, struct media_
     object->ref = 1;
     object->byte_stream = bytestream;
     IMFByteStream_AddRef(bytestream);
+    object->rate = 1.0f;
 
     if (FAILED(hr = MFCreateEventQueue(&object->event_queue)))
         goto fail;
@@ -1467,7 +1458,7 @@ static HRESULT media_source_constructor(IMFByteStream *bytestream, struct media_
 
         if (FAILED(hr = media_stream_init_desc(object->streams[i])))
         {
-            ERR("Failed to finish initialization of media stream %p, hr %x.\n", object->streams[i], hr);
+            ERR("Failed to finish initialization of media stream %p, hr %#lx.\n", object->streams[i], hr);
             IMFMediaSource_Release(&object->streams[i]->parent_source->IMFMediaSource_iface);
             IMFMediaEventQueue_Release(object->streams[i]->event_queue);
             free(object->streams[i]);
@@ -1509,7 +1500,7 @@ static HRESULT media_source_constructor(IMFByteStream *bytestream, struct media_
     return S_OK;
 
     fail:
-    WARN("Failed to construct MFMediaSource, hr %#x.\n", hr);
+    WARN("Failed to construct MFMediaSource, hr %#lx.\n", hr);
 
     if (descriptors)
     {
@@ -1596,7 +1587,7 @@ static ULONG WINAPI winegstreamer_stream_handler_AddRef(IMFByteStreamHandler *if
     struct winegstreamer_stream_handler *handler = impl_from_IMFByteStreamHandler(iface);
     ULONG refcount = InterlockedIncrement(&handler->refcount);
 
-    TRACE("%p, refcount %u.\n", handler, refcount);
+    TRACE("%p, refcount %lu.\n", handler, refcount);
 
     return refcount;
 }
@@ -1607,7 +1598,7 @@ static ULONG WINAPI winegstreamer_stream_handler_Release(IMFByteStreamHandler *i
     ULONG refcount = InterlockedDecrement(&handler->refcount);
     struct winegstreamer_stream_handler_result *result, *next;
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     if (!refcount)
     {
@@ -1663,7 +1654,7 @@ static ULONG WINAPI create_object_context_AddRef(IUnknown *iface)
     struct create_object_context *context = impl_from_IUnknown(iface);
     ULONG refcount = InterlockedIncrement(&context->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     return refcount;
 }
@@ -1673,7 +1664,7 @@ static ULONG WINAPI create_object_context_Release(IUnknown *iface)
     struct create_object_context *context = impl_from_IUnknown(iface);
     ULONG refcount = InterlockedDecrement(&context->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     if (!refcount)
     {
@@ -1703,7 +1694,7 @@ static HRESULT WINAPI winegstreamer_stream_handler_BeginCreateObject(IMFByteStre
     IMFAsyncResult *caller, *item;
     HRESULT hr;
 
-    TRACE("%p, %s, %#x, %p, %p, %p, %p.\n", iface, debugstr_w(url), flags, props, cancel_cookie, callback, state);
+    TRACE("%p, %s, %#lx, %p, %p, %p, %p.\n", iface, debugstr_w(url), flags, props, cancel_cookie, callback, state);
 
     if (cancel_cookie)
         *cancel_cookie = NULL;
@@ -1880,7 +1871,7 @@ static HRESULT WINAPI winegstreamer_stream_handler_callback_GetParameters(IMFAsy
 static HRESULT winegstreamer_stream_handler_create_object(struct winegstreamer_stream_handler *This, WCHAR *url, IMFByteStream *stream, DWORD flags,
                                             IPropertyStore *props, IUnknown **out_object, MF_OBJECT_TYPE *out_obj_type)
 {
-    TRACE("%p, %s, %p, %u, %p, %p, %p.\n", This, debugstr_w(url), stream, flags, props, out_object, out_obj_type);
+    TRACE("%p, %s, %p, %#lx, %p, %p, %p.\n", This, debugstr_w(url), stream, flags, props, out_object, out_obj_type);
 
     if (flags & MF_RESOLUTION_MEDIASOURCE)
     {
@@ -1899,7 +1890,7 @@ static HRESULT winegstreamer_stream_handler_create_object(struct winegstreamer_s
     }
     else
     {
-        FIXME("flags = %08x\n", flags);
+        FIXME("Unhandled flags %#lx.\n", flags);
         return E_NOTIMPL;
     }
 }

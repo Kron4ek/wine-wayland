@@ -444,7 +444,7 @@ BOOL WINAPI SystemParametersInfoA( UINT uiAction, UINT uiParam,
  */
 INT WINAPI GetSystemMetrics( INT index )
 {
-    return NtUserCallOneParam( index, NtUserGetSystemMetrics );
+    return NtUserGetSystemMetrics( index );
 }
 
 
@@ -453,7 +453,7 @@ INT WINAPI GetSystemMetrics( INT index )
  */
 INT WINAPI GetSystemMetricsForDpi( INT index, UINT dpi )
 {
-    return NtUserCallTwoParam( index, dpi, NtUserGetSystemMetricsForDpi );
+    return NtUserGetSystemMetricsForDpi( index, dpi );
 }
 
 
@@ -486,7 +486,7 @@ BOOL WINAPI SetDoubleClickTime( UINT interval )
  */
 COLORREF WINAPI DECLSPEC_HOTPATCH GetSysColor( INT index )
 {
-    return NtUserCallOneParam( index, NtUserGetSysColor );
+    return NtUserGetSysColor( index );
 }
 
 
@@ -505,7 +505,7 @@ DWORD_PTR WINAPI SetSysColorsTemp( const COLORREF *pPens, const HBRUSH *pBrushes
  */
 HBRUSH WINAPI DECLSPEC_HOTPATCH GetSysColorBrush( INT index )
 {
-    return UlongToHandle( NtUserCallOneParam( index, NtUserGetSysColorBrush ));
+    return NtUserGetSysColorBrush( index );
 }
 
 
@@ -514,7 +514,7 @@ HBRUSH WINAPI DECLSPEC_HOTPATCH GetSysColorBrush( INT index )
  */
 HPEN SYSCOLOR_GetPen( INT index )
 {
-    return UlongToHandle( NtUserCallOneParam( index, NtUserGetSysColorPen ));
+    return NtUserGetSysColorPen( index );
 }
 
 
@@ -523,7 +523,7 @@ HPEN SYSCOLOR_GetPen( INT index )
  */
 HBRUSH SYSCOLOR_Get55AABrush(void)
 {
-    return UlongToHandle( NtUserCallOneParam( COLOR_55AA_BRUSH, NtUserGetSysColorBrush ));
+    return NtUserGetSysColorBrush( COLOR_55AA_BRUSH );
 }
 
 /***********************************************************************
@@ -989,89 +989,12 @@ BOOL WINAPI PhysicalToLogicalPointForPerMonitorDPI( HWND hwnd, POINT *pt )
     return ret;
 }
 
-struct monitor_enum_info
-{
-    RECT     rect;
-    UINT     max_area;
-    UINT     min_distance;
-    HMONITOR primary;
-    HMONITOR nearest;
-    HMONITOR ret;
-};
-
-/* helper callback for MonitorFromRect */
-static BOOL CALLBACK monitor_enum( HMONITOR monitor, HDC hdc, LPRECT rect, LPARAM lp )
-{
-    struct monitor_enum_info *info = (struct monitor_enum_info *)lp;
-    RECT intersect;
-
-    if (IntersectRect( &intersect, rect, &info->rect ))
-    {
-        /* check for larger intersecting area */
-        UINT area = (intersect.right - intersect.left) * (intersect.bottom - intersect.top);
-        if (area > info->max_area)
-        {
-            info->max_area = area;
-            info->ret = monitor;
-        }
-    }
-    else if (!info->max_area)  /* if not intersecting, check for min distance */
-    {
-        UINT distance;
-        UINT x, y;
-
-        if (info->rect.right <= rect->left) x = rect->left - info->rect.right;
-        else if (rect->right <= info->rect.left) x = info->rect.left - rect->right;
-        else x = 0;
-        if (info->rect.bottom <= rect->top) y = rect->top - info->rect.bottom;
-        else if (rect->bottom <= info->rect.top) y = info->rect.top - rect->bottom;
-        else y = 0;
-        distance = x * x + y * y;
-        if (distance < info->min_distance)
-        {
-            info->min_distance = distance;
-            info->nearest = monitor;
-        }
-    }
-    if (!info->primary)
-    {
-        MONITORINFO mon_info;
-        mon_info.cbSize = sizeof(mon_info);
-        GetMonitorInfoW( monitor, &mon_info );
-        if (mon_info.dwFlags & MONITORINFOF_PRIMARY) info->primary = monitor;
-    }
-    return TRUE;
-}
-
 /***********************************************************************
  *		MonitorFromRect (USER32.@)
  */
 HMONITOR WINAPI MonitorFromRect( const RECT *rect, DWORD flags )
 {
-    struct monitor_enum_info info;
-
-    info.rect         = *rect;
-    info.max_area     = 0;
-    info.min_distance = ~0u;
-    info.primary      = 0;
-    info.nearest      = 0;
-    info.ret          = 0;
-
-    if (IsRectEmpty(&info.rect))
-    {
-        info.rect.right = info.rect.left + 1;
-        info.rect.bottom = info.rect.top + 1;
-    }
-
-    if (!NtUserEnumDisplayMonitors( 0, NULL, monitor_enum, (LPARAM)&info )) return 0;
-    if (!info.ret)
-    {
-        if (flags & MONITOR_DEFAULTTOPRIMARY) info.ret = info.primary;
-        else if (flags & MONITOR_DEFAULTTONEAREST) info.ret = info.nearest;
-    }
-
-    TRACE( "%s flags %x returning %p\n", wine_dbgstr_rect(rect), flags, info.ret );
-    return info.ret;
+    return NtUserMonitorFromRect( rect, flags );
 }
 
 /***********************************************************************
@@ -1088,24 +1011,9 @@ HMONITOR WINAPI MonitorFromPoint( POINT pt, DWORD flags )
 /***********************************************************************
  *		MonitorFromWindow (USER32.@)
  */
-HMONITOR WINAPI MonitorFromWindow(HWND hWnd, DWORD dwFlags)
+HMONITOR WINAPI MonitorFromWindow( HWND hwnd, DWORD flags )
 {
-    RECT rect;
-    WINDOWPLACEMENT wp;
-
-    TRACE("(%p, 0x%08x)\n", hWnd, dwFlags);
-
-    wp.length = sizeof(wp);
-    if (IsIconic(hWnd) && GetWindowPlacement(hWnd, &wp))
-        return MonitorFromRect( &wp.rcNormalPosition, dwFlags );
-
-    if (GetWindowRect( hWnd, &rect ))
-        return MonitorFromRect( &rect, dwFlags );
-
-    if (!(dwFlags & (MONITOR_DEFAULTTOPRIMARY|MONITOR_DEFAULTTONEAREST))) return 0;
-    /* retrieve the primary */
-    SetRect( &rect, 0, 0, 1, 1 );
-    return MonitorFromRect( &rect, dwFlags );
+    return NtUserMonitorFromWindow( hwnd, flags );
 }
 
 /***********************************************************************
@@ -1137,7 +1045,7 @@ BOOL WINAPI GetMonitorInfoA( HMONITOR monitor, LPMONITORINFO info )
  */
 BOOL WINAPI GetMonitorInfoW( HMONITOR monitor, LPMONITORINFO info )
 {
-    return NtUserCallTwoParam( HandleToUlong(monitor), (ULONG_PTR)info, NtUserGetMonitorInfo );
+    return NtUserGetMonitorInfo( monitor, info );
 }
 
 #ifdef __i386__
@@ -1261,7 +1169,7 @@ BOOL WINAPI GetPhysicalCursorPos( POINT *point )
  */
 BOOL WINAPI SetPhysicalCursorPos( INT x, INT y )
 {
-    return SetCursorPos( x, y );
+    return NtUserSetCursorPos( x, y );
 }
 
 /***********************************************************************

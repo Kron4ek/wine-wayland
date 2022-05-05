@@ -274,14 +274,7 @@ static enum glx_swap_control_method swap_control_method = GLX_SWAP_CONTROL_NONE;
 static BOOL has_swap_control_tear = FALSE;
 static BOOL has_swap_method = FALSE;
 
-static CRITICAL_SECTION context_section;
-static CRITICAL_SECTION_DEBUG critsect_debug =
-{
-    0, 0, &context_section,
-    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": context_section") }
-};
-static CRITICAL_SECTION context_section = { &critsect_debug, -1, 0, 0, 0, 0 };
+static pthread_mutex_t context_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static const BOOL is_win64 = sizeof(void *) > sizeof(int);
 
@@ -541,7 +534,7 @@ done:
 
 static void *opengl_handle;
 
-static BOOL WINAPI init_opengl( INIT_ONCE *once, void *param, void **context )
+static void init_opengl(void)
 {
     int error_base, event_base;
     unsigned int i;
@@ -553,7 +546,7 @@ static BOOL WINAPI init_opengl( INIT_ONCE *once, void *param, void **context )
     {
         ERR( "Failed to load libGL: %s\n", dlerror() );
         ERR( "OpenGL support is disabled.\n");
-        return TRUE;
+        return;
     }
 
     for (i = 0; i < ARRAY_SIZE( opengl_func_names ); i++)
@@ -721,19 +714,18 @@ static BOOL WINAPI init_opengl( INIT_ONCE *once, void *param, void **context )
 
     X11DRV_WineGL_LoadExtensions();
     init_pixel_formats( gdi_display );
-    return TRUE;
+    return;
 
 failed:
     dlclose(opengl_handle);
     opengl_handle = NULL;
-    return TRUE;
 }
 
 static BOOL has_opengl(void)
 {
-    static INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
-    InitOnceExecuteOnce(&init_once, init_opengl, NULL, NULL);
-    return opengl_handle != NULL;
+    static pthread_once_t init_once = PTHREAD_ONCE_INIT;
+
+    return !pthread_once( &init_once, init_opengl );
 }
 
 static const char *debugstr_fbconfig( GLXFBConfig fbconfig )
@@ -1181,7 +1173,7 @@ static void mark_drawable_dirty( struct gl_drawable *old, struct gl_drawable *ne
 {
     struct wgl_context *ctx;
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     LIST_FOR_EACH_ENTRY( ctx, &context_list, struct wgl_context, entry )
     {
         if (old == ctx->drawables[0] || old == ctx->new_drawables[0])
@@ -1195,7 +1187,7 @@ static void mark_drawable_dirty( struct gl_drawable *old, struct gl_drawable *ne
             ctx->new_drawables[1] = grab_gl_drawable( new );
         }
     }
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
 }
 
 /* Given the current context, make sure its drawable is sync'd */
@@ -1203,7 +1195,7 @@ static inline void sync_context(struct wgl_context *context)
 {
     BOOL refresh = FALSE;
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     if (context->new_drawables[0])
     {
         release_gl_drawable( context->drawables[0] );
@@ -1226,7 +1218,7 @@ static inline void sync_context(struct wgl_context *context)
         else
             pglXMakeCurrent(gdi_display, context->drawables[0]->drawable, context->ctx);
     }
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
 }
 
 static BOOL set_swap_interval(GLXDrawable drawable, int interval)
@@ -1270,14 +1262,14 @@ static struct gl_drawable *get_gl_drawable( HWND hwnd, HDC hdc )
 {
     struct gl_drawable *gl;
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     if (hwnd && !XFindContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char **)&gl ))
         gl = grab_gl_drawable( gl );
     else if (hdc && !XFindContext( gdi_display, (XID)hdc, gl_pbuffer_context, (char **)&gl ))
         gl = grab_gl_drawable( gl );
     else
         gl = NULL;
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
     return gl;
 }
 
@@ -1312,7 +1304,7 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct wgl_pixel
     RECT rect;
     int width, height;
 
-    GetClientRect( hwnd, &rect );
+    NtUserGetClientRect( hwnd, &rect );
     width  = min( max( 1, rect.right ), 65535 );
     height = min( max( 1, rect.bottom ), 65535 );
 
@@ -1327,7 +1319,8 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct wgl_pixel
     gl->ref = 1;
     gl->mutable_pf = mutable_pf;
 
-    if (!known_child && !GetWindow( hwnd, GW_CHILD ) && GetAncestor( hwnd, GA_PARENT ) == GetDesktopWindow())  /* childless top-level window */
+    if (!known_child && !NtUserGetWindowRelative( hwnd, GW_CHILD ) &&
+        NtUserGetAncestor( hwnd, GA_PARENT ) == NtUserGetDesktopWindow())  /* childless top-level window */
     {
         gl->type = DC_GL_WINDOW;
         gl->window = create_client_window( hwnd, visual );
@@ -1369,14 +1362,14 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct wgl_pixel
         return NULL;
     }
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     if (!XFindContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char **)&prev ))
     {
         gl->swap_interval = prev->swap_interval;
         release_gl_drawable( prev );
     }
     XSaveContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char *)grab_gl_drawable(gl) );
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
     return gl;
 }
 
@@ -1398,7 +1391,7 @@ static BOOL set_win_format( HWND hwnd, const struct wgl_pixel_format *format, BO
     XFlush( gdi_display );
     release_gl_drawable( gl );
 
-    __wine_set_pixel_format( hwnd, pixel_format_index( format ));
+    NtUserSetWindowPixelFormat( hwnd, pixel_format_index( format ));
     return TRUE;
 }
 
@@ -1407,11 +1400,11 @@ static BOOL set_pixel_format(HDC hdc, int format, BOOL allow_change)
 {
     const struct wgl_pixel_format *fmt;
     int value;
-    HWND hwnd = WindowFromDC( hdc );
+    HWND hwnd = NtUserWindowFromDC( hdc );
 
     TRACE("(%p,%d)\n", hdc, format);
 
-    if (!hwnd || hwnd == GetDesktopWindow())
+    if (!hwnd || hwnd == NtUserGetDesktopWindow())
     {
         WARN( "not a valid window DC %p/%p\n", hdc, hwnd );
         return FALSE;
@@ -1493,7 +1486,7 @@ void set_gl_drawable_parent( HWND hwnd, HWND parent )
         break;
     case DC_GL_CHILD_WIN:
     case DC_GL_PIXMAP_WIN:
-        if (parent == GetDesktopWindow()) break;
+        if (parent == NtUserGetDesktopWindow()) break;
         /* fall through */
     default:
         release_gl_drawable( old );
@@ -1508,7 +1501,7 @@ void set_gl_drawable_parent( HWND hwnd, HWND parent )
     else
     {
         destroy_gl_drawable( hwnd );
-        __wine_set_pixel_format( hwnd, 0 );
+        NtUserSetWindowPixelFormat( hwnd, 0 );
     }
     release_gl_drawable( old );
 }
@@ -1521,13 +1514,13 @@ void destroy_gl_drawable( HWND hwnd )
 {
     struct gl_drawable *gl;
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     if (!XFindContext( gdi_display, (XID)hwnd, gl_hwnd_context, (char **)&gl ))
     {
         XDeleteContext( gdi_display, (XID)hwnd, gl_hwnd_context );
         release_gl_drawable( gl );
     }
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
 }
 
 
@@ -1684,7 +1677,7 @@ static int WINAPI glxdrv_wglGetPixelFormat( HDC hdc )
     struct gl_drawable *gl;
     int ret = 0;
 
-    if ((gl = get_gl_drawable( WindowFromDC( hdc ), hdc )))
+    if ((gl = get_gl_drawable( NtUserWindowFromDC( hdc ), hdc )))
     {
         ret = pixel_format_index( gl->format );
         /* Offscreen formats can't be used with traditional WGL calls.
@@ -1725,7 +1718,7 @@ static struct wgl_context * WINAPI glxdrv_wglCreateContext( HDC hdc )
     struct wgl_context *ret;
     struct gl_drawable *gl;
 
-    if (!(gl = get_gl_drawable( WindowFromDC( hdc ), hdc )))
+    if (!(gl = get_gl_drawable( NtUserWindowFromDC( hdc ), hdc )))
     {
         SetLastError( ERROR_INVALID_PIXEL_FORMAT );
         return NULL;
@@ -1736,9 +1729,9 @@ static struct wgl_context * WINAPI glxdrv_wglCreateContext( HDC hdc )
         ret->hdc = hdc;
         ret->fmt = gl->format;
         ret->ctx = create_glxcontext(gdi_display, ret, NULL);
-        EnterCriticalSection( &context_section );
+        pthread_mutex_lock( &context_mutex );
         list_add_head( &context_list, &ret->entry );
-        LeaveCriticalSection( &context_section );
+        pthread_mutex_unlock( &context_mutex );
     }
     release_gl_drawable( gl );
     TRACE( "%p -> %p\n", hdc, ret );
@@ -1754,7 +1747,7 @@ static BOOL WINAPI glxdrv_wglDeleteContext(struct wgl_context *ctx)
 
     TRACE("(%p)\n", ctx);
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     list_remove( &ctx->entry );
     LIST_FOR_EACH_ENTRY( pb, &pbuffer_list, struct wgl_pbuffer, entry )
     {
@@ -1763,7 +1756,7 @@ static BOOL WINAPI glxdrv_wglDeleteContext(struct wgl_context *ctx)
             pb->prev_context = pb->tmp_context = NULL;
         }
     }
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
 
     if (ctx->ctx) pglXDestroyContext( gdi_display, ctx->ctx );
     release_gl_drawable( ctx->drawables[0] );
@@ -1815,7 +1808,7 @@ static BOOL WINAPI glxdrv_wglMakeCurrent(HDC hdc, struct wgl_context *ctx)
         return TRUE;
     }
 
-    if ((gl = get_gl_drawable( WindowFromDC( hdc ), hdc )))
+    if ((gl = get_gl_drawable( NtUserWindowFromDC( hdc ), hdc )))
     {
         if (ctx->fmt != gl->format)
         {
@@ -1827,7 +1820,7 @@ static BOOL WINAPI glxdrv_wglMakeCurrent(HDC hdc, struct wgl_context *ctx)
         TRACE("hdc %p drawable %lx fmt %p ctx %p %s\n", hdc, gl->drawable, gl->format, ctx->ctx,
               debugstr_fbconfig( gl->format->fbconfig ));
 
-        EnterCriticalSection( &context_section );
+        pthread_mutex_lock( &context_mutex );
         ret = pglXMakeCurrent(gdi_display, gl->drawable, ctx->ctx);
         if (ret)
         {
@@ -1836,10 +1829,10 @@ static BOOL WINAPI glxdrv_wglMakeCurrent(HDC hdc, struct wgl_context *ctx)
             ctx->hdc = hdc;
             set_context_drawables( ctx, gl, gl );
             ctx->refresh_drawables = FALSE;
-            LeaveCriticalSection( &context_section );
+            pthread_mutex_unlock( &context_mutex );
             goto done;
         }
-        LeaveCriticalSection( &context_section );
+        pthread_mutex_unlock( &context_mutex );
     }
     SetLastError( ERROR_INVALID_HANDLE );
 
@@ -1868,11 +1861,11 @@ static BOOL X11DRV_wglMakeContextCurrentARB( HDC draw_hdc, HDC read_hdc, struct 
 
     if (!pglXMakeContextCurrent) return FALSE;
 
-    if ((draw_gl = get_gl_drawable( WindowFromDC( draw_hdc ), draw_hdc )))
+    if ((draw_gl = get_gl_drawable( NtUserWindowFromDC( draw_hdc ), draw_hdc )))
     {
-        read_gl = get_gl_drawable( WindowFromDC( read_hdc ), read_hdc );
+        read_gl = get_gl_drawable( NtUserWindowFromDC( read_hdc ), read_hdc );
 
-        EnterCriticalSection( &context_section );
+        pthread_mutex_lock( &context_mutex );
         ret = pglXMakeContextCurrent(gdi_display, draw_gl->drawable,
                                      read_gl ? read_gl->drawable : 0, ctx->ctx);
         if (ret)
@@ -1882,10 +1875,10 @@ static BOOL X11DRV_wglMakeContextCurrentARB( HDC draw_hdc, HDC read_hdc, struct 
             set_context_drawables( ctx, draw_gl, read_gl );
             ctx->refresh_drawables = FALSE;
             NtCurrentTeb()->glContext = ctx;
-            LeaveCriticalSection( &context_section );
+            pthread_mutex_unlock( &context_mutex );
             goto done;
         }
-        LeaveCriticalSection( &context_section );
+        pthread_mutex_unlock( &context_mutex );
     }
     SetLastError( ERROR_INVALID_HANDLE );
 done:
@@ -1950,7 +1943,7 @@ static void wglFinish(void)
     escape.gl_drawable = 0;
     escape.flush = FALSE;
 
-    if ((gl = get_gl_drawable( WindowFromDC( ctx->hdc ), 0 )))
+    if ((gl = get_gl_drawable( NtUserWindowFromDC( ctx->hdc ), 0 )))
     {
         switch (gl->type)
         {
@@ -1963,7 +1956,8 @@ static void wglFinish(void)
     }
 
     pglFinish();
-    if (escape.gl_drawable) ExtEscape( ctx->hdc, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
+    if (escape.gl_drawable)
+        NtGdiExtEscape( ctx->hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
 }
 
 static void wglFlush(void)
@@ -1976,7 +1970,7 @@ static void wglFlush(void)
     escape.gl_drawable = 0;
     escape.flush = FALSE;
 
-    if ((gl = get_gl_drawable( WindowFromDC( ctx->hdc ), 0 )))
+    if ((gl = get_gl_drawable( NtUserWindowFromDC( ctx->hdc ), 0 )))
     {
         switch (gl->type)
         {
@@ -1989,7 +1983,8 @@ static void wglFlush(void)
     }
 
     pglFlush();
-    if (escape.gl_drawable) ExtEscape( ctx->hdc, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
+    if (escape.gl_drawable)
+        NtGdiExtEscape( ctx->hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
 }
 
 static const GLubyte *wglGetString(GLenum name)
@@ -2010,7 +2005,7 @@ static struct wgl_context *X11DRV_wglCreateContextAttribsARB( HDC hdc, struct wg
 
     TRACE("(%p %p %p)\n", hdc, hShareContext, attribList);
 
-    if (!(gl = get_gl_drawable( WindowFromDC( hdc ), hdc )))
+    if (!(gl = get_gl_drawable( NtUserWindowFromDC( hdc ), hdc )))
     {
         SetLastError( ERROR_INVALID_PIXEL_FORMAT );
         return NULL;
@@ -2087,9 +2082,9 @@ static struct wgl_context *X11DRV_wglCreateContextAttribsARB( HDC hdc, struct wg
         }
         else
         {
-            EnterCriticalSection( &context_section );
+            pthread_mutex_lock( &context_mutex );
             list_add_head( &context_list, &ret->entry );
-            LeaveCriticalSection( &context_section );
+            pthread_mutex_unlock( &context_mutex );
         }
     }
 
@@ -2283,9 +2278,9 @@ static struct wgl_pbuffer *X11DRV_wglCreatePbufferARB( HDC hdc, int iPixelFormat
         SetLastError(ERROR_NO_SYSTEM_RESOURCES);
         goto create_failed; /* unexpected error */
     }
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     list_add_head( &pbuffer_list, &object->entry );
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
     TRACE("->(%p)\n", object);
     return object;
 
@@ -2304,9 +2299,9 @@ static BOOL X11DRV_wglDestroyPbufferARB( struct wgl_pbuffer *object )
 {
     TRACE("(%p)\n", object);
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     list_remove( &object->entry );
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
     pglXDestroyPbuffer(gdi_display, object->drawable);
     if (object->tmp_context)
         pglXDestroyContext(gdi_display, object->tmp_context);
@@ -2325,12 +2320,12 @@ static HDC X11DRV_wglGetPbufferDCARB( struct wgl_pbuffer *object )
     struct gl_drawable *gl, *prev;
     HDC hdc;
 
-    hdc = CreateDCA( "DISPLAY", NULL, NULL, NULL );
+    hdc = NtGdiOpenDCW( NULL, NULL, NULL, 0, TRUE, NULL, NULL, NULL );
     if (!hdc) return 0;
 
     if (!(gl = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*gl) )))
     {
-        DeleteDC( hdc );
+        NtGdiDeleteObjectApp( hdc );
         return 0;
     }
     gl->type = DC_GL_PBUFFER;
@@ -2338,17 +2333,17 @@ static HDC X11DRV_wglGetPbufferDCARB( struct wgl_pbuffer *object )
     gl->format = object->fmt;
     gl->ref = 1;
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     if (!XFindContext( gdi_display, (XID)hdc, gl_pbuffer_context, (char **)&prev ))
         release_gl_drawable( prev );
     XSaveContext( gdi_display, (XID)hdc, gl_pbuffer_context, (char *)gl );
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
 
     escape.code = X11DRV_SET_DRAWABLE;
     escape.drawable = object->drawable;
     escape.mode = IncludeInferiors;
     SetRect( &escape.dc_rect, 0, 0, object->width, object->height );
-    ExtEscape( hdc, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
+    NtGdiExtEscape( hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
 
     TRACE( "(%p)->(%p)\n", object, hdc );
     return hdc;
@@ -2454,7 +2449,7 @@ static int X11DRV_wglReleasePbufferDCARB( struct wgl_pbuffer *object, HDC hdc )
 
     TRACE("(%p, %p)\n", object, hdc);
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
 
     if (!XFindContext( gdi_display, (XID)hdc, gl_pbuffer_context, (char **)&gl ))
     {
@@ -2463,9 +2458,9 @@ static int X11DRV_wglReleasePbufferDCARB( struct wgl_pbuffer *object, HDC hdc )
     }
     else hdc = 0;
 
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
 
-    return hdc && DeleteDC(hdc);
+    return hdc && NtGdiDeleteObjectApp(hdc);
 }
 
 /**
@@ -3053,7 +3048,7 @@ static int X11DRV_wglGetSwapIntervalEXT(void)
 
     TRACE("()\n");
 
-    if (!(gl = get_gl_drawable( WindowFromDC( ctx->hdc ), ctx->hdc )))
+    if (!(gl = get_gl_drawable( NtUserWindowFromDC( ctx->hdc ), ctx->hdc )))
     {
         /* This can't happen because a current WGL context is required to get
          * here. Likely the application is buggy.
@@ -3090,13 +3085,13 @@ static BOOL X11DRV_wglSwapIntervalEXT(int interval)
         return FALSE;
     }
 
-    if (!(gl = get_gl_drawable( WindowFromDC( ctx->hdc ), ctx->hdc )))
+    if (!(gl = get_gl_drawable( NtUserWindowFromDC( ctx->hdc ), ctx->hdc )))
     {
         SetLastError(ERROR_DC_NOT_FOUND);
         return FALSE;
     }
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     ret = set_swap_interval(gl->drawable, interval);
     gl->refresh_swap_interval = FALSE;
     if (ret)
@@ -3104,7 +3099,7 @@ static BOOL X11DRV_wglSwapIntervalEXT(int interval)
     else
         SetLastError(ERROR_DC_NOT_FOUND);
 
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
     release_gl_drawable(gl);
 
     return ret;
@@ -3315,19 +3310,19 @@ static BOOL WINAPI glxdrv_wglSwapBuffers( HDC hdc )
     escape.gl_drawable = 0;
     escape.flush = !pglXWaitForSbcOML;
 
-    if (!(gl = get_gl_drawable( WindowFromDC( hdc ), hdc )))
+    if (!(gl = get_gl_drawable( NtUserWindowFromDC( hdc ), hdc )))
     {
         SetLastError( ERROR_INVALID_HANDLE );
         return FALSE;
     }
 
-    EnterCriticalSection( &context_section );
+    pthread_mutex_lock( &context_mutex );
     if (gl->refresh_swap_interval)
     {
         set_swap_interval(gl->drawable, gl->swap_interval);
         gl->refresh_swap_interval = FALSE;
     }
-    LeaveCriticalSection( &context_section );
+    pthread_mutex_unlock( &context_mutex );
 
     switch (gl->type)
     {
@@ -3372,7 +3367,8 @@ static BOOL WINAPI glxdrv_wglSwapBuffers( HDC hdc )
 
     release_gl_drawable( gl );
 
-    if (escape.gl_drawable) ExtEscape( ctx->hdc, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
+    if (escape.gl_drawable)
+        NtGdiExtEscape( ctx->hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
     return TRUE;
 }
 

@@ -63,7 +63,6 @@ AC_ARG_WITH(udev,      AS_HELP_STRING([--without-udev],[do not use udev (plug an
 AC_ARG_WITH(unwind,    AS_HELP_STRING([--without-unwind],[do not use the libunwind library (exception handling)]))
 AC_ARG_WITH(usb,       AS_HELP_STRING([--without-usb],[do not use the libusb library]))
 AC_ARG_WITH(v4l2,      AS_HELP_STRING([--without-v4l2],[do not use v4l2 (video capture)]))
-AC_ARG_WITH(vkd3d,     AS_HELP_STRING([--without-vkd3d],[do not use vkd3d (Direct3D 12 support)]))
 AC_ARG_WITH(vulkan,    AS_HELP_STRING([--without-vulkan],[do not use Vulkan]))
 AC_ARG_WITH(xcomposite,AS_HELP_STRING([--without-xcomposite],[do not use the Xcomposite extension]),
             [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_Xcomposite_h=no; fi])
@@ -193,10 +192,6 @@ case $host in
     TARGETFLAGS="$TARGETFLAGS -mfloat-abi=$float_abi"
     ;;
   aarch64*)
-    AC_CACHE_CHECK([whether $CC supports __builtin_ms_va_list],wine_cv_builtin_ms_va_list,
-        [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>]], [[void func(__builtin_ms_va_list *args);]])],
-                      [wine_cv_builtin_ms_va_list=yes],[wine_cv_builtin_ms_va_list=no])])
-    test $wine_cv_builtin_ms_va_list != no || AC_MSG_ERROR([You need clang >= 5.0 to build Wine for arm64.])
     enable_wow64=${enable_wow64:-yes}
     enable_wow64win=${enable_wow64win:-yes}
     ;;
@@ -250,7 +245,6 @@ AC_SUBST(toolsdir,[$wine_cv_toolsdir])
 AC_SUBST(MAKEDEP,[$wine_makedep])
 AC_SUBST(RUNTESTFLAGS,["-q -P wine"])
 AC_SUBST(SED_CMD,["LC_ALL=C sed -e 's,@bindir@,\${bindir},g' -e 's,@dlldir@,\${dlldir},g' -e 's,@PACKAGE_STRING@,$PACKAGE_STRING,g' -e 's,@PACKAGE_VERSION@,$PACKAGE_VERSION,g'"])
-AC_SUBST(api_manext,[3w])
 
 if test -n "$host_alias" -a "$host_alias" != "$build_alias"
 then
@@ -436,7 +430,6 @@ AC_CHECK_HEADERS(\
 	elf.h \
 	float.h \
 	gettext-po.h \
-	ieeefp.h \
 	libproc.h \
 	link.h \
 	linux/cdrom.h \
@@ -673,7 +666,6 @@ case $host_os in
                                      [LDDLLFLAGS="-Wl,--disable-stdcall-fixup"]) ;;
     esac
     dnl Disable modules that can't be used on Windows
-    enable_mountmgr_sys=${enable_mountmgr_sys:-no}
     enable_loader=${enable_loader:-no}
     enable_server=${enable_server:-no}
     dnl Disable dependencies that are not useful on Windows
@@ -781,7 +773,7 @@ case $host_os in
         LIBS="$ac_save_LIBS"
     fi
 
-    UNIXLDFLAGS="-dynamiclib -install_name @loader_path/\$(UNIXLIB)"
+    UNIXLDFLAGS="-dynamiclib -install_name @rpath/\$(UNIXLIB) -Wl,-rpath,@loader_path\/"
     AC_SUBST(LIBWINE_SHAREDLIB,"libwine.$libwine_version.dylib")
     AC_SUBST(LIBWINE_LDFLAGS,["-dynamiclib -install_name @rpath/libwine.$libwine_soversion.dylib -Wl,-rpath,@loader_path/ -compatibility_version $libwine_soversion -current_version $libwine_version"])
     AC_SUBST(WINELOADER_DEPENDS,"wine_info.plist")
@@ -814,6 +806,7 @@ case $host_os in
 
   *)
     AC_DEFINE(_GNU_SOURCE,1,[Define to 1 to enable GNU extensions on Linux])
+    test "$ac_cv_sys_file_offset_bits" = 64 && AC_DEFINE(_TIME_BITS,64,[Define to 64 to enable 64-bit time_t on Linux])
     case $host_cpu in
       *i[[3456789]]86*)
         DLLFLAGS="$DLLFLAGS -fno-PIC"
@@ -921,6 +914,23 @@ then
                                   AC_SUBST(DELAYLOADFLAG,["-Wl,-delayload,"])
                                   CFLAGS="$CFLAGS $llvm_cflags"])
         fi
+        AC_MSG_CHECKING([for $CROSSCC option to enable C99 features])
+        AC_CACHE_VAL([wine_cv_crosscc_c99],
+            [wine_cv_crosscc_c99=no
+             for arg in '' '-std=gnu99'
+             do
+                 CC="$CROSSCC $arg"
+                 AC_COMPILE_IFELSE([AC_LANG_SOURCE([$ac_c_conftest_c99_program])],
+                                   [wine_cv_crosscc_c99=$arg],[wine_cv_crosscc_c99=no])
+                 test "x$wine_cv_crosscc_c99" != xno && break
+             done])
+        case "x$wine_cv_crosscc_c99" in
+          x) AC_MSG_RESULT([none needed]) ;;
+          xno) AC_MSG_RESULT([unsupported]) ;;
+          x*) AC_MSG_RESULT([$wine_cv_crosscc_c99])
+              CROSSCC="$CROSSCC $wine_cv_crosscc_c99" ;;
+        esac
+
         WINE_TRY_CROSSCFLAGS([-fno-strict-aliasing])
         dnl clang needs to be told to fail on unknown options
         WINE_TRY_CROSSCFLAGS([-Werror=unknown-warning-option],[CFLAGS="$CFLAGS -Werror=unknown-warning-option"])
@@ -996,6 +1006,10 @@ then
 fi
 WINE_NOTICE_WITH(mingw,[test "x$CROSSTARGET" = "x"],
                  [MinGW compiler not found, cross-compiling PE files won't be supported.])
+
+case $host_cpu in
+  aarch64*) test "x$CROSSTARGET" != x || AC_MSG_ERROR([PE cross-compilation is required for ARM64, please install clang/llvm-dlltool/lld, or llvm-mingw.]) ;;
+esac
 
 dnl **** External libraries ****
 
@@ -1088,6 +1102,27 @@ then
         WINE_NOTICE([libxslt ${notice_platform}MinGW development files not found; using bundled version.])
     fi
 
+    WINE_MINGW_PACKAGE_FLAGS(VKD3D,[libvkd3d libvkd3d-shader],[-lvkd3d -lvkd3d-shader],
+        [WINE_CHECK_MINGW_HEADER(vkd3d.h)
+        WINE_CHECK_MINGW_HEADER(vkd3d_shader.h)
+        if test "$ac_cv_mingw_header_vkd3d_h" = "yes" -a "$ac_cv_mingw_header_vkd3d_shader_h" = "yes"
+        then
+            WINE_CHECK_MINGW_LIB(vkd3d,vkd3d_serialize_versioned_root_signature,[:],[:],[$VKD3D_PE_LIBS])
+            WINE_CHECK_MINGW_LIB(vkd3d-shader,vkd3d_shader_compile,[:],[:],[$VKD3D_PE_LIBS])
+            if test "$ac_cv_mingw_lib_vkd3d" = "no" -o "$ac_cv_mingw_lib_vkd3d_shader" = "no"
+            then
+                VKD3D_PE_CFLAGS=""
+                VKD3D_PE_LIBS=""
+            fi
+        else
+            VKD3D_PE_CFLAGS=""
+            VKD3D_PE_LIBS=""
+        fi])
+    if test "x$VKD3D_PE_LIBS" = "x"
+    then
+        WINE_NOTICE([libvkd3d ${notice_platform}MinGW development files not found; using bundled version.])
+    fi
+
     WINE_MINGW_PACKAGE_FLAGS(ZLIB,[zlib],[-lz],
         [WINE_CHECK_MINGW_HEADER(zlib.h,
             [WINE_CHECK_MINGW_LIB(z,inflate,[:],[ZLIB_PE_CFLAGS=""; ZLIB_PE_LIBS=""],[$ZLIB_PE_LIBS])],
@@ -1105,7 +1140,8 @@ WINE_EXTLIB_FLAGS(JXR, jxr, jxr, "-I\$(top_srcdir)/libs/jxr/jxrgluelib -I\$(top_
 WINE_EXTLIB_FLAGS(LCMS2, lcms2, lcms2, "-I\$(top_srcdir)/libs/lcms2/include")
 WINE_EXTLIB_FLAGS(MPG123, mpg123, mpg123, "-I\$(top_srcdir)/libs/mpg123/src/libmpg123")
 WINE_EXTLIB_FLAGS(PNG, png, "png \$(ZLIB_PE_LIBS)", "-I\$(top_srcdir)/libs/png")
-WINE_EXTLIB_FLAGS(TIFF, tiff, tiff, "-I\$(top_srcdir)/libs/tiff/libtiff")
+WINE_EXTLIB_FLAGS(TIFF, tiff, "tiff \$(ZLIB_PE_LIBS)", "-I\$(top_srcdir)/libs/tiff/libtiff")
+WINE_EXTLIB_FLAGS(VKD3D, vkd3d, vkd3d, "-I\$(top_srcdir)/libs/vkd3d/include")
 WINE_EXTLIB_FLAGS(XML2, xml2, xml2, "-I\$(top_srcdir)/libs/xml2/include -DLIBXML_STATIC")
 WINE_EXTLIB_FLAGS(XSLT, xslt, xslt, "-I\$(top_srcdir)/libs/xslt -DLIBXSLT_STATIC")
 WINE_EXTLIB_FLAGS(ZLIB, zlib, z, "-I\$(top_srcdir)/libs/zlib -DFAR= -DZ_SOLO")
@@ -1649,7 +1685,7 @@ then
         AC_CHECK_LIB(capi20,capi20_register,[:],[CAPI20_LIBS=""],[$CAPI20_LIBS])
     fi])
 fi
-WINE_NOTICE_WITH(capi,[test "x$ac_cv_lib_capi20_capi20_register" = "x"],
+WINE_NOTICE_WITH(capi,[test "x$ac_cv_lib_capi20_capi20_register" != xyes],
                  [libcapi20 ${notice_platform}development files not found, ISDN won't be supported.],
                  [enable_capi2032])
 
@@ -1773,18 +1809,6 @@ fi
 WINE_NOTICE_WITH(vulkan,[test "x$ac_cv_lib_soname_vulkan" = "x" -a "x$ac_cv_lib_soname_MoltenVK" = "x"],
                  [libvulkan and libMoltenVK ${notice_platform}development files not found, Vulkan won't be supported.])
 
-dnl **** Check for vkd3d ****
-if test "x$with_vkd3d" != "xno"
-then
-    WINE_PACKAGE_FLAGS(VKD3D,[libvkd3d],,,,
-        [WINE_CHECK_SONAME(vkd3d,vkd3d_serialize_versioned_root_signature,,,[$VKD3D_LIBS])])
-    WINE_PACKAGE_FLAGS(VKD3D_SHADER,[libvkd3d-shader],,,,
-        [WINE_CHECK_SONAME(vkd3d-shader,vkd3d_shader_compile,,,[$VKD3D_SHADER_LIBS])])
-fi
-WINE_NOTICE_WITH(vkd3d,[test "x$ac_cv_lib_soname_vkd3d" = "x"],
-                 [vkd3d ${notice_platform}development files not found (or too old), Direct3D 12 won't be supported.])
-test "x$ac_cv_lib_soname_vkd3d" != "x" || enable_d3d12=${enable_d3d12:-no}
-
 dnl **** Check for gcc specific options ****
 
 if test "x${GCC}" = "xyes"
@@ -1883,7 +1907,8 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
        WINE_TRY_CFLAGS([-Wl,-delayload,autoconftest.dll],[AC_SUBST(DELAYLOADFLAG,["-Wl,-delayload,"])]) ;;
     *) MSVCRTFLAGS="-D_WIN32"
        WINE_TRY_CFLAGS([-fno-builtin],[MSVCRTFLAGS="$MSVCRTFLAGS -fno-builtin"])
-       WINE_TRY_CFLAGS([-fshort-wchar],[MSVCRTFLAGS="$MSVCRTFLAGS -fshort-wchar"]) ;;
+       WINE_TRY_CFLAGS([-fshort-wchar],[MSVCRTFLAGS="$MSVCRTFLAGS -fshort-wchar"])
+       WINE_TRY_CFLAGS([-Wno-format],[MSVCRTFLAGS="$MSVCRTFLAGS -Wno-format"]) ;;
   esac
 
   case $host_cpu in
@@ -1894,7 +1919,17 @@ char*f(const char *h,char n) {return strchr(h,n);}]])],[ac_cv_c_logicalop_noisy=
         dnl Mingw uses Windows 64-bit types, not Unix ones
         cygwin*|mingw32*) WINE_TRY_CFLAGS([-Wno-format]) ;;
         dnl Default to ms_abi on 64-bit
-        *) WINE_TRY_CFLAGS([-mabi=ms],[MSVCRTFLAGS="$MSVCRTFLAGS -mabi=ms"]) ;;
+        *) if test -z "$CROSSTARGET"
+           then
+               AC_CACHE_CHECK([for working -mabi=ms], ac_cv_mabi_ms,
+                   [CFLAGS="$CFLAGS -mabi=ms"
+                    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>
+int a(int b, ...) { __builtin_ms_va_list list; __builtin_ms_va_start(list,b); }]])],
+                       [ac_cv_mabi_ms=yes],[ac_cv_mabi_ms=no])
+                    CFLAGS=$saved_CFLAGS])
+               test $ac_cv_mabi_ms = yes || AC_MSG_ERROR([The compiler doesn't support -mabi=ms. Use gcc instead of clang, or install mingw-w64.])
+           fi
+           MSVCRTFLAGS="$MSVCRTFLAGS -mabi=ms" ;;
       esac ;;
   esac
 
@@ -2235,32 +2270,6 @@ AC_CHECK_MEMBERS([struct sysinfo.totalram, struct sysinfo.mem_unit],,,
 # include <sys/sysinfo.h>
 #endif])
 
-dnl Check for isfinite
-ac_save_LIBS="$LIBS"
-LIBS="$LIBS -lm"
-AC_CACHE_CHECK([for isfinite], ac_cv_have_isfinite,
-               AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <math.h>]], [[float f = 0.0; return isfinite(f)]])],[ac_cv_have_isfinite="yes"],[ac_cv_have_isfinite="no"]))
-if test "$ac_cv_have_isfinite" = "yes"
-then
-    AC_DEFINE(HAVE_ISFINITE, 1, [Define to 1 if you have the `isfinite' function.])
-fi
-
-dnl Check for isinf
-AC_CACHE_CHECK([for isinf], ac_cv_have_isinf,
-               AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <math.h>]], [[float f = 0.0; return isinf(f)]])],[ac_cv_have_isinf="yes"],[ac_cv_have_isinf="no"]))
-if test "$ac_cv_have_isinf" = "yes"
-then
-    AC_DEFINE(HAVE_ISINF, 1, [Define to 1 if you have the `isinf' function.])
-fi
-
-dnl Check for isnan
-AC_CACHE_CHECK([for isnan], ac_cv_have_isnan,
-               AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <math.h>]], [[float f = 0.0; return isnan(f)]])],[ac_cv_have_isnan="yes"],[ac_cv_have_isnan="no"]))
-if test "$ac_cv_have_isnan" = "yes"
-then
-    AC_DEFINE(HAVE_ISNAN, 1, [Define to 1 if you have the `isnan' function.])
-fi
-
 LIBS="$ac_save_LIBS"
 
 dnl Check for __builtin_popcount
@@ -2323,244 +2332,7 @@ WINE_CONFIG_MAKEFILE(dlls/advapi32)
 WINE_CONFIG_MAKEFILE(dlls/advpack)
 WINE_CONFIG_MAKEFILE(dlls/amsi)
 WINE_CONFIG_MAKEFILE(dlls/amstream)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-appmodel-identity-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-appmodel-runtime-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-appmodel-runtime-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-appmodel-runtime-l1-1-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-apiquery-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-appcompat-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-appinit-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-atoms-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-bem-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-com-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-com-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-com-private-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-comm-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-console-l3-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-crt-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-crt-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-datetime-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-datetime-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-debug-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-debug-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-delayload-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-delayload-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-errorhandling-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-errorhandling-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-errorhandling-l1-1-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-errorhandling-l1-1-3)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-featurestaging-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-fibers-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-fibers-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-ansi-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-fromapp-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-l1-2-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-l1-2-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-l2-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-file-l2-1-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-handle-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-heap-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-heap-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-heap-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-heap-obsolete-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-interlocked-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-interlocked-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-io-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-io-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-job-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-job-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-legacy-l1-1-5)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-kernel32-private-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-largeinteger-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-2-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l1-2-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-libraryloader-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l1-2-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l1-2-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-obsolete-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-obsolete-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-obsolete-l1-3-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localization-private-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-localregistry-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-3)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-memory-l1-1-4)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-misc-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-namedpipe-ansi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-namedpipe-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-namedpipe-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-namespace-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-normalization-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-path-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-privateprofile-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-processenvironment-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-processenvironment-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-processthreads-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-processthreads-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-processthreads-l1-1-2)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-processthreads-l1-1-3)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-processtopology-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-processtopology-obsolete-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-profile-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-psapi-ansi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-psapi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-psapi-obsolete-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-psm-appnotify-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-quirks-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-realtime-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-realtime-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registry-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registry-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registry-l2-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-registryuserspecific-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-rtlsupport-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-rtlsupport-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-shlwapi-legacy-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-shlwapi-obsolete-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-shlwapi-obsolete-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-shutdown-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-sidebyside-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-string-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-string-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-string-obsolete-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-stringansi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-stringloader-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-synch-ansi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-synch-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-synch-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-synch-l1-2-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-sysinfo-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-sysinfo-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-sysinfo-l1-2-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-systemtopology-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-threadpool-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-threadpool-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-threadpool-legacy-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-threadpool-private-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-timezone-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-toolhelp-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-url-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-util-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-version-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-version-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-version-private-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-versionansi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-windowserrorreporting-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-windowserrorreporting-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-error-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-error-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-errorprivate-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-registration-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-roparameterizediid-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-string-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-winrt-string-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-wow64-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-wow64-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-xstate-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-core-xstate-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-conio-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-convert-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-environment-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-filesystem-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-heap-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-locale-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-math-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-multibyte-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-private-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-process-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-runtime-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-stdio-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-string-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-time-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-crt-utility-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-devices-config-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-devices-config-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-devices-query-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-advapi32-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-advapi32-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-kernel32-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-normaliz-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-ole32-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-shell32-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-shlwapi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-shlwapi-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-user32-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-downlevel-version-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-dx-d3dkmt-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventing-classicprovider-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventing-consumer-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventing-controller-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventing-legacy-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventing-provider-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-eventlog-legacy-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-gaming-tcui-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-gdi-dpiinfo-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-mm-joystick-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-mm-misc-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-mm-mme-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-mm-time-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-ntuser-dc-access-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-ntuser-rectangle-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-ntuser-sysparams-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-perf-legacy-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-power-base-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-power-setting-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-rtcore-ntuser-draw-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-rtcore-ntuser-private-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-rtcore-ntuser-private-l1-1-4)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-rtcore-ntuser-window-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-rtcore-ntuser-winevent-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-rtcore-ntuser-wmpointer-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-rtcore-ntuser-wmpointer-l1-1-3)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-activedirectoryclient-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-audit-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-base-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-base-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-base-private-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-credentials-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-cryptoapi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-grouppolicy-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-lsalookup-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-lsalookup-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-lsalookup-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-lsalookup-l2-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-lsapolicy-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-provider-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-sddl-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-security-systemfunctions-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-service-core-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-service-core-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-service-management-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-service-management-l2-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-service-private-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-service-winsvc-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-service-winsvc-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-shcore-obsolete-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-shcore-scaling-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-shcore-scaling-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-shcore-stream-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-shcore-stream-winrt-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-shcore-thread-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-shell-shellcom-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/api-ms-win-shell-shellfolders-l1-1-0)
+WINE_CONFIG_MAKEFILE(dlls/apisetschema)
 WINE_CONFIG_MAKEFILE(dlls/apphelp)
 WINE_CONFIG_MAKEFILE(dlls/appwiz.cpl)
 WINE_CONFIG_MAKEFILE(dlls/atl)
@@ -2677,6 +2449,7 @@ WINE_CONFIG_MAKEFILE(dlls/ddrawex)
 WINE_CONFIG_MAKEFILE(dlls/devenum)
 WINE_CONFIG_MAKEFILE(dlls/dhcpcsvc)
 WINE_CONFIG_MAKEFILE(dlls/dhcpcsvc6)
+WINE_CONFIG_MAKEFILE(dlls/diasymreader)
 WINE_CONFIG_MAKEFILE(dlls/difxapi)
 WINE_CONFIG_MAKEFILE(dlls/dinput)
 WINE_CONFIG_MAKEFILE(dlls/dinput8)
@@ -2719,58 +2492,6 @@ WINE_CONFIG_MAKEFILE(dlls/dxva2)
 WINE_CONFIG_MAKEFILE(dlls/esent)
 WINE_CONFIG_MAKEFILE(dlls/evr)
 WINE_CONFIG_MAKEFILE(dlls/explorerframe)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-authz-context-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-domainjoin-netjoin-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-dwmapi-ext-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-dc-create-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-dc-create-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-dc-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-devcaps-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-draw-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-draw-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-font-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-font-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-gdi-render-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-kernel32-package-current-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-kernel32-package-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-dialogbox-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-draw-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-gui-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-gui-l1-3-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-keyboard-l1-3-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-message-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-message-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-misc-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-misc-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-misc-l1-5-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-mouse-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-private-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-private-l1-3-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-rectangle-ext-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-uicontext-ext-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-window-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-window-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-window-l1-1-4)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-windowclass-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ntuser-windowclass-l1-1-1)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-oleacc-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-ras-rasapi32-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-gdi-devcaps-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-gdi-object-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-gdi-rgn-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-cursor-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-dc-access-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-dpi-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-dpi-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-rawinput-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-syscolors-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-rtcore-ntuser-sysparams-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-security-credui-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-security-cryptui-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-shell-comctl32-init-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-shell-comdlg32-l1-1-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-shell-shell32-l1-2-0)
-WINE_CONFIG_MAKEFILE(dlls/ext-ms-win-uxtheme-themes-l1-1-0)
 WINE_CONFIG_MAKEFILE(dlls/faultrep)
 WINE_CONFIG_MAKEFILE(dlls/feclient)
 WINE_CONFIG_MAKEFILE(dlls/fltlib)
@@ -2904,6 +2625,7 @@ WINE_CONFIG_MAKEFILE(dlls/msvcp120)
 WINE_CONFIG_MAKEFILE(dlls/msvcp120_app)
 WINE_CONFIG_MAKEFILE(dlls/msvcp140)
 WINE_CONFIG_MAKEFILE(dlls/msvcp140_1)
+WINE_CONFIG_MAKEFILE(dlls/msvcp140_atomic_wait)
 WINE_CONFIG_MAKEFILE(dlls/msvcp60)
 WINE_CONFIG_MAKEFILE(dlls/msvcp70)
 WINE_CONFIG_MAKEFILE(dlls/msvcp71)
@@ -3157,9 +2879,11 @@ WINE_CONFIG_MAKEFILE(dlls/winsta)
 WINE_CONFIG_MAKEFILE(dlls/wintab.dll16,enable_win16)
 WINE_CONFIG_MAKEFILE(dlls/wintab32)
 WINE_CONFIG_MAKEFILE(dlls/wintrust)
+WINE_CONFIG_MAKEFILE(dlls/wintypes)
 WINE_CONFIG_MAKEFILE(dlls/winusb)
 WINE_CONFIG_MAKEFILE(dlls/wlanapi)
 WINE_CONFIG_MAKEFILE(dlls/wldap32)
+WINE_CONFIG_MAKEFILE(dlls/wmadmod)
 WINE_CONFIG_MAKEFILE(dlls/wmasf)
 WINE_CONFIG_MAKEFILE(dlls/wmi)
 WINE_CONFIG_MAKEFILE(dlls/wmiutils)
@@ -3243,6 +2967,7 @@ WINE_CONFIG_MAKEFILE(libs/strmbase)
 WINE_CONFIG_MAKEFILE(libs/strmiids)
 WINE_CONFIG_MAKEFILE(libs/tiff)
 WINE_CONFIG_MAKEFILE(libs/uuid)
+WINE_CONFIG_MAKEFILE(libs/vkd3d)
 WINE_CONFIG_MAKEFILE(libs/wbemuuid)
 WINE_CONFIG_MAKEFILE(libs/wine)
 WINE_CONFIG_MAKEFILE(libs/wmcodecdspuuid)
@@ -3262,9 +2987,11 @@ WINE_CONFIG_MAKEFILE(programs/conhost)
 WINE_CONFIG_MAKEFILE(programs/control)
 WINE_CONFIG_MAKEFILE(programs/cscript)
 WINE_CONFIG_MAKEFILE(programs/dism)
+WINE_CONFIG_MAKEFILE(programs/dllhost)
 WINE_CONFIG_MAKEFILE(programs/dpnsvr)
 WINE_CONFIG_MAKEFILE(programs/dpvsetup)
 WINE_CONFIG_MAKEFILE(programs/expand)
+WINE_CONFIG_MAKEFILE(programs/explorer)
 WINE_CONFIG_MAKEFILE(programs/extrac32)
 WINE_CONFIG_MAKEFILE(programs/fc)
 WINE_CONFIG_MAKEFILE(programs/find)
@@ -3384,10 +3111,6 @@ AC_CONFIG_COMMANDS([Makefile], [wine_fn_output_makefile Makefile],
 # uninstall:       uninstall everything
 # ctags:           create a tags file for vim and others.
 # etags:           create a TAGS file for Emacs.
-# manpages:        compile manpages for Wine API
-# htmlpages:       compile html pages for Wine API
-# sgmlpages:       compile sgml source for the Wine API Guide
-# xmlpages:        compile xml source for the Wine API Guide
 
 m4_set_foreach([_AC_SUBST_VARS],[var],[var = $var
 ])$SET_MAKE
@@ -3490,13 +3213,9 @@ dnl Rules for cleaning
 
 WINE_APPEND_RULE(
 [distclean:: clean
-	rm -rf autom4te.cache documentation/html documentation/api-guide documentation/api-guide-xml documentation/man\$(api_manext)])
-
-dnl Rules for API documentation
-
-WINE_APPEND_RULE(
-[install-manpages:: manpages
-	for i in documentation/man\$(api_manext)/*.\$(api_manext); do ${wine_srcdir}tools/install-sh -m 644 \$(INSTALL_DATA_FLAGS) \$\$i \$(DESTDIR)\$(mandir)/\$\$i; done])
+	rm -rf autom4te.cache
+maintainer-clean::
+	rm -f configure include/config.h.in])
 
 dnl Rules for generated source files
 

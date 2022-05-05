@@ -16,8 +16,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include "wined3d_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d_shader);
@@ -1320,6 +1318,9 @@ static void *shader_sm4_init(const DWORD *byte_code, size_t byte_code_size,
     {
         struct wined3d_shader_signature_element *e = &output_signature->elements[i];
 
+        if (priv->shader_version.type == WINED3D_SHADER_TYPE_PIXEL
+                && stricmp(e->semantic_name, "SV_TARGET"))
+            continue;
         if (e->register_idx >= ARRAY_SIZE(priv->output_map))
         {
             WARN("Invalid output index %u.\n", e->register_idx);

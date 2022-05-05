@@ -22,8 +22,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <stdio.h>
 #include <string.h>
 
@@ -3578,24 +3576,24 @@ static BOOL match_usage(BYTE usage1, BYTE usage_idx1, BYTE usage2, BYTE usage_id
     return FALSE;
 }
 
-BOOL vshader_get_input(const struct wined3d_shader *shader,
-        BYTE usage_req, BYTE usage_idx_req, unsigned int *regnum)
+bool vshader_get_input(const struct wined3d_shader *shader,
+        uint8_t usage_req, uint8_t usage_idx_req, unsigned int *regnum)
 {
-    WORD map = shader->reg_maps.input_registers;
+    uint32_t map = shader->reg_maps.input_registers & 0xffff;
     unsigned int i;
 
-    for (i = 0; map; map >>= 1, ++i)
+    while (map)
     {
-        if (!(map & 1)) continue;
-
+        i = wined3d_bit_scan(&map);
         if (match_usage(shader->u.vs.attributes[i].usage,
                 shader->u.vs.attributes[i].usage_idx, usage_req, usage_idx_req))
         {
             *regnum = i;
-            return TRUE;
+            return true;
         }
     }
-    return FALSE;
+
+    return false;
 }
 
 static HRESULT shader_init(struct wined3d_shader *shader, struct wined3d_device *device,
@@ -3738,7 +3736,7 @@ static struct wined3d_shader_signature_element *shader_find_signature_element(co
     for (i = 0; i < s->element_count; ++i)
     {
         if (e[i].stream_idx == stream_idx
-                && !_strnicmp(e[i].semantic_name, semantic_name, -1)
+                && !stricmp(e[i].semantic_name, semantic_name)
                 && e[i].semantic_idx == semantic_idx)
             return &e[i];
     }
@@ -3882,7 +3880,7 @@ static HRESULT geometry_shader_init_stream_output(struct wined3d_shader *shader,
             return E_INVALIDARG;
         }
 
-        mask = ((1u << e->component_count) - 1) << component_idx;
+        mask = wined3d_mask_from_size(e->component_count) << component_idx;
         if ((output->mask & 0xff & mask) != mask)
         {
             WARN("Invalid component range %u-%u (mask %#x), output mask %#x.\n",
@@ -4204,7 +4202,7 @@ void find_ps_compile_args(const struct wined3d_state *state, const struct wined3
     }
     else
     {
-        args->texcoords_initialized = (1u << WINED3D_MAX_TEXTURES) - 1;
+        args->texcoords_initialized = wined3d_mask_from_size(WINED3D_MAX_TEXTURES);
     }
 
     args->pointsprite = state->render_states[WINED3D_RS_POINTSPRITEENABLE]

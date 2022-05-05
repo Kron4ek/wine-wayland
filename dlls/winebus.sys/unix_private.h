@@ -24,6 +24,7 @@
 #include <windef.h>
 #include <winbase.h>
 #include <winternl.h>
+#include <ddk/hidsdi.h>
 
 #include "unixlib.h"
 
@@ -94,7 +95,7 @@ struct raw_device_vtbl
     void (*destroy)(struct unix_device *iface);
     NTSTATUS (*start)(struct unix_device *iface);
     void (*stop)(struct unix_device *iface);
-    NTSTATUS (*get_report_descriptor)(struct unix_device *iface, BYTE *buffer, DWORD length, DWORD *out_length);
+    NTSTATUS (*get_report_descriptor)(struct unix_device *iface, BYTE *buffer, UINT length, UINT *out_length);
     void (*set_output_report)(struct unix_device *iface, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io);
     void (*get_feature_report)(struct unix_device *iface, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io);
     void (*set_feature_report)(struct unix_device *iface, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io);
@@ -105,8 +106,10 @@ struct hid_device_vtbl
     void (*destroy)(struct unix_device *iface);
     NTSTATUS (*start)(struct unix_device *iface);
     void (*stop)(struct unix_device *iface);
-    NTSTATUS (*haptics_start)(struct unix_device *iface, DWORD duration_ms,
-                              USHORT rumble_intensity, USHORT buzz_intensity);
+    NTSTATUS (*haptics_start)(struct unix_device *iface, UINT duration_ms,
+                              USHORT rumble_intensity, USHORT buzz_intensity,
+                              USHORT left_intensity, USHORT right_intensity);
+    NTSTATUS (*haptics_stop)(struct unix_device *iface);
     NTSTATUS (*physical_device_control)(struct unix_device *iface, USAGE control);
     NTSTATUS (*physical_device_set_gain)(struct unix_device *iface, BYTE percent);
     NTSTATUS (*physical_effect_control)(struct unix_device *iface, BYTE index, USAGE control, BYTE iterations);
@@ -121,34 +124,28 @@ struct hid_report_descriptor
     BYTE next_report_id[3];
 };
 
-enum haptics_waveform_index
+#include "pshpack1.h"
+struct hid_haptics_feature
 {
-    HAPTICS_WAVEFORM_STOP_INDEX = 1,
-    HAPTICS_WAVEFORM_NULL_INDEX = 2,
-    HAPTICS_WAVEFORM_RUMBLE_INDEX = 3,
-    HAPTICS_WAVEFORM_BUZZ_INDEX = 4,
-    HAPTICS_WAVEFORM_LAST_INDEX = HAPTICS_WAVEFORM_BUZZ_INDEX,
+    WORD waveform;
+    WORD duration;
+    UINT cutoff_time_ms;
 };
 
 struct hid_haptics_features
 {
-    WORD  waveform_list[HAPTICS_WAVEFORM_LAST_INDEX - HAPTICS_WAVEFORM_NULL_INDEX];
-    WORD  duration_list[HAPTICS_WAVEFORM_LAST_INDEX - HAPTICS_WAVEFORM_NULL_INDEX];
-    DWORD waveform_cutoff_time_ms;
+    struct hid_haptics_feature rumble;
+    struct hid_haptics_feature buzz;
+    struct hid_haptics_feature left;
+    struct hid_haptics_feature right;
 };
-
-struct hid_haptics_waveform
-{
-    WORD manual_trigger;
-    WORD intensity;
-};
+#include "poppack.h"
 
 struct hid_haptics
 {
     struct hid_haptics_features features;
-    struct hid_haptics_waveform waveforms[HAPTICS_WAVEFORM_LAST_INDEX + 1];
     BYTE features_report;
-    BYTE waveform_report;
+    BYTE intensity_report;
 };
 
 /* must match the order and number of usages in the
@@ -188,6 +185,7 @@ struct hid_physical
 struct hid_device_state
 {
     ULONG bit_size;
+    USAGE_AND_PAGE abs_axis_usages[32];
     USHORT abs_axis_start;
     USHORT abs_axis_count;
     USHORT rel_axis_start;
@@ -239,10 +237,10 @@ extern BOOL bus_event_queue_input_report(struct list *queue, struct unix_device 
                                          BYTE *report, USHORT length) DECLSPEC_HIDDEN;
 extern BOOL bus_event_queue_pop(struct list *queue, struct bus_event *event) DECLSPEC_HIDDEN;
 
-extern BOOL hid_device_begin_report_descriptor(struct unix_device *iface, USAGE usage_page, USAGE usage) DECLSPEC_HIDDEN;
+extern BOOL hid_device_begin_report_descriptor(struct unix_device *iface, const USAGE_AND_PAGE *device_usage) DECLSPEC_HIDDEN;
 extern BOOL hid_device_end_report_descriptor(struct unix_device *iface) DECLSPEC_HIDDEN;
 
-extern BOOL hid_device_begin_input_report(struct unix_device *iface) DECLSPEC_HIDDEN;
+extern BOOL hid_device_begin_input_report(struct unix_device *iface, const USAGE_AND_PAGE *physical_usage) DECLSPEC_HIDDEN;
 extern BOOL hid_device_end_input_report(struct unix_device *iface) DECLSPEC_HIDDEN;
 extern BOOL hid_device_add_buttons(struct unix_device *iface, USAGE usage_page,
                                    USAGE usage_min, USAGE usage_max) DECLSPEC_HIDDEN;
@@ -266,5 +264,6 @@ extern void hid_device_set_effect_state(struct unix_device *iface, BYTE index, B
 
 BOOL is_xbox_gamepad(WORD vid, WORD pid) DECLSPEC_HIDDEN;
 BOOL is_dualshock4_gamepad(WORD vid, WORD pid) DECLSPEC_HIDDEN;
+BOOL is_dualsense_gamepad(WORD vid, WORD pid) DECLSPEC_HIDDEN;
 
 #endif /* __WINEBUS_UNIX_PRIVATE_H */

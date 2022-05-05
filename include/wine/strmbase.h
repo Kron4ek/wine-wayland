@@ -36,6 +36,7 @@ struct strmbase_pin
     struct strmbase_filter *filter;
     PIN_DIRECTION dir;
     WCHAR name[128];
+    WCHAR id[128];
     IPin *peer;
     AM_MEDIA_TYPE mt;
 
@@ -105,9 +106,6 @@ struct strmbase_sink_ops
 };
 
 /* Base Pin */
-HRESULT WINAPI BaseOutputPinImpl_GetDeliveryBuffer(struct strmbase_source *pin,
-        IMediaSample **sample, REFERENCE_TIME *start, REFERENCE_TIME *stop, DWORD flags);
-HRESULT WINAPI BaseOutputPinImpl_InitAllocator(struct strmbase_source *pin, IMemAllocator **allocator);
 HRESULT WINAPI BaseOutputPinImpl_DecideAllocator(struct strmbase_source *pin, IMemInputPin *peer, IMemAllocator **allocator);
 HRESULT WINAPI BaseOutputPinImpl_AttemptConnection(struct strmbase_source *pin, IPin *peer, const AM_MEDIA_TYPE *mt);
 

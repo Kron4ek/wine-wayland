@@ -49,7 +49,7 @@ struct string
 
 static void *alloc_mem( struct parser *parser, UINT size )
 {
-    struct list *mem = heap_alloc( sizeof(struct list) + size );
+    struct list *mem = malloc( sizeof(struct list) + size );
     list_add_tail( parser->mem, mem );
     return &mem[1];
 }
@@ -217,6 +217,7 @@ static int wql_lex( void *val, struct parser *parser );
 %lex-param { struct parser *ctx }
 %parse-param { struct parser *ctx }
 %define parse.error verbose
+%define api.prefix {wql_}
 %define api.pure
 
 %union

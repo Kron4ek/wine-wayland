@@ -74,24 +74,20 @@ static BOOL hid_report_descriptor_append_usage(struct hid_report_descriptor *des
     return hid_report_descriptor_append(desc, template, sizeof(template));
 }
 
-BOOL hid_device_begin_report_descriptor(struct unix_device *iface, USAGE usage_page, USAGE usage)
+static BOOL hid_device_begin_collection(struct hid_report_descriptor *desc, const USAGE_AND_PAGE *usage, BYTE type)
 {
-    struct hid_report_descriptor *desc = &iface->hid_report_descriptor;
     const BYTE template[] =
     {
-        USAGE_PAGE(2, usage_page),
-        USAGE(2, usage),
-        COLLECTION(1, Application),
-            USAGE(1, 0),
+        USAGE_PAGE(2, usage->UsagePage),
+        USAGE(2, usage->Usage),
+        COLLECTION(1, type),
     };
 
-    memset(desc, 0, sizeof(*desc));
     return hid_report_descriptor_append(desc, template, sizeof(template));
 }
 
-BOOL hid_device_end_report_descriptor(struct unix_device *iface)
+static BOOL hid_device_end_collection(struct hid_report_descriptor *desc)
 {
-    struct hid_report_descriptor *desc = &iface->hid_report_descriptor;
     static const BYTE template[] =
     {
         END_COLLECTION,
@@ -100,15 +96,27 @@ BOOL hid_device_end_report_descriptor(struct unix_device *iface)
     return hid_report_descriptor_append(desc, template, sizeof(template));
 }
 
-BOOL hid_device_begin_input_report(struct unix_device *iface)
+BOOL hid_device_begin_report_descriptor(struct unix_device *iface, const USAGE_AND_PAGE *device_usage)
+{
+    struct hid_report_descriptor *desc = &iface->hid_report_descriptor;
+    memset(desc, 0, sizeof(*desc));
+    return hid_device_begin_collection(desc, device_usage, Application);
+}
+
+BOOL hid_device_end_report_descriptor(struct unix_device *iface)
+{
+    struct hid_report_descriptor *desc = &iface->hid_report_descriptor;
+    return hid_device_end_collection(desc);
+}
+
+BOOL hid_device_begin_input_report(struct unix_device *iface, const USAGE_AND_PAGE *physical_usage)
 {
     struct hid_report_descriptor *desc = &iface->hid_report_descriptor;
     struct hid_device_state *state = &iface->hid_device_state;
     const BYTE report_id = ++desc->next_report_id[HidP_Input];
     const BYTE template[] =
     {
-        COLLECTION(1, Report),
-            REPORT_ID(1, report_id),
+        REPORT_ID(1, report_id),
     };
 
     if (state->report_len)
@@ -119,6 +127,10 @@ BOOL hid_device_begin_input_report(struct unix_device *iface)
 
     state->id = report_id;
     state->bit_size += 8;
+
+    if (!hid_device_begin_collection(desc, physical_usage, Physical))
+        return FALSE;
+
     return hid_report_descriptor_append(desc, template, sizeof(template));
 }
 
@@ -126,10 +138,6 @@ BOOL hid_device_end_input_report(struct unix_device *iface)
 {
     struct hid_report_descriptor *desc = &iface->hid_report_descriptor;
     struct hid_device_state *state = &iface->hid_device_state;
-    static const BYTE template[] =
-    {
-        END_COLLECTION,
-    };
 
     state->report_len = (state->bit_size + 7) / 8;
     if (!(state->report_buf = calloc(1, state->report_len))) return FALSE;
@@ -137,7 +145,7 @@ BOOL hid_device_end_input_report(struct unix_device *iface)
 
     state->report_buf[0] = state->id;
     state->last_report_buf[0] = state->id;
-    return hid_report_descriptor_append(desc, template, sizeof(template));
+    return hid_device_end_collection(desc);
 }
 
 static BOOL hid_device_add_button_count(struct unix_device *iface, BYTE count)
@@ -235,30 +243,43 @@ BOOL hid_device_add_hatswitch(struct unix_device *iface, INT count)
     return hid_report_descriptor_append(desc, template, sizeof(template));
 }
 
-static BOOL hid_device_add_axis_count(struct unix_device *iface, BOOL rel, BYTE count)
+static BOOL hid_device_add_axis_count(struct unix_device *iface, BOOL rel, BYTE count,
+                                      USAGE usage_page, const USAGE *usages)
 {
-    USHORT offset = iface->hid_device_state.bit_size / 8;
+    struct hid_device_state *state = &iface->hid_device_state;
+    USHORT i, offset = state->bit_size / 8;
 
-    if (!rel && iface->hid_device_state.rel_axis_count)
+    if (!rel && state->rel_axis_count)
         ERR("absolute axes should be added before relative axes!\n");
-    else if (iface->hid_device_state.button_count || iface->hid_device_state.hatswitch_count)
+    else if (state->button_count || state->hatswitch_count)
         ERR("axes should be added before buttons or hatswitches!\n");
-    else if ((iface->hid_device_state.bit_size % 8))
+    else if ((state->bit_size % 8))
         ERR("axes should be byte aligned, missing padding!\n");
-    else if (iface->hid_device_state.bit_size + 32 * count > 0x80000)
+    else if (state->bit_size + 32 * count > 0x80000)
         ERR("report size overflow, too many elements!\n");
     else if (rel)
     {
-        if (!iface->hid_device_state.rel_axis_count) iface->hid_device_state.rel_axis_start = offset;
-        iface->hid_device_state.rel_axis_count += count;
-        iface->hid_device_state.bit_size += 32 * count;
+        if (!state->rel_axis_count) state->rel_axis_start = offset;
+        state->rel_axis_count += count;
+        state->bit_size += 32 * count;
         return TRUE;
     }
     else
     {
-        if (!iface->hid_device_state.abs_axis_count) iface->hid_device_state.abs_axis_start = offset;
-        iface->hid_device_state.abs_axis_count += count;
-        iface->hid_device_state.bit_size += 32 * count;
+        if (state->abs_axis_count + count > ARRAY_SIZE(state->abs_axis_usages))
+        {
+            ERR("absolute axis usage overflow, too many elements!\n");
+            return FALSE;
+        }
+        for (i = 0; i < count; ++i)
+        {
+            state->abs_axis_usages[state->abs_axis_count + i].UsagePage = usage_page;
+            state->abs_axis_usages[state->abs_axis_count + i].Usage = usages[i];
+        }
+
+        if (!state->abs_axis_count) state->abs_axis_start = offset;
+        state->abs_axis_count += count;
+        state->bit_size += 32 * count;
         return TRUE;
     }
 
@@ -288,7 +309,7 @@ BOOL hid_device_add_axes(struct unix_device *iface, BYTE count, USAGE usage_page
     };
     int i;
 
-    if (!hid_device_add_axis_count(iface, rel, count))
+    if (!hid_device_add_axis_count(iface, rel, count, usage_page, usages))
         return FALSE;
 
     if (!hid_report_descriptor_append(desc, template_begin, sizeof(template_begin)))
@@ -309,11 +330,21 @@ BOOL hid_device_add_axes(struct unix_device *iface, BYTE count, USAGE usage_page
     return TRUE;
 }
 
+#include "pshpack1.h"
+struct hid_haptics_intensity
+{
+    UINT16 rumble_intensity;
+    UINT16 buzz_intensity;
+    UINT16 left_intensity;
+    UINT16 right_intensity;
+};
+#include "poppack.h"
+
 BOOL hid_device_add_haptics(struct unix_device *iface)
 {
     struct hid_report_descriptor *desc = &iface->hid_report_descriptor;
     const BYTE haptics_features_report = ++desc->next_report_id[HidP_Feature];
-    const BYTE haptics_waveform_report = ++desc->next_report_id[HidP_Output];
+    const BYTE haptics_intensity_report = ++desc->next_report_id[HidP_Output];
     const BYTE haptics_template[] =
     {
         USAGE_PAGE(2, HID_USAGE_PAGE_HAPTICS),
@@ -323,26 +354,22 @@ BOOL hid_device_add_haptics(struct unix_device *iface)
 
             USAGE(1, HID_USAGE_HAPTICS_WAVEFORM_LIST),
             COLLECTION(1, NamedArray),
-                USAGE_PAGE(1, HID_USAGE_PAGE_ORDINAL),
-                USAGE(1, 3), /* HID_USAGE_HAPTICS_WAVEFORM_RUMBLE */
-                USAGE(1, 4), /* HID_USAGE_HAPTICS_WAVEFORM_BUZZ */
-                REPORT_COUNT(1, 2),
+                /* ordinal 1 and 2 are reserved for implicit waveforms */
+                USAGE(4, (HID_USAGE_PAGE_ORDINAL<<16)|3),
                 REPORT_SIZE(1, 16),
+                REPORT_COUNT(1, 1),
                 FEATURE(1, Data|Var|Abs|Null),
             END_COLLECTION,
 
-            USAGE_PAGE(2, HID_USAGE_PAGE_HAPTICS),
             USAGE(1, HID_USAGE_HAPTICS_DURATION_LIST),
             COLLECTION(1, NamedArray),
-                USAGE_PAGE(1, HID_USAGE_PAGE_ORDINAL),
-                USAGE(1, 3), /* 0 (HID_USAGE_HAPTICS_WAVEFORM_RUMBLE) */
-                USAGE(1, 4), /* 0 (HID_USAGE_HAPTICS_WAVEFORM_BUZZ) */
-                REPORT_COUNT(1, 2),
+                /* ordinal 1 and 2 are reserved for implicit waveforms */
+                USAGE(4, (HID_USAGE_PAGE_ORDINAL<<16)|3),
                 REPORT_SIZE(1, 16),
+                REPORT_COUNT(1, 1),
                 FEATURE(1, Data|Var|Abs|Null),
             END_COLLECTION,
 
-            USAGE_PAGE(2, HID_USAGE_PAGE_HAPTICS),
             USAGE(1, HID_USAGE_HAPTICS_WAVEFORM_CUTOFF_TIME),
             UNIT(2, 0x1001), /* seconds */
             UNIT_EXPONENT(1, -3), /* 10^-3 */
@@ -355,14 +382,7 @@ BOOL hid_device_add_haptics(struct unix_device *iface)
             UNIT(1, 0), /* None */
             UNIT_EXPONENT(1, 0),
 
-            REPORT_ID(1, haptics_waveform_report),
-            USAGE(1, HID_USAGE_HAPTICS_MANUAL_TRIGGER),
-            LOGICAL_MINIMUM(1, 1),
-            LOGICAL_MAXIMUM(1, 4),
-            REPORT_SIZE(1, 16),
-            REPORT_COUNT(1, 1),
-            OUTPUT(1, Data|Var|Abs),
-
+            REPORT_ID(1, haptics_intensity_report),
             USAGE(1, HID_USAGE_HAPTICS_INTENSITY),
             LOGICAL_MINIMUM(4, 0x00000000),
             LOGICAL_MAXIMUM(4, 0x0000ffff),
@@ -371,16 +391,55 @@ BOOL hid_device_add_haptics(struct unix_device *iface)
             OUTPUT(1, Data|Var|Abs),
         END_COLLECTION,
     };
+    const BYTE trigger_template_begin[] =
+    {
+        USAGE_PAGE(1, HID_USAGE_PAGE_GENERIC),
+        COLLECTION(1, Physical),
+    };
+    const BYTE trigger_template_end[] =
+    {
+        END_COLLECTION,
+    };
 
     iface->hid_haptics.features_report = haptics_features_report;
-    iface->hid_haptics.waveform_report = haptics_waveform_report;
-    iface->hid_haptics.features.waveform_list[0] = HID_USAGE_HAPTICS_WAVEFORM_RUMBLE;
-    iface->hid_haptics.features.waveform_list[1] = HID_USAGE_HAPTICS_WAVEFORM_BUZZ;
-    iface->hid_haptics.features.duration_list[0] = 0;
-    iface->hid_haptics.features.duration_list[1] = 0;
-    iface->hid_haptics.features.waveform_cutoff_time_ms = 1000;
+    iface->hid_haptics.intensity_report = haptics_intensity_report;
+    iface->hid_haptics.features.rumble.waveform = HID_USAGE_HAPTICS_WAVEFORM_RUMBLE;
+    iface->hid_haptics.features.rumble.duration = 0;
+    iface->hid_haptics.features.rumble.cutoff_time_ms = 1000;
+    iface->hid_haptics.features.buzz.waveform = HID_USAGE_HAPTICS_WAVEFORM_BUZZ;
+    iface->hid_haptics.features.buzz.duration = 0;
+    iface->hid_haptics.features.buzz.cutoff_time_ms = 1000;
+    iface->hid_haptics.features.left.waveform = HID_USAGE_HAPTICS_WAVEFORM_RUMBLE;
+    iface->hid_haptics.features.left.duration = 0;
+    iface->hid_haptics.features.left.cutoff_time_ms = 1000;
+    iface->hid_haptics.features.right.waveform = HID_USAGE_HAPTICS_WAVEFORM_RUMBLE;
+    iface->hid_haptics.features.right.duration = 0;
+    iface->hid_haptics.features.right.cutoff_time_ms = 1000;
 
-    return hid_report_descriptor_append(desc, haptics_template, sizeof(haptics_template));
+    if (!hid_report_descriptor_append(desc, haptics_template, sizeof(haptics_template)))
+        return FALSE;
+    if (!hid_report_descriptor_append(desc, haptics_template, sizeof(haptics_template)))
+        return FALSE;
+
+    if (!hid_report_descriptor_append_usage(desc, HID_USAGE_GENERIC_Z))
+        return FALSE;
+    if (!hid_report_descriptor_append(desc, trigger_template_begin, sizeof(trigger_template_begin)))
+        return FALSE;
+    if (!hid_report_descriptor_append(desc, haptics_template, sizeof(haptics_template)))
+        return FALSE;
+    if (!hid_report_descriptor_append(desc, trigger_template_end, sizeof(trigger_template_end)))
+        return FALSE;
+
+    if (!hid_report_descriptor_append_usage(desc, HID_USAGE_GENERIC_RZ))
+        return FALSE;
+    if (!hid_report_descriptor_append(desc, trigger_template_begin, sizeof(trigger_template_begin)))
+        return FALSE;
+    if (!hid_report_descriptor_append(desc, haptics_template, sizeof(haptics_template)))
+        return FALSE;
+    if (!hid_report_descriptor_append(desc, trigger_template_end, sizeof(trigger_template_end)))
+        return FALSE;
+
+    return TRUE;
 }
 
 #include "pshpack1.h"
@@ -859,8 +918,8 @@ BOOL hid_device_add_physical(struct unix_device *iface, USAGE *usages, USHORT co
 
             USAGE(1, PID_USAGE_AXES_ENABLE),
             COLLECTION(1, Logical),
-                USAGE(4, (HID_USAGE_PAGE_GENERIC<<16)|HID_USAGE_GENERIC_X),
-                USAGE(4, (HID_USAGE_PAGE_GENERIC<<16)|HID_USAGE_GENERIC_Y),
+                USAGE(4, (state->abs_axis_usages[0].UsagePage<<16)|state->abs_axis_usages[0].Usage),
+                USAGE(4, (state->abs_axis_usages[1].UsagePage<<16)|state->abs_axis_usages[1].Usage),
                 LOGICAL_MINIMUM(1, 0),
                 LOGICAL_MAXIMUM(1, 1),
                 REPORT_SIZE(1, 1),
@@ -1025,7 +1084,7 @@ static void hid_device_stop(struct unix_device *iface)
     iface->hid_vtbl->stop(iface);
 }
 
-NTSTATUS hid_device_get_report_descriptor(struct unix_device *iface, BYTE *buffer, DWORD length, DWORD *out_length)
+static NTSTATUS hid_device_get_report_descriptor(struct unix_device *iface, BYTE *buffer, UINT length, UINT *out_length)
 {
     *out_length = iface->hid_report_descriptor.size;
     if (length < iface->hid_report_descriptor.size) return STATUS_BUFFER_TOO_SMALL;
@@ -1039,27 +1098,23 @@ static void hid_device_set_output_report(struct unix_device *iface, HID_XFER_PAC
     struct hid_physical *physical = &iface->hid_physical;
     struct hid_haptics *haptics = &iface->hid_haptics;
 
-    if (packet->reportId == haptics->waveform_report)
+    if (packet->reportId == haptics->intensity_report)
     {
-        struct hid_haptics_waveform *waveform = (struct hid_haptics_waveform *)(packet->reportBuffer + 1);
-        struct hid_haptics_waveform *rumble = haptics->waveforms + HAPTICS_WAVEFORM_RUMBLE_INDEX;
-        struct hid_haptics_waveform *buzz = haptics->waveforms + HAPTICS_WAVEFORM_BUZZ_INDEX;
+        struct hid_haptics_intensity *report = (struct hid_haptics_intensity *)(packet->reportBuffer + 1);
         ULONG duration_ms;
 
-        io->Information = sizeof(*waveform) + 1;
+        io->Information = sizeof(*report) + 1;
         assert(packet->reportBufferLen == io->Information);
 
-        if (waveform->manual_trigger == 0 || waveform->manual_trigger > HAPTICS_WAVEFORM_LAST_INDEX)
-            io->Status = STATUS_INVALID_PARAMETER;
+        if (!report->rumble_intensity && !report->buzz_intensity && !report->left_intensity && !report->right_intensity)
+            io->Status = iface->hid_vtbl->haptics_stop(iface);
         else
         {
-            if (waveform->manual_trigger == HAPTICS_WAVEFORM_STOP_INDEX)
-                memset(haptics->waveforms, 0, sizeof(haptics->waveforms));
-            else
-                haptics->waveforms[waveform->manual_trigger] = *waveform;
-
-            duration_ms = haptics->features.waveform_cutoff_time_ms;
-            io->Status = iface->hid_vtbl->haptics_start(iface, duration_ms, rumble->intensity, buzz->intensity);
+            duration_ms = min(haptics->features.rumble.cutoff_time_ms, haptics->features.buzz.cutoff_time_ms);
+            duration_ms = min(duration_ms, haptics->features.left.cutoff_time_ms);
+            duration_ms = min(duration_ms, haptics->features.right.cutoff_time_ms);
+            io->Status = iface->hid_vtbl->haptics_start(iface, duration_ms, report->rumble_intensity, report->buzz_intensity,
+                                                        report->left_intensity, report->right_intensity);
         }
     }
     else if (packet->reportId == physical->device_control_report)
@@ -1268,7 +1323,10 @@ static void hid_device_set_feature_report(struct unix_device *iface, HID_XFER_PA
         io->Information = sizeof(*features) + 1;
         assert(packet->reportBufferLen == io->Information);
 
-        haptics->features.waveform_cutoff_time_ms = features->waveform_cutoff_time_ms;
+        haptics->features.rumble.cutoff_time_ms = features->rumble.cutoff_time_ms;
+        haptics->features.buzz.cutoff_time_ms = features->buzz.cutoff_time_ms;
+        haptics->features.left.cutoff_time_ms = features->left.cutoff_time_ms;
+        haptics->features.right.cutoff_time_ms = features->right.cutoff_time_ms;
         io->Status = STATUS_SUCCESS;
     }
     else

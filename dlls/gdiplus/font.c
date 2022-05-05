@@ -106,7 +106,7 @@ typedef struct
 #define GET_BE_DWORD(x) (x)
 #else
 #define GET_BE_WORD(x) MAKEWORD(HIBYTE(x), LOBYTE(x))
-#define GET_BE_DWORD(x) MAKELONG(GET_BE_WORD(HIWORD(x)), GET_BE_WORD(LOWORD(x)));
+#define GET_BE_DWORD(x) MAKELONG(GET_BE_WORD(HIWORD(x)), GET_BE_WORD(LOWORD(x)))
 #endif
 
 #define MS_MAKE_TAG(ch0, ch1, ch2, ch3) \
@@ -354,7 +354,7 @@ GpStatus WINGDIPAPI GdipGetFontSize(GpFont *font, REAL *size)
     if (!(font && size)) return InvalidParameter;
 
     *size = get_font_size(font);
-    TRACE("%s,%d => %f\n", debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, *size);
+    TRACE("%s,%ld => %f\n", debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, *size);
 
     return Ok;
 }
@@ -398,7 +398,7 @@ GpStatus WINGDIPAPI GdipGetFontStyle(GpFont *font, INT *style)
         return InvalidParameter;
 
     *style = get_font_style(font);
-    TRACE("%s,%d => %d\n", debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, *style);
+    TRACE("%s,%ld => %d\n", debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, *style);
 
     return Ok;
 }
@@ -421,7 +421,7 @@ GpStatus WINGDIPAPI GdipGetFontUnit(GpFont *font, Unit *unit)
     if (!(font && unit)) return InvalidParameter;
 
     *unit = font->unit;
-    TRACE("%s,%d => %d\n", debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, *unit);
+    TRACE("%s,%ld => %d\n", debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, *unit);
 
     return Ok;
 }
@@ -509,7 +509,7 @@ GpStatus WINGDIPAPI GdipGetLogFontW(GpFont *font, GpGraphics *graphics, LOGFONTW
     lf->lfPitchAndFamily = 0;
     lstrcpyW(lf->lfFaceName, font->family->FamilyName);
 
-    TRACE("=> %s,%d\n", debugstr_w(lf->lfFaceName), lf->lfHeight);
+    TRACE("=> %s,%ld\n", debugstr_w(lf->lfFaceName), lf->lfHeight);
 
     return Ok;
 }
@@ -561,7 +561,7 @@ GpStatus WINGDIPAPI GdipGetFontHeight(GDIPCONST GpFont *font,
     if (!graphics)
     {
         *height = font_height;
-        TRACE("%s,%d => %f\n",
+        TRACE("%s,%ld => %f\n",
               debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, *height);
         return Ok;
     }
@@ -571,7 +571,7 @@ GpStatus WINGDIPAPI GdipGetFontHeight(GDIPCONST GpFont *font,
 
     *height = pixels_to_units(font_height, graphics->unit, dpi, graphics->printer_display);
 
-    TRACE("%s,%d(unit %d) => %f\n",
+    TRACE("%s,%ld(unit %d) => %f\n",
           debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, graphics->unit, *height);
     return Ok;
 }
@@ -612,7 +612,7 @@ GpStatus WINGDIPAPI GdipGetFontHeightGivenDPI(GDIPCONST GpFont *font, REAL dpi, 
 
     *height = (REAL)line_spacing * font_size / (REAL)em_height;
 
-    TRACE("%s,%d => %f\n",
+    TRACE("%s,%ld => %f\n",
           debugstr_w(font->family->FamilyName), font->otm.otmTextMetrics.tmHeight, *height);
 
     return Ok;
@@ -1150,13 +1150,15 @@ GpStatus WINGDIPAPI GdipPrivateAddFontFile(GpFontCollection *collection, GDIPCON
 #define NAME_ID_FULL_FONT_NAME  4
 
 typedef struct {
-    USHORT major_version;
-    USHORT minor_version;
+    ULONG version;
     USHORT tables_no;
     USHORT search_range;
     USHORT entry_selector;
     USHORT range_shift;
 } tt_header;
+
+#define TT_HEADER_VERSION_1 0x00010000
+#define TT_HEADER_VERSION_CFF 0x4f54544f
 
 typedef struct {
     char tag[4];        /* table name */
@@ -1402,7 +1404,8 @@ static WCHAR *load_ttf_name_id( const BYTE *mem, DWORD_PTR size, DWORD id )
     header = (const tt_header*)mem;
     count = GET_BE_WORD(header->tables_no);
 
-    if (GET_BE_WORD(header->major_version) != 1 || GET_BE_WORD(header->minor_version) != 0)
+    if (GET_BE_DWORD(header->version) != TT_HEADER_VERSION_1 &&
+        GET_BE_DWORD(header->version) != TT_HEADER_VERSION_CFF)
         return NULL;
 
     pos = sizeof(*header);
@@ -1489,7 +1492,7 @@ GpStatus WINGDIPAPI GdipPrivateAddMemoryFont(GpFontCollection* fontCollection,
         return OutOfMemory;
 
     font = AddFontMemResourceEx((void*)memory, length, NULL, &count);
-    TRACE("%s: %p/%u\n", debugstr_w(name), font, count);
+    TRACE("%s: %p/%lu\n", debugstr_w(name), font, count);
     if (!font || !count)
         ret = InvalidParameter;
     else

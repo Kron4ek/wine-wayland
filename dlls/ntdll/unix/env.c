@@ -55,11 +55,13 @@
 #include "wine/condrv.h"
 #include "wine/debug.h"
 #include "unix_private.h"
+#include "locale_private.h"
 #include "error.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(environ);
 
 PEB *peb = NULL;
+WOW_PEB *wow_peb = NULL;
 USHORT *uctable = NULL, *lctable = NULL;
 SIZE_T startup_info_size = 0;
 BOOL is_prefix_bootstrap = FALSE;
@@ -72,7 +74,7 @@ char **main_envp = NULL;
 WCHAR **main_wargv = NULL;
 
 static LCID user_lcid, system_lcid;
-static LANGID user_ui_language, system_ui_language;
+static LANGID user_ui_language;
 
 static char system_locale[LOCALE_NAME_MAX_LENGTH];
 static char user_locale[LOCALE_NAME_MAX_LENGTH];
@@ -81,21 +83,7 @@ static char user_locale[LOCALE_NAME_MAX_LENGTH];
 const WCHAR system_dir[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
                             's','y','s','t','e','m','3','2','\\',0};
 
-static struct
-{
-    USHORT *data;
-    USHORT *dbcs;
-    USHORT *mbtable;
-    void   *wctable;
-} unix_cp;
-
-enum nls_section_type
-{
-    NLS_SECTION_SORTKEYS = 9,
-    NLS_SECTION_CASEMAP = 10,
-    NLS_SECTION_CODEPAGE = 11,
-    NLS_SECTION_NORMALIZE = 12
-};
+static CPTABLEINFO unix_cp = { CP_UTF8, 4, '?', 0xfffd, '?', '?' };
 
 static char *get_nls_file_path( ULONG type, ULONG id )
 {
@@ -152,22 +140,15 @@ static void *read_nls_file( ULONG type, ULONG id )
     return ret;
 }
 
-static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
+static NTSTATUS open_nls_data_file( const char *path, const WCHAR *sysdir, HANDLE *file )
 {
-    static const WCHAR sortdirW[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
-                                     'g','l','o','b','a','l','i','z','a','t','i','o','n','\\',
-                                     's','o','r','t','i','n','g','\\',0};
-
     NTSTATUS status = STATUS_OBJECT_NAME_NOT_FOUND;
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING valueW;
-    WCHAR buffer[ARRAY_SIZE(sortdirW) + 16];
-    char *p, *path = get_nls_file_path( type, id );
+    WCHAR buffer[64];
+    char *p, *ntpath;
 
-    if (!path) return STATUS_OBJECT_NAME_NOT_FOUND;
-
-    /* try to open file in system dir */
-    wcscpy( buffer, type == NLS_SECTION_SORTKEYS ? sortdirW : system_dir );
+    wcscpy( buffer, system_dir );
     p = strrchr( path, '/' ) + 1;
     ascii_to_unicode( buffer + wcslen(buffer), p, strlen(p) + 1 );
     init_unicode_string( &valueW, buffer );
@@ -175,13 +156,12 @@ static NTSTATUS open_nls_data_file( ULONG type, ULONG id, HANDLE *file )
 
     status = open_unix_file( file, path, GENERIC_READ, &attr, 0, FILE_SHARE_READ,
                              FILE_OPEN, FILE_SYNCHRONOUS_IO_ALERT, NULL, 0 );
-    free( path );
     if (status != STATUS_NO_SUCH_FILE) return status;
 
-    if ((status = nt_to_unix_file_name( &attr, &path, FILE_OPEN ))) return status;
-    status = open_unix_file( file, path, GENERIC_READ, &attr, 0, FILE_SHARE_READ,
+    if ((status = nt_to_unix_file_name( &attr, &ntpath, FILE_OPEN ))) return status;
+    status = open_unix_file( file, ntpath, GENERIC_READ, &attr, 0, FILE_SHARE_READ,
                              FILE_OPEN, FILE_SYNCHRONOUS_IO_ALERT, NULL, 0 );
-    free( path );
+    free( ntpath );
     return status;
 }
 
@@ -213,183 +193,15 @@ static NTSTATUS get_nls_section_name( ULONG type, ULONG id, WCHAR name[32] )
 }
 
 
-static int get_utf16( const WCHAR *src, unsigned int srclen, unsigned int *ch )
-{
-    if (IS_HIGH_SURROGATE( src[0] ))
-    {
-        if (srclen <= 1) return 0;
-        if (!IS_LOW_SURROGATE( src[1] )) return 0;
-        *ch = 0x10000 + ((src[0] & 0x3ff) << 10) + (src[1] & 0x3ff);
-        return 2;
-    }
-    if (IS_LOW_SURROGATE( src[0] )) return 0;
-    *ch = src[0];
-    return 1;
-}
-
-
 #ifdef __APPLE__
 
 /* The Apple filesystem enforces NFD so we need the compose tables to put it back into NFC */
-
-struct norm_table
-{
-    WCHAR   name[13];      /* 00 file name */
-    USHORT  checksum[3];   /* 1a checksum? */
-    USHORT  version[4];    /* 20 Unicode version */
-    USHORT  form;          /* 28 normalization form */
-    USHORT  len_factor;    /* 2a factor for length estimates */
-    USHORT  unknown1;      /* 2c */
-    USHORT  decomp_size;   /* 2e decomposition hash size */
-    USHORT  comp_size;     /* 30 composition hash size */
-    USHORT  unknown2;      /* 32 */
-    USHORT  classes;       /* 34 combining classes table offset */
-    USHORT  props_level1;  /* 36 char properties table level 1 offset */
-    USHORT  props_level2;  /* 38 char properties table level 2 offset */
-    USHORT  decomp_hash;   /* 3a decomposition hash table offset */
-    USHORT  decomp_map;    /* 3c decomposition character map table offset */
-    USHORT  decomp_seq;    /* 3e decomposition character sequences offset */
-    USHORT  comp_hash;     /* 40 composition hash table offset */
-    USHORT  comp_seq;      /* 42 composition character sequences offset */
-    /* BYTE[]       combining class values */
-    /* BYTE[0x2200] char properties index level 1 */
-    /* BYTE[]       char properties index level 2 */
-    /* WORD[]       decomposition hash table */
-    /* WORD[]       decomposition character map */
-    /* WORD[]       decomposition character sequences */
-    /* WORD[]       composition hash table */
-    /* WORD[]       composition character sequences */
-};
 
 static struct norm_table *nfc_table;
 
 static void init_unix_codepage(void)
 {
     nfc_table = read_nls_file( NLS_SECTION_NORMALIZE, NormalizationC );
-}
-
-static void put_utf16( WCHAR *dst, unsigned int ch )
-{
-    if (ch >= 0x10000)
-    {
-        ch -= 0x10000;
-        dst[0] = 0xd800 | (ch >> 10);
-        dst[1] = 0xdc00 | (ch & 0x3ff);
-    }
-    else dst[0] = ch;
-}
-
-static BYTE rol( BYTE val, BYTE count )
-{
-    return (val << count) | (val >> (8 - count));
-}
-
-
-static BYTE get_char_props( const struct norm_table *info, unsigned int ch )
-{
-    const BYTE *level1 = (const BYTE *)((const USHORT *)info + info->props_level1);
-    const BYTE *level2 = (const BYTE *)((const USHORT *)info + info->props_level2);
-    BYTE off = level1[ch / 128];
-
-    if (!off || off >= 0xfb) return rol( off, 5 );
-    return level2[(off - 1) * 128 + ch % 128];
-}
-
-static BYTE get_combining_class( const struct norm_table *info, unsigned int c )
-{
-    const BYTE *classes = (const BYTE *)((const USHORT *)info + info->classes);
-    BYTE class = get_char_props( info, c ) & 0x3f;
-
-    if (class == 0x3f) return 0;
-    return classes[class];
-}
-
-#define HANGUL_SBASE  0xac00
-#define HANGUL_LBASE  0x1100
-#define HANGUL_VBASE  0x1161
-#define HANGUL_TBASE  0x11a7
-#define HANGUL_LCOUNT 19
-#define HANGUL_VCOUNT 21
-#define HANGUL_TCOUNT 28
-#define HANGUL_NCOUNT (HANGUL_VCOUNT * HANGUL_TCOUNT)
-#define HANGUL_SCOUNT (HANGUL_LCOUNT * HANGUL_NCOUNT)
-
-static unsigned int compose_hangul( unsigned int ch1, unsigned int ch2 )
-{
-    if (ch1 >= HANGUL_LBASE && ch1 < HANGUL_LBASE + HANGUL_LCOUNT)
-    {
-        int lindex = ch1 - HANGUL_LBASE;
-        int vindex = ch2 - HANGUL_VBASE;
-        if (vindex >= 0 && vindex < HANGUL_VCOUNT)
-            return HANGUL_SBASE + (lindex * HANGUL_VCOUNT + vindex) * HANGUL_TCOUNT;
-    }
-    if (ch1 >= HANGUL_SBASE && ch1 < HANGUL_SBASE + HANGUL_SCOUNT)
-    {
-        int sindex = ch1 - HANGUL_SBASE;
-        if (!(sindex % HANGUL_TCOUNT))
-        {
-            int tindex = ch2 - HANGUL_TBASE;
-            if (tindex > 0 && tindex < HANGUL_TCOUNT) return ch1 + tindex;
-        }
-    }
-    return 0;
-}
-
-static unsigned int compose_chars( const struct norm_table *info, unsigned int ch1, unsigned int ch2 )
-{
-    const USHORT *table = (const USHORT *)info + info->comp_hash;
-    const WCHAR *chars = (const USHORT *)info + info->comp_seq;
-    unsigned int hash, start, end, i, len, ch[3];
-
-    hash = (ch1 + 95 * ch2) % info->comp_size;
-    start = table[hash];
-    end = table[hash + 1];
-    while (start < end)
-    {
-        for (i = 0; i < 3; i++, start += len) len = get_utf16( chars + start, end - start, ch + i );
-        if (ch[0] == ch1 && ch[1] == ch2) return ch[2];
-    }
-    return 0;
-}
-
-static unsigned int compose_string( const struct norm_table *info, WCHAR *str, unsigned int srclen )
-{
-    unsigned int i, ch, comp, len, start_ch = 0, last_starter = srclen;
-    BYTE class, prev_class = 0;
-
-    for (i = 0; i < srclen; i += len)
-    {
-        if (!(len = get_utf16( str + i, srclen - i, &ch ))) return 0;
-        class = get_combining_class( info, ch );
-        if (last_starter == srclen || (prev_class && prev_class >= class) ||
-            (!(comp = compose_hangul( start_ch, ch )) &&
-             !(comp = compose_chars( info, start_ch, ch ))))
-        {
-            if (!class)
-            {
-                last_starter = i;
-                start_ch = ch;
-            }
-            prev_class = class;
-        }
-        else
-        {
-            int comp_len = 1 + (comp >= 0x10000);
-            int start_len = 1 + (start_ch >= 0x10000);
-
-            if (comp_len != start_len)
-                memmove( str + last_starter + comp_len, str + last_starter + start_len,
-                         (i - (last_starter + start_len)) * sizeof(WCHAR) );
-            memmove( str + i + comp_len - start_len, str + i + len, (srclen - i - len) * sizeof(WCHAR) );
-            srclen += comp_len - start_len - len;
-            start_ch = comp;
-            i = last_starter;
-            len = comp_len;
-            prev_class = 0;
-            put_utf16( str + i, comp );
-        }
-    }
-    return srclen;
 }
 
 #elif defined(__ANDROID__)  /* Android always uses UTF-8 */
@@ -458,17 +270,6 @@ static const struct { const char *name; UINT cp; } charset_names[] =
     { "UTF8", CP_UTF8 }
 };
 
-static void init_unix_cptable( USHORT *ptr )
-{
-    unix_cp.data = ptr;
-    ptr += ptr[0];
-    unix_cp.wctable = ptr + ptr[0] + 1;
-    unix_cp.mbtable = ++ptr;
-    ptr += 256;
-    if (*ptr++) ptr += 256;  /* glyph table */
-    if (*ptr) unix_cp.dbcs = ptr + 1; /* dbcs ranges */
-}
-
 static void init_unix_codepage(void)
 {
     char charset_name[16];
@@ -497,7 +298,7 @@ static void init_unix_codepage(void)
             if (charset_names[pos].cp != CP_UTF8)
             {
                 void *data = read_nls_file( NLS_SECTION_CODEPAGE, charset_names[pos].cp );
-                if (data) init_unix_cptable( data );
+                if (data) init_codepage_table( data, &unix_cp );
             }
             return;
         }
@@ -547,7 +348,6 @@ static BOOL is_dynamic_env_var( const char *var )
             STARTS_WITH( var, "WINECONFIGDIR=" ) ||
             STARTS_WITH( var, "WINEDLLDIR" ) ||
             STARTS_WITH( var, "WINEUNIXCP=" ) ||
-            STARTS_WITH( var, "WINELOCALE=" ) ||
             STARTS_WITH( var, "WINEUSERLOCALE=" ) ||
             STARTS_WITH( var, "WINEUSERNAME=" ) ||
             STARTS_WITH( var, "WINEPRELOADRESERVE=" ) ||
@@ -555,99 +355,19 @@ static BOOL is_dynamic_env_var( const char *var )
             STARTS_WITH( var, "WINESERVERSOCKET=" ));
 }
 
-static unsigned int decode_utf8_char( unsigned char ch, const char **str, const char *strend )
-{
-    /* number of following bytes in sequence based on first byte value (for bytes above 0x7f) */
-    static const char utf8_length[128] =
-    {
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0x80-0x8f */
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0x90-0x9f */
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0xa0-0xaf */
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, /* 0xb0-0xbf */
-        0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* 0xc0-0xcf */
-        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* 0xd0-0xdf */
-        2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, /* 0xe0-0xef */
-        3,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0  /* 0xf0-0xff */
-    };
-
-    /* first byte mask depending on UTF-8 sequence length */
-    static const unsigned char utf8_mask[4] = { 0x7f, 0x1f, 0x0f, 0x07 };
-
-    unsigned int len = utf8_length[ch - 0x80];
-    unsigned int res = ch & utf8_mask[len];
-    const char *end = *str + len;
-
-    if (end > strend)
-    {
-        *str = end;
-        return ~0;
-    }
-    switch (len)
-    {
-    case 3:
-        if ((ch = end[-3] ^ 0x80) >= 0x40) break;
-        res = (res << 6) | ch;
-        (*str)++;
-        if (res < 0x10) break;
-    case 2:
-        if ((ch = end[-2] ^ 0x80) >= 0x40) break;
-        res = (res << 6) | ch;
-        if (res >= 0x110000 >> 6) break;
-        (*str)++;
-        if (res < 0x20) break;
-        if (res >= 0xd800 >> 6 && res <= 0xdfff >> 6) break;
-    case 1:
-        if ((ch = end[-1] ^ 0x80) >= 0x40) break;
-        res = (res << 6) | ch;
-        (*str)++;
-        if (res < 0x80) break;
-        return res;
-    }
-    return ~0;
-}
-
-
 /******************************************************************
  *      ntdll_umbstowcs  (ntdll.so)
  */
 DWORD ntdll_umbstowcs( const char *src, DWORD srclen, WCHAR *dst, DWORD dstlen )
 {
-    DWORD reslen;
+    unsigned int reslen;
 
-    if (unix_cp.data)
-    {
-        DWORD i;
+    if (unix_cp.CodePage != CP_UTF8) return cp_mbstowcs( &unix_cp, dst, dstlen, src, srclen );
 
-        if (unix_cp.dbcs)
-        {
-            for (i = dstlen; srclen && i; i--, srclen--, src++, dst++)
-            {
-                USHORT off = unix_cp.dbcs[(unsigned char)*src];
-                if (off && srclen > 1)
-                {
-                    src++;
-                    srclen--;
-                    *dst = unix_cp.dbcs[off + (unsigned char)*src];
-                }
-                else *dst = unix_cp.mbtable[(unsigned char)*src];
-            }
-            reslen = dstlen - i;
-        }
-        else
-        {
-            reslen = min( srclen, dstlen );
-            for (i = 0; i < reslen; i++) dst[i] = unix_cp.mbtable[(unsigned char)src[i]];
-        }
-    }
-    else  /* utf-8 */
-    {
-        reslen = 0;
-        RtlUTF8ToUnicodeN( dst, dstlen * sizeof(WCHAR), &reslen, src, srclen );
-        reslen /= sizeof(WCHAR);
+    utf8_mbstowcs( dst, dstlen, &reslen, src, srclen );
 #ifdef __APPLE__  /* work around broken Mac OS X filesystem that enforces NFD */
-        if (reslen && nfc_table) reslen = compose_string( nfc_table, dst, reslen );
+    if (reslen && nfc_table) reslen = compose_string( nfc_table, dst, reslen );
 #endif
-    }
     return reslen;
 }
 
@@ -657,98 +377,40 @@ DWORD ntdll_umbstowcs( const char *src, DWORD srclen, WCHAR *dst, DWORD dstlen )
  */
 int ntdll_wcstoumbs( const WCHAR *src, DWORD srclen, char *dst, DWORD dstlen, BOOL strict )
 {
-    DWORD i, reslen;
+    unsigned int i, reslen;
 
-    if (unix_cp.data)
+    if (unix_cp.CodePage != CP_UTF8)
     {
-        if (unix_cp.dbcs)
+        if (strict)
         {
-            const unsigned short *uni2cp = unix_cp.wctable;
-            for (i = dstlen; srclen && i; i--, srclen--, src++)
+            if (unix_cp.DBCSCodePage)
             {
-                unsigned short ch = uni2cp[*src];
-                if (ch >> 8)
+                const WCHAR *uni2cp = unix_cp.WideCharTable;
+                for (i = 0; i < srclen; i++)
                 {
-                    if (strict && unix_cp.dbcs[unix_cp.dbcs[ch >> 8] + (ch & 0xff)] != *src) return -1;
-                    if (i == 1) break;  /* do not output a partial char */
-                    i--;
-                    *dst++ = ch >> 8;
-                }
-                else
-                {
-                    if (unix_cp.mbtable[ch] != *src) return -1;
-                    *dst++ = (char)ch;
+                    WCHAR ch = uni2cp[src[i]];
+                    if (ch >> 8)
+                    {
+                        if (unix_cp.DBCSOffsets[unix_cp.DBCSOffsets[ch >> 8] + (ch & 0xff)] != src[i])
+                            return -1;
+                    }
+                    else if (unix_cp.MultiByteTable[(unsigned char)ch] != src[i]) return -1;
                 }
             }
-            reslen = dstlen - i;
-        }
-        else
-        {
-            const unsigned char *uni2cp = unix_cp.wctable;
-            reslen = min( srclen, dstlen );
-            for (i = 0; i < reslen; i++)
+            else
             {
-                unsigned char ch = uni2cp[src[i]];
-                if (strict && unix_cp.mbtable[ch] != src[i]) return -1;
-                dst[i] = ch;
+                const char *uni2cp = unix_cp.WideCharTable;
+                for (i = 0; i < srclen; i++)
+                    if (unix_cp.MultiByteTable[(unsigned char)uni2cp[src[i]]] != src[i])
+                        return -1;
             }
         }
+        reslen = cp_wcstombs( &unix_cp, dst, dstlen, src, srclen );
     }
-    else  /* utf-8 */
+    else
     {
-        char *end;
-        unsigned int val;
-
-        for (end = dst + dstlen; srclen; srclen--, src++)
-        {
-            WCHAR ch = *src;
-
-            if (ch < 0x80)  /* 0x00-0x7f: 1 byte */
-            {
-                if (dst > end - 1) break;
-                *dst++ = ch;
-                continue;
-            }
-            if (ch < 0x800)  /* 0x80-0x7ff: 2 bytes */
-            {
-                if (dst > end - 2) break;
-                dst[1] = 0x80 | (ch & 0x3f);
-                ch >>= 6;
-                dst[0] = 0xc0 | ch;
-                dst += 2;
-                continue;
-            }
-            if (!get_utf16( src, srclen, &val ))
-            {
-                if (strict) return -1;
-                val = 0xfffd;
-            }
-            if (val < 0x10000)  /* 0x800-0xffff: 3 bytes */
-            {
-                if (dst > end - 3) break;
-                dst[2] = 0x80 | (val & 0x3f);
-                val >>= 6;
-                dst[1] = 0x80 | (val & 0x3f);
-                val >>= 6;
-                dst[0] = 0xe0 | val;
-                dst += 3;
-            }
-            else   /* 0x10000-0x10ffff: 4 bytes */
-            {
-                if (dst > end - 4) break;
-                dst[3] = 0x80 | (val & 0x3f);
-                val >>= 6;
-                dst[2] = 0x80 | (val & 0x3f);
-                val >>= 6;
-                dst[1] = 0x80 | (val & 0x3f);
-                val >>= 6;
-                dst[0] = 0xf0 | val;
-                dst += 4;
-                src++;
-                srclen--;
-            }
-        }
-        reslen = dstlen - (end - dst);
+        NTSTATUS status = utf8_wcstombs( dst, dstlen, &reslen, src, srclen );
+        if (strict && status == STATUS_SOME_NOT_MAPPED) return -1;
     }
     return reslen;
 }
@@ -1026,6 +688,7 @@ static WCHAR **build_wargv( const WCHAR *image )
 static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
 {
     static const char sep[] = "_.@";
+    const char *extra = NULL;
     char buffer[LOCALE_NAME_MAX_LENGTH];
     char *p, *country = NULL, *modifier = NULL;
 
@@ -1069,9 +732,23 @@ static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
     strcpy( win_name, buffer );
     if (modifier)
     {
-        if (!strcmp( modifier, "latin" )) strcat( win_name, "-Latn" );
-        else if (!strcmp( modifier, "euro" )) {} /* ignore */
-        else return FALSE;
+        if (!strcmp( modifier, "arabic" )) strcat( win_name, "-Arab" );
+        else if (!strcmp( modifier, "chakma" )) strcat( win_name, "-Cakm" );
+        else if (!strcmp( modifier, "cherokee" )) strcat( win_name, "-Cher" );
+        else if (!strcmp( modifier, "cyrillic" )) strcat( win_name, "-Cyrl" );
+        else if (!strcmp( modifier, "devanagari" )) strcat( win_name, "-Deva" );
+        else if (!strcmp( modifier, "gurmukhi" )) strcat( win_name, "-Guru" );
+        else if (!strcmp( modifier, "javanese" )) strcat( win_name, "-Java" );
+        else if (!strcmp( modifier, "latin" )) strcat( win_name, "-Latn" );
+        else if (!strcmp( modifier, "mongolian" )) strcat( win_name, "-Mong" );
+        else if (!strcmp( modifier, "syriac" )) strcat( win_name, "-Syrc" );
+        else if (!strcmp( modifier, "tifinagh" )) strcat( win_name, "-Tfng" );
+        else if (!strcmp( modifier, "tibetan" )) strcat( win_name, "-Tibt" );
+        else if (!strcmp( modifier, "vai" )) strcat( win_name, "-Vaii" );
+        else if (!strcmp( modifier, "yi" )) strcat( win_name, "-Yiii" );
+        else if (!strcmp( modifier, "saaho" )) strcpy( win_name, "ssy" );
+        else if (!strcmp( modifier, "valencia" )) extra = "-valencia";
+        /* ignore unknown modifiers */
     }
     if (country)
     {
@@ -1079,7 +756,49 @@ static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
         *p++ = '-';
         strcpy( p, country );
     }
+    if (extra) strcat( win_name, extra );
     return TRUE;
+}
+
+
+static LCID init_system_lcid( void *locale_ptr )
+{
+    struct
+    {
+        UINT ctypes;
+        UINT unknown1;
+        UINT unknown2;
+        UINT unknown3;
+        UINT locales;
+        UINT charmaps;
+        UINT geoids;
+        UINT scripts;
+    } *header = locale_ptr;
+    WCHAR name[LOCALE_NAME_MAX_LENGTH];
+    const NLS_LOCALE_LCNAME_INDEX *lcnames;
+    const NLS_LOCALE_HEADER *locale_table;
+    const WCHAR *locale_strings;
+    int min, max;
+
+    ascii_to_unicode( name, system_locale, strlen(system_locale) + 1 );
+    locale_table = (const NLS_LOCALE_HEADER *)((char *)header + header->locales);
+    locale_strings = (const WCHAR *)((char *)locale_table + locale_table->strings_offset);
+    lcnames = (const NLS_LOCALE_LCNAME_INDEX *)((char *)locale_table + locale_table->lcnames_offset);
+    min = 0;
+    max = locale_table->nb_lcnames - 1;
+    while (min <= max)
+    {
+        int pos = (min + max) / 2;
+        int res = wcsicmp( name, locale_strings + lcnames[pos].name + 1 );
+        if (res < 0) max = pos - 1;
+        else if (res > 0) min = pos + 1;
+        else
+        {
+            ULONG offset = locale_table->locales_offset + lcnames[pos].idx * locale_table->locale_size;
+            return ((const NLS_LOCALE_DATA *)((const char *)locale_table + offset))->idefaultlanguage;
+        }
+    }
+    return MAKELANGID( LANG_ENGLISH, SUBLANG_DEFAULT );
 }
 
 
@@ -1358,15 +1077,13 @@ static void add_dynamic_environment( WCHAR **env, SIZE_T *pos, SIZE_T *size )
     add_system_dll_path_var( env, pos, size );
     append_envA( env, pos, size, "WINEUSERNAME", user_name );
     append_envA( env, pos, size, "WINEDLLOVERRIDES", overrides );
-    if (unix_cp.data)
+    if (unix_cp.CodePage != CP_UTF8)
     {
-        sprintf( str, "%u", unix_cp.data[1] );
+        sprintf( str, "%u", unix_cp.CodePage );
         append_envA( env, pos, size, "WINEUNIXCP", str );
     }
     else append_envW( env, pos, size, "WINEUNIXCP", NULL );
-    append_envA( env, pos, size, "WINELOCALE", system_locale );
-    append_envA( env, pos, size, "WINEUSERLOCALE",
-                 strcmp( user_locale, system_locale ) ? user_locale : NULL );
+    append_envA( env, pos, size, "WINEUSERLOCALE", user_locale );
     append_envA( env, pos, size, "SystemDrive", "C:" );
     append_envA( env, pos, size, "SystemRoot", "C:\\windows" );
 }
@@ -1675,6 +1392,8 @@ static void get_initial_console( RTL_USER_PROCESS_PARAMETERS *params )
         params->hStdOutput = (HANDLE)((UINT_PTR)params->hStdOutput | 1);
         output_fd = 1;
     }
+    if (!params->ConsoleHandle && main_image_info.SubSystemType == IMAGE_SUBSYSTEM_WINDOWS_CUI)
+        params->ConsoleHandle = CONSOLE_HANDLE_SHELL_NO_WINDOW;
 
     if (output_fd != -1)
     {
@@ -2129,37 +1848,34 @@ static void init_peb( RTL_USER_PROCESS_PARAMETERS *params, void *module )
     {
         NtCurrentTeb()->WowTebOffset = teb_offset;
         NtCurrentTeb()->Tib.ExceptionList = (void *)((char *)NtCurrentTeb() + teb_offset);
+        wow_peb = (PEB32 *)((char *)peb + page_size);
         set_thread_id( NtCurrentTeb(),  GetCurrentProcessId(), GetCurrentThreadId() );
     }
 #endif
 
     load_global_options( &params->ImagePathName );
 
-    if (NtCurrentTeb()->WowTebOffset)
+    if (wow_peb)
     {
         void *wow64_params = build_wow64_parameters( params );
-#ifdef _WIN64
-        PEB32 *wow64_peb = (PEB32 *)((char *)peb + page_size);
-#else
-        PEB64 *wow64_peb = (PEB64 *)((char *)peb - page_size);
-#endif
-        wow64_peb->ImageBaseAddress                = PtrToUlong( peb->ImageBaseAddress );
-        wow64_peb->ProcessParameters               = PtrToUlong( wow64_params );
-        wow64_peb->NumberOfProcessors              = peb->NumberOfProcessors;
-        wow64_peb->NtGlobalFlag                    = peb->NtGlobalFlag;
-        wow64_peb->CriticalSectionTimeout.QuadPart = peb->CriticalSectionTimeout.QuadPart;
-        wow64_peb->HeapSegmentReserve              = peb->HeapSegmentReserve;
-        wow64_peb->HeapSegmentCommit               = peb->HeapSegmentCommit;
-        wow64_peb->HeapDeCommitTotalFreeThreshold  = peb->HeapDeCommitTotalFreeThreshold;
-        wow64_peb->HeapDeCommitFreeBlockThreshold  = peb->HeapDeCommitFreeBlockThreshold;
-        wow64_peb->OSMajorVersion                  = peb->OSMajorVersion;
-        wow64_peb->OSMinorVersion                  = peb->OSMinorVersion;
-        wow64_peb->OSBuildNumber                   = peb->OSBuildNumber;
-        wow64_peb->OSPlatformId                    = peb->OSPlatformId;
-        wow64_peb->ImageSubSystem                  = peb->ImageSubSystem;
-        wow64_peb->ImageSubSystemMajorVersion      = peb->ImageSubSystemMajorVersion;
-        wow64_peb->ImageSubSystemMinorVersion      = peb->ImageSubSystemMinorVersion;
-        wow64_peb->SessionId                       = peb->SessionId;
+
+        wow_peb->ImageBaseAddress                = PtrToUlong( peb->ImageBaseAddress );
+        wow_peb->ProcessParameters               = PtrToUlong( wow64_params );
+        wow_peb->NumberOfProcessors              = peb->NumberOfProcessors;
+        wow_peb->NtGlobalFlag                    = peb->NtGlobalFlag;
+        wow_peb->CriticalSectionTimeout.QuadPart = peb->CriticalSectionTimeout.QuadPart;
+        wow_peb->HeapSegmentReserve              = peb->HeapSegmentReserve;
+        wow_peb->HeapSegmentCommit               = peb->HeapSegmentCommit;
+        wow_peb->HeapDeCommitTotalFreeThreshold  = peb->HeapDeCommitTotalFreeThreshold;
+        wow_peb->HeapDeCommitFreeBlockThreshold  = peb->HeapDeCommitFreeBlockThreshold;
+        wow_peb->OSMajorVersion                  = peb->OSMajorVersion;
+        wow_peb->OSMinorVersion                  = peb->OSMinorVersion;
+        wow_peb->OSBuildNumber                   = peb->OSBuildNumber;
+        wow_peb->OSPlatformId                    = peb->OSPlatformId;
+        wow_peb->ImageSubSystem                  = peb->ImageSubSystem;
+        wow_peb->ImageSubSystemMajorVersion      = peb->ImageSubSystemMajorVersion;
+        wow_peb->ImageSubSystemMinorVersion      = peb->ImageSubSystemMinorVersion;
+        wow_peb->SessionId                       = peb->SessionId;
     }
 }
 
@@ -2440,6 +2156,9 @@ void *create_startup_info( const UNICODE_STRING *nt_image, const RTL_USER_PROCES
  */
 NTSTATUS WINAPI NtGetNlsSectionPtr( ULONG type, ULONG id, void *unknown, void **ptr, SIZE_T *size )
 {
+    static const WCHAR sortdirW[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
+                                     'g','l','o','b','a','l','i','z','a','t','i','o','n','\\',
+                                     's','o','r','t','i','n','g','\\',0};
     UNICODE_STRING nameW;
     OBJECT_ATTRIBUTES attr;
     WCHAR name[32];
@@ -2452,7 +2171,12 @@ NTSTATUS WINAPI NtGetNlsSectionPtr( ULONG type, ULONG id, void *unknown, void **
     InitializeObjectAttributes( &attr, &nameW, 0, 0, NULL );
     if ((status = NtOpenSection( &handle, SECTION_MAP_READ, &attr )))
     {
-        if ((status = open_nls_data_file( type, id, &file ))) return status;
+        char *path = get_nls_file_path( type, id );
+
+        if (!path) return STATUS_OBJECT_NAME_NOT_FOUND;
+        status = open_nls_data_file( path, type == NLS_SECTION_SORTKEYS ? sortdirW : system_dir, &file );
+        free( path );
+        if (status) return status;
         attr.Attributes = OBJ_OPENIF | OBJ_PERMANENT;
         status = NtCreateSection( &handle, SECTION_MAP_READ, &attr, NULL, PAGE_READONLY, SEC_COMMIT, file );
         NtClose( file );
@@ -2460,12 +2184,41 @@ NTSTATUS WINAPI NtGetNlsSectionPtr( ULONG type, ULONG id, void *unknown, void **
     }
     if (!status)
     {
-        *ptr = NULL;
-        *size = 0;
-        status = NtMapViewOfSection( handle, GetCurrentProcess(), ptr, 0, 0, NULL, size,
-                                     ViewShare, 0, PAGE_READONLY );
+        status = map_section( handle, ptr, size, PAGE_READONLY );
+        NtClose( handle );
     }
-    NtClose( handle );
+    return status;
+}
+
+
+/**************************************************************************
+ *      NtInitializeNlsFiles  (NTDLL.@)
+ */
+NTSTATUS WINAPI NtInitializeNlsFiles( void **ptr, LCID *lcid, LARGE_INTEGER *size )
+{
+    const char *dir = build_dir ? build_dir : data_dir;
+    char *path;
+    HANDLE handle, file;
+    SIZE_T mapsize;
+    NTSTATUS status;
+
+    if (!(path = malloc( strlen(dir) + sizeof("/nls/locale.nls") ))) return STATUS_NO_MEMORY;
+    strcpy( path, dir );
+    strcat( path, "/nls/locale.nls" );
+    status = open_nls_data_file( path, system_dir, &file );
+    free( path );
+    if (!status)
+    {
+        status = NtCreateSection( &handle, SECTION_MAP_READ, NULL, NULL, PAGE_READONLY, SEC_COMMIT, file );
+        NtClose( file );
+    }
+    if (!status)
+    {
+        status = map_section( handle, ptr, &mapsize, PAGE_READONLY );
+        NtClose( handle );
+    }
+    if (!status && !system_lcid) system_lcid = init_system_lcid( *ptr );
+    *lcid = system_lcid;
     return status;
 }
 
@@ -2486,11 +2239,7 @@ NTSTATUS WINAPI NtQueryDefaultLocale( BOOLEAN user, LCID *lcid )
 NTSTATUS WINAPI NtSetDefaultLocale( BOOLEAN user, LCID lcid )
 {
     if (user) user_lcid = lcid;
-    else
-    {
-        system_lcid = lcid;
-        system_ui_language = LANGIDFROMLCID(lcid); /* there is no separate call to set it */
-    }
+    else system_lcid = lcid;
     return STATUS_SUCCESS;
 }
 
@@ -2520,7 +2269,7 @@ NTSTATUS WINAPI NtSetDefaultUILanguage( LANGID lang )
  */
 NTSTATUS WINAPI NtQueryInstallUILanguage( LANGID *lang )
 {
-    *lang = system_ui_language;
+    *lang = LANGIDFROMLCID(system_lcid); /* there is no separate call to set it */
     return STATUS_SUCCESS;
 }
 
@@ -2540,64 +2289,80 @@ WCHAR WINAPI RtlDowncaseUnicodeChar( WCHAR wch )
     return ntdll_towlower( wch );
 }
 
+/******************************************************************
+ *      RtlInitCodePageTable   (ntdll.so)
+ */
+void WINAPI RtlInitCodePageTable( USHORT *ptr, CPTABLEINFO *info )
+{
+    static const CPTABLEINFO utf8_cpinfo = { CP_UTF8, 4, '?', 0xfffd, '?', '?' };
+
+    if (ptr[1] == CP_UTF8) *info = utf8_cpinfo;
+    else init_codepage_table( ptr, info );
+}
+
+/**************************************************************************
+ *	RtlCustomCPToUnicodeN   (ntdll.so)
+ */
+NTSTATUS WINAPI RtlCustomCPToUnicodeN( CPTABLEINFO *info, WCHAR *dst, DWORD dstlen, DWORD *reslen,
+                                       const char *src, DWORD srclen )
+{
+    unsigned int ret = cp_mbstowcs( info, dst, dstlen / sizeof(WCHAR), src, srclen );
+    if (reslen) *reslen = ret * sizeof(WCHAR);
+    return STATUS_SUCCESS;
+}
+
+/**************************************************************************
+ *	RtlUnicodeToCustomCPN   (ntdll.so)
+ */
+NTSTATUS WINAPI RtlUnicodeToCustomCPN( CPTABLEINFO *info, char *dst, DWORD dstlen, DWORD *reslen,
+                                       const WCHAR *src, DWORD srclen )
+{
+    unsigned int ret = cp_wcstombs( info, dst, dstlen, src, srclen / sizeof(WCHAR) );
+    if (reslen) *reslen = ret;
+    return STATUS_SUCCESS;
+}
+
 /**********************************************************************
  *      RtlUTF8ToUnicodeN  (ntdll.so)
  */
 NTSTATUS WINAPI RtlUTF8ToUnicodeN( WCHAR *dst, DWORD dstlen, DWORD *reslen, const char *src, DWORD srclen )
 {
-    unsigned int res, len;
-    NTSTATUS status = STATUS_SUCCESS;
-    const char *srcend = src + srclen;
-    WCHAR *dstend;
+    unsigned int ret;
+    NTSTATUS status;
 
-    if (!src) return STATUS_INVALID_PARAMETER_4;
-    if (!reslen) return STATUS_INVALID_PARAMETER;
-
-    dstlen /= sizeof(WCHAR);
-    dstend = dst + dstlen;
     if (!dst)
-    {
-        for (len = 0; src < srcend; len++)
-        {
-            unsigned char ch = *src++;
-            if (ch < 0x80) continue;
-            if ((res = decode_utf8_char( ch, &src, srcend )) > 0x10ffff)
-                status = STATUS_SOME_NOT_MAPPED;
-            else
-                if (res > 0xffff) len++;
-        }
-        *reslen = len * sizeof(WCHAR);
-        return status;
-    }
+        status = utf8_mbstowcs_size( src, srclen, &ret );
+    else
+        status = utf8_mbstowcs( dst, dstlen / sizeof(WCHAR), &ret, src, srclen );
 
-    while ((dst < dstend) && (src < srcend))
-    {
-        unsigned char ch = *src++;
-        if (ch < 0x80)  /* special fast case for 7-bit ASCII */
-        {
-            *dst++ = ch;
-            continue;
-        }
-        if ((res = decode_utf8_char( ch, &src, srcend )) <= 0xffff)
-        {
-            *dst++ = res;
-        }
-        else if (res <= 0x10ffff)  /* we need surrogates */
-        {
-            res -= 0x10000;
-            *dst++ = 0xd800 | (res >> 10);
-            if (dst == dstend) break;
-            *dst++ = 0xdc00 | (res & 0x3ff);
-        }
-        else
-        {
-            *dst++ = 0xfffd;
-            status = STATUS_SOME_NOT_MAPPED;
-        }
-    }
-    if (src < srcend) status = STATUS_BUFFER_TOO_SMALL;  /* overflow */
-    *reslen = (dstlen - (dstend - dst)) * sizeof(WCHAR);
+    *reslen = ret * sizeof(WCHAR);
     return status;
+}
+
+/**************************************************************************
+ *	RtlUnicodeToUTF8N   (ntdll.so)
+ */
+NTSTATUS WINAPI RtlUnicodeToUTF8N( char *dst, DWORD dstlen, DWORD *reslen, const WCHAR *src, DWORD srclen )
+{
+    unsigned int ret;
+    NTSTATUS status;
+
+    if (!dst)
+        status = utf8_wcstombs_size( src, srclen / sizeof(WCHAR), &ret );
+    else
+        status = utf8_wcstombs( dst, dstlen, &ret, src, srclen / sizeof(WCHAR) );
+
+    *reslen = ret;
+    return status;
+}
+
+/**********************************************************************
+ *      RtlInitUnicodeString  (ntdll.so)
+ */
+void WINAPI RtlInitUnicodeString( UNICODE_STRING *str, const WCHAR *data )
+{
+    if (data) init_unicode_string( str, data );
+    else str->Length = str->MaximumLength = 0;
 }
 
 /**********************************************************************

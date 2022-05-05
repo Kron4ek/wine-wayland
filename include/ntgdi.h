@@ -115,6 +115,30 @@ enum
     NtGdiSetGraphicsMode,
 };
 
+/* NtGdiGetDCDword parameter, not compatible with Windows */
+enum
+{
+    NtGdiGetArcDirection,
+    NtGdiGetBkColor,
+    NtGdiGetBkMode,
+    NtGdiGetDCBrushColor,
+    NtGdiGetDCPenColor,
+    NtGdiGetGraphicsMode,
+    NtGdiGetLayout,
+    NtGdiGetPolyFillMode,
+    NtGdiGetROP2,
+    NtGdiGetTextColor,
+    NtGdiIsMemDC,
+};
+
+/* NtGdiGetDCPoint parameter, not compatible with Windows */
+enum
+{
+    NtGdiGetBrushOrgEx,
+    NtGdiGetCurrentPosition,
+    NtGdiGetDCOrg,
+};
+
 enum
 {
     NtGdiAnimatePalette,
@@ -182,6 +206,9 @@ struct font_enum_entry
 
 /* flag for NtGdiGetRandomRgn to respect LAYOUT_RTL */
 #define NTGDI_RGN_MIRROR_RTL   0x80000000
+
+/* magic driver version that we use for win16 DCs with DIB surfaces */
+#define NTGDI_WIN16_DIB  0xfafa000
 
 #endif /* __WINESRC__ */
 
@@ -364,7 +391,7 @@ BOOL     WINAPI NtGdiPlgBlt( HDC hdc, const POINT *point, HDC hdc_src, INT x_src
                              INT width, INT height, HBITMAP mask, INT x_mask, INT y_mask,
                              DWORD bk_color );
 BOOL     WINAPI NtGdiPolyDraw(HDC hdc, const POINT *points, const BYTE *types, DWORD count );
-ULONG    WINAPI NtGdiPolyPolyDraw( HDC hdc, const POINT *points, const UINT *counts,
+ULONG    WINAPI NtGdiPolyPolyDraw( HDC hdc, const POINT *points, const ULONG *counts,
                                    DWORD count, UINT function );
 BOOL     WINAPI NtGdiPtInRegion( HRGN hrgn, INT x, INT y );
 BOOL     WINAPI NtGdiPtVisible( HDC hdc, INT x, INT y );

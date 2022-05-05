@@ -19,7 +19,6 @@
  */
 
 #include "comsvcs_private.h"
-#include "wine/heap.h"
 #include "wine/debug.h"
 #include "initguid.h"
 #include "comsvcs_classes.h"
@@ -97,7 +96,7 @@ static ULONG WINAPI holder_AddRef(IHolder *iface)
 {
     holder *This = impl_from_IHolder(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
-    TRACE("(%p)->(%d)\n", This, ref);
+    TRACE("(%p)->(%ld)\n", This, ref);
     return ref;
 }
 
@@ -105,11 +104,11 @@ static ULONG WINAPI holder_Release(IHolder *iface)
 {
     holder *This = impl_from_IHolder(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
-    TRACE("(%p)->(%d)\n", This, ref);
+    TRACE("(%p)->(%ld)\n", This, ref);
 
     if (!ref)
     {
-        heap_free(This);
+        free(This);
     }
 
     return ref;
@@ -121,11 +120,11 @@ static HRESULT WINAPI holder_AllocResource(IHolder *iface, const RESTYPID typeid
     HRESULT hr;
     TIMEINSECS secs;
 
-    TRACE("(%p)->(%08lx, %p) stub\n", This, typeid, resid);
+    TRACE("(%p)->(%08Ix, %p) stub\n", This, typeid, resid);
 
     hr = IDispenserDriver_CreateResource(This->driver, typeid, resid, &secs);
 
-    TRACE("<- 0x%08x\n", hr);
+    TRACE("<- 0x%08lx\n", hr);
     return hr;
 }
 
@@ -134,11 +133,11 @@ static HRESULT WINAPI holder_FreeResource(IHolder *iface, const RESID resid)
     holder *This = impl_from_IHolder(iface);
     HRESULT hr;
 
-    TRACE("(%p)->(%08lx) stub\n", This, resid);
+    TRACE("(%p)->(%08Ix) stub\n", This, resid);
 
     hr = IDispenserDriver_DestroyResource(This->driver, resid);
 
-    TRACE("<- 0x%08x\n", hr);
+    TRACE("<- 0x%08lx\n", hr);
 
     return hr;
 }
@@ -147,7 +146,7 @@ static HRESULT WINAPI holder_TrackResource(IHolder *iface, const RESID resid)
 {
     holder *This = impl_from_IHolder(iface);
 
-    FIXME("(%p)->(%08lx) stub\n", This, resid);
+    FIXME("(%p)->(%08Ix) stub\n", This, resid);
 
     return E_NOTIMPL;
 }
@@ -165,7 +164,7 @@ static HRESULT WINAPI holder_UntrackResource(IHolder *iface, const RESID resid, 
 {
     holder *This = impl_from_IHolder(iface);
 
-    FIXME("(%p)->(%08lx, %d) stub\n", This, resid, value);
+    FIXME("(%p)->(%08Ix, %d) stub\n", This, resid, value);
 
     return E_NOTIMPL;
 }
@@ -194,7 +193,7 @@ static HRESULT WINAPI holder_RequestDestroyResource(IHolder *iface, const RESID 
 {
     holder *This = impl_from_IHolder(iface);
 
-    FIXME("(%p)->(%08lx) stub\n", This, resid);
+    FIXME("(%p)->(%08Ix) stub\n", This, resid);
 
     return E_NOTIMPL;
 }
@@ -221,7 +220,7 @@ static HRESULT create_holder(IDispenserDriver *driver, IHolder **object)
 
     TRACE("(%p)\n", object);
 
-    hold = heap_alloc(sizeof(*hold));
+    hold = malloc(sizeof(*hold));
     if (!hold)
     {
         *object = NULL;
@@ -263,7 +262,7 @@ static ULONG WINAPI dismanager_AddRef(IDispenserManager *iface)
 {
     dispensermanager *This = impl_from_IDispenserManager(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
-    TRACE("(%p)->(%d)\n", This, ref);
+    TRACE("(%p)->(%ld)\n", This, ref);
     return ref;
 }
 
@@ -271,13 +270,13 @@ static ULONG WINAPI dismanager_Release(IDispenserManager *iface)
 {
     dispensermanager *This = impl_from_IDispenserManager(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
-    TRACE("(%p)->(%d)\n", This, ref);
+    TRACE("(%p)->(%ld)\n", This, ref);
 
     if (!ref)
     {
         if (This->mta_cookie)
             CoDecrementMTAUsage(This->mta_cookie);
-        heap_free(This);
+        free(This);
     }
 
     return ref;
@@ -299,7 +298,7 @@ static HRESULT WINAPI dismanager_RegisterDispenser(IDispenserManager *iface, IDi
     if (!This->mta_cookie)
         CoIncrementMTAUsage(&This->mta_cookie);
 
-    TRACE("<-- 0x%08x, %p\n", hr, *dispenser);
+    TRACE("<-- 0x%08lx, %p\n", hr, *dispenser);
 
     return hr;
 }
@@ -330,7 +329,7 @@ static HRESULT WINAPI dispenser_manager_cf_CreateInstance(IClassFactory *iface, 
 
     TRACE("(%p %s %p)\n", outer, debugstr_guid(riid), object);
 
-    dismanager = heap_alloc_zero(sizeof(*dismanager));
+    dismanager = calloc(1, sizeof(*dismanager));
     if (!dismanager)
     {
         *object = NULL;
@@ -429,7 +428,7 @@ static ULONG WINAPI new_moniker_AddRef(IMoniker* iface)
     struct new_moniker *moniker = impl_from_IMoniker(iface);
     ULONG refcount = InterlockedIncrement(&moniker->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     return refcount;
 }
@@ -439,12 +438,12 @@ static ULONG WINAPI new_moniker_Release(IMoniker* iface)
     struct new_moniker *moniker = impl_from_IMoniker(iface);
     ULONG refcount = InterlockedDecrement(&moniker->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     if (!refcount)
     {
-        heap_free(moniker->progid);
-        heap_free(moniker);
+        free(moniker->progid);
+        free(moniker);
     }
 
     return refcount;
@@ -488,7 +487,7 @@ static HRESULT WINAPI new_moniker_Load(IMoniker *iface, IStream *stream)
 
     if (SUCCEEDED(hr) && progid_len)
     {
-        if (!(progid = heap_alloc(progid_len)))
+        if (!(progid = malloc(progid_len)))
            return E_OUTOFMEMORY;
         hr = IStream_Read(stream, progid, progid_len, &len);
     }
@@ -500,12 +499,12 @@ static HRESULT WINAPI new_moniker_Load(IMoniker *iface, IStream *stream)
     if (SUCCEEDED(hr) && pad == 0)
     {
         moniker->clsid = clsid;
-        heap_free(moniker->progid);
+        free(moniker->progid);
         moniker->progid = progid;
         progid = NULL;
     }
 
-    heap_free(progid);
+    free(progid);
 
     return hr;
 }
@@ -600,7 +599,7 @@ static HRESULT WINAPI new_moniker_BindToStorage(IMoniker *iface, IBindCtx *pbc, 
 static HRESULT WINAPI new_moniker_Reduce(IMoniker *iface, IBindCtx *pbc, DWORD flags, IMoniker **ppmkToLeft,
         IMoniker **ret)
 {
-    TRACE("%p, %p, %d, %p, %p.\n", iface, pbc, flags, ppmkToLeft, ret);
+    TRACE("%p, %p, %ld, %p, %p.\n", iface, pbc, flags, ppmkToLeft, ret);
 
     if (!ret)
         return E_POINTER;
@@ -758,7 +757,7 @@ static ULONG WINAPI new_moniker_rotdata_Release(IROTData *iface)
 
 static HRESULT WINAPI new_moniker_rotdata_GetComparisonData(IROTData *iface, byte *data, ULONG data_len, ULONG *length)
 {
-    FIXME("%p, %p, %u, %p.\n", iface, data, data_len, length);
+    FIXME("%p, %p, %lu, %p.\n", iface, data, data_len, length);
 
     return E_NOTIMPL;
 }
@@ -871,7 +870,7 @@ static HRESULT new_moniker_parse_displayname(IBindCtx *pbc, LPOLESTR name, ULONG
         progid = str;
     }
 
-    moniker = heap_alloc_zero(sizeof(*moniker));
+    moniker = calloc(1, sizeof(*moniker));
     if (!moniker)
         return E_OUTOFMEMORY;
 
@@ -881,12 +880,11 @@ static HRESULT new_moniker_parse_displayname(IBindCtx *pbc, LPOLESTR name, ULONG
     moniker->clsid = guid;
     if (progid)
     {
-        if (!(moniker->progid = heap_alloc((lstrlenW(progid) + 1) * sizeof(WCHAR))))
+        if (!(moniker->progid = wcsdup(progid)))
         {
             IMoniker_Release(&moniker->IMoniker_iface);
             return E_OUTOFMEMORY;
         }
-        lstrcpyW(moniker->progid, progid);
     }
 
     *ret = &moniker->IMoniker_iface;

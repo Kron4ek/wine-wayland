@@ -28,6 +28,8 @@
 
 #include <limits.h>
 #include <stdarg.h>
+#include <stdlib.h>
+#include <pthread.h>
 #include <X11/Xlib.h>
 #include <X11/Xresource.h>
 #include <X11/Xutil.h>
@@ -57,8 +59,7 @@ typedef int Status;
 
 #include "windef.h"
 #include "winbase.h"
-#include "wingdi.h"
-#include "winuser.h"
+#include "ntgdi.h"
 #include "wine/gdi_driver.h"
 #include "wine/list.h"
 
@@ -193,56 +194,56 @@ extern BOOL CDECL X11DRV_StrokeAndFillPath( PHYSDEV dev ) DECLSPEC_HIDDEN;
 extern BOOL CDECL X11DRV_StrokePath( PHYSDEV dev ) DECLSPEC_HIDDEN;
 extern BOOL CDECL X11DRV_UnrealizePalette( HPALETTE hpal ) DECLSPEC_HIDDEN;
 
-extern BOOL CDECL X11DRV_ActivateKeyboardLayout( HKL hkl, UINT flags ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_Beep(void) DECLSPEC_HIDDEN;
-extern INT CDECL X11DRV_GetKeyNameText( LONG lparam, LPWSTR buffer, INT size ) DECLSPEC_HIDDEN;
-extern UINT CDECL X11DRV_MapVirtualKeyEx( UINT code, UINT map_type, HKL hkl ) DECLSPEC_HIDDEN;
-extern INT CDECL X11DRV_ToUnicodeEx( UINT virtKey, UINT scanCode, const BYTE *lpKeyState,
-                                     LPWSTR bufW, int bufW_size, UINT flags, HKL hkl ) DECLSPEC_HIDDEN;
-extern SHORT CDECL X11DRV_VkKeyScanEx( WCHAR wChar, HKL hkl ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_DestroyCursorIcon( HCURSOR handle ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetCursor( HCURSOR handle ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_SetCursorPos( INT x, INT y ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_GetCursorPos( LPPOINT pos ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_ClipCursor( LPCRECT clip ) DECLSPEC_HIDDEN;
-extern LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
-                                                  HWND hwnd, DWORD flags, LPVOID lpvoid ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmode,
-                                                DWORD flags ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_UpdateDisplayDevices( const struct gdi_device_manager *device_manager,
-                                               BOOL force, void *param ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_CreateDesktopWindow( HWND hwnd ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_CreateWindow( HWND hwnd ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_DestroyWindow( HWND hwnd ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_FlashWindowEx( PFLASHWINFO pfinfo ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_GetDC( HDC hdc, HWND hwnd, HWND top, const RECT *win_rect,
-                                const RECT *top_rect, DWORD flags ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_ReleaseDC( HWND hwnd, HDC hdc ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_ScrollDC( HDC hdc, INT dx, INT dy, HRGN update ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetCapture( HWND hwnd, UINT flags ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha,
-                                                     DWORD flags ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetParent( HWND hwnd, HWND parent, HWND old_parent ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetWindowIcon( HWND hwnd, UINT type, HICON icon ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetWindowText( HWND hwnd, LPCWSTR text ) DECLSPEC_HIDDEN;
-extern UINT CDECL X11DRV_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp ) DECLSPEC_HIDDEN;
-extern LRESULT CDECL X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_UpdateClipboard(void) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO *info,
-                                              const RECT *window_rect ) DECLSPEC_HIDDEN;
-extern LRESULT CDECL X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flags,
-                                            const RECT *window_rect, const RECT *client_rect, RECT *visible_rect,
-                                            struct window_surface **surface ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags,
-                                           const RECT *rectWindow, const RECT *rectClient,
-                                           const RECT *visible_rect, const RECT *valid_rects,
-                                           struct window_surface *surface ) DECLSPEC_HIDDEN;
-extern BOOL CDECL X11DRV_SystemParametersInfo( UINT action, UINT int_param, void *ptr_param,
-                                               UINT flags ) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_ThreadDetach(void) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_ActivateKeyboardLayout( HKL hkl, UINT flags ) DECLSPEC_HIDDEN;
+extern void X11DRV_Beep(void) DECLSPEC_HIDDEN;
+extern INT X11DRV_GetKeyNameText( LONG lparam, LPWSTR buffer, INT size ) DECLSPEC_HIDDEN;
+extern UINT X11DRV_MapVirtualKeyEx( UINT code, UINT map_type, HKL hkl ) DECLSPEC_HIDDEN;
+extern INT X11DRV_ToUnicodeEx( UINT virtKey, UINT scanCode, const BYTE *lpKeyState,
+                               LPWSTR bufW, int bufW_size, UINT flags, HKL hkl ) DECLSPEC_HIDDEN;
+extern SHORT X11DRV_VkKeyScanEx( WCHAR wChar, HKL hkl ) DECLSPEC_HIDDEN;
+extern void X11DRV_DestroyCursorIcon( HCURSOR handle ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetCursor( HCURSOR handle ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_SetCursorPos( INT x, INT y ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_GetCursorPos( LPPOINT pos ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_ClipCursor( LPCRECT clip ) DECLSPEC_HIDDEN;
+extern LONG X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
+                                            HWND hwnd, DWORD flags, LPVOID lpvoid ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmode,
+                                          DWORD flags ) DECLSPEC_HIDDEN;
+extern void X11DRV_UpdateDisplayDevices( const struct gdi_device_manager *device_manager,
+                                         BOOL force, void *param ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_CreateDesktopWindow( HWND hwnd ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_CreateWindow( HWND hwnd ) DECLSPEC_HIDDEN;
+extern void X11DRV_DestroyWindow( HWND hwnd ) DECLSPEC_HIDDEN;
+extern void X11DRV_FlashWindowEx( PFLASHWINFO pfinfo ) DECLSPEC_HIDDEN;
+extern void X11DRV_GetDC( HDC hdc, HWND hwnd, HWND top, const RECT *win_rect,
+                          const RECT *top_rect, DWORD flags ) DECLSPEC_HIDDEN;
+extern void X11DRV_ReleaseDC( HWND hwnd, HDC hdc ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_ScrollDC( HDC hdc, INT dx, INT dy, HRGN update ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetCapture( HWND hwnd, UINT flags ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha,
+                                               DWORD flags ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetParent( HWND hwnd, HWND parent, HWND old_parent ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetWindowIcon( HWND hwnd, UINT type, HICON icon ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetWindowText( HWND hwnd, LPCWSTR text ) DECLSPEC_HIDDEN;
+extern UINT X11DRV_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp ) DECLSPEC_HIDDEN;
+extern LRESULT X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam ) DECLSPEC_HIDDEN;
+extern void X11DRV_UpdateClipboard(void) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO *info,
+                                        const RECT *window_rect ) DECLSPEC_HIDDEN;
+extern LRESULT X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flags,
+                                      const RECT *window_rect, const RECT *client_rect, RECT *visible_rect,
+                                      struct window_surface **surface ) DECLSPEC_HIDDEN;
+extern void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags,
+                                     const RECT *rectWindow, const RECT *rectClient,
+                                     const RECT *visible_rect, const RECT *valid_rects,
+                                     struct window_surface *surface ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_SystemParametersInfo( UINT action, UINT int_param, void *ptr_param,
+                                         UINT flags ) DECLSPEC_HIDDEN;
+extern void X11DRV_ThreadDetach(void) DECLSPEC_HIDDEN;
 
 /* X11 driver internal functions */
 
@@ -394,14 +395,10 @@ struct x11drv_thread_data
 };
 
 extern struct x11drv_thread_data *x11drv_init_thread_data(void) DECLSPEC_HIDDEN;
-extern DWORD thread_data_tls_index DECLSPEC_HIDDEN;
 
 static inline struct x11drv_thread_data *x11drv_thread_data(void)
 {
-    DWORD err = GetLastError();  /* TlsGetValue always resets last error */
-    struct x11drv_thread_data *data = TlsGetValue( thread_data_tls_index );
-    SetLastError( err );
-    return data;
+    return NtUserGetThreadInfo()->driver_data;
 }
 
 /* retrieve the thread display, or NULL if not created yet */
@@ -661,6 +658,7 @@ extern void change_systray_owner( Display *display, Window systray_window ) DECL
 extern void update_systray_balloon_position(void) DECLSPEC_HIDDEN;
 extern HWND create_foreign_window( Display *display, Window window ) DECLSPEC_HIDDEN;
 extern BOOL update_clipboard( HWND hwnd ) DECLSPEC_HIDDEN;
+extern void init_win_context(void) DECLSPEC_HIDDEN;
 
 static inline void mirror_rect( const RECT *window_rect, RECT *rect )
 {
@@ -672,13 +670,11 @@ static inline void mirror_rect( const RECT *window_rect, RECT *rect )
 
 /* X context to associate a hwnd to an X window */
 extern XContext winContext DECLSPEC_HIDDEN;
-/* X context to associate a struct x11drv_win_data to an hwnd */
-extern XContext win_data_context DECLSPEC_HIDDEN;
 /* X context to associate an X cursor to a Win32 cursor handle */
 extern XContext cursor_context DECLSPEC_HIDDEN;
 
 extern void X11DRV_InitClipboard(void) DECLSPEC_HIDDEN;
-extern void CDECL X11DRV_SetFocus( HWND hwnd ) DECLSPEC_HIDDEN;
+extern void X11DRV_SetFocus( HWND hwnd ) DECLSPEC_HIDDEN;
 extern void set_window_cursor( Window window, HCURSOR handle ) DECLSPEC_HIDDEN;
 extern void sync_window_cursor( Window window ) DECLSPEC_HIDDEN;
 extern LRESULT clip_cursor_notify( HWND hwnd, HWND prev_clip_hwnd, HWND new_clip_hwnd ) DECLSPEC_HIDDEN;
@@ -689,22 +685,21 @@ extern void retry_grab_clipping_window(void) DECLSPEC_HIDDEN;
 extern BOOL clip_fullscreen_window( HWND hwnd, BOOL reset ) DECLSPEC_HIDDEN;
 extern void move_resize_window( HWND hwnd, int dir ) DECLSPEC_HIDDEN;
 extern void X11DRV_InitKeyboard( Display *display ) DECLSPEC_HIDDEN;
-extern DWORD CDECL X11DRV_MsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *handles, DWORD timeout,
-                                                       DWORD mask, DWORD flags ) DECLSPEC_HIDDEN;
+extern DWORD X11DRV_MsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *handles, DWORD timeout,
+                                                 DWORD mask, DWORD flags ) DECLSPEC_HIDDEN;
+extern HWND *build_hwnd_list(void) DECLSPEC_HIDDEN;
 
 typedef int (*x11drv_error_callback)( Display *display, XErrorEvent *event, void *arg );
 
 extern void X11DRV_expect_error( Display *display, x11drv_error_callback callback, void *arg ) DECLSPEC_HIDDEN;
 extern int X11DRV_check_error(void) DECLSPEC_HIDDEN;
 extern void X11DRV_X_to_window_rect( struct x11drv_win_data *data, RECT *rect, int x, int y, int cx, int cy ) DECLSPEC_HIDDEN;
-extern BOOL is_window_rect_full_screen( const RECT *rect ) DECLSPEC_HIDDEN;
 extern POINT virtual_screen_to_root( INT x, INT y ) DECLSPEC_HIDDEN;
 extern POINT root_to_virtual_screen( INT x, INT y ) DECLSPEC_HIDDEN;
-extern RECT get_virtual_screen_rect(void) DECLSPEC_HIDDEN;
-extern RECT get_primary_monitor_rect(void) DECLSPEC_HIDDEN;
 extern RECT get_host_primary_monitor_rect(void) DECLSPEC_HIDDEN;
 extern RECT get_work_area( const RECT *monitor_rect ) DECLSPEC_HIDDEN;
 extern void xinerama_init( unsigned int width, unsigned int height ) DECLSPEC_HIDDEN;
+extern void init_recursive_mutex( pthread_mutex_t *mutex ) DECLSPEC_HIDDEN;
 
 #define DEPTH_COUNT 3
 extern const unsigned int *depths DECLSPEC_HIDDEN;
@@ -823,7 +818,7 @@ extern void X11DRV_DisplayDevices_Update(BOOL) DECLSPEC_HIDDEN;
 extern struct x11drv_display_device_handler desktop_handler DECLSPEC_HIDDEN;
 
 /* XIM support */
-extern BOOL X11DRV_InitXIM( const char *input_style ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_InitXIM( const WCHAR *input_style ) DECLSPEC_HIDDEN;
 extern XIC X11DRV_CreateIC(XIM xim, struct x11drv_win_data *data) DECLSPEC_HIDDEN;
 extern void X11DRV_SetupXIM(void) DECLSPEC_HIDDEN;
 extern void X11DRV_XIMLookupChars( const char *str, DWORD count ) DECLSPEC_HIDDEN;
@@ -834,11 +829,80 @@ extern void X11DRV_SetPreeditState(HWND hwnd, BOOL fOpen) DECLSPEC_HIDDEN;
 
 static inline BOOL is_window_rect_mapped( const RECT *rect )
 {
-    RECT virtual_rect = get_virtual_screen_rect();
+    RECT virtual_rect = NtUserGetVirtualScreenRect();
     return (rect->left < virtual_rect.right &&
             rect->top < virtual_rect.bottom &&
             max( rect->right, rect->left + 1 ) > virtual_rect.left &&
             max( rect->bottom, rect->top + 1 ) > virtual_rect.top);
+}
+
+/* GDI helpers */
+
+static inline BOOL lp_to_dp( HDC hdc, POINT *points, INT count )
+{
+    return NtGdiTransformPoints( hdc, points, points, count, NtGdiLPtoDP );
+}
+
+static inline UINT get_palette_entries( HPALETTE palette, UINT start, UINT count, PALETTEENTRY *entries )
+{
+    return NtGdiDoPalette( palette, start, count, entries, NtGdiGetPaletteEntries, TRUE );
+}
+
+/* user helpers */
+
+static inline LRESULT send_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
+{
+    return NtUserMessageCall( hwnd, msg, wparam, lparam, NULL, NtUserSendMessage, FALSE );
+}
+
+static inline LRESULT send_message_timeout( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+                                            UINT flags, UINT timeout, PDWORD_PTR res_ptr )
+{
+    struct send_message_timeout_params params = { .flags = flags, .timeout = timeout };
+    LRESULT res = NtUserMessageCall( hwnd, msg, wparam, lparam, &params,
+                                     NtUserSendMessageTimeout, FALSE );
+    if (res_ptr) *res_ptr = params.result;
+    return res;
+}
+
+static inline BOOL send_notify_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
+{
+    return NtUserMessageCall( hwnd, msg, wparam, lparam, 0, NtUserSendNotifyMessage, FALSE );
+}
+
+static inline HWND get_focus(void)
+{
+    GUITHREADINFO info;
+    info.cbSize = sizeof(info);
+    return NtUserGetGUIThreadInfo( GetCurrentThreadId(), &info ) ? info.hwndFocus : 0;
+}
+
+static inline HWND get_active_window(void)
+{
+    GUITHREADINFO info;
+    info.cbSize = sizeof(info);
+    return NtUserGetGUIThreadInfo( GetCurrentThreadId(), &info ) ? info.hwndActive : 0;
+}
+
+/* registry helpers */
+
+extern HKEY open_hkcu_key( const char *name ) DECLSPEC_HIDDEN;
+extern ULONG query_reg_value( HKEY hkey, const WCHAR *name,
+                              KEY_VALUE_PARTIAL_INFORMATION *info, ULONG size ) DECLSPEC_HIDDEN;
+extern HKEY reg_open_key( HKEY root, const WCHAR *name, ULONG name_len ) DECLSPEC_HIDDEN;
+
+/* string helpers */
+
+static inline void ascii_to_unicode( WCHAR *dst, const char *src, size_t len )
+{
+    while (len--) *dst++ = (unsigned char)*src++;
+}
+
+static inline UINT asciiz_to_unicode( WCHAR *dst, const char *src )
+{
+    WCHAR *p = dst;
+    while ((*p++ = *src++));
+    return (p - dst) * sizeof(WCHAR);
 }
 
 #endif  /* __WINE_X11DRV_H */

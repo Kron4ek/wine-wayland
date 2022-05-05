@@ -364,11 +364,34 @@ struct filesystem_event
     char        name[1];
 };
 
-typedef struct
+struct luid
 {
     unsigned int low_part;
     int          high_part;
-} luid_t;
+};
+
+struct luid_attr
+{
+    struct luid  luid;
+    unsigned int attrs;
+};
+
+struct acl
+{
+    unsigned char  revision;
+    unsigned char  pad1;
+    unsigned short size;
+    unsigned short count;
+    unsigned short pad2;
+};
+
+struct sid
+{
+    unsigned char revision;
+    unsigned char sub_count;
+    unsigned char id_auth[6];
+    unsigned int  sub_auth[15];
+};
 
 typedef struct
 {
@@ -413,13 +436,6 @@ struct object_type_info
     unsigned int  handle_max;
     unsigned int  valid_access;
     generic_map_t mapping;
-
-};
-
-struct token_groups
-{
-    unsigned int count;
-
 
 };
 
@@ -1748,14 +1764,16 @@ struct recv_socket_request
     struct request_header __header;
     int          oob;
     async_data_t async;
-    unsigned int status;
-    unsigned int total;
+    int          force_async;
+    char __pad_60[4];
 };
 struct recv_socket_reply
 {
     struct reply_header __header;
     obj_handle_t wait;
     unsigned int options;
+    int          nonblocking;
+    char __pad_20[4];
 };
 
 
@@ -1765,14 +1783,16 @@ struct send_socket_request
     struct request_header __header;
     char __pad_12[4];
     async_data_t async;
-    unsigned int status;
-    unsigned int total;
+    int          force_async;
+    char __pad_60[4];
 };
 struct send_socket_reply
 {
     struct reply_header __header;
     obj_handle_t wait;
     unsigned int options;
+    int          nonblocking;
+    char __pad_20[4];
 };
 
 
@@ -2889,6 +2909,23 @@ struct get_async_result_reply
 
 
 
+struct set_async_direct_result_request
+{
+    struct request_header __header;
+    obj_handle_t   handle;
+    apc_param_t    information;
+    unsigned int   status;
+    int            mark_pending;
+};
+struct set_async_direct_result_reply
+{
+    struct reply_header __header;
+    obj_handle_t   handle;
+    char __pad_12[4];
+};
+
+
+
 struct read_request
 {
     struct request_header __header;
@@ -3096,12 +3133,12 @@ struct set_window_info_request
     user_handle_t  handle;
     unsigned int   style;
     unsigned int   ex_style;
-    unsigned int   id;
+    data_size_t    extra_size;
     mod_handle_t   instance;
     lparam_t       user_data;
-    int            extra_offset;
-    data_size_t    extra_size;
     lparam_t       extra_value;
+    int            extra_offset;
+    char __pad_60[4];
 };
 struct set_window_info_reply
 {
@@ -3111,8 +3148,7 @@ struct set_window_info_reply
     mod_handle_t   old_instance;
     lparam_t       old_user_data;
     lparam_t       old_extra_value;
-    unsigned int   old_id;
-    char __pad_44[4];
+    lparam_t       old_id;
 };
 #define SET_WIN_STYLE     0x01
 #define SET_WIN_EXSTYLE   0x02
@@ -4331,13 +4367,13 @@ struct adjust_token_privileges_request
     obj_handle_t  handle;
     int           disable_all;
     int           get_modified_state;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
 };
 struct adjust_token_privileges_reply
 {
     struct reply_header __header;
     unsigned int  len;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_12[4];
 };
 
@@ -4351,7 +4387,7 @@ struct get_token_privileges_reply
 {
     struct reply_header __header;
     unsigned int  len;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_12[4];
 };
 
@@ -4361,14 +4397,14 @@ struct check_token_privileges_request
     struct request_header __header;
     obj_handle_t  handle;
     int           all_required;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_20[4];
 };
 struct check_token_privileges_reply
 {
     struct reply_header __header;
     int           has_privileges;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_12[4];
 };
 
@@ -4395,8 +4431,8 @@ struct filter_token_request
     obj_handle_t  handle;
     unsigned int  flags;
     data_size_t   privileges_size;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES,privileges_size); */
-    /* VARARG(disable_sids,SID); */
+    /* VARARG(privileges,luid_attr,privileges_size); */
+    /* VARARG(disable_sids,sid); */
 };
 struct filter_token_reply
 {
@@ -4420,7 +4456,7 @@ struct access_check_reply
     unsigned int    access_granted;
     unsigned int    access_status;
     unsigned int    privileges_len;
-    /* VARARG(privileges,LUID_AND_ATTRIBUTES); */
+    /* VARARG(privileges,luid_attr); */
     char __pad_20[4];
 };
 
@@ -4435,7 +4471,7 @@ struct get_token_sid_reply
 {
     struct reply_header __header;
     data_size_t     sid_len;
-    /* VARARG(sid,SID); */
+    /* VARARG(sid,sid); */
     char __pad_12[4];
 };
 
@@ -4447,9 +4483,10 @@ struct get_token_groups_request
 struct get_token_groups_reply
 {
     struct reply_header __header;
-    data_size_t     user_len;
-    /* VARARG(user,token_groups); */
-    char __pad_12[4];
+    data_size_t     attr_len;
+    data_size_t     sid_len;
+    /* VARARG(attrs,uints,attr_len); */
+    /* VARARG(sids,sids); */
 };
 
 struct get_token_default_dacl_request
@@ -4461,7 +4498,7 @@ struct get_token_default_dacl_reply
 {
     struct reply_header __header;
     data_size_t     acl_len;
-    /* VARARG(acl,ACL); */
+    /* VARARG(acl,acl); */
     char __pad_12[4];
 };
 
@@ -4469,7 +4506,7 @@ struct set_token_default_dacl_request
 {
     struct request_header __header;
     obj_handle_t    handle;
-    /* VARARG(acl,ACL); */
+    /* VARARG(acl,acl); */
 };
 struct set_token_default_dacl_reply
 {
@@ -4609,10 +4646,10 @@ struct get_directory_entry_request
 struct get_directory_entry_reply
 {
     struct reply_header __header;
+    data_size_t    total_len;
     data_size_t    name_len;
     /* VARARG(name,unicode_str,name_len); */
     /* VARARG(type,unicode_str); */
-    char __pad_12[4];
 };
 
 
@@ -4732,7 +4769,7 @@ struct allocate_locally_unique_id_request
 struct allocate_locally_unique_id_reply
 {
     struct reply_header __header;
-    luid_t         luid;
+    struct luid    luid;
 };
 
 
@@ -4904,8 +4941,8 @@ struct get_token_info_request
 struct get_token_info_reply
 {
     struct reply_header __header;
-    luid_t         token_id;
-    luid_t         modified_id;
+    struct luid    token_id;
+    struct luid    modified_id;
     unsigned int   session_id;
     int            primary;
     int            impersonation_level;
@@ -5405,92 +5442,6 @@ struct get_next_thread_reply
     char __pad_12[4];
 };
 
-
-struct create_esync_request
-{
-    struct request_header __header;
-    unsigned int access;
-    int          initval;
-    int          type;
-    int          max;
-    /* VARARG(objattr,object_attributes); */
-    char __pad_28[4];
-};
-struct create_esync_reply
-{
-    struct reply_header __header;
-    obj_handle_t handle;
-    int          type;
-    unsigned int shm_idx;
-    char __pad_20[4];
-};
-
-
-struct open_esync_request
-{
-    struct request_header __header;
-    unsigned int access;
-    unsigned int attributes;
-    obj_handle_t rootdir;
-    int          type;
-    /* VARARG(name,unicode_str); */
-    char __pad_28[4];
-};
-struct open_esync_reply
-{
-    struct reply_header __header;
-    obj_handle_t handle;
-    int          type;
-    unsigned int shm_idx;
-    char __pad_20[4];
-};
-
-
-struct get_esync_fd_request
-{
-    struct request_header __header;
-    obj_handle_t handle;
-};
-struct get_esync_fd_reply
-{
-    struct reply_header __header;
-    int          type;
-    unsigned int shm_idx;
-};
-
-
-struct get_esync_apc_fd_request
-{
-    struct request_header __header;
-    char __pad_12[4];
-};
-struct get_esync_apc_fd_reply
-{
-    struct reply_header __header;
-};
-
-
-struct esync_msgwait_request
-{
-    struct request_header __header;
-    int          in_msgwait;
-};
-struct esync_msgwait_reply
-{
-    struct reply_header __header;
-};
-
-enum esync_type
-{
-    ESYNC_SEMAPHORE = 1,
-    ESYNC_AUTO_EVENT,
-    ESYNC_MANUAL_EVENT,
-    ESYNC_MUTEX,
-    ESYNC_AUTO_SERVER,
-    ESYNC_MANUAL_SERVER,
-    ESYNC_QUEUE,
-};
-
 enum fsync_type
 {
     FSYNC_SEMAPHORE = 1,
@@ -5703,6 +5654,7 @@ enum request
     REQ_register_async,
     REQ_cancel_async,
     REQ_get_async_result,
+    REQ_set_async_direct_result,
     REQ_read,
     REQ_write,
     REQ_ioctl,
@@ -5854,11 +5806,6 @@ enum request
     REQ_suspend_process,
     REQ_resume_process,
     REQ_get_next_thread,
-    REQ_create_esync,
-    REQ_open_esync,
-    REQ_get_esync_fd,
-    REQ_get_esync_apc_fd,
-    REQ_esync_msgwait,
     REQ_create_fsync,
     REQ_open_fsync,
     REQ_get_fsync_idx,
@@ -5994,6 +5941,7 @@ union generic_request
     struct register_async_request register_async_request;
     struct cancel_async_request cancel_async_request;
     struct get_async_result_request get_async_result_request;
+    struct set_async_direct_result_request set_async_direct_result_request;
     struct read_request read_request;
     struct write_request write_request;
     struct ioctl_request ioctl_request;
@@ -6145,11 +6093,6 @@ union generic_request
     struct suspend_process_request suspend_process_request;
     struct resume_process_request resume_process_request;
     struct get_next_thread_request get_next_thread_request;
-    struct create_esync_request create_esync_request;
-    struct open_esync_request open_esync_request;
-    struct get_esync_fd_request get_esync_fd_request;
-    struct get_esync_apc_fd_request get_esync_apc_fd_request;
-    struct esync_msgwait_request esync_msgwait_request;
     struct create_fsync_request create_fsync_request;
     struct open_fsync_request open_fsync_request;
     struct get_fsync_idx_request get_fsync_idx_request;
@@ -6283,6 +6226,7 @@ union generic_reply
     struct register_async_reply register_async_reply;
     struct cancel_async_reply cancel_async_reply;
     struct get_async_result_reply get_async_result_reply;
+    struct set_async_direct_result_reply set_async_direct_result_reply;
     struct read_reply read_reply;
     struct write_reply write_reply;
     struct ioctl_reply ioctl_reply;
@@ -6434,11 +6378,6 @@ union generic_reply
     struct suspend_process_reply suspend_process_reply;
     struct resume_process_reply resume_process_reply;
     struct get_next_thread_reply get_next_thread_reply;
-    struct create_esync_reply create_esync_reply;
-    struct open_esync_reply open_esync_reply;
-    struct get_esync_fd_reply get_esync_fd_reply;
-    struct get_esync_apc_fd_reply get_esync_apc_fd_reply;
-    struct esync_msgwait_reply esync_msgwait_reply;
     struct create_fsync_reply create_fsync_reply;
     struct open_fsync_reply open_fsync_reply;
     struct get_fsync_idx_reply get_fsync_idx_reply;
@@ -6448,7 +6387,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 739
+#define SERVER_PROTOCOL_VERSION 750
 
 /* ### protocol_version end ### */
 

@@ -60,9 +60,9 @@ static ULONG WINAPI qualifier_set_Release(
     if (!refs)
     {
         TRACE("destroying %p\n", set);
-        heap_free( set->class );
-        heap_free( set->member );
-        heap_free( set );
+        free( set->class );
+        free( set->member );
+        free( set );
     }
     return refs;
 }
@@ -103,24 +103,24 @@ static HRESULT create_qualifier_enum( enum wbm_namespace ns, const WCHAR *class,
     if (member && name)
     {
         len = lstrlenW( class ) + lstrlenW( member ) + lstrlenW( name ) + ARRAY_SIZE(fmtW);
-        if (!(query = heap_alloc( len * sizeof(WCHAR) ))) return E_OUTOFMEMORY;
+        if (!(query = malloc( len * sizeof(WCHAR) ))) return E_OUTOFMEMORY;
         swprintf( query, len, fmtW, class, member, name );
     }
     else if (member)
     {
         len = lstrlenW( class ) + lstrlenW( member ) + ARRAY_SIZE(fmt2W);
-        if (!(query = heap_alloc( len * sizeof(WCHAR) ))) return E_OUTOFMEMORY;
+        if (!(query = malloc( len * sizeof(WCHAR) ))) return E_OUTOFMEMORY;
         swprintf( query, len, fmt2W, class, member );
     }
     else
     {
         len = lstrlenW( class ) + ARRAY_SIZE(fmt3W);
-        if (!(query = heap_alloc( len * sizeof(WCHAR) ))) return E_OUTOFMEMORY;
+        if (!(query = malloc( len * sizeof(WCHAR) ))) return E_OUTOFMEMORY;
         swprintf( query, len, fmt3W, class );
     }
 
     hr = exec_query( ns, query, iter );
-    heap_free( query );
+    free( query );
     return hr;
 }
 
@@ -159,7 +159,7 @@ static HRESULT get_qualifier_value( enum wbm_namespace ns, const WCHAR *class, c
         hr = IWbemClassObject_Get( obj, L"BoolValue", 0, val, NULL, NULL );
         break;
     default:
-        ERR("unhandled type %u\n", V_UI4( &var ));
+        ERR( "unhandled type %lu\n", V_UI4( &var ) );
         break;
     }
 
@@ -177,10 +177,10 @@ static HRESULT WINAPI qualifier_set_Get(
 {
     struct qualifier_set *set = impl_from_IWbemQualifierSet( iface );
 
-    TRACE("%p, %s, %08x, %p, %p\n", iface, debugstr_w(wszName), lFlags, pVal, plFlavor);
+    TRACE( "%p, %s, %#lx, %p, %p\n", iface, debugstr_w(wszName), lFlags, pVal, plFlavor );
     if (lFlags)
     {
-        FIXME("flags %08x not supported\n", lFlags);
+        FIXME( "flags %#lx not supported\n", lFlags );
         return E_NOTIMPL;
     }
     return get_qualifier_value( set->ns, set->class, set->member, wszName, pVal, plFlavor );
@@ -192,7 +192,7 @@ static HRESULT WINAPI qualifier_set_Put(
     VARIANT *pVal,
     LONG lFlavor )
 {
-    FIXME("%p, %s, %p, %d\n", iface, debugstr_w(wszName), pVal, lFlavor);
+    FIXME( "%p, %s, %p, %ld\n", iface, debugstr_w(wszName), pVal, lFlavor );
     return E_NOTIMPL;
 }
 
@@ -214,10 +214,10 @@ static HRESULT WINAPI qualifier_set_GetNames(
     IWbemClassObject *obj;
     HRESULT hr;
 
-    TRACE("%p, %08x, %p\n", iface, lFlags, pNames);
+    TRACE( "%p, %#lx, %p\n", iface, lFlags, pNames );
     if (lFlags)
     {
-        FIXME("flags %08x not supported\n", lFlags);
+        FIXME( "flags %#lx not supported\n", lFlags );
         return E_NOTIMPL;
     }
 
@@ -237,7 +237,7 @@ static HRESULT WINAPI qualifier_set_BeginEnumeration(
     IWbemQualifierSet *iface,
     LONG lFlags )
 {
-    FIXME("%p, %08x\n", iface, lFlags);
+    FIXME( "%p, %#lx\n", iface, lFlags );
     return E_NOTIMPL;
 }
 
@@ -248,7 +248,7 @@ static HRESULT WINAPI qualifier_set_Next(
     VARIANT *pVal,
     LONG *plFlavor )
 {
-    FIXME("%p, %08x, %p, %p, %p\n", iface, lFlags, pstrName, pVal, plFlavor);
+    FIXME( "%p, %#lx, %p, %p, %p\n", iface, lFlags, pstrName, pVal, plFlavor );
     return E_NOTIMPL;
 }
 
@@ -279,19 +279,19 @@ HRESULT WbemQualifierSet_create( enum wbm_namespace ns, const WCHAR *class, cons
 
     TRACE("%p\n", ppObj);
 
-    if (!(set = heap_alloc( sizeof(*set) ))) return E_OUTOFMEMORY;
+    if (!(set = malloc( sizeof(*set) ))) return E_OUTOFMEMORY;
 
     set->IWbemQualifierSet_iface.lpVtbl = &qualifier_set_vtbl;
-    if (!(set->class = heap_strdupW( class )))
+    if (!(set->class = wcsdup( class )))
     {
-        heap_free( set );
+        free( set );
         return E_OUTOFMEMORY;
     }
     if (!member) set->member = NULL;
-    else if (!(set->member = heap_strdupW( member )))
+    else if (!(set->member = wcsdup( member )))
     {
-        heap_free( set->class );
-        heap_free( set );
+        free( set->class );
+        free( set );
         return E_OUTOFMEMORY;
     }
     set->ns = ns;

@@ -245,7 +245,7 @@ static enum dbg_start minidump_do_reload(struct tgt_process_minidump_data* data)
         const char *str;
         char tmp[128];
 
-        dbg_printf("WineDbg starting on minidump on pid %04x\n", pid);
+        dbg_printf("WineDbg starting on minidump on pid %04lx\n", pid);
         switch (msi->ProcessorArchitecture)
         {
         case PROCESSOR_ARCHITECTURE_UNKNOWN:
@@ -307,8 +307,8 @@ static enum dbg_start minidump_do_reload(struct tgt_process_minidump_data* data)
             str = "???";
             break;
         }
-        dbg_printf("  %s was running on #%d %s CPU%s",
-                   dbg_W2A(exec_name, -1), msi->u.s.NumberOfProcessors, str,
+        dbg_printf("  %ls was running on #%d %s CPU%s",
+                   exec_name, msi->u.s.NumberOfProcessors, str,
                    msi->u.s.NumberOfProcessors < 2 ? "" : "s");
         switch (msi->MajorVersion)
         {
@@ -379,7 +379,7 @@ static enum dbg_start minidump_do_reload(struct tgt_process_minidump_data* data)
             break;
         default: str = "???"; break;
         }
-        dbg_printf(" on Windows %s (%u)\n", str, msi->BuildNumber);
+        dbg_printf(" on Windows %s (%lu)\n", str, msi->BuildNumber);
         /* FIXME CSD: msi->CSDVersionRva */
 
         if (sizeof(MINIDUMP_SYSTEM_INFO) + 4 > dir->Location.DataSize &&

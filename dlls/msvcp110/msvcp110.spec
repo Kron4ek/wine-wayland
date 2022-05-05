@@ -1149,7 +1149,7 @@
 @ stub -arch=win64 ?_Assign@_Concurrent_queue_iterator_base_v4@details@Concurrency@@IEAAXAEBV123@@Z
 @ stub ?_Atexit@@YAXP6AXXZ@Z
 @ extern ?_BADOFF@std@@3_JB std_BADOFF
-# extern ?_Byte_reverse_table@details@Concurrency@@3QBEB
+@ extern ?_Byte_reverse_table@details@Concurrency@@3QBEB byte_reverse_table
 @ cdecl -arch=arm ?_C_str@?$_Yarn@D@std@@QBAPBDXZ(ptr) _Yarn_char_c_str
 @ thiscall -arch=i386 ?_C_str@?$_Yarn@D@std@@QBEPBDXZ(ptr) _Yarn_char_c_str
 @ cdecl -arch=win64 ?_C_str@?$_Yarn@D@std@@QEBAPEBDXZ(ptr) _Yarn_char_c_str
@@ -3817,13 +3817,13 @@
 @ extern _LZero
 @ cdecl _Lock_shared_ptr_spin_lock()
 @ cdecl _Mbrtowc(ptr ptr long ptr ptr)
-@ stub _Mtx_clear_owner
+@ cdecl _Mtx_clear_owner(ptr)
 @ cdecl _Mtx_current_owns(ptr)
 @ cdecl _Mtx_destroy(ptr)
 @ cdecl _Mtx_getconcrtcs(ptr)
 @ cdecl _Mtx_init(ptr long)
 @ cdecl _Mtx_lock(ptr)
-@ stub _Mtx_reset_owner
+@ cdecl _Mtx_reset_owner(ptr)
 @ stub _Mtx_timedlock
 @ cdecl _Mtx_trylock(ptr)
 @ cdecl _Mtx_unlock(ptr)

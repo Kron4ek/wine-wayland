@@ -106,7 +106,6 @@ extern char *dup_fd_name( struct fd *root, const char *name );
 extern void get_nt_name( struct fd *fd, struct unicode_str *name );
 
 extern int default_fd_signaled( struct object *obj, struct wait_queue_entry *entry );
-extern int default_fd_get_esync_fd( struct object *obj, enum esync_type *type );
 extern unsigned int default_fd_get_fsync_idx( struct object *obj, enum fsync_type *type );
 extern int default_fd_get_poll_events( struct fd *fd );
 extern void default_poll_event( struct fd *fd, int event );
@@ -166,8 +165,8 @@ extern int get_file_unix_fd( struct file *file );
 extern struct file *create_file_for_fd( int fd, unsigned int access, unsigned int sharing );
 extern struct file *create_file_for_fd_obj( struct fd *fd, unsigned int access, unsigned int sharing );
 extern void file_set_error(void);
-extern struct security_descriptor *mode_to_sd( mode_t mode, const SID *user, const SID *group );
-extern mode_t sd_to_mode( const struct security_descriptor *sd, const SID *owner );
+extern struct security_descriptor *mode_to_sd( mode_t mode, const struct sid *user, const struct sid *group );
+extern mode_t sd_to_mode( const struct security_descriptor *sd, const struct sid *owner );
 extern int is_file_executable( const char *name );
 
 /* file mapping functions */

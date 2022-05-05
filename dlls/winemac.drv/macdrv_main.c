@@ -57,6 +57,7 @@ int right_command_is_ctrl = 0;
 BOOL allow_software_rendering = FALSE;
 BOOL disable_window_decorations = FALSE;
 int allow_immovable_windows = TRUE;
+int use_confinement_cursor_clipping = TRUE;
 int cursor_clipping_locks_windows = TRUE;
 int use_precise_scrolling = TRUE;
 int gl_surface_mode = GL_SURFACE_IN_FRONT_OPAQUE;
@@ -194,6 +195,9 @@ static void setup_options(void)
     if (!get_config_key(hkey, appkey, "AllowImmovableWindows", buffer, sizeof(buffer)))
         allow_immovable_windows = IS_OPTION_TRUE(buffer[0]);
 
+    if (!get_config_key(hkey, appkey, "UseConfinementCursorClipping", buffer, sizeof(buffer)))
+        use_confinement_cursor_clipping = IS_OPTION_TRUE(buffer[0]);
+
     if (!get_config_key(hkey, appkey, "CursorClippingLocksWindows", buffer, sizeof(buffer)))
         cursor_clipping_locks_windows = IS_OPTION_TRUE(buffer[0]);
 
@@ -309,7 +313,7 @@ static BOOL process_attach(void)
 /***********************************************************************
  *              ThreadDetach   (MACDRV.@)
  */
-void CDECL macdrv_ThreadDetach(void)
+void macdrv_ThreadDetach(void)
 {
     struct macdrv_thread_data *data = macdrv_thread_data();
 
@@ -324,7 +328,6 @@ void CDECL macdrv_ThreadDetach(void)
     }
 }
 
-extern void __wine_esync_set_queue_fd( int fd );
 
 /***********************************************************************
  *              set_queue_display_fd
@@ -335,8 +338,6 @@ static void set_queue_display_fd(int fd)
 {
     HANDLE handle;
     int ret;
-
-    __wine_esync_set_queue_fd(fd);
 
     if (wine_server_fd_to_handle(fd, GENERIC_READ | SYNCHRONIZE, 0, &handle))
     {
@@ -414,7 +415,7 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved)
 /***********************************************************************
  *              SystemParametersInfo (MACDRV.@)
  */
-BOOL CDECL macdrv_SystemParametersInfo( UINT action, UINT int_param, void *ptr_param, UINT flags )
+BOOL macdrv_SystemParametersInfo( UINT action, UINT int_param, void *ptr_param, UINT flags )
 {
     switch (action)
     {

@@ -19394,9 +19394,6 @@ static void add_dirty_rect_test(void)
     hr = IDirect3DTexture9_GetSurfaceLevel(tex_dynamic, 0, &surface_dynamic);
     ok(SUCCEEDED(hr), "Failed to get surface level, hr %#x.\n", hr);
 
-    fill_surface(surface_src_red, 0x00ff0000, 0);
-    fill_surface(surface_src_green, 0x0000ff00, 0);
-
     hr = IDirect3DDevice9_SetFVF(device, D3DFVF_XYZ | D3DFVF_TEX1);
     ok(SUCCEEDED(hr), "Failed to set fvf, hr %#x.\n", hr);
     hr = IDirect3DDevice9_SetTextureStageState(device, 0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
@@ -19405,6 +19402,23 @@ static void add_dirty_rect_test(void)
     ok(SUCCEEDED(hr), "Failed to set color arg, hr %#x.\n", hr);
     hr = IDirect3DDevice9_SetSamplerState(device, 0, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
     ok(SUCCEEDED(hr), "Failed to set sampler state, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_SetTexture(device, 0, (IDirect3DBaseTexture9 *)tex_dst2);
+    ok(hr == D3D_OK, "Unexpected hr %#x.\n", hr);
+    hr = IDirect3DDevice9_UpdateTexture(device, (IDirect3DBaseTexture9 *)tex_src_red,
+            (IDirect3DBaseTexture9 *)tex_dst2);
+    fill_surface(surface_src_green, 0x00000080, D3DLOCK_NO_DIRTY_UPDATE);
+    hr = IDirect3DDevice9_UpdateTexture(device, (IDirect3DBaseTexture9 *)tex_src_green,
+            (IDirect3DBaseTexture9 *)tex_dst2);
+    ok(hr == D3D_OK, "Unexpected hr %#x.\n", hr);
+    add_dirty_rect_test_draw(device);
+    color = getPixelColor(device, 320, 240);
+    ok(color_match(color, 0x00000080, 1), "Unexpected colour 0x%08x.\n", color);
+    hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
+    ok(hr == D3D_OK, "Unexpected hr %#x.\n", hr);
+
+    fill_surface(surface_src_red, 0x00ff0000, 0);
+    fill_surface(surface_src_green, 0x0000ff00, 0);
 
     hr = IDirect3DDevice9_UpdateTexture(device, (IDirect3DBaseTexture9 *)tex_src_green,
             (IDirect3DBaseTexture9 *)tex_dst1);
@@ -26911,7 +26925,15 @@ static void test_sample_mask(void)
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     get_rt_readback(rt, &rb);
     colour = get_readback_color(&rb, 64, 64);
-    ok(color_match(colour, 0xffff8080, 1), "Got unexpected colour %08x.\n", colour);
+    /* Multiple generations of Nvidia cards return broken results.
+     * A mask with no bits or all bits set produce the expected results (0x00 / 0xff),
+     * but any other mask behaves almost as if the result is 0.5 + (enabled / total)
+     * samples. It's not quite that though (you'd expect 0xbf or 0xc0 instead of 0xbc).
+     *
+     * I looked at a few other possible problems: Incorrectly enabled Z test, alpha test,
+     * culling, the multisample mask affecting CopyRects. Neither of these make a difference. */
+    ok(color_match(colour, 0xffff8080, 1) || broken(color_match(colour, 0xffffbcbc, 1)),
+            "Got unexpected colour %08x.\n", colour);
     release_surface_readback(&rb);
 
     hr = IDirect3DDevice9_EndScene(device);

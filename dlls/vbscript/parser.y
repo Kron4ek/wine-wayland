@@ -81,13 +81,14 @@ static statement_t *link_statements(statement_t*,statement_t*);
 
 #define CHECK_ERROR if(((parser_ctx_t*)ctx)->hres != S_OK) YYABORT
 
-#define YYLTYPE unsigned
+#define PARSER_LTYPE unsigned
 #define YYLLOC_DEFAULT(Cur, Rhs, N) Cur = YYRHSLOC((Rhs), (N) ? 1 : 0)
 
 %}
 
 %lex-param { parser_ctx_t *ctx }
 %parse-param { parser_ctx_t *ctx }
+%define api.prefix {parser_}
 %define api.pure
 %start Program
 
@@ -517,7 +518,7 @@ static int parser_error(unsigned *loc, parser_ctx_t *ctx, const char *str)
         FIXME("%s: %s\n", debugstr_w(ctx->code + *loc), debugstr_a(str));
         ctx->hres = E_FAIL;
     }else {
-        WARN("%s: %08x\n", debugstr_w(ctx->code + *loc), ctx->hres);
+        WARN("%s: %08lx\n", debugstr_w(ctx->code + *loc), ctx->hres);
     }
     return 0;
 }

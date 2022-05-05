@@ -21,8 +21,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include "wined3d_private.h"
 #include "winternl.h"
 
@@ -155,6 +153,15 @@ UINT64 adapter_adjust_memory(struct wined3d_adapter *adapter, INT64 amount)
             wine_dbgstr_longlong(amount),
             wine_dbgstr_longlong(adapter->vram_bytes_used));
     return adapter->vram_bytes_used;
+}
+
+ssize_t adapter_adjust_mapped_memory(struct wined3d_adapter *adapter, ssize_t size)
+{
+    /* Note that this needs to be thread-safe; the Vulkan adapter may map from
+     * client threads. */
+    ssize_t ret = InterlockedExchangeAddSizeT(&adapter->mapped_size, size) + size;
+    TRACE("Adjusted mapped adapter memory by %Id to %Id.\n", size, ret);
+    return ret;
 }
 
 void wined3d_adapter_cleanup(struct wined3d_adapter *adapter)
@@ -456,6 +463,7 @@ static const struct wined3d_gpu_description gpu_description_table[] =
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_RTX2070,    "NVIDIA GeForce RTX 2070",          DRIVER_NVIDIA_KEPLER,  8192},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_RTX2080,    "NVIDIA GeForce RTX 2080",          DRIVER_NVIDIA_KEPLER,  8192},
     {HW_VENDOR_NVIDIA,     CARD_NVIDIA_GEFORCE_RTX2080TI,  "NVIDIA GeForce RTX 2080 Ti",       DRIVER_NVIDIA_KEPLER,  11264},
+    {HW_VENDOR_NVIDIA,     CARD_NVIDIA_TESLA_T4,           "NVIDIA Tesla T4",                  DRIVER_NVIDIA_KEPLER,  16384},
 
     /* AMD cards */
     {HW_VENDOR_AMD,        CARD_AMD_RAGE_128PRO,           "ATI Rage Fury",                    DRIVER_AMD_RAGE_128PRO,  16  },
@@ -1228,8 +1236,8 @@ HRESULT CDECL wined3d_output_find_closest_matching_mode(const struct wined3d_out
     closest = ~0u;
     for (i = 0, j = 0; i < matching_mode_count; ++i)
     {
-        unsigned int d = abs(mode->width - matching_modes[i]->width)
-                + abs(mode->height - matching_modes[i]->height);
+        unsigned int d = abs((int)(mode->width - matching_modes[i]->width))
+            + abs((int)(mode->height - matching_modes[i]->height));
 
         if (closest > d)
         {
@@ -1821,7 +1829,9 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d,
 
             allowed_usage = WINED3DUSAGE_DYNAMIC;
             allowed_bind_flags = WINED3D_BIND_SHADER_RESOURCE
-                    | WINED3D_BIND_UNORDERED_ACCESS;
+                    | WINED3D_BIND_UNORDERED_ACCESS
+                    | WINED3D_BIND_VERTEX_BUFFER
+                    | WINED3D_BIND_INDEX_BUFFER;
             gl_type = gl_type_end = WINED3D_GL_RES_TYPE_BUFFER;
             break;
 
@@ -1853,6 +1863,11 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d,
         format_flags |= WINED3DFMT_FLAG_DEPTH_STENCIL;
     if (bind_flags & WINED3D_BIND_UNORDERED_ACCESS)
         format_flags |= WINED3DFMT_FLAG_UNORDERED_ACCESS;
+    if (bind_flags & WINED3D_BIND_VERTEX_BUFFER)
+        format_flags |= WINED3DFMT_FLAG_VERTEX_ATTRIBUTE;
+    if (bind_flags & WINED3D_BIND_INDEX_BUFFER)
+        format_flags |= WINED3DFMT_FLAG_INDEX_BUFFER;
+
     if (usage & WINED3DUSAGE_QUERY_FILTER)
         format_flags |= WINED3DFMT_FLAG_FILTERING;
     if (usage & WINED3DUSAGE_QUERY_POSTPIXELSHADER_BLENDING)
@@ -2788,15 +2803,20 @@ static void adapter_no3d_unmap_bo_address(struct wined3d_context *context,
 }
 
 static void adapter_no3d_copy_bo_address(struct wined3d_context *context,
-        const struct wined3d_bo_address *dst, const struct wined3d_bo_address *src, size_t size)
+        const struct wined3d_bo_address *dst, const struct wined3d_bo_address *src,
+        unsigned int range_count, const struct wined3d_range *ranges)
 {
+    unsigned int i;
+
     if (dst->buffer_object)
         ERR("Unsupported dst buffer object %p.\n", dst->buffer_object);
     if (src->buffer_object)
         ERR("Unsupported src buffer object %p.\n", src->buffer_object);
     if (dst->buffer_object || src->buffer_object)
         return;
-    memcpy(dst->addr, src->addr, size);
+
+    for (i = 0; i < range_count; ++i)
+        memcpy(dst->addr + ranges[i].offset, src->addr + ranges[i].offset, ranges[i].size);
 }
 
 static void adapter_no3d_flush_bo_address(struct wined3d_context *context,

@@ -27,8 +27,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include "config.h"
-
 #include <stdio.h>
 
 #include "wined3d_private.h"
@@ -497,27 +495,26 @@ static void shader_arb_load_np2fixup_constants(const struct arb_ps_np2fixup_info
         const struct wined3d_gl_info *gl_info, const struct wined3d_state *state)
 {
     GLfloat np2fixup_constants[4 * WINED3D_MAX_FRAGMENT_SAMPLERS];
-    WORD active = fixup->super.active;
-    UINT i;
+    uint32_t active = fixup->super.active;
+    const struct wined3d_texture *tex;
+    unsigned char idx;
+    GLfloat *tex_dim;
+    unsigned int i;
 
     if (!active)
         return;
 
-    for (i = 0; active; active >>= 1, ++i)
+    while (active)
     {
-        const struct wined3d_texture *tex = state->textures[i];
-        unsigned char idx = fixup->super.idx[i];
-        GLfloat *tex_dim = &np2fixup_constants[(idx >> 1) * 4];
-
-        if (!(active & 1))
-            continue;
-
-        if (!tex)
+        i = wined3d_bit_scan(&active);
+        if (!(tex = state->textures[i]))
         {
             ERR("Nonexistent texture is flagged for NP2 texcoord fixup.\n");
             continue;
         }
 
+        idx = fixup->super.idx[i];
+        tex_dim = &np2fixup_constants[(idx >> 1) * 4];
         if (idx % 2)
         {
             tex_dim[2] = tex->pow2_matrix[0];
@@ -766,7 +763,7 @@ static void shader_generate_arb_declarations(const struct wined3d_shader *shader
     char pshader = shader_is_pshader_version(reg_maps->shader_version.type);
     const struct wined3d_shader_lconst *lconst;
     unsigned max_constantsF;
-    DWORD map;
+    uint32_t map;
 
     /* In pixel shaders, all private constants are program local, we don't need anything
      * from program.env. Thus we can advertise the full set of constants in pixel shaders.
@@ -838,21 +835,27 @@ static void shader_generate_arb_declarations(const struct wined3d_shader *shader
         }
     }
 
-    for (i = 0, map = reg_maps->temporary; map; map >>= 1, ++i)
+    map = reg_maps->temporary;
+    while (map)
     {
-        if (map & 1) shader_addline(buffer, "TEMP R%u;\n", i);
+        i = wined3d_bit_scan(&map);
+        shader_addline(buffer, "TEMP R%u;\n", i);
     }
 
-    for (i = 0, map = reg_maps->address; map; map >>= 1, ++i)
+    map = reg_maps->address;
+    while (map)
     {
-        if (map & 1) shader_addline(buffer, "ADDRESS A%u;\n", i);
+        i = wined3d_bit_scan(&map);
+        shader_addline(buffer, "ADDRESS A%u;\n", i);
     }
 
     if (pshader && reg_maps->shader_version.major == 1 && reg_maps->shader_version.minor <= 3)
     {
-        for (i = 0, map = reg_maps->texcoord; map; map >>= 1, ++i)
+        map = reg_maps->texcoord;
+        while (map)
         {
-            if (map & 1) shader_addline(buffer, "TEMP T%u;\n", i);
+            i = wined3d_bit_scan(&map);
+            shader_addline(buffer, "TEMP T%u;\n", i);
         }
     }
 
@@ -3507,17 +3510,18 @@ static GLuint shader_arb_generate_pshader(const struct wined3d_shader *shader,
     BOOL dcl_td = FALSE;
     BOOL want_nv_prog = FALSE;
     struct arb_pshader_private *shader_priv = shader->backend_data;
-    DWORD map;
     BOOL custom_linear_fog = FALSE;
+    uint32_t map;
 
     char srgbtmp[4][4];
     char ftoa_tmp[17];
     unsigned int i, found = 0;
 
-    for (i = 0, map = reg_maps->temporary; map; map >>= 1, ++i)
+    map = reg_maps->temporary;
+    while (map)
     {
-        if (!(map & 1)
-                || (shader->u.ps.color0_mov && i == shader->u.ps.color0_reg)
+        i = wined3d_bit_scan(&map);
+        if ((shader->u.ps.color0_mov && i == shader->u.ps.color0_reg)
                 || (reg_maps->shader_version.major < 2 && !i))
             continue;
 
@@ -3676,12 +3680,12 @@ static GLuint shader_arb_generate_pshader(const struct wined3d_shader *shader,
     /* Base Declarations */
     shader_generate_arb_declarations(shader, reg_maps, buffer, gl_info, NULL, &priv_ctx);
 
-    for (i = 0, map = reg_maps->bumpmat; map; map >>= 1, ++i)
+    map = reg_maps->bumpmat;
+    while (map)
     {
         unsigned char bump_const;
 
-        if (!(map & 1)) continue;
-
+        i = wined3d_bit_scan(&map);
         bump_const = compiled->numbumpenvmatconsts;
         compiled->bumpenvmatconst[bump_const].const_num = WINED3D_CONST_NUM_UNUSED;
         compiled->bumpenvmatconst[bump_const].texunit = i;
@@ -3855,16 +3859,16 @@ static int compare_sig(const struct wined3d_shader_signature *sig1, const struct
 
         if ((ret = strcmp(e1->semantic_name, e2->semantic_name)))
             return ret;
-        if (e1->semantic_idx != e2->semantic_idx)
-            return e1->semantic_idx < e2->semantic_idx ? -1 : 1;
-        if (e1->sysval_semantic != e2->sysval_semantic)
-            return e1->sysval_semantic < e2->sysval_semantic ? -1 : 1;
-        if (e1->component_type != e2->component_type)
-            return e1->component_type < e2->component_type ? -1 : 1;
-        if (e1->register_idx != e2->register_idx)
-            return e1->register_idx < e2->register_idx ? -1 : 1;
-        if (e1->mask != e2->mask)
-            return e1->mask < e2->mask ? -1 : 1;
+        if ((ret = wined3d_uint32_compare(e1->semantic_idx, e2->semantic_idx)))
+            return ret;
+        if ((ret = wined3d_uint32_compare(e1->sysval_semantic, e2->sysval_semantic)))
+            return ret;
+        if ((ret = wined3d_uint32_compare(e1->component_type, e2->component_type)))
+            return ret;
+        if ((ret = wined3d_uint32_compare(e1->register_idx, e2->register_idx)))
+            return ret;
+        if ((ret = wined3d_uint32_compare(e1->mask, e2->mask)))
+            return ret;
     }
     return 0;
 }
@@ -7904,26 +7908,7 @@ static DWORD arbfp_blitter_blit(struct wined3d_blitter *blitter, enum wined3d_bl
         dst_rect = &d;
     }
 
-    if (wined3d_settings.offscreen_rendering_mode == ORM_FBO)
-    {
-        GLenum buffer;
-
-        if (dst_location == WINED3D_LOCATION_DRAWABLE)
-        {
-            TRACE("Destination texture %p is onscreen.\n", dst_texture);
-            buffer = wined3d_texture_get_gl_buffer(dst_texture);
-        }
-        else
-        {
-            TRACE("Destination texture %p is offscreen.\n", dst_texture);
-            buffer = GL_COLOR_ATTACHMENT0;
-        }
-        wined3d_context_gl_apply_fbo_state_blit(context_gl, GL_DRAW_FRAMEBUFFER,
-                &dst_texture->resource, dst_sub_resource_idx, NULL, 0, dst_location);
-        wined3d_context_gl_set_draw_buffer(context_gl, buffer);
-        wined3d_context_gl_check_fbo_status(context_gl, GL_DRAW_FRAMEBUFFER);
-        context_invalidate_state(context, STATE_FRAMEBUFFER);
-    }
+    context_gl_apply_texture_draw_state(context_gl, dst_texture, dst_sub_resource_idx, dst_location);
 
     if (op == WINED3D_BLIT_OP_COLOR_BLIT_ALPHATEST)
     {

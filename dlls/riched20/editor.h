@@ -182,12 +182,12 @@ int ME_MoveCursorChars(ME_TextEditor *editor, ME_Cursor *cursor, int nRelOfs, BO
 BOOL ME_ArrowKey(ME_TextEditor *ed, int nVKey, BOOL extend, BOOL ctrl) DECLSPEC_HIDDEN;
 
 int ME_GetCursorOfs(const ME_Cursor *cursor) DECLSPEC_HIDDEN;
-int ME_GetSelectionOfs(ME_TextEditor *editor, int *from, int *to) DECLSPEC_HIDDEN;
+int ME_GetSelectionOfs(ME_TextEditor *editor, LONG *from, LONG *to) DECLSPEC_HIDDEN;
 int ME_GetSelection(ME_TextEditor *editor, ME_Cursor **from, ME_Cursor **to) DECLSPEC_HIDDEN;
 BOOL ME_IsSelection(ME_TextEditor *editor) DECLSPEC_HIDDEN;
 void ME_DeleteSelection(ME_TextEditor *editor) DECLSPEC_HIDDEN;
 void ME_SendSelChange(ME_TextEditor *editor) DECLSPEC_HIDDEN;
-void editor_insert_oleobj( ME_TextEditor *editor, const REOBJECT *reo ) DECLSPEC_HIDDEN;
+HRESULT editor_insert_oleobj( ME_TextEditor *editor, const REOBJECT *reo ) DECLSPEC_HIDDEN;
 BOOL ME_InternalDeleteText(ME_TextEditor *editor, ME_Cursor *start, int nChars, BOOL bForce) DECLSPEC_HIDDEN;
 int ME_GetTextLength(ME_TextEditor *editor) DECLSPEC_HIDDEN;
 int ME_GetTextLengthEx(ME_TextEditor *editor, const GETTEXTLENGTHEX *how) DECLSPEC_HIDDEN;

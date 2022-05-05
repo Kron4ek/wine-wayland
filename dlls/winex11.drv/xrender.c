@@ -190,14 +190,7 @@ MAKE_FUNCPTR(XRenderQueryExtension)
 
 #undef MAKE_FUNCPTR
 
-static CRITICAL_SECTION xrender_cs;
-static CRITICAL_SECTION_DEBUG critsect_debug =
-{
-    0, 0, &xrender_cs,
-    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": xrender_cs") }
-};
-static CRITICAL_SECTION xrender_cs = { &critsect_debug, -1, 0, 0, 0, 0 };
+static pthread_mutex_t xrender_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define MS_MAKE_TAG( _x1, _x2, _x3, _x4 ) \
           ( ( (ULONG)_x4 << 24 ) |     \
@@ -388,11 +381,11 @@ static void get_xrender_color( struct xrender_physdev *physdev, COLORREF src_col
 {
     if (src_color & (1 << 24))  /* PALETTEINDEX */
     {
-        HPALETTE pal = GetCurrentObject( physdev->dev.hdc, OBJ_PAL );
+        HPALETTE pal = NtGdiGetDCObject( physdev->dev.hdc, NTGDI_OBJ_PAL );
         PALETTEENTRY pal_ent;
 
-        if (!GetPaletteEntries( pal, LOWORD(src_color), 1, &pal_ent ))
-            GetPaletteEntries( pal, 0, 1, &pal_ent );
+        if (!get_palette_entries( pal, LOWORD(src_color), 1, &pal_ent ))
+            get_palette_entries( pal, 0, 1, &pal_ent );
         dst_color->red   = pal_ent.peRed   * 257;
         dst_color->green = pal_ent.peGreen * 257;
         dst_color->blue  = pal_ent.peBlue  * 257;
@@ -499,20 +492,20 @@ static Picture get_xrender_picture( struct xrender_physdev *dev, HRGN clip_rgn, 
 
     if (clip_rect)
     {
-        HRGN rgn = CreateRectRgnIndirect( clip_rect );
-        if (clip_rgn) CombineRgn( rgn, rgn, clip_rgn, RGN_AND );
-        if (dev->region) CombineRgn( rgn, rgn, dev->region, RGN_AND );
+        HRGN rgn = NtGdiCreateRectRgn( clip_rect->left, clip_rect->top, clip_rect->right, clip_rect->bottom );
+        if (clip_rgn) NtGdiCombineRgn( rgn, rgn, clip_rgn, RGN_AND );
+        if (dev->region) NtGdiCombineRgn( rgn, rgn, dev->region, RGN_AND );
         update_xrender_clipping( dev, rgn );
-        DeleteObject( rgn );
+        NtGdiDeleteObjectApp( rgn );
     }
     else if (clip_rgn)
     {
         if (dev->region)
         {
-            HRGN rgn = CreateRectRgn( 0, 0, 0, 0 );
-            CombineRgn( rgn, clip_rgn, dev->region, RGN_AND );
+            HRGN rgn = NtGdiCreateRectRgn( 0, 0, 0, 0 );
+            NtGdiCombineRgn( rgn, clip_rgn, dev->region, RGN_AND );
             update_xrender_clipping( dev, rgn );
-            DeleteObject( rgn );
+            NtGdiDeleteObjectApp( rgn );
         }
         else update_xrender_clipping( dev, clip_rgn );
     }
@@ -566,7 +559,7 @@ static Picture get_no_alpha_mask(void)
     static Pixmap pixmap;
     static Picture pict;
 
-    EnterCriticalSection( &xrender_cs );
+    pthread_mutex_lock( &xrender_mutex );
     if (!pict)
     {
         XRenderPictureAttributes pa;
@@ -581,7 +574,7 @@ static Picture get_no_alpha_mask(void)
         col.alpha = 0;
         pXRenderFillRectangle( gdi_display, PictOpSrc, pict, &col, 0, 0, 1, 1 );
     }
-    LeaveCriticalSection( &xrender_cs );
+    pthread_mutex_unlock( &xrender_mutex );
     return pict;
 }
 
@@ -829,9 +822,10 @@ static HFONT CDECL xrenderdrv_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_fla
     LFANDSIZE lfsz;
     struct xrender_physdev *physdev = get_xrender_dev( dev );
     PHYSDEV next = GET_NEXT_PHYSDEV( dev, pSelectFont );
+    DWORD mode;
     HFONT ret;
 
-    GetObjectW( hfont, sizeof(lfsz.lf), &lfsz.lf );
+    NtGdiExtGetObjectW( hfont, sizeof(lfsz.lf), &lfsz.lf );
     if (!*aa_flags) *aa_flags = get_xft_aa_flags( &lfsz.lf );
 
     ret = next->funcs->pSelectFont( next, hfont, aa_flags );
@@ -859,11 +853,12 @@ static HFONT CDECL xrenderdrv_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_fla
     lfsz.devsize.cx = X11DRV_XWStoDS( dev->hdc, lfsz.lf.lfWidth );
     lfsz.devsize.cy = X11DRV_YWStoDS( dev->hdc, lfsz.lf.lfHeight );
 
-    GetTransform( dev->hdc, 0x204, &lfsz.xform );
+    NtGdiGetTransform( dev->hdc, 0x204, &lfsz.xform );
     TRACE("font transform %f %f %f %f\n", lfsz.xform.eM11, lfsz.xform.eM12,
           lfsz.xform.eM21, lfsz.xform.eM22);
 
-    if (GetGraphicsMode( dev->hdc ) == GM_COMPATIBLE)
+    NtGdiGetDCDword( dev->hdc, NtGdiGetGraphicsMode, &mode );
+    if (mode == GM_COMPATIBLE)
     {
         lfsz.lf.lfOrientation = lfsz.lf.lfEscapement;
         if (lfsz.xform.eM11 * lfsz.xform.eM22 < 0)
@@ -875,11 +870,11 @@ static HFONT CDECL xrenderdrv_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_fla
 
     lfsz_calc_hash(&lfsz);
 
-    EnterCriticalSection(&xrender_cs);
+    pthread_mutex_lock( &xrender_mutex );
     if (physdev->cache_index != -1)
         dec_ref_cache( physdev->cache_index );
     physdev->cache_index = GetCacheEntry( &lfsz );
-    LeaveCriticalSection(&xrender_cs);
+    pthread_mutex_unlock( &xrender_mutex );
     return ret;
 }
 
@@ -968,9 +963,9 @@ static BOOL CDECL xrenderdrv_DeleteDC( PHYSDEV dev )
 
     free_xrender_picture( physdev );
 
-    EnterCriticalSection( &xrender_cs );
+    pthread_mutex_lock( &xrender_mutex );
     if (physdev->cache_index != -1) dec_ref_cache( physdev->cache_index );
-    LeaveCriticalSection( &xrender_cs );
+    pthread_mutex_unlock( &xrender_mutex );
 
     HeapFree( GetProcessHeap(), 0, physdev );
     return TRUE;
@@ -1020,7 +1015,7 @@ static void CDECL xrenderdrv_SetDeviceClipping( PHYSDEV dev, HRGN rgn )
 /************************************************************************
  *   UploadGlyph
  *
- * Helper to ExtTextOut.  Must be called inside xrender_cs
+ * Helper to ExtTextOut.  Must be called inside xrender_mutex
  */
 static void UploadGlyph(struct xrender_physdev *physDev, UINT glyph, enum glyph_type type)
 {
@@ -1038,20 +1033,23 @@ static void UploadGlyph(struct xrender_physdev *physDev, UINT glyph, enum glyph_
     static const MAT2 identity = { {0,1},{0,0},{0,0},{0,1} };
 
     if (type == GLYPH_INDEX) ggo_format |= GGO_GLYPH_INDEX;
-    buflen = GetGlyphOutlineW(physDev->dev.hdc, glyph, ggo_format, &gm, 0, NULL, &identity);
+    buflen = NtGdiGetGlyphOutline( physDev->dev.hdc, glyph, ggo_format, &gm, 0, NULL, &identity, FALSE );
     if(buflen == GDI_ERROR) {
         if(format != AA_None) {
             format = AA_None;
             physDev->aa_flags = GGO_BITMAP;
             ggo_format = (ggo_format & GGO_GLYPH_INDEX) | GGO_BITMAP;
-            buflen = GetGlyphOutlineW(physDev->dev.hdc, glyph, ggo_format, &gm, 0, NULL, &identity);
+            buflen = NtGdiGetGlyphOutline( physDev->dev.hdc, glyph, ggo_format, &gm, 0, NULL,
+                                           &identity, FALSE);
         }
         if(buflen == GDI_ERROR) {
             WARN("GetGlyphOutlineW failed using default glyph\n");
-            buflen = GetGlyphOutlineW(physDev->dev.hdc, 0, ggo_format, &gm, 0, NULL, &identity);
+            buflen = NtGdiGetGlyphOutline( physDev->dev.hdc, 0, ggo_format, &gm, 0, NULL,
+                                           &identity, FALSE );
             if(buflen == GDI_ERROR) {
                 WARN("GetGlyphOutlineW failed for default glyph trying for space\n");
-                buflen = GetGlyphOutlineW(physDev->dev.hdc, 0x20, ggo_format, &gm, 0, NULL, &identity);
+                buflen = NtGdiGetGlyphOutline( physDev->dev.hdc, 0x20, ggo_format, &gm, 0, NULL,
+                                               &identity, FALSE );
                 if(buflen == GDI_ERROR) {
                     ERR("GetGlyphOutlineW for all attempts unable to upload a glyph\n");
                     return;
@@ -1122,7 +1120,7 @@ static void UploadGlyph(struct xrender_physdev *physDev, UINT glyph, enum glyph_
 
     buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, buflen);
     if (buflen)
-        GetGlyphOutlineW(physDev->dev.hdc, glyph, ggo_format, &gm, buflen, buf, &identity);
+        NtGdiGetGlyphOutline( physDev->dev.hdc, glyph, ggo_format, &gm, buflen, buf, &identity, FALSE );
     else
         gm.gmBlackBoxX = gm.gmBlackBoxY = 0;  /* empty glyph */
     formatEntry->realized[glyph] = TRUE;
@@ -1219,7 +1217,7 @@ static void UploadGlyph(struct xrender_physdev *physDev, UINT glyph, enum glyph_
  *                 get_tile_pict
  *
  * Returns an appropriate Picture for tiling the text colour.
- * Call and use result within the xrender_cs
+ * Call and use result within the xrender_mutex
  */
 static Picture get_tile_pict( enum wxr_format wxr_format, const XRenderColor *color)
 {
@@ -1268,7 +1266,7 @@ static Picture get_tile_pict( enum wxr_format wxr_format, const XRenderColor *co
  *                 get_mask_pict
  *
  * Returns an appropriate Picture for masking with the specified alpha.
- * Call and use result within the xrender_cs
+ * Call and use result within the xrender_mutex
  */
 static Picture get_mask_pict( int alpha )
 {
@@ -1309,6 +1307,7 @@ static BOOL CDECL xrenderdrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags,
     gsCacheEntry *entry;
     gsCacheEntryFormat *formatEntry;
     unsigned int idx;
+    DWORD text_color;
     Picture pict, tile_pict = 0;
     XGlyphElt16 *elts;
     POINT offset, desired, current;
@@ -1317,7 +1316,8 @@ static BOOL CDECL xrenderdrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags,
     RECT rect, bounds;
     enum glyph_type type = (flags & ETO_GLYPH_INDEX) ? GLYPH_INDEX : GLYPH_WCHAR;
 
-    get_xrender_color( physdev, GetTextColor( physdev->dev.hdc ), &col );
+    NtGdiGetDCDword( physdev->dev.hdc, NtGdiGetTextColor, &text_color );
+    get_xrender_color( physdev, text_color, &col );
     pict = get_xrender_picture( physdev, 0, (flags & ETO_CLIPPED) ? lprect : NULL );
 
     if(flags & ETO_OPAQUE)
@@ -1328,7 +1328,11 @@ static BOOL CDECL xrenderdrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags,
             /* use the inverse of the text color */
             bg.red = bg.green = bg.blue = bg.alpha = ~col.alpha;
         else
-            get_xrender_color( physdev, GetBkColor( physdev->dev.hdc ), &bg );
+        {
+            DWORD bg_color;
+            NtGdiGetDCDword( physdev->dev.hdc, NtGdiGetBkColor, &bg_color );
+            get_xrender_color( physdev, bg_color, &bg );
+        }
 
         set_xrender_transformation( pict, 1, 1, 0, 0 );
         pXRenderFillRectangle( gdi_display, PictOpSrc, pict, &bg,
@@ -1341,7 +1345,7 @@ static BOOL CDECL xrenderdrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags,
 
     if(count == 0) return TRUE;
 
-    EnterCriticalSection(&xrender_cs);
+    pthread_mutex_lock( &xrender_mutex );
 
     entry = glyphsetCache + physdev->cache_index;
     formatEntry = entry->format[type][aa_type_from_flags( physdev->aa_flags )];
@@ -1358,7 +1362,7 @@ static BOOL CDECL xrenderdrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags,
     if (!formatEntry)
     {
         WARN("could not upload requested glyphs\n");
-        LeaveCriticalSection(&xrender_cs);
+        pthread_mutex_unlock( &xrender_mutex );
         return FALSE;
     }
 
@@ -1429,7 +1433,7 @@ static BOOL CDECL xrenderdrv_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags,
                             0, 0, 0, 0, elts, count);
     HeapFree(GetProcessHeap(), 0, elts);
 
-    LeaveCriticalSection(&xrender_cs);
+    pthread_mutex_unlock( &xrender_mutex );
     add_device_bounds( physdev->x11dev, &bounds );
     return TRUE;
 }
@@ -1546,7 +1550,7 @@ static void xrender_mono_blit( Picture src_pict, Picture dst_pict,
      * contains a 1x1 picture for tiling. The source data effectively acts as an alpha channel to
      * the tile data.
      */
-    EnterCriticalSection( &xrender_cs );
+    pthread_mutex_lock( &xrender_mutex );
     color = *bg;
     color.alpha = 0xffff;  /* tile pict needs 100% alpha */
     tile_pict = get_tile_pict( dst_format, &color );
@@ -1570,7 +1574,7 @@ static void xrender_mono_blit( Picture src_pict, Picture dst_pict,
     }
     pXRenderComposite(gdi_display, PictOpOver, tile_pict, src_pict, dst_pict,
                       0, 0, x_offset, y_offset, x_dst, y_dst, width_dst, height_dst );
-    LeaveCriticalSection( &xrender_cs );
+    pthread_mutex_unlock( &xrender_mutex );
 
     /* force the alpha channel for background pixels, it has been set to 100% by the tile */
     if (bg->alpha != 0xffff && (dst_format == WXR_FORMAT_A8R8G8B8 || dst_format == WXR_FORMAT_B8G8R8A8))
@@ -1648,10 +1652,13 @@ static void xrender_stretch_blit( struct xrender_physdev *physdev_src, struct xr
     /* mono -> color */
     if (physdev_src->format == WXR_FORMAT_MONO && physdev_dst->format != WXR_FORMAT_MONO)
     {
+        DWORD text_color, bg_color;
         XRenderColor fg, bg;
 
-        get_xrender_color( physdev_dst, GetTextColor( physdev_dst->dev.hdc ), &fg );
-        get_xrender_color( physdev_dst, GetBkColor( physdev_dst->dev.hdc ), &bg );
+        NtGdiGetDCDword( physdev_dst->dev.hdc, NtGdiGetTextColor, &text_color );
+        NtGdiGetDCDword( physdev_dst->dev.hdc, NtGdiGetBkColor, &bg_color );
+        get_xrender_color( physdev_dst, text_color, &fg );
+        get_xrender_color( physdev_dst, bg_color, &bg );
         fg.alpha = bg.alpha = 0;
 
         xrender_mono_blit( src_pict, dst_pict, physdev_dst->format, &fg, &bg,
@@ -1905,7 +1912,7 @@ static DWORD CDECL xrenderdrv_BlendImage( PHYSDEV dev, BITMAPINFO *info, const s
 
         dst_pict = get_xrender_picture( physdev, 0, &dst->visrect );
 
-        EnterCriticalSection( &xrender_cs );
+        pthread_mutex_lock( &xrender_mutex );
         mask_pict = get_mask_pict( func.SourceConstantAlpha * 257 );
 
         xrender_blit( PictOpOver, src_pict, mask_pict, dst_pict,
@@ -1917,7 +1924,7 @@ static DWORD CDECL xrenderdrv_BlendImage( PHYSDEV dev, BITMAPINFO *info, const s
         pXRenderFreePicture( gdi_display, src_pict );
         XFreePixmap( gdi_display, src_pixmap );
 
-        LeaveCriticalSection( &xrender_cs );
+        pthread_mutex_unlock( &xrender_mutex );
         add_device_bounds( physdev->x11dev, &dst->visrect );
     }
     return ret;
@@ -1994,7 +2001,7 @@ static BOOL CDECL xrenderdrv_AlphaBlend( PHYSDEV dst_dev, struct bitblt_coords *
 
     if (tmp_pict) src_pict = tmp_pict;
 
-    EnterCriticalSection( &xrender_cs );
+    pthread_mutex_lock( &xrender_mutex );
     mask_pict = get_mask_pict( blendfn.SourceConstantAlpha * 257 );
 
     xrender_blit( PictOpOver, src_pict, mask_pict, dst_pict,
@@ -2008,7 +2015,7 @@ static BOOL CDECL xrenderdrv_AlphaBlend( PHYSDEV dst_dev, struct bitblt_coords *
     if (tmp_pict) pXRenderFreePicture( gdi_display, tmp_pict );
     if (tmp_pixmap) XFreePixmap( gdi_display, tmp_pixmap );
 
-    LeaveCriticalSection( &xrender_cs );
+    pthread_mutex_unlock( &xrender_mutex );
     add_device_bounds( physdev_dst->x11dev, &dst->visrect );
     return TRUE;
 }
@@ -2057,7 +2064,7 @@ static BOOL CDECL xrenderdrv_GradientFill( PHYSDEV dev, TRIVERTEX *vert_array, U
             pt[0].y = v1->y;
             pt[1].x = v2->x;
             pt[1].y = v2->y;
-            LPtoDP( dev->hdc, pt, 2 );
+            lp_to_dp( dev->hdc, pt, 2 );
             if (mode == GRADIENT_FILL_RECT_H)
             {
                 gradient.p1.y = gradient.p2.y = 0;
@@ -2246,7 +2253,6 @@ static const struct gdi_dc_funcs xrender_funcs =
     NULL,                               /* pUnrealizePalette */
     NULL,                               /* pD3DKMTCheckVidPnExclusiveOwnership */
     NULL,                               /* pD3DKMTSetVidPnSourceOwner */
-    NULL,                               /* wine_get_wgl_driver */
     GDI_PRIORITY_GRAPHICS_DRV + 10      /* priority */
 };
 

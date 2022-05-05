@@ -2008,6 +2008,10 @@ static void get_performance_info( SYSTEM_PERFORMANCE_INFORMATION *info )
 #endif
     }
 #endif
+
+    /* Titan Quest refuses to run if TotalPageFile <= TotalPhys */
+    if (!totalswap) totalswap = page_size;
+
     info->AvailablePages      = freeram / page_size;
     info->TotalCommittedPages = (totalram + totalswap - freeram - freeswap) / page_size;
     info->TotalCommitLimit    = (totalram + totalswap) / page_size;
@@ -2254,12 +2258,12 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
           tzi->DaylightDate.wDay, tzi->DaylightDate.wMonth, tzi->DaylightDate.wYear);
 }
 
-static time_t find_dst_change(unsigned long min, unsigned long max, int *is_dst)
+static time_t find_dst_change(time_t start, time_t end, int *is_dst)
 {
-    time_t start;
     struct tm *tm;
+    ULONGLONG min = (sizeof(time_t) == sizeof(int)) ? (ULONG)start : start;
+    ULONGLONG max = (sizeof(time_t) == sizeof(int)) ? (ULONG)end : end;
 
-    start = min;
     tm = localtime(&start);
     *is_dst = !tm->tm_isdst;
     TRACE("starting date isdst %d, %s", !*is_dst, ctime(&start));

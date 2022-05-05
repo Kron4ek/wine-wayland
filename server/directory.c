@@ -69,7 +69,6 @@ static const struct object_ops object_type_ops =
     no_add_queue,                 /* add_queue */
     NULL,                         /* remove_queue */
     NULL,                         /* signaled */
-    NULL,                         /* get_esync_fd */
     NULL,                         /* get_fsync_idx */
     NULL,                         /* satisfied */
     no_signal,                    /* signal */
@@ -121,7 +120,6 @@ static const struct object_ops directory_ops =
     no_add_queue,                 /* add_queue */
     NULL,                         /* remove_queue */
     NULL,                         /* signaled */
-    NULL,                         /* get_esync_fd */
     NULL,                         /* get_fsync_idx */
     NULL,                         /* satisfied */
     no_signal,                    /* signal */
@@ -550,9 +548,11 @@ DECL_HANDLER(get_directory_entry)
             const struct unicode_str *type_name = &obj->ops->type->name;
             const WCHAR *name = get_object_name( obj, &name_len );
 
-            if (name_len + type_name->len <= get_reply_max_size())
+            reply->total_len = name_len + type_name->len;
+
+            if (reply->total_len <= get_reply_max_size())
             {
-                void *ptr = set_reply_data_size( name_len + type_name->len );
+                void *ptr = set_reply_data_size( reply->total_len );
                 if (ptr)
                 {
                     reply->name_len = name_len;
@@ -560,7 +560,7 @@ DECL_HANDLER(get_directory_entry)
                     memcpy( (char *)ptr + name_len, type_name->str, type_name->len );
                 }
             }
-            else set_error( STATUS_BUFFER_OVERFLOW );
+            else set_error( STATUS_BUFFER_TOO_SMALL );
 
             release_object( obj );
         }

@@ -1,3 +1,4 @@
+EXTRADEFS = -DWINE_NO_LONG_TYPES
 MODULE    = win32u.dll
 UNIXLIB   = win32u.so
 IMPORTLIB = win32u
@@ -11,10 +12,13 @@ C_SRCS = \
 	bitblt.c \
 	bitmap.c \
 	brush.c \
+	class.c \
 	clipboard.c \
 	clipping.c \
 	cursoricon.c \
 	dc.c \
+	dce.c \
+	defwnd.c \
 	dib.c \
 	dibdrv/bitblt.c \
 	dibdrv/dc.c \
@@ -27,9 +31,12 @@ C_SRCS = \
 	font.c \
 	freetype.c \
 	gdiobj.c \
+	hook.c \
 	input.c \
 	main.c \
 	mapping.c \
+	menu.c \
+	message.c \
 	opentype.c \
 	painting.c \
 	palette.c \
@@ -37,6 +44,7 @@ C_SRCS = \
 	pen.c \
 	printdrv.c \
 	region.c \
+	spy.c \
 	syscall.c \
 	sysparams.c \
 	vertical.c \

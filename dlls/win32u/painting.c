@@ -117,7 +117,7 @@ BOOL CDECL nulldrv_InvertRgn( PHYSDEV dev, HRGN rgn )
     return ret;
 }
 
-static BOOL polyline( HDC hdc, const POINT *points, UINT count )
+static BOOL polyline( HDC hdc, const POINT *points, ULONG count )
 {
     return NtGdiPolyPolyDraw( hdc, points, &count, 1, NtGdiPolyPolyline );
 }
@@ -549,8 +549,8 @@ BOOL WINAPI NtGdiInvertRgn( HDC hdc, HRGN hrgn )
 /**********************************************************************
  *          NtGdiPolyPolyDraw  (win32u.@)
  */
-ULONG WINAPI NtGdiPolyPolyDraw( HDC hdc, const POINT *points, const UINT *counts,
-                                UINT count, UINT function )
+ULONG WINAPI NtGdiPolyPolyDraw( HDC hdc, const POINT *points, const ULONG *counts,
+                                DWORD count, UINT function )
 {
     PHYSDEV physdev;
     ULONG ret;
@@ -572,7 +572,7 @@ ULONG WINAPI NtGdiPolyPolyDraw( HDC hdc, const POINT *points, const UINT *counts
 
     case NtGdiPolyPolyline:
         physdev = GET_DC_PHYSDEV( dc, pPolyPolyline );
-        ret = physdev->funcs->pPolyPolyline( physdev, points, counts, count );
+        ret = physdev->funcs->pPolyPolyline( physdev, points, (const DWORD *)counts, count );
         break;
 
     case NtGdiPolyBezier:
@@ -958,7 +958,7 @@ BOOL WINAPI NtUserScrollDC( HDC hdc, INT dx, INT dy, const RECT *scroll, const R
     else
         NtGdiGetAppClipBox( hdc, &clip_rect );
     src_rect = clip_rect;
-    offset_rect( &clip_rect, -dx, -dy );
+    OffsetRect( &clip_rect, -dx, -dy );
     intersect_rect( &src_rect, &src_rect, &clip_rect );
 
     /* if an scroll rectangle is specified, only the pixels within that

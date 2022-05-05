@@ -87,7 +87,7 @@ static ULONG WINAPI HTMLDOMImplementation_AddRef(IHTMLDOMImplementation *iface)
     HTMLDOMImplementation *This = impl_from_IHTMLDOMImplementation(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -97,7 +97,7 @@ static ULONG WINAPI HTMLDOMImplementation_Release(IHTMLDOMImplementation *iface)
     HTMLDOMImplementation *This = impl_from_IHTMLDOMImplementation(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         assert(!This->browser);
@@ -257,7 +257,7 @@ static HRESULT WINAPI HTMLDOMImplementation2_createHTMLDocument(IHTMLDOMImplemen
     nsres = nsIDOMDOMImplementation_CreateHTMLDocument(This->implementation, &title_str, &doc);
     nsAString_Finish(&title_str);
     if(NS_FAILED(nsres)) {
-        ERR("CreateHTMLDocument failed: %08x\n", nsres);
+        ERR("CreateHTMLDocument failed: %08lx\n", nsres);
         return E_FAIL;
     }
 
@@ -332,7 +332,7 @@ HRESULT create_dom_implementation(HTMLDocumentNode *doc_node, IHTMLDOMImplementa
 
     nsres = nsIDOMHTMLDocument_GetImplementation(doc_node->nsdoc, &dom_implementation->implementation);
     if(NS_FAILED(nsres)) {
-        ERR("GetDOMImplementation failed: %08x\n", nsres);
+        ERR("GetDOMImplementation failed: %08lx\n", nsres);
         IHTMLDOMImplementation_Release(&dom_implementation->IHTMLDOMImplementation_iface);
         return E_FAIL;
     }
@@ -386,7 +386,7 @@ static ULONG WINAPI HTMLScreen_AddRef(IHTMLScreen *iface)
     HTMLScreen *This = impl_from_IHTMLScreen(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -396,7 +396,7 @@ static ULONG WINAPI HTMLScreen_Release(IHTMLScreen *iface)
     HTMLScreen *This = impl_from_IHTMLScreen(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         release_dispex(&This->dispex);
@@ -451,7 +451,7 @@ static HRESULT WINAPI HTMLScreen_get_colorDepth(IHTMLScreen *iface, LONG *p)
 static HRESULT WINAPI HTMLScreen_put_bufferDepth(IHTMLScreen *iface, LONG v)
 {
     HTMLScreen *This = impl_from_IHTMLScreen(iface);
-    FIXME("(%p)->(%d)\n", This, v);
+    FIXME("(%p)->(%ld)\n", This, v);
     return E_NOTIMPL;
 }
 
@@ -485,7 +485,7 @@ static HRESULT WINAPI HTMLScreen_get_height(IHTMLScreen *iface, LONG *p)
 static HRESULT WINAPI HTMLScreen_put_updateInterval(IHTMLScreen *iface, LONG v)
 {
     HTMLScreen *This = impl_from_IHTMLScreen(iface);
-    FIXME("(%p)->(%d)\n", This, v);
+    FIXME("(%p)->(%ld)\n", This, v);
     return E_NOTIMPL;
 }
 
@@ -611,7 +611,7 @@ static ULONG WINAPI OmHistory_AddRef(IOmHistory *iface)
     OmHistory *This = impl_from_IOmHistory(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -621,7 +621,7 @@ static ULONG WINAPI OmHistory_Release(IOmHistory *iface)
     OmHistory *This = impl_from_IOmHistory(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         release_dispex(&This->dispex);
@@ -787,7 +787,7 @@ static ULONG WINAPI HTMLPluginsCollection_AddRef(IHTMLPluginsCollection *iface)
     HTMLPluginsCollection *This = impl_from_IHTMLPluginsCollection(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -797,7 +797,7 @@ static ULONG WINAPI HTMLPluginsCollection_Release(IHTMLPluginsCollection *iface)
     HTMLPluginsCollection *This = impl_from_IHTMLPluginsCollection(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         if(This->navigator)
@@ -943,7 +943,7 @@ static ULONG WINAPI HTMLMimeTypesCollection_AddRef(IHTMLMimeTypesCollection *ifa
     HTMLMimeTypesCollection *This = impl_from_IHTMLMimeTypesCollection(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -953,7 +953,7 @@ static ULONG WINAPI HTMLMimeTypesCollection_Release(IHTMLMimeTypesCollection *if
     HTMLMimeTypesCollection *This = impl_from_IHTMLMimeTypesCollection(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         if(This->navigator)
@@ -1079,7 +1079,7 @@ static ULONG WINAPI OmNavigator_AddRef(IOmNavigator *iface)
     OmNavigator *This = impl_from_IOmNavigator(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -1089,7 +1089,7 @@ static ULONG WINAPI OmNavigator_Release(IOmNavigator *iface)
     OmNavigator *This = impl_from_IOmNavigator(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         if(This->plugins)
@@ -1162,77 +1162,80 @@ static HRESULT WINAPI OmNavigator_get_appName(IOmNavigator *iface, BSTR *p)
     return S_OK;
 }
 
-static unsigned int get_ua_version(OmNavigator *navigator)
+/* undocumented, added in IE8 */
+extern HRESULT WINAPI MapBrowserEmulationModeToUserAgent(const void*,WCHAR**);
+
+/* Retrieves allocated user agent via CoTaskMemAlloc */
+static HRESULT get_user_agent(OmNavigator *navigator, WCHAR **user_agent)
 {
+    DWORD version;
+
     switch(dispex_compat_mode(&navigator->dispex)) {
     case COMPAT_MODE_QUIRKS:
     case COMPAT_MODE_IE5:
     case COMPAT_MODE_IE7:
-        return 7;
+        version = 7;
+        break;
     case COMPAT_MODE_IE8:
-        return 8;
+        version = 8;
+        break;
     case COMPAT_MODE_IE9:
-        return 9;
+        version = 9;
+        break;
     case COMPAT_MODE_IE10:
-        return 10;
+        version = 10;
+        break;
     case COMPAT_MODE_IE11:
-        return 11;
+        version = 11;
+        break;
+    default:
+        assert(0);
+        return E_FAIL;
     }
-    assert(0);
-    return 0;
+    return MapBrowserEmulationModeToUserAgent(&version, user_agent);
 }
 
 static HRESULT WINAPI OmNavigator_get_appVersion(IOmNavigator *iface, BSTR *p)
 {
     OmNavigator *This = impl_from_IOmNavigator(iface);
-
-    char user_agent[512];
-    DWORD size;
+    WCHAR *user_agent;
+    unsigned len;
     HRESULT hres;
     const unsigned skip_prefix = 8; /* strlen("Mozilla/") */
 
     TRACE("(%p)->(%p)\n", This, p);
 
-    size = sizeof(user_agent);
-    hres = ObtainUserAgentString(get_ua_version(This), user_agent, &size);
+    hres = get_user_agent(This, &user_agent);
     if(FAILED(hres))
         return hres;
+    len = wcslen(user_agent);
 
-    if(size <= skip_prefix) {
+    if(len < skip_prefix) {
+        CoTaskMemFree(user_agent);
         *p = NULL;
         return S_OK;
     }
 
-    size = MultiByteToWideChar(CP_ACP, 0, user_agent + skip_prefix, -1, NULL, 0);
-    *p = SysAllocStringLen(NULL, size-1);
-    if(!*p)
-        return E_OUTOFMEMORY;
-
-    MultiByteToWideChar(CP_ACP, 0, user_agent + skip_prefix, -1, *p, size);
-    return S_OK;
+    *p = SysAllocStringLen(user_agent + skip_prefix, len - skip_prefix);
+    CoTaskMemFree(user_agent);
+    return *p ? S_OK : E_OUTOFMEMORY;
 }
 
 static HRESULT WINAPI OmNavigator_get_userAgent(IOmNavigator *iface, BSTR *p)
 {
     OmNavigator *This = impl_from_IOmNavigator(iface);
-    char user_agent[512];
-    DWORD size;
+    WCHAR *user_agent;
     HRESULT hres;
 
     TRACE("(%p)->(%p)\n", This, p);
 
-    size = sizeof(user_agent);
-    hres = ObtainUserAgentString(get_ua_version(This), user_agent, &size);
+    hres = get_user_agent(This, &user_agent);
     if(FAILED(hres))
         return hres;
 
-    size = MultiByteToWideChar(CP_ACP, 0, user_agent, -1, NULL, 0);
-    *p = SysAllocStringLen(NULL, size-1);
-    if(!*p)
-        return E_OUTOFMEMORY;
-
-    MultiByteToWideChar(CP_ACP, 0, user_agent, -1, *p, size);
-    return S_OK;
+    *p = SysAllocString(user_agent);
+    CoTaskMemFree(user_agent);
+    return *p ? S_OK : E_OUTOFMEMORY;
 }
 
 static HRESULT WINAPI OmNavigator_javaEnabled(IOmNavigator *iface, VARIANT_BOOL *enabled)
@@ -1339,7 +1342,7 @@ static HRESULT get_language_string(LCID lcid, BSTR *p)
 
     len = LCIDToLocaleName(lcid, NULL, 0, 0);
     if(!len) {
-        WARN("LCIDToLocaleName failed: %u\n", GetLastError());
+        WARN("LCIDToLocaleName failed: %lu\n", GetLastError());
         return E_FAIL;
     }
 
@@ -1349,7 +1352,7 @@ static HRESULT get_language_string(LCID lcid, BSTR *p)
 
     len = LCIDToLocaleName(lcid, ret, len, 0);
     if(!len) {
-        WARN("LCIDToLocaleName failed: %u\n", GetLastError());
+        WARN("LCIDToLocaleName failed: %lu\n", GetLastError());
         SysFreeString(ret);
         return E_FAIL;
     }
@@ -1531,7 +1534,7 @@ static ULONG WINAPI HTMLPerformanceTiming_AddRef(IHTMLPerformanceTiming *iface)
     HTMLPerformanceTiming *This = impl_from_IHTMLPerformanceTiming(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -1541,7 +1544,7 @@ static ULONG WINAPI HTMLPerformanceTiming_Release(IHTMLPerformanceTiming *iface)
     HTMLPerformanceTiming *This = impl_from_IHTMLPerformanceTiming(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         release_dispex(&This->dispex);
@@ -1897,7 +1900,7 @@ static ULONG WINAPI HTMLPerformanceNavigation_AddRef(IHTMLPerformanceNavigation 
     HTMLPerformanceNavigation *This = impl_from_IHTMLPerformanceNavigation(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -1907,7 +1910,7 @@ static ULONG WINAPI HTMLPerformanceNavigation_Release(IHTMLPerformanceNavigation
     HTMLPerformanceNavigation *This = impl_from_IHTMLPerformanceNavigation(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         release_dispex(&This->dispex);
@@ -2052,7 +2055,7 @@ static ULONG WINAPI HTMLPerformance_AddRef(IHTMLPerformance *iface)
     HTMLPerformance *This = impl_from_IHTMLPerformance(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -2062,7 +2065,7 @@ static ULONG WINAPI HTMLPerformance_Release(IHTMLPerformance *iface)
     HTMLPerformance *This = impl_from_IHTMLPerformance(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         if(This->timing)
@@ -2260,7 +2263,7 @@ static ULONG WINAPI HTMLNamespaceCollection_AddRef(IHTMLNamespaceCollection *ifa
     HTMLNamespaceCollection *This = impl_from_IHTMLNamespaceCollection(iface);
     LONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     return ref;
 }
@@ -2270,7 +2273,7 @@ static ULONG WINAPI HTMLNamespaceCollection_Release(IHTMLNamespaceCollection *if
     HTMLNamespaceCollection *This = impl_from_IHTMLNamespaceCollection(iface);
     LONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%d\n", This, ref);
+    TRACE("(%p) ref=%ld\n", This, ref);
 
     if(!ref) {
         release_dispex(&This->dispex);
@@ -2415,7 +2418,7 @@ static ULONG WINAPI console_AddRef(IWineMSHTMLConsole *iface)
     struct console *console = impl_from_IWineMSHTMLConsole(iface);
     LONG ref = InterlockedIncrement(&console->ref);
 
-    TRACE("(%p) ref=%d\n", console, ref);
+    TRACE("(%p) ref=%ld\n", console, ref);
 
     return ref;
 }
@@ -2425,7 +2428,7 @@ static ULONG WINAPI console_Release(IWineMSHTMLConsole *iface)
     struct console *console = impl_from_IWineMSHTMLConsole(iface);
     LONG ref = InterlockedDecrement(&console->ref);
 
-    TRACE("(%p) ref=%d\n", console, ref);
+    TRACE("(%p) ref=%ld\n", console, ref);
 
     if(!ref) {
         release_dispex(&console->dispex);

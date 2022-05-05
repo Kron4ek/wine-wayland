@@ -61,7 +61,7 @@ static ULONG WINAPI enum_pins_AddRef(IEnumPins *iface)
 {
     struct enum_pins *enum_pins = impl_from_IEnumPins(iface);
     ULONG refcount = InterlockedIncrement(&enum_pins->refcount);
-    TRACE("%p increasing refcount to %u.\n", enum_pins, refcount);
+    TRACE("%p increasing refcount to %lu.\n", enum_pins, refcount);
     return refcount;
 }
 
@@ -71,13 +71,13 @@ static ULONG WINAPI enum_pins_Release(IEnumPins *iface)
     ULONG refcount = InterlockedDecrement(&enum_pins->refcount);
     unsigned int i;
 
-    TRACE("%p decreasing refcount to %u.\n", enum_pins, refcount);
+    TRACE("%p decreasing refcount to %lu.\n", enum_pins, refcount);
     if (!refcount)
     {
         for (i = 0; i < enum_pins->count; ++i)
             IPin_Release(enum_pins->pins[i]);
-        heap_free(enum_pins->pins);
-        heap_free(enum_pins);
+        free(enum_pins->pins);
+        free(enum_pins);
     }
     return refcount;
 }
@@ -87,7 +87,7 @@ static HRESULT WINAPI enum_pins_Next(IEnumPins *iface, ULONG count, IPin **pins,
     struct enum_pins *enum_pins = impl_from_IEnumPins(iface);
     unsigned int i;
 
-    TRACE("iface %p, count %u, pins %p, ret_count %p.\n", iface, count, pins, ret_count);
+    TRACE("iface %p, count %lu, pins %p, ret_count %p.\n", iface, count, pins, ret_count);
 
     if (!pins || (count > 1 && !ret_count))
         return E_POINTER;
@@ -106,7 +106,7 @@ static HRESULT WINAPI enum_pins_Skip(IEnumPins *iface, ULONG count)
 {
     struct enum_pins *enum_pins = impl_from_IEnumPins(iface);
 
-    TRACE("iface %p, count %u.\n", iface, count);
+    TRACE("iface %p, count %lu.\n", iface, count);
 
     enum_pins->index += count;
 
@@ -131,16 +131,16 @@ static HRESULT WINAPI enum_pins_Clone(IEnumPins *iface, IEnumPins **out)
 
     TRACE("iface %p, out %p.\n", iface, out);
 
-    if (!(object = heap_alloc(sizeof(*object))))
+    if (!(object = calloc(1, sizeof(*object))))
         return E_OUTOFMEMORY;
 
     object->IEnumPins_iface.lpVtbl = &enum_pins_vtbl;
     object->refcount = 1;
     object->count = enum_pins->count;
     object->index = enum_pins->index;
-    if (!(object->pins = heap_alloc(enum_pins->count * sizeof(*object->pins))))
+    if (!(object->pins = malloc(enum_pins->count * sizeof(*object->pins))))
     {
-        heap_free(object);
+        free(object);
         return E_OUTOFMEMORY;
     }
     for (i = 0; i < enum_pins->count; ++i)
@@ -222,7 +222,7 @@ static ULONG WINAPI filter_AddRef(IMediaStreamFilter *iface)
     struct filter *filter = impl_from_IMediaStreamFilter(iface);
     ULONG refcount = InterlockedIncrement(&filter->refcount);
 
-    TRACE("%p increasing refcount to %u.\n", iface, refcount);
+    TRACE("%p increasing refcount to %lu.\n", iface, refcount);
 
     return refcount;
 }
@@ -233,7 +233,7 @@ static ULONG WINAPI filter_Release(IMediaStreamFilter *iface)
     ULONG refcount = InterlockedDecrement(&filter->refcount);
     unsigned int i;
 
-    TRACE("%p decreasing refcount to %u.\n", iface, refcount);
+    TRACE("%p decreasing refcount to %lu.\n", iface, refcount);
 
     if (!refcount)
     {
@@ -251,11 +251,11 @@ static ULONG WINAPI filter_Release(IMediaStreamFilter *iface)
             IAMMediaStream_JoinFilter(filter->streams[i], NULL);
             IAMMediaStream_Release(filter->streams[i]);
         }
-        heap_free(filter->streams);
+        free(filter->streams);
         if (filter->clock)
             IReferenceClock_Release(filter->clock);
         DeleteCriticalSection(&filter->cs);
-        heap_free(filter);
+        free(filter);
     }
 
     return refcount;
@@ -363,7 +363,7 @@ static HRESULT WINAPI filter_GetState(IMediaStreamFilter *iface, DWORD timeout, 
 {
     struct filter *filter = impl_from_IMediaStreamFilter(iface);
 
-    TRACE("iface %p, timeout %u, state %p.\n", iface, timeout, state);
+    TRACE("iface %p, timeout %lu, state %p.\n", iface, timeout, state);
 
     if (!state)
         return E_POINTER;
@@ -424,7 +424,7 @@ static HRESULT WINAPI filter_EnumPins(IMediaStreamFilter *iface, IEnumPins **enu
     if (!enum_pins)
         return E_POINTER;
 
-    if (!(object = heap_alloc(sizeof(*object))))
+    if (!(object = calloc(1, sizeof(*object))))
         return E_OUTOFMEMORY;
 
     EnterCriticalSection(&filter->cs);
@@ -433,9 +433,9 @@ static HRESULT WINAPI filter_EnumPins(IMediaStreamFilter *iface, IEnumPins **enu
     object->refcount = 1;
     object->count = filter->nb_streams;
     object->index = 0;
-    if (!(object->pins = heap_alloc(filter->nb_streams * sizeof(*object->pins))))
+    if (!(object->pins = malloc(filter->nb_streams * sizeof(*object->pins))))
     {
-        heap_free(object);
+        free(object);
         LeaveCriticalSection(&filter->cs);
         return E_OUTOFMEMORY;
     }
@@ -543,7 +543,7 @@ static HRESULT WINAPI filter_AddMediaStream(IMediaStreamFilter *iface, IAMMediaS
 
     TRACE("(%p)->(%p)\n", iface, pAMMediaStream);
 
-    streams = CoTaskMemRealloc(This->streams, (This->nb_streams + 1) * sizeof(IAMMediaStream*));
+    streams = realloc(This->streams, (This->nb_streams + 1) * sizeof(*streams));
     if (!streams)
         return E_OUTOFMEMORY;
     This->streams = streams;
@@ -593,7 +593,7 @@ static HRESULT WINAPI filter_EnumMediaStreams(IMediaStreamFilter *iface, LONG in
 {
     struct filter *filter = impl_from_IMediaStreamFilter(iface);
 
-    TRACE("filter %p, index %d, stream %p.\n", filter, index, stream);
+    TRACE("filter %p, index %ld, stream %p.\n", filter, index, stream);
 
     if (index >= filter->nb_streams)
         return S_FALSE;
@@ -1004,7 +1004,7 @@ static HRESULT WINAPI filter_seeking_SetPositions(IMediaSeeking *iface, LONGLONG
     IMediaSeeking *seeking;
     HRESULT hr;
 
-    TRACE("iface %p, current %s, current_flags %#x, stop %s, stop_flags %#x.\n", iface,
+    TRACE("iface %p, current %s, current_flags %#lx, stop %s, stop_flags %#lx.\n", iface,
             current_ptr ? wine_dbgstr_longlong(*current_ptr) : "<null>", current_flags,
             stop_ptr ? wine_dbgstr_longlong(*stop_ptr): "<null>", stop_flags);
 
@@ -1092,7 +1092,7 @@ HRESULT filter_create(IUnknown *outer, void **out)
     if (outer)
         return CLASS_E_NOAGGREGATION;
 
-    if (!(object = heap_alloc_zero(sizeof(*object))))
+    if (!(object = calloc(1, sizeof(*object))))
         return E_OUTOFMEMORY;
 
     object->IMediaStreamFilter_iface.lpVtbl = &filter_vtbl;

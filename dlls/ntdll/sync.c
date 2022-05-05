@@ -182,12 +182,12 @@ static inline NTSTATUS wait_semaphore( RTL_CRITICAL_SECTION *crit, int timeout )
     }
     else
     {
-        int *lock = (int *)&crit->LockSemaphore;
+        LONG *lock = (LONG *)&crit->LockSemaphore;
         while (!InterlockedCompareExchange( lock, 0, 1 ))
         {
-            static const int zero;
+            static const LONG zero;
             /* this may wait longer than specified in case of multiple wake-ups */
-            if (RtlWaitOnAddress( lock, &zero, sizeof(int), &time ) == STATUS_TIMEOUT)
+            if (RtlWaitOnAddress( lock, &zero, sizeof(LONG), &time ) == STATUS_TIMEOUT)
                 return STATUS_TIMEOUT;
         }
         return STATUS_WAIT_0;
@@ -363,7 +363,7 @@ NTSTATUS WINAPI RtlpUnWaitCriticalSection( RTL_CRITICAL_SECTION *crit )
     }
     else
     {
-        int *lock = (int *)&crit->LockSemaphore;
+        LONG *lock = (LONG *)&crit->LockSemaphore;
         InterlockedExchange( lock, 1 );
         RtlWakeAddressSingle( lock );
         ret = STATUS_SUCCESS;
@@ -372,15 +372,6 @@ NTSTATUS WINAPI RtlpUnWaitCriticalSection( RTL_CRITICAL_SECTION *crit )
     return ret;
 }
 
-
-static inline void small_pause(void)
-{
-#ifdef __i386__
-    __asm__ __volatile__( "rep;nop" : : : "memory" );
-#else
-    __asm__ __volatile__( "" : : : "memory" );
-#endif
-}
 
 /******************************************************************************
  *      RtlEnterCriticalSection   (NTDLL.@)
@@ -399,7 +390,7 @@ NTSTATUS WINAPI RtlEnterCriticalSection( RTL_CRITICAL_SECTION *crit )
             {
                 if (InterlockedCompareExchange( &crit->LockCount, 0, -1 ) == -1) goto done;
             }
-            small_pause();
+            YieldProcessor();
         }
     }
 
@@ -761,7 +752,7 @@ void WINAPI RtlInitializeConditionVariable( RTL_CONDITION_VARIABLE *variable )
  */
 void WINAPI RtlWakeConditionVariable( RTL_CONDITION_VARIABLE *variable )
 {
-    InterlockedIncrement( (int *)&variable->Ptr );
+    InterlockedIncrement( (LONG *)&variable->Ptr );
     RtlWakeAddressSingle( variable );
 }
 
@@ -772,7 +763,7 @@ void WINAPI RtlWakeConditionVariable( RTL_CONDITION_VARIABLE *variable )
  */
 void WINAPI RtlWakeAllConditionVariable( RTL_CONDITION_VARIABLE *variable )
 {
-    InterlockedIncrement( (int *)&variable->Ptr );
+    InterlockedIncrement( (LONG *)&variable->Ptr );
     RtlWakeAddressAll( variable );
 }
 

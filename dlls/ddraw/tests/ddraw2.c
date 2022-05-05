@@ -148,6 +148,11 @@ static BOOL ddraw_is_vendor(IDirectDraw2 *ddraw, DWORD vendor)
             && identifier.dwVendorId == vendor;
 }
 
+static BOOL ddraw_is_amd(IDirectDraw2 *ddraw)
+{
+    return ddraw_is_vendor(ddraw, 0x1002);
+}
+
 static BOOL ddraw_is_intel(IDirectDraw2 *ddraw)
 {
     return ddraw_is_vendor(ddraw, 0x8086);
@@ -383,7 +388,7 @@ static void fill_surface(IDirectDrawSurface *surface, D3DCOLOR color)
     ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 }
 
-static void check_rect(IDirectDrawSurface *surface, RECT r, const char *message)
+static void check_rect(IDirectDrawSurface *surface, RECT r)
 {
     LONG x_coords[2][2] =
     {
@@ -414,8 +419,7 @@ static void check_rect(IDirectDrawSurface *surface, RECT r, const char *message)
                     if (x < 0 || x >= 640 || y < 0 || y >= 480)
                         continue;
                     color = get_surface_color(surface, x, y);
-                    ok(color == expected, "%s: Pixel (%d, %d) has color %08x, expected %08x\n",
-                            message, x, y, color, expected);
+                    ok(color == expected, "Pixel (%d, %d) has color %08x, expected %08x.\n", x, y, color, expected);
                 }
             }
         }
@@ -1071,6 +1075,17 @@ static void test_coop_level_d3d_state(void)
     window = create_window();
     ddraw = create_ddraw();
     ok(!!ddraw, "Failed to create a ddraw object.\n");
+
+    if (ddraw_is_warp(ddraw))
+    {
+        /* ddraw2 crashes in EndScene, and if it doesn't crash it fails with
+         * DDERR_SURFACELOST on WARP. */
+        win_skip("Skipping test that crashes WARP occasionally.\n");
+        IDirectDraw2_Release(ddraw);
+        DestroyWindow(window);
+        return;
+    }
+
     if (!(device = create_device(ddraw, window, DDSCL_NORMAL)))
     {
         skip("Failed to create a 3D device, skipping test.\n");
@@ -1154,12 +1169,9 @@ static void test_coop_level_d3d_state(void)
     hr = IDirect3DDevice2_DrawPrimitive(device, D3DPT_TRIANGLESTRIP, D3DVT_LVERTEX, quad, ARRAY_SIZE(quad), 0);
     ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice2_EndScene(device);
-    ok(hr == DD_OK || broken(ddraw_is_warp(ddraw) && hr == DDERR_SURFACELOST), "Got unexpected hr %#x.\n", hr);
-    if (hr == DD_OK)
-    {
-        color = get_surface_color(rt, 320, 240);
-        ok(compare_color(color, 0x0000ff80, 1), "Got unexpected color 0x%08x.\n", color);
-    }
+    ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
+    color = get_surface_color(rt, 320, 240);
+    ok(compare_color(color, 0x0000ff80, 1), "Got unexpected color 0x%08x.\n", color);
 
     destroy_viewport(device, viewport);
     destroy_material(background);
@@ -2663,14 +2675,16 @@ static void test_window_style(void)
 {
     LONG style, exstyle, tmp, expected_style;
     RECT fullscreen_rect, r;
+    HWND window, window2;
     IDirectDraw2 *ddraw;
-    HWND window;
     HRESULT hr;
     ULONG ref;
     BOOL ret;
 
     window = CreateWindowA("static", "ddraw_test", WS_OVERLAPPEDWINDOW,
             0, 0, 100, 100, 0, 0, 0, 0);
+    window2 = CreateWindowA("static", "ddraw_test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            0, 0, 50, 50, 0, 0, 0, 0);
     ddraw = create_ddraw();
     ok(!!ddraw, "Failed to create a ddraw object.\n");
 
@@ -2714,6 +2728,133 @@ static void test_window_style(void)
     tmp = GetWindowLongA(window, GWL_EXSTYLE);
     ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
 
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN | DDSCL_NOWINDOWCHANGES);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    todo_wine ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    todo_wine ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL | DDSCL_NOWINDOWCHANGES);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ret = SetForegroundWindow(window);
+    ok(ret, "Failed to set foreground window.\n");
+
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    ShowWindow(window, SW_SHOW);
+    ret = SetForegroundWindow(GetDesktopWindow());
+    ok(ret, "Failed to set foreground window.\n");
+    SetActiveWindow(window);
+    ok(GetActiveWindow() == window, "Unexpected active window.\n");
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    GetWindowRect(window, &r);
+    ok(EqualRect(&r, &fullscreen_rect), "Expected %s, got %s.\n",
+            wine_dbgstr_rect(&fullscreen_rect), wine_dbgstr_rect(&r));
+
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    SetWindowPos(window, NULL, 0, 0, 100, 100, SWP_NOZORDER | SWP_NOACTIVATE);
+    GetWindowRect(window, &r);
+    ok(!EqualRect(&r, &fullscreen_rect), "Window resize failed? got %s.\n",
+            wine_dbgstr_rect(&r));
+
+    ret = SetForegroundWindow(window2);
+    ok(ret, "Failed to set foreground window.\n");
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    GetWindowRect(window, &r);
+    ok(EqualRect(&r, &fullscreen_rect), "Expected %s, got %s.\n",
+            wine_dbgstr_rect(&fullscreen_rect), wine_dbgstr_rect(&r));
+
+    ret = SetForegroundWindow(window);
+    ok(ret, "Failed to set foreground window.\n");
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
     ShowWindow(window, SW_SHOW);
     hr = IDirectDraw2_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
     ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
@@ -2737,6 +2878,7 @@ static void test_window_style(void)
     ref = IDirectDraw2_Release(ddraw);
     ok(ref == 0, "The ddraw object was not properly freed: refcount %u.\n", ref);
 
+    DestroyWindow(window2);
     DestroyWindow(window);
 }
 
@@ -13510,7 +13652,8 @@ static void test_depth_readback(void)
                 /* The ddraw2 version of this test behaves similarly to the ddraw7 version on Nvidia GPUs,
                  * except that we only have D16 (broken on geforce 9) and D24X8 (broken on geforce 7) available.
                  * Accept all nvidia GPUs as broken here, but still expect one of the formats to pass. */
-                ok(compare_uint(expected_depth, depth, max_diff) || ddraw_is_nvidia(ddraw),
+                ok(compare_uint(expected_depth, depth, max_diff) || ddraw_is_nvidia(ddraw)
+                        || (ddraw_is_amd(ddraw) && tests[i].z_depth == 24),
                         "Test %u: Got depth 0x%08x (diff %d), expected 0x%08x+/-%u, at %u, %u.\n",
                         i, depth, expected_depth - depth, expected_depth, max_diff, x, y);
                 if (!compare_uint(expected_depth, depth, max_diff))
@@ -14005,7 +14148,11 @@ static void test_viewport(void)
         {{100, 100,  640,  480}, {100, 220, 579, 459}, "Viewport (100, 100) - (640, 480)"},
         {{  0,   0, 8192, 8192}, {-10, -10, -10, -10}, "Viewport (0, 0) - (8192, 8192)"},
     };
-    static const struct vec2 rt_sizes[] =
+    static const struct
+    {
+        unsigned int x, y;
+    }
+    rt_sizes[] =
     {
         {640, 480}, {1280, 960}, {320, 240}, {800, 600},
     };
@@ -14076,6 +14223,8 @@ static void test_viewport(void)
 
     for (i = 0; i < ARRAY_SIZE(rt_sizes); ++i)
     {
+        winetest_push_context("Size %ux%u", rt_sizes[i].x, rt_sizes[i].y);
+
         if (i)
         {
             memset(&surface_desc, 0, sizeof(surface_desc));
@@ -14085,23 +14234,23 @@ static void test_viewport(void)
             surface_desc.dwHeight = rt_sizes[i].y;
             surface_desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_3DDEVICE;
             hr = IDirectDraw2_CreateSurface(ddraw, &surface_desc, &rt, NULL);
-            ok(SUCCEEDED(hr), "Failed to create render target, hr %#x (i %u).\n", hr, i);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
             surface_desc.dwFlags = DDSD_CAPS | DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT;
             surface_desc.ddsCaps.dwCaps = DDSCAPS_ZBUFFER;
             surface_desc.ddpfPixelFormat = z_fmt;
             hr = IDirectDraw2_CreateSurface(ddraw, &surface_desc, &ds, NULL);
-            ok(SUCCEEDED(hr), "Failed to create depth buffer, hr %#x (i %u).\n", hr, i);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
             hr = IDirectDrawSurface_AddAttachedSurface(rt, ds);
-            ok(SUCCEEDED(hr), "Failed to attach depth buffer, hr %#x (i %u).\n", hr, i);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
             hr = IDirect3DDevice2_SetRenderTarget(device, rt, 0);
-            ok(SUCCEEDED(hr), "Failed to set render target, hr %#x (i %u).\n", hr, i);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
         }
         else
         {
             hr = IDirect3DDevice2_GetRenderTarget(device, &rt);
-            ok(SUCCEEDED(hr), "Failed to get render target, hr %#x.\n", hr);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
         }
 
         full_viewport = create_viewport(device, 0, 0, rt_sizes[i].x, rt_sizes[i].y);
@@ -14113,17 +14262,18 @@ static void test_viewport(void)
 
         for (j = 0; j < ARRAY_SIZE(tests); ++j)
         {
+            winetest_push_context(tests[j].message);
+
             expected_failure = tests[j].vp.dwX + tests[j].vp.dwWidth > rt_sizes[i].x
                     || tests[j].vp.dwY + tests[j].vp.dwHeight > rt_sizes[i].y;
 
             hr = IDirect3DViewport2_Clear(full_viewport, 1, &clear_rect, D3DCLEAR_TARGET);
-            ok(SUCCEEDED(hr), "Failed to clear viewport, hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
             hr = IDirect3D2_CreateViewport(d3d, &viewport, NULL);
-            ok(SUCCEEDED(hr), "Failed to create viewport, hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
             hr = IDirect3DViewport2_SetViewport2(viewport, NULL);
-            ok(hr == E_INVALIDARG, "Setting NULL viewport data returned unexpected hr %#x (i %u, j %u).\n",
-                    hr, i, j);
+            ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
             memset(&vp, 0, sizeof(vp));
             vp.dwSize = sizeof(vp);
             vp.dwX = tests[j].vp.dwX;
@@ -14135,35 +14285,32 @@ static void test_viewport(void)
             vp.dvMinZ = 0.0f;
             vp.dvMaxZ = 1.0f;
             hr = IDirect3DViewport2_SetViewport(viewport, &vp);
-            ok(hr == D3DERR_VIEWPORTHASNODEVICE,
-                    "Setting viewport data returned unexpected hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == D3DERR_VIEWPORTHASNODEVICE, "Got unexpected hr %#x.\n", hr);
             hr = IDirect3DDevice2_AddViewport(device, viewport);
-            ok(SUCCEEDED(hr), "Failed to add viewport, hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
             hr = IDirect3DViewport2_SetViewport(viewport, &vp);
-            if (expected_failure)
-                ok(hr == E_INVALIDARG, "Setting viewport data returned unexpected hr %#x (i %u, j %u).\n",
-                        hr, i, j);
-            else
-                ok(SUCCEEDED(hr), "Failed to set viewport data, hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == (expected_failure ? E_INVALIDARG : DD_OK), "Got unexpected hr %#x.\n", hr);
 
             hr = IDirect3DDevice2_SetCurrentViewport(device, viewport);
-            ok(SUCCEEDED(hr), "Failed to set the viewport, hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
             if (expected_failure)
             {
                 destroy_viewport(device, viewport);
+                winetest_pop_context();
                 continue;
             }
 
             hr = IDirect3DDevice2_BeginScene(device);
-            ok(SUCCEEDED(hr), "Failed to begin scene, hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
             hr = IDirect3DDevice2_DrawPrimitive(device, D3DPT_TRIANGLESTRIP, D3DVT_LVERTEX, quad, 4, 0);
-            ok(SUCCEEDED(hr), "Got unexpected hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
             hr = IDirect3DDevice2_EndScene(device);
-            ok(SUCCEEDED(hr), "Failed to end scene, hr %#x (i %u, j %u).\n", hr, i, j);
+            ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
-            check_rect(rt, tests[j].expected_rect, tests[j].message);
+            check_rect(rt, tests[j].expected_rect);
 
             destroy_viewport(device, viewport);
+            winetest_pop_context();
         }
 
         destroy_viewport(device, full_viewport);
@@ -14173,6 +14320,8 @@ static void test_viewport(void)
         IDirectDrawSurface_Release(ds);
 
         IDirectDrawSurface_Release(rt);
+
+        winetest_pop_context();
     }
 
     destroy_material(black_background);
@@ -14978,8 +15127,9 @@ static HRESULT CALLBACK find_different_mode_callback(DDSURFACEDESC *surface_desc
     if (U1(U4(*surface_desc).ddpfPixelFormat).dwRGBBitCount != registry_mode.dmBitsPerPel)
         return DDENUMRET_OK;
 
+    /* See comment in ddraw7 about the frequency. */
     if (surface_desc->dwWidth != param->old_width && surface_desc->dwHeight != param->old_height &&
-            surface_desc->dwRefreshRate != param->old_frequency)
+            (!compare_uint(surface_desc->dwRefreshRate, param->old_frequency, 1) || !param->old_frequency))
     {
         param->new_width = surface_desc->dwWidth;
         param->new_height = surface_desc->dwHeight;

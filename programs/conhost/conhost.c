@@ -100,7 +100,11 @@ static struct screen_buffer *create_screen_buffer( struct console *console, int 
         if (screen_buffer->font.face_len)
         {
             screen_buffer->font.face_name = malloc( screen_buffer->font.face_len * sizeof(WCHAR) );
-            if (!screen_buffer->font.face_name) return NULL;
+            if (!screen_buffer->font.face_name)
+            {
+                free( screen_buffer );
+                return NULL;
+            }
 
             memcpy( screen_buffer->font.face_name, console->active->font.face_name,
                     screen_buffer->font.face_len * sizeof(WCHAR) );
@@ -158,7 +162,7 @@ static void tty_flush( struct console *console )
     TRACE("%s\n", debugstr_an(console->tty_buffer, console->tty_buffer_count));
     if (!WriteFile( console->tty_output, console->tty_buffer, console->tty_buffer_count,
                     NULL, NULL ))
-        WARN( "write failed: %u\n", GetLastError() );
+        WARN( "write failed: %lu\n", GetLastError() );
     console->tty_buffer_count = 0;
 }
 
@@ -176,7 +180,7 @@ static void tty_write( struct console *console, const char *buffer, size_t size 
     {
         assert( !console->tty_buffer_count );
         if (!WriteFile( console->tty_output, buffer, size, NULL, NULL ))
-            WARN( "write failed: %u\n", GetLastError() );
+            WARN( "write failed: %lu\n", GetLastError() );
     }
 }
 
@@ -324,6 +328,12 @@ static void init_tty_output( struct console *console )
     console->tty_cursor_visible = TRUE;
 }
 
+/* no longer use relative cursor positioning (legacy API have been used) */
+static void enter_absolute_mode( struct console *console )
+{
+    console->use_relative_cursor = 0;
+}
+
 static void scroll_to_cursor( struct screen_buffer *screen_buffer )
 {
     unsigned int cursor_x = get_bounded_cursor_x( screen_buffer );
@@ -453,11 +463,13 @@ static NTSTATUS read_complete( struct console *console, NTSTATUS status, const v
         req->signal = signal;
         req->read   = 1;
         req->status = status;
+        if (console->read_ioctl == IOCTL_CONDRV_READ_CONSOLE_CONTROL)
+            wine_server_add_data( req, &console->key_state, sizeof(console->key_state) );
         wine_server_add_data( req, buf, size );
         status = wine_server_call( req );
     }
     SERVER_END_REQ;
-    if (status && (console->read_ioctl || status != STATUS_INVALID_HANDLE)) ERR( "failed: %#x\n", status );
+    if (status && (console->read_ioctl || status != STATUS_INVALID_HANDLE)) ERR( "failed: %#lx\n", status );
     console->signaled = signal;
     console->read_ioctl = 0;
     console->pending_read = 0;
@@ -468,7 +480,7 @@ static NTSTATUS read_console_input( struct console *console, size_t out_size )
 {
     size_t count = min( out_size / sizeof(INPUT_RECORD), console->record_count );
 
-    TRACE("count %u\n", count);
+    TRACE("count %Iu\n", count);
 
     read_complete( console, STATUS_SUCCESS, console->records, count * sizeof(*console->records),
                    console->record_count > count );
@@ -488,8 +500,9 @@ static void read_from_buffer( struct console *console, size_t out_size )
     switch( console->read_ioctl )
     {
     case IOCTL_CONDRV_READ_CONSOLE:
+    case IOCTL_CONDRV_READ_CONSOLE_CONTROL:
         out_size = min( out_size, console->read_buffer_count * sizeof(WCHAR) );
-        read_complete( console, STATUS_SUCCESS, console->read_buffer, out_size, console->record_count != 0  );
+        read_complete( console, STATUS_SUCCESS, console->read_buffer, out_size, console->record_count != 0 );
         read_len = out_size / sizeof(WCHAR);
         break;
     case IOCTL_CONDRV_READ_FILE:
@@ -1151,7 +1164,7 @@ static unsigned int edit_line_string_width( const WCHAR *str, unsigned int len)
     return offset;
 }
 
-static void update_read_output( struct console *console )
+static void update_read_output( struct console *console, BOOL newline )
 {
     struct screen_buffer *screen_buffer = console->active;
     struct edit_line *ctx = &console->edit_line;
@@ -1199,7 +1212,7 @@ static void update_read_output( struct console *console )
         }
     }
 
-    if (!ctx->status)
+    if (newline)
     {
         offset = edit_line_string_width( ctx->buf, ctx->len );
         screen_buffer->cursor_x = 0;
@@ -1237,10 +1250,15 @@ static void update_read_output( struct console *console )
     update_window_config( screen_buffer->console, TRUE );
 }
 
+/* can end on any ctrl-character: from 0x00 up to 0x1F) */
+#define FIRST_NON_CONTROL_CHAR (L' ')
+
 static NTSTATUS process_console_input( struct console *console )
 {
     struct edit_line *ctx = &console->edit_line;
     unsigned int i;
+    WCHAR ctrl_value = FIRST_NON_CONTROL_CHAR;
+    unsigned int ctrl_keyvalue = 0;
 
     switch (console->read_ioctl)
     {
@@ -1248,6 +1266,7 @@ static NTSTATUS process_console_input( struct console *console )
         if (console->record_count) read_console_input( console, console->pending_read );
         return STATUS_SUCCESS;
     case IOCTL_CONDRV_READ_CONSOLE:
+    case IOCTL_CONDRV_READ_CONSOLE_CONTROL:
     case IOCTL_CONDRV_READ_FILE:
         break;
     default:
@@ -1267,7 +1286,7 @@ static NTSTATUS process_console_input( struct console *console )
 
         if (ir.EventType != KEY_EVENT || !ir.Event.KeyEvent.bKeyDown) continue;
 
-        TRACE( "key code=%02x scan=%02x char=%02x state=%08x\n",
+        TRACE( "key code=%02x scan=%02x char=%02x state=%08lx\n",
                ir.Event.KeyEvent.wVirtualKeyCode, ir.Event.KeyEvent.wVirtualScanCode,
                ir.Event.KeyEvent.uChar.UnicodeChar, ir.Event.KeyEvent.dwControlKeyState );
 
@@ -1280,6 +1299,20 @@ static NTSTATUS process_console_input( struct console *console )
             /* mask out some bits which don't interest us */
             state = ir.Event.KeyEvent.dwControlKeyState & ~(NUMLOCK_ON|SCROLLLOCK_ON|CAPSLOCK_ON|ENHANCED_KEY);
 
+            if (ctx->ctrl_mask &&
+                ir.Event.KeyEvent.uChar.UnicodeChar &&
+                ir.Event.KeyEvent.uChar.UnicodeChar < FIRST_NON_CONTROL_CHAR)
+            {
+                if (ctx->ctrl_mask & (1u << ir.Event.KeyEvent.uChar.UnicodeChar))
+                {
+                    ctrl_value = ir.Event.KeyEvent.uChar.UnicodeChar;
+                    ctrl_keyvalue = ir.Event.KeyEvent.dwControlKeyState;
+                    ctx->status = STATUS_SUCCESS;
+                    TRACE("Found ctrl char in mask: ^%lc %x\n", ir.Event.KeyEvent.uChar.UnicodeChar + '@', ctx->ctrl_mask);
+                    continue;
+                }
+                if (ir.Event.KeyEvent.uChar.UnicodeChar == 10) continue;
+            }
             func = NULL;
             for (map = console->edition_mode ? emacs_key_map : win32_key_map; map->entries != NULL; map++)
             {
@@ -1322,7 +1355,7 @@ static NTSTATUS process_console_input( struct console *console )
             }
             else if (ctx->len >= console->pending_read / sizeof(WCHAR))
                 ctx->status = STATUS_SUCCESS;
-    }
+        }
     }
 
     if (console->record_count > i) memmove( console->records, console->records + i,
@@ -1332,19 +1365,27 @@ static NTSTATUS process_console_input( struct console *console )
     if (ctx->status == STATUS_PENDING && !(console->mode & ENABLE_LINE_INPUT) && ctx->len)
         ctx->status = STATUS_SUCCESS;
 
-    if (console->mode & ENABLE_ECHO_INPUT) update_read_output( console );
+    if (console->mode & ENABLE_ECHO_INPUT) update_read_output( console, !ctx->status && ctrl_value == FIRST_NON_CONTROL_CHAR );
     if (ctx->status == STATUS_PENDING) return STATUS_SUCCESS;
 
     if (!ctx->status && (console->mode & ENABLE_LINE_INPUT))
     {
-        if (ctx->len) append_input_history( console, ctx->buf, ctx->len * sizeof(WCHAR) );
-        if (edit_line_grow(console, 2))
+        if (ctrl_value < FIRST_NON_CONTROL_CHAR)
         {
-            ctx->buf[ctx->len++] = '\r';
-            ctx->buf[ctx->len++] = '\n';
-            ctx->buf[ctx->len] = 0;
-            TRACE( "return %s\n", debugstr_wn( ctx->buf, ctx->len ));
+            edit_line_insert( console, &ctrl_value, 1 );
+            console->key_state = ctrl_keyvalue;
         }
+        else
+        {
+            if (ctx->len) append_input_history( console, ctx->buf, ctx->len * sizeof(WCHAR) );
+            if (edit_line_grow(console, 2))
+            {
+                ctx->buf[ctx->len++] = '\r';
+                ctx->buf[ctx->len++] = '\n';
+                ctx->buf[ctx->len] = 0;
+            }
+        }
+        TRACE( "return %s\n", debugstr_wn( ctx->buf, ctx->len ));
     }
 
     console->read_buffer = ctx->buf;
@@ -1361,8 +1402,10 @@ static NTSTATUS process_console_input( struct console *console )
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS read_console( struct console *console, unsigned int ioctl, size_t out_size )
+static NTSTATUS read_console( struct console *console, unsigned int ioctl, size_t out_size,
+                              const WCHAR *initial, unsigned int initial_len, unsigned int ctrl_mask )
 {
+    struct edit_line *ctx = &console->edit_line;
     TRACE("\n");
 
     if (out_size > INT_MAX)
@@ -1372,17 +1415,44 @@ static NTSTATUS read_console( struct console *console, unsigned int ioctl, size_
     }
 
     console->read_ioctl = ioctl;
+    console->key_state = 0;
     if (!out_size || console->read_buffer_count)
     {
         read_from_buffer( console, out_size );
         return STATUS_SUCCESS;
     }
 
-    console->edit_line.history_index = console->history_index;
-    console->edit_line.home_x = console->active->cursor_x;
-    console->edit_line.home_y = console->active->cursor_y;
-    console->edit_line.status = STATUS_PENDING;
-    if (edit_line_grow( console, 1 )) console->edit_line.buf[0] = 0;
+    ctx->history_index = console->history_index;
+    ctx->home_x = console->active->cursor_x;
+    ctx->home_y = console->active->cursor_y;
+    ctx->status = STATUS_PENDING;
+    if (initial_len && edit_line_grow( console, initial_len + 1 ))
+    {
+        unsigned offset = edit_line_string_width( initial, initial_len );
+        if (offset > ctx->home_x)
+        {
+            int deltay;
+            offset -= ctx->home_x + 1;
+            deltay = offset / console->active->width + 1;
+            if (ctx->home_y >= deltay)
+                ctx->home_y -= deltay;
+            else
+            {
+                ctx->home_y = 0;
+                FIXME("Support for negative ordinates is missing\n");
+            }
+            ctx->home_x = console->active->width - 1 - (offset % console->active->width);
+        }
+        else
+            ctx->home_x -= offset;
+        ctx->cursor = initial_len;
+        memcpy( ctx->buf, initial, initial_len * sizeof(WCHAR) );
+        ctx->buf[initial_len] = 0;
+        ctx->len = initial_len;
+        ctx->end_offset = initial_len;
+    }
+    else if (edit_line_grow( console, 1 )) ctx->buf[0] = 0;
+    ctx->ctrl_mask = ctrl_mask;
 
     console->pending_read = out_size;
     return process_console_input( console );
@@ -1503,8 +1573,11 @@ static void char_key_press( struct console *console, WCHAR ch, unsigned int ctrl
     key_press( console, ch, vk, ctrl );
 }
 
-static unsigned int escape_char_to_vk( WCHAR ch )
+static unsigned int escape_char_to_vk( WCHAR ch, unsigned int *ctrl, WCHAR *outuch )
 {
+    if (ctrl) *ctrl = 0;
+    if (outuch) *outuch = '\0';
+
     switch (ch)
     {
     case 'A': return VK_UP;
@@ -1517,6 +1590,8 @@ static unsigned int escape_char_to_vk( WCHAR ch )
     case 'Q': return VK_F2;
     case 'R': return VK_F3;
     case 'S': return VK_F4;
+    case 'Z': if (ctrl && outuch) {*ctrl = SHIFT_PRESSED; *outuch = '\t'; return VK_TAB;}
+        return 0;
     default:  return 0;
     }
 }
@@ -1554,7 +1629,8 @@ static unsigned int convert_modifiers( unsigned int n )
 
 static unsigned int process_csi_sequence( struct console *console, const WCHAR *buf, size_t size )
 {
-    unsigned int n, count = 0, params[8], params_cnt = 0, vk;
+    unsigned int n, count = 0, params[8], params_cnt = 0, vk, ctrl;
+    WCHAR outuch;
 
     for (;;)
     {
@@ -1568,9 +1644,9 @@ static unsigned int process_csi_sequence( struct console *console, const WCHAR *
         if (++count == size) return 0;
     }
 
-    if ((vk = escape_char_to_vk( buf[count] )))
+    if ((vk = escape_char_to_vk( buf[count], &ctrl, &outuch )))
     {
-        key_press( console, 0, vk, params_cnt >= 2 ? convert_modifiers( params[1] ) : 0 );
+        key_press( console, outuch, vk, params_cnt >= 2 ? convert_modifiers( params[1] ) : ctrl );
         return count + 1;
     }
 
@@ -1606,7 +1682,7 @@ static unsigned int process_input_escape( struct console *console, const WCHAR *
 
     case 'O':
         if (++count == size) break;
-        vk = escape_char_to_vk( buf[1] );
+        vk = escape_char_to_vk( buf[1], NULL, NULL );
         if (vk)
         {
             key_press( console, 0, vk, 0 );
@@ -1634,7 +1710,7 @@ static DWORD WINAPI tty_input( void *param )
         unsigned int h = condrv_handle( console->tty_input );
         status = NtDeviceIoControlFile( console->server, NULL, NULL, NULL, &io, IOCTL_CONDRV_SETUP_INPUT,
                                         &h, sizeof(h), NULL, 0 );
-        if (status) ERR( "input setup failed: %#x\n", status );
+        if (status) ERR( "input setup failed: %#lx\n", status );
     }
 
     event = CreateEventW( NULL, TRUE, FALSE, NULL );
@@ -1691,7 +1767,7 @@ static DWORD WINAPI tty_input( void *param )
         LeaveCriticalSection( &console_section );
     }
 
-    TRACE( "NtReadFile failed: %#x\n", status );
+    TRACE( "NtReadFile failed: %#lx\n", status );
 
 done:
     EnterCriticalSection( &console_section );
@@ -1701,7 +1777,7 @@ done:
         unsigned int h = 0;
         status = NtDeviceIoControlFile( console->server, NULL, NULL, NULL, &io, IOCTL_CONDRV_SETUP_INPUT,
                                         &h, sizeof(h), NULL, 0 );
-        if (status) ERR( "input restore failed: %#x\n", status );
+        if (status) ERR( "input restore failed: %#lx\n", status );
     }
     CloseHandle( console->input_thread );
     console->input_thread = NULL;
@@ -1826,7 +1902,7 @@ NTSTATUS change_screen_buffer_size( struct screen_buffer *screen_buffer, int new
 }
 
 static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
-                                 const struct condrv_output_info_params *params )
+                                 const struct condrv_output_info_params *params, size_t in_size )
 {
     const struct condrv_output_info *info = &params->info;
     NTSTATUS status;
@@ -1850,13 +1926,17 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
 
         if (screen_buffer->cursor_x != info->cursor_x || screen_buffer->cursor_y != info->cursor_y)
         {
+            struct console *console = screen_buffer->console;
             screen_buffer->cursor_x = info->cursor_x;
             screen_buffer->cursor_y = info->cursor_y;
+            if (console->use_relative_cursor)
+                set_tty_cursor_relative( console, screen_buffer->cursor_x, screen_buffer->cursor_y );
             scroll_to_cursor( screen_buffer );
         }
     }
     if (params->mask & SET_CONSOLE_OUTPUT_INFO_SIZE)
     {
+        enter_absolute_mode( screen_buffer->console );
         /* new screen-buffer cannot be smaller than actual window */
         if (info->width < screen_buffer->win.right - screen_buffer->win.left + 1 ||
             info->height < screen_buffer->win.bottom - screen_buffer->win.top + 1)
@@ -1892,6 +1972,7 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
     }
     if (params->mask & SET_CONSOLE_OUTPUT_INFO_DISPLAY_WINDOW)
     {
+        enter_absolute_mode( screen_buffer->console );
         if (info->win_left < 0 || info->win_left > info->win_right ||
             info->win_right >= screen_buffer->width ||
             info->win_top < 0  || info->win_top > info->win_bottom ||
@@ -1910,8 +1991,27 @@ static NTSTATUS set_output_info( struct screen_buffer *screen_buffer,
     }
     if (params->mask & SET_CONSOLE_OUTPUT_INFO_MAX_SIZE)
     {
+        enter_absolute_mode( screen_buffer->console );
         screen_buffer->max_width  = info->max_width;
         screen_buffer->max_height = info->max_height;
+    }
+    if (params->mask & SET_CONSOLE_OUTPUT_INFO_FONT)
+    {
+        WCHAR *face_name = (WCHAR *)(params + 1);
+        size_t face_name_size = in_size - sizeof(*params);
+        unsigned int height = info->font_height;
+        unsigned int weight = FW_NORMAL;
+
+        if (!face_name_size)
+        {
+            face_name = screen_buffer->font.face_name;
+            face_name_size = screen_buffer->font.face_len * sizeof(WCHAR);
+        }
+
+        if (!height) height = 12;
+        if (info->font_weight >= FW_SEMIBOLD) weight = FW_BOLD;
+
+        update_console_font( screen_buffer->console, face_name, face_name_size, height, weight );
     }
 
     if (is_active( screen_buffer ))
@@ -1997,6 +2097,7 @@ static NTSTATUS write_output( struct screen_buffer *screen_buffer, const struct 
     char_info_t *dest;
     char *src;
 
+    enter_absolute_mode( screen_buffer->console );
     if (*out_size == sizeof(SMALL_RECT) && !params->width) return STATUS_INVALID_PARAMETER;
 
     entry_size = params->mode == CHAR_INFO_MODE_TEXTATTR ? sizeof(char_info_t) : sizeof(WCHAR);
@@ -2099,6 +2200,7 @@ static NTSTATUS read_output( struct screen_buffer *screen_buffer, const struct c
     unsigned int x, y, width;
     unsigned int i, count;
 
+    enter_absolute_mode( screen_buffer->console );
     x = params->x;
     y = params->y;
     mode  = params->mode;
@@ -2177,6 +2279,7 @@ static NTSTATUS fill_output( struct screen_buffer *screen_buffer, const struct c
 
     TRACE( "(%u %u) mode %u\n", params->x, params->y, params->mode );
 
+    enter_absolute_mode( screen_buffer->console );
     if (params->y >= screen_buffer->height) return STATUS_SUCCESS;
     dest = screen_buffer->data + min( params->y * screen_buffer->width + params->x,
                                       screen_buffer->height * screen_buffer->width );
@@ -2230,6 +2333,7 @@ static NTSTATUS scroll_output( struct screen_buffer *screen_buffer, const struct
     RECT update_rect;
     SMALL_RECT clip;
 
+    enter_absolute_mode( screen_buffer->console );
     xsrc = params->scroll.Left;
     ysrc = params->scroll.Top;
     w = params->scroll.Right - params->scroll.Left + 1;
@@ -2425,8 +2529,9 @@ static NTSTATUS screen_buffer_ioctl( struct screen_buffer *screen_buffer, unsign
         return get_output_info( screen_buffer, out_size );
 
     case IOCTL_CONDRV_SET_OUTPUT_INFO:
-        if (in_size != sizeof(struct condrv_output_info_params) || *out_size) return STATUS_INVALID_PARAMETER;
-        return set_output_info( screen_buffer, in_data );
+        if (in_size < sizeof(struct condrv_output_info_params) || *out_size)
+            return STATUS_INVALID_PARAMETER;
+        return set_output_info( screen_buffer, in_data, in_size );
 
     case IOCTL_CONDRV_FILL_OUTPUT:
         if (in_size != sizeof(struct condrv_fill_output_params) || *out_size != sizeof(DWORD))
@@ -2473,13 +2578,25 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
     case IOCTL_CONDRV_READ_CONSOLE:
         if (in_size || *out_size % sizeof(WCHAR)) return STATUS_INVALID_PARAMETER;
         ensure_tty_input_thread( console );
-        status = read_console( console, code, *out_size );
+        status = read_console( console, code, *out_size, NULL, 0, 0 );
+        *out_size = 0;
+        return status;
+
+    case IOCTL_CONDRV_READ_CONSOLE_CONTROL:
+        if ((in_size < sizeof(DWORD)) || ((in_size - sizeof(DWORD)) % sizeof(WCHAR)) ||
+            (*out_size < sizeof(DWORD)) || ((*out_size - sizeof(DWORD)) % sizeof(WCHAR)))
+            return STATUS_INVALID_PARAMETER;
+        ensure_tty_input_thread( console );
+        status = read_console( console, code, *out_size - sizeof(DWORD),
+                               (const WCHAR*)((const char*)in_data + sizeof(DWORD)),
+                               (in_size - sizeof(DWORD)) / sizeof(WCHAR),
+                               *(DWORD*)in_data );
         *out_size = 0;
         return status;
 
     case IOCTL_CONDRV_READ_FILE:
         ensure_tty_input_thread( console );
-        status = read_console( console, code, *out_size );
+        status = read_console( console, code, *out_size, NULL, 0, 0 );
         *out_size = 0;
         return status;
 
@@ -2533,7 +2650,7 @@ static NTSTATUS console_input_ioctl( struct console *console, unsigned int code,
             TRACE( "get window\n" );
             if (in_size || *out_size != sizeof(*result)) return STATUS_INVALID_PARAMETER;
             if (!(result = alloc_ioctl_buffer( sizeof(*result )))) return STATUS_NO_MEMORY;
-            if (!console->win) init_message_window( console );
+            if (!console->win && !console->no_window) init_message_window( console );
             *result = condrv_handle( console->win );
             return STATUS_SUCCESS;
         }
@@ -2628,13 +2745,14 @@ static NTSTATUS process_console_ioctls( struct console *console )
         }
         if (status)
         {
-            TRACE( "failed to get next request: %#x\n", status );
+            TRACE( "failed to get next request: %#lx\n", status );
             return status;
         }
 
         if (code == IOCTL_CONDRV_INIT_OUTPUT)
         {
             TRACE( "initializing output %x\n", output );
+            enter_absolute_mode( console );
             if (console->active)
                 create_screen_buffer( console, output, console->active->width, console->active->height );
             else
@@ -2761,6 +2879,7 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         if (!wcscmp( argv[i], L"--unix"))
         {
             console.is_unix = 1;
+            console.use_relative_cursor = 1;
             headless = 1;
             continue;
         }
@@ -2810,8 +2929,13 @@ int __cdecl wmain(int argc, WCHAR *argv[])
     {
         console.tty_input  = GetStdHandle( STD_INPUT_HANDLE );
         console.tty_output = GetStdHandle( STD_OUTPUT_HANDLE );
-        init_tty_output( &console );
-        if (!console.is_unix && !ensure_tty_input_thread( &console )) return 1;
+
+        if (console.tty_input || console.tty_output)
+        {
+            init_tty_output( &console );
+            if (!console.is_unix && !ensure_tty_input_thread( &console )) return 1;
+        }
+        else console.no_window = TRUE;
     }
     else
     {

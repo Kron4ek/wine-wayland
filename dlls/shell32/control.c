@@ -53,6 +53,9 @@ void Control_UnloadApplet(CPlApplet* applet)
 
     if (applet->proc) applet->proc(applet->hWnd, CPL_EXIT, 0L, 0L);
     FreeLibrary(applet->hModule);
+    if (applet->context_activated)
+        DeactivateActCtx(0, applet->cookie);
+    ReleaseActCtx(applet->context);
     list_remove( &applet->entry );
     heap_free(applet->cmd);
     heap_free(applet);
@@ -60,14 +63,18 @@ void Control_UnloadApplet(CPlApplet* applet)
 
 CPlApplet*	Control_LoadApplet(HWND hWnd, LPCWSTR cmd, CPanel* panel)
 {
+    WCHAR path[MAX_PATH];
     CPlApplet*	applet;
     DWORD len;
     unsigned 	i;
     CPLINFO	info;
     NEWCPLINFOW newinfo;
+    ACTCTXW ctx;
 
     if (!(applet = heap_alloc_zero(sizeof(*applet))))
        return applet;
+
+    applet->context = INVALID_HANDLE_VALUE;
 
     len = ExpandEnvironmentStringsW(cmd, NULL, 0);
     if (len > 0)
@@ -86,6 +93,21 @@ CPlApplet*	Control_LoadApplet(HWND hWnd, LPCWSTR cmd, CPanel* panel)
     }
 
     applet->hWnd = hWnd;
+
+    /* Activate context before DllMain() is called */
+    if (SearchPathW(NULL, applet->cmd, NULL, ARRAY_SIZE(path), path, NULL))
+    {
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.cbSize = sizeof(ctx);
+        ctx.lpSource = path;
+        ctx.lpResourceName = MAKEINTRESOURCEW(123);
+        ctx.dwFlags = ACTCTX_FLAG_RESOURCE_NAME_VALID;
+        applet->context = CreateActCtxW(&ctx);
+        if (applet->context != INVALID_HANDLE_VALUE)
+            applet->context_activated = ActivateActCtx(applet->context, &applet->cookie);
+        else
+            TRACE("No manifest at ID 123 in %s\n", wine_dbgstr_w(path));
+    }
 
     if (!(applet->hModule = LoadLibraryW(applet->cmd))) {
         WARN("Cannot load control panel applet %s\n", debugstr_w(applet->cmd));
@@ -177,6 +199,9 @@ CPlApplet*	Control_LoadApplet(HWND hWnd, LPCWSTR cmd, CPanel* panel)
 
  theError:
     FreeLibrary(applet->hModule);
+    if (applet->context_activated)
+        DeactivateActCtx(0, applet->cookie);
+    ReleaseActCtx(applet->context);
     heap_free(applet->cmd);
     heap_free(applet);
     return NULL;
@@ -811,7 +836,7 @@ void WINAPI Control_RunDLLW(HWND hWnd, HINSTANCE hInst, LPCWSTR cmd, DWORD nCmdS
 {
     CPanel	panel;
 
-    TRACE("(%p, %p, %s, 0x%08x)\n",
+    TRACE("(%p, %p, %s, 0x%08lx)\n",
 	  hWnd, hInst, debugstr_w(cmd), nCmdShow);
 
     memset(&panel, 0, sizeof(panel));
@@ -845,7 +870,7 @@ void WINAPI Control_RunDLLA(HWND hWnd, HINSTANCE hInst, LPCSTR cmd, DWORD nCmdSh
  */
 HRESULT WINAPI Control_FillCache_RunDLLW(HWND hWnd, HANDLE hModule, DWORD w, DWORD x)
 {
-    FIXME("%p %p 0x%08x 0x%08x stub\n", hWnd, hModule, w, x);
+    FIXME("%p %p 0x%08lx 0x%08lx stub\n", hWnd, hModule, w, x);
     return S_OK;
 }
 
@@ -867,7 +892,7 @@ HRESULT WINAPI Control_FillCache_RunDLLA(HWND hWnd, HANDLE hModule, DWORD w, DWO
  */
 DWORD WINAPI CallCPLEntry16(HMODULE hMod, FARPROC pFunc, DWORD dw3, DWORD dw4, DWORD dw5, DWORD dw6)
 {
-    FIXME("(%p, %p, %08x, %08x, %08x, %08x): stub.\n", hMod, pFunc, dw3, dw4, dw5, dw6);
+    FIXME("(%p, %p, %08lx, %08lx, %08lx, %08lx): stub.\n", hMod, pFunc, dw3, dw4, dw5, dw6);
     return 0x0deadbee;
 }
 

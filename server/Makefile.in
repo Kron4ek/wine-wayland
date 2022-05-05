@@ -11,7 +11,6 @@ C_SRCS = \
 	debugger.c \
 	device.c \
 	directory.c \
-	esync.c \
 	event.c \
 	fd.c \
 	file.c \

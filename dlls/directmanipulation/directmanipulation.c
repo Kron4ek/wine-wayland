@@ -23,7 +23,6 @@
 #include "winbase.h"
 #include "oleidl.h"
 #include "rpcproxy.h"
-#include "wine/heap.h"
 #include "wine/debug.h"
 
 #include "directmanipulation.h"
@@ -75,7 +74,7 @@ ULONG WINAPI update_manager_AddRef(IDirectManipulationUpdateManager *iface)
     struct directupdatemanager *This = impl_from_IDirectManipulationUpdateManager(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     return ref;
 }
@@ -85,11 +84,11 @@ ULONG WINAPI update_manager_Release(IDirectManipulationUpdateManager *iface)
     struct directupdatemanager *This = impl_from_IDirectManipulationUpdateManager(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     if (!ref)
     {
-        heap_free(This);
+        free(This);
     }
     return ref;
 }
@@ -105,7 +104,7 @@ static HRESULT WINAPI update_manager_RegisterWaitHandleCallback(IDirectManipulat
 static HRESULT WINAPI update_manager_UnregisterWaitHandleCallback(IDirectManipulationUpdateManager *iface, DWORD cookie)
 {
     struct directupdatemanager *This = impl_from_IDirectManipulationUpdateManager(iface);
-    FIXME("%p, %x\n", This, cookie);
+    FIXME("%p, %lx\n", This, cookie);
     return E_NOTIMPL;
 }
 
@@ -130,7 +129,7 @@ static HRESULT create_update_manager(IDirectManipulationUpdateManager **obj)
 {
     struct directupdatemanager *object;
 
-    object = heap_alloc(sizeof(*object));
+    object = malloc(sizeof(*object));
     if(!object)
         return E_OUTOFMEMORY;
 
@@ -187,7 +186,7 @@ static ULONG WINAPI primary_AddRef(IDirectManipulationPrimaryContent *iface)
     struct primarycontext *This = impl_from_IDirectManipulationPrimaryContent(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     return ref;
 }
@@ -197,11 +196,11 @@ static ULONG WINAPI primary_Release(IDirectManipulationPrimaryContent *iface)
     struct primarycontext *This = impl_from_IDirectManipulationPrimaryContent(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     if (!ref)
     {
-        heap_free(This);
+        free(This);
     }
     return ref;
 }
@@ -218,7 +217,7 @@ static HRESULT WINAPI primary_SetSnapPoints(IDirectManipulationPrimaryContent *i
             const float *points, DWORD count)
 {
     struct primarycontext *This = impl_from_IDirectManipulationPrimaryContent(iface);
-    FIXME("%p, %d, %p, %d\n", This, motion, points, count);
+    FIXME("%p, %d, %p, %ld\n", This, motion, points, count);
     return E_NOTIMPL;
 }
 
@@ -262,7 +261,7 @@ static HRESULT WINAPI primary_SetVerticalAlignment(IDirectManipulationPrimaryCon
 static HRESULT WINAPI primary_GetInertiaEndTransform(IDirectManipulationPrimaryContent *iface, float *matrix, DWORD count)
 {
     struct primarycontext *This = impl_from_IDirectManipulationPrimaryContent(iface);
-    FIXME("%p,  %p, %d\n", This, matrix, count);
+    FIXME("%p,  %p, %ld\n", This, matrix, count);
     return E_NOTIMPL;
 }
 
@@ -350,7 +349,7 @@ static HRESULT WINAPI content_GetOutputTransform(IDirectManipulationContent *ifa
                     float *matrix, DWORD count)
 {
     struct primarycontext *This = impl_from_IDirectManipulationContent(iface);
-    FIXME("%p, %p, %d\n", This, matrix, count);
+    FIXME("%p, %p, %ld\n", This, matrix, count);
     return E_NOTIMPL;
 }
 
@@ -358,7 +357,7 @@ static HRESULT WINAPI content_GetContentTransform(IDirectManipulationContent *if
                     float *matrix, DWORD count)
 {
     struct primarycontext *This = impl_from_IDirectManipulationContent(iface);
-    FIXME("%p, %p, %d\n", This, matrix, count);
+    FIXME("%p, %p, %ld\n", This, matrix, count);
     return E_NOTIMPL;
 }
 
@@ -366,7 +365,7 @@ static HRESULT WINAPI content_SyncContentTransform(IDirectManipulationContent *i
                     const float *matrix, DWORD count)
 {
     struct primarycontext *This = impl_from_IDirectManipulationContent(iface);
-    FIXME("%p, %p, %d\n", This, matrix, count);
+    FIXME("%p, %p, %ld\n", This, matrix, count);
     return E_NOTIMPL;
 }
 
@@ -419,7 +418,7 @@ static ULONG WINAPI viewport_AddRef(IDirectManipulationViewport2 *iface)
     struct directviewport *This = impl_from_IDirectManipulationViewport2(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     return ref;
 }
@@ -429,11 +428,11 @@ static ULONG WINAPI viewport_Release(IDirectManipulationViewport2 *iface)
     struct directviewport *This = impl_from_IDirectManipulationViewport2(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     if (!ref)
     {
-        heap_free(This);
+        free(This);
     }
     return ref;
 }
@@ -520,7 +519,7 @@ static HRESULT WINAPI viewport_SetViewportTransform(IDirectManipulationViewport2
                     const float *matrix, DWORD count)
 {
     struct directviewport *This = impl_from_IDirectManipulationViewport2(iface);
-    FIXME("%p, %p, %d\n", This, matrix, count);
+    FIXME("%p, %p, %ld\n", This, matrix, count);
     return E_NOTIMPL;
 }
 
@@ -528,7 +527,7 @@ static HRESULT WINAPI viewport_SyncDisplayTransform(IDirectManipulationViewport2
                     const float *matrix, DWORD count)
 {
     struct directviewport *This = impl_from_IDirectManipulationViewport2(iface);
-    FIXME("%p, %p, %d\n", This, matrix, count);
+    FIXME("%p, %p, %ld\n", This, matrix, count);
     return E_NOTIMPL;
 }
 
@@ -540,7 +539,7 @@ static HRESULT WINAPI viewport_GetPrimaryContent(IDirectManipulationViewport2 *i
     {
         struct primarycontext *primary;
         TRACE("IDirectManipulationPrimaryContent\n");
-        primary = heap_alloc( sizeof(*primary));
+        primary = malloc( sizeof(*primary));
         if(!primary)
             return E_OUTOFMEMORY;
 
@@ -624,7 +623,7 @@ static HRESULT WINAPI viewport_AddEventHandler(IDirectManipulationViewport2 *ifa
 static HRESULT WINAPI viewport_RemoveEventHandler(IDirectManipulationViewport2 *iface, DWORD cookie)
 {
     struct directviewport *This = impl_from_IDirectManipulationViewport2(iface);
-    FIXME("%p, %d\n", This, cookie);
+    FIXME("%p, %ld\n", This, cookie);
     return E_NOTIMPL;
 }
 
@@ -666,7 +665,7 @@ static HRESULT WINAPI viewport_AddBehavior(IDirectManipulationViewport2 *iface, 
 static HRESULT WINAPI viewport_RemoveBehavior(IDirectManipulationViewport2 *iface, DWORD cookie)
 {
     struct directviewport *This = impl_from_IDirectManipulationViewport2(iface);
-    FIXME("%p, %d\n", This, cookie);
+    FIXME("%p, %ld\n", This, cookie);
     return E_NOTIMPL;
 }
 
@@ -719,7 +718,7 @@ static HRESULT create_viewport(IDirectManipulationViewport2 **obj)
 {
     struct directviewport *object;
 
-    object = heap_alloc(sizeof(*object));
+    object = malloc(sizeof(*object));
     if(!object)
         return E_OUTOFMEMORY;
 
@@ -750,7 +749,7 @@ static ULONG WINAPI direct_manip_AddRef(IDirectManipulationManager2 *iface)
     struct directmanipulation *This = impl_from_IDirectManipulationManager2(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     return ref;
 }
@@ -760,13 +759,13 @@ static ULONG WINAPI direct_manip_Release(IDirectManipulationManager2 *iface)
     struct directmanipulation *This = impl_from_IDirectManipulationManager2(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     if (!ref)
     {
         if(This->updatemanager)
             IDirectManipulationUpdateManager_Release(This->updatemanager);
-        heap_free(This);
+        free(This);
     }
     return ref;
 }
@@ -887,7 +886,7 @@ static HRESULT WINAPI DirectManipulation_CreateInstance(IClassFactory *iface, IU
 
     *ppv = NULL;
 
-    object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object));
+    object = calloc(1, sizeof(*object));
     if (!object)
         return E_OUTOFMEMORY;
 
@@ -946,7 +945,7 @@ static ULONG WINAPI compositor_AddRef(IDirectManipulationCompositor2 *iface)
     struct directcompositor *This = impl_from_IDirectManipulationCompositor2(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     return ref;
 }
@@ -956,13 +955,13 @@ static ULONG WINAPI compositor_Release(IDirectManipulationCompositor2 *iface)
     struct directcompositor *This = impl_from_IDirectManipulationCompositor2(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) ref=%u\n", This, ref);
+    TRACE("(%p) ref=%lu\n", This, ref);
 
     if (!ref)
     {
         if(This->manager)
             IDirectManipulationUpdateManager_Release(This->manager);
-        heap_free(This);
+        free(This);
     }
     return ref;
 }
@@ -1065,7 +1064,7 @@ static HRESULT WINAPI DirectCompositor_CreateInstance(IClassFactory *iface, IUnk
 
     *ppv = NULL;
 
-    object = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*object));
+    object = calloc(1, sizeof(*object));
     if (!object)
         return E_OUTOFMEMORY;
 

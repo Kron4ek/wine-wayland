@@ -35,6 +35,8 @@ static void parser(const char*);
 
 %}
 
+%define api.prefix {dbg_}
+
 %union
 {
     struct dbg_lvalue   lvalue;
@@ -443,7 +445,7 @@ static LONG WINAPI wine_dbg_cmd(EXCEPTION_POINTERS *eptr)
         dbg_interrupt_debuggee();
         return EXCEPTION_CONTINUE_EXECUTION;
     default:
-        dbg_printf("\nException %x\n", eptr->ExceptionRecord->ExceptionCode);
+        dbg_printf("\nException %lx\n", eptr->ExceptionRecord->ExceptionCode);
         break;
     }
 

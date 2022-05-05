@@ -30,7 +30,6 @@
 #include "dxva2api.h"
 
 #include "wine/debug.h"
-#include "wine/heap.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(dxva2);
 
@@ -98,7 +97,7 @@ static BOOL dxva_array_reserve(void **elements, size_t *capacity, size_t count, 
     if (new_capacity < count)
         new_capacity = max_capacity;
 
-    if (!(new_elements = heap_realloc(*elements, new_capacity * size)))
+    if (!(new_elements = realloc(*elements, new_capacity * size)))
         return FALSE;
 
     *elements = new_elements;
@@ -163,7 +162,7 @@ static ULONG WINAPI video_processor_AddRef(IDirectXVideoProcessor *iface)
     struct video_processor *processor = impl_from_IDirectXVideoProcessor(iface);
     ULONG refcount = InterlockedIncrement(&processor->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     return refcount;
 }
@@ -173,12 +172,12 @@ static ULONG WINAPI video_processor_Release(IDirectXVideoProcessor *iface)
     struct video_processor *processor = impl_from_IDirectXVideoProcessor(iface);
     ULONG refcount = InterlockedDecrement(&processor->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     if (!refcount)
     {
         IDirectXVideoProcessorService_Release(processor->service);
-        heap_free(processor);
+        free(processor);
     }
 
     return refcount;
@@ -314,7 +313,7 @@ static HRESULT WINAPI video_processor_VideoProcessBlt(IDirectXVideoProcessor *if
 
     if (FAILED(hr = IDirect3DSurface9_GetDevice(rt, &device)))
     {
-        WARN("Failed to get surface device, hr %#x.\n", hr);
+        WARN("Failed to get surface device, hr %#lx.\n", hr);
         return hr;
     }
 
@@ -330,7 +329,7 @@ static HRESULT WINAPI video_processor_VideoProcessBlt(IDirectXVideoProcessor *if
         if (FAILED(hr = IDirect3DDevice9_StretchRect(device, samples[i].SrcSurface, &samples[i].SrcRect,
                 rt, &dst_rect, D3DTEXF_POINT)))
         {
-            WARN("Failed to copy sample %u, hr %#x.\n", i, hr);
+            WARN("Failed to copy sample %u, hr %#lx.\n", i, hr);
         }
     }
 
@@ -398,7 +397,7 @@ static HRESULT WINAPI device_manager_processor_service_CreateSurface(IDirectXVid
     unsigned int i, j;
     HRESULT hr;
 
-    TRACE("%p, %u, %u, %u, %u, %u, %u, %u, %p, %p.\n", iface, width, height, backbuffers, format, pool, usage, dxvaType,
+    TRACE("%p, %u, %u, %u, %u, %u, %lu, %lu, %p, %p.\n", iface, width, height, backbuffers, format, pool, usage, dxvaType,
             surfaces, shared_handle);
 
     if (backbuffers >= UINT_MAX)
@@ -613,7 +612,7 @@ static HRESULT WINAPI device_manager_processor_service_CreateVideoProcessor(IDir
         return E_INVALIDARG;
     }
 
-    if (!(object = heap_alloc_zero(sizeof(*object))))
+    if (!(object = calloc(1, sizeof(*object))))
         return E_OUTOFMEMORY;
 
     object->IDirectXVideoProcessor_iface.lpVtbl = &video_processor_vtbl;
@@ -679,7 +678,7 @@ static HRESULT WINAPI device_manager_decoder_service_CreateSurface(IDirectXVideo
         UINT width, UINT height, UINT backbuffers, D3DFORMAT format, D3DPOOL pool, DWORD usage, DWORD dxvaType,
         IDirect3DSurface9 **surfaces, HANDLE *shared_handle)
 {
-    FIXME("%p, %u, %u, %u, %#x, %d, %d, %d, %p, %p.\n", iface, width, height, backbuffers, format, pool, usage,
+    FIXME("%p, %u, %u, %u, %#x, %d, %ld, %ld, %p, %p.\n", iface, width, height, backbuffers, format, pool, usage,
             dxvaType, surfaces, shared_handle);
 
     return E_NOTIMPL;
@@ -753,7 +752,7 @@ static ULONG WINAPI device_manager_AddRef(IDirect3DDeviceManager9 *iface)
     struct device_manager *manager = impl_from_IDirect3DDeviceManager9(iface);
     ULONG refcount = InterlockedIncrement(&manager->refcount);
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     return refcount;
 }
@@ -764,7 +763,7 @@ static ULONG WINAPI device_manager_Release(IDirect3DDeviceManager9 *iface)
     ULONG refcount = InterlockedDecrement(&manager->refcount);
     size_t i;
 
-    TRACE("%p, refcount %u.\n", iface, refcount);
+    TRACE("%p, refcount %lu.\n", iface, refcount);
 
     if (!refcount)
     {
@@ -776,8 +775,8 @@ static ULONG WINAPI device_manager_Release(IDirect3DDeviceManager9 *iface)
             if (manager->handles[i].state_block)
                 IDirect3DStateBlock9_Release(manager->handles[i].state_block);
         }
-        heap_free(manager->handles);
-        heap_free(manager);
+        free(manager->handles);
+        free(manager);
     }
 
     return refcount;
@@ -1037,7 +1036,7 @@ static const IDirect3DDeviceManager9Vtbl device_manager_vtbl =
 
 BOOL WINAPI CapabilitiesRequestAndCapabilitiesReply( HMONITOR monitor, LPSTR buffer, DWORD length )
 {
-    FIXME("(%p, %p, %d): stub\n", monitor, buffer, length);
+    FIXME("%p, %p, %ld: stub.\n", monitor, buffer, length);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1051,7 +1050,7 @@ HRESULT WINAPI DXVA2CreateDirect3DDeviceManager9(UINT *token, IDirect3DDeviceMan
 
     *manager = NULL;
 
-    if (!(object = heap_alloc_zero(sizeof(*object))))
+    if (!(object = calloc(1, sizeof(*object))))
         return E_OUTOFMEMORY;
 
     object->IDirect3DDeviceManager9_iface.lpVtbl = &device_manager_vtbl;
@@ -1113,7 +1112,7 @@ BOOL WINAPI DestroyPhysicalMonitor( HMONITOR monitor )
 
 BOOL WINAPI DestroyPhysicalMonitors( DWORD arraySize, LPPHYSICAL_MONITOR array )
 {
-    FIXME("(0x%x, %p): stub\n", arraySize, array);
+    FIXME("%lu, %p: stub.\n", arraySize, array);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1221,7 +1220,7 @@ HRESULT WINAPI GetNumberOfPhysicalMonitorsFromIDirect3DDevice9( IDirect3DDevice9
 
 BOOL WINAPI GetPhysicalMonitorsFromHMONITOR( HMONITOR monitor, DWORD arraySize, LPPHYSICAL_MONITOR array )
 {
-    FIXME("(%p, 0x%x, %p): stub\n", monitor, arraySize, array);
+    FIXME("%p, %lu, %p: stub.\n", monitor, arraySize, array);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1229,7 +1228,7 @@ BOOL WINAPI GetPhysicalMonitorsFromHMONITOR( HMONITOR monitor, DWORD arraySize, 
 
 HRESULT WINAPI GetPhysicalMonitorsFromIDirect3DDevice9( IDirect3DDevice9 *device, DWORD arraySize, LPPHYSICAL_MONITOR array )
 {
-    FIXME("(%p, 0x%x, %p): stub\n", device, arraySize, array);
+    FIXME("%p, %lu, %p: stub.\n", device, arraySize, array);
 
     return E_NOTIMPL;
 }
@@ -1301,7 +1300,7 @@ BOOL WINAPI SaveCurrentSettings( HMONITOR monitor )
 
 BOOL WINAPI SetMonitorBrightness( HMONITOR monitor, DWORD brightness )
 {
-    FIXME("(%p, 0x%x): stub\n", monitor, brightness);
+    FIXME("%p, %#lx: stub.\n", monitor, brightness);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1317,7 +1316,7 @@ BOOL WINAPI SetMonitorColorTemperature( HMONITOR monitor, MC_COLOR_TEMPERATURE t
 
 BOOL WINAPI SetMonitorContrast( HMONITOR monitor, DWORD contrast )
 {
-    FIXME("(%p, 0x%x): stub\n", monitor, contrast);
+    FIXME("%p, %#lx: stub.\n", monitor, contrast);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1325,7 +1324,7 @@ BOOL WINAPI SetMonitorContrast( HMONITOR monitor, DWORD contrast )
 
 BOOL WINAPI SetMonitorDisplayAreaPosition( HMONITOR monitor, MC_POSITION_TYPE type, DWORD position )
 {
-    FIXME("(%p, 0x%x, 0x%x): stub\n", monitor, type, position);
+    FIXME("%p, 0x%x, %#lx: stub.\n", monitor, type, position);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1333,7 +1332,7 @@ BOOL WINAPI SetMonitorDisplayAreaPosition( HMONITOR monitor, MC_POSITION_TYPE ty
 
 BOOL WINAPI SetMonitorDisplayAreaSize( HMONITOR monitor, MC_SIZE_TYPE type, DWORD size )
 {
-    FIXME("(%p, 0x%x, 0x%x): stub\n", monitor, type, size);
+    FIXME("%p, 0x%x, %#lx: stub.\n", monitor, type, size);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1341,7 +1340,7 @@ BOOL WINAPI SetMonitorDisplayAreaSize( HMONITOR monitor, MC_SIZE_TYPE type, DWOR
 
 BOOL WINAPI SetMonitorRedGreenOrBlueDrive( HMONITOR monitor, MC_DRIVE_TYPE type, DWORD drive )
 {
-    FIXME("(%p, 0x%x, 0x%x): stub\n", monitor, type, drive);
+    FIXME("%p, 0x%x, %#lx: stub.\n", monitor, type, drive);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1349,7 +1348,7 @@ BOOL WINAPI SetMonitorRedGreenOrBlueDrive( HMONITOR monitor, MC_DRIVE_TYPE type,
 
 BOOL WINAPI SetMonitorRedGreenOrBlueGain( HMONITOR monitor, MC_GAIN_TYPE type, DWORD gain )
 {
-    FIXME("(%p, 0x%x, 0x%x): stub\n", monitor, type, gain);
+    FIXME("%p, 0x%x, %#lx: stub.\n", monitor, type, gain);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
@@ -1357,7 +1356,7 @@ BOOL WINAPI SetMonitorRedGreenOrBlueGain( HMONITOR monitor, MC_GAIN_TYPE type, D
 
 BOOL WINAPI SetVCPFeature( HMONITOR monitor, BYTE vcpCode, DWORD value )
 {
-    FIXME("(%p, 0x%02x, 0x%x): stub\n", monitor, vcpCode, value);
+    FIXME("%p, 0x%02x, %#lx: stub.\n", monitor, vcpCode, value);
 
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;

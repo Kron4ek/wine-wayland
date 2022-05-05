@@ -88,7 +88,7 @@ static ULONG_PTR schan_alloc_handle(void *object, enum schan_handle_type type)
         handle = schan_free_handles;
         if (handle->type != SCHAN_HANDLE_FREE)
         {
-            ERR("Handle %d(%p) is in the free list, but has type %#x.\n", index, handle, handle->type);
+            ERR("Handle %ld(%p) is in the free list, but has type %#x.\n", index, handle, handle->type);
             return SCHAN_INVALID_HANDLE;
         }
         schan_free_handles = handle->object;
@@ -128,7 +128,7 @@ static void *schan_free_handle(ULONG_PTR handle_idx, enum schan_handle_type type
     handle = &schan_handle_table[handle_idx];
     if (handle->type != type)
     {
-        ERR("Handle %ld(%p) is not of type %#x\n", handle_idx, handle, type);
+        ERR("Handle %Id(%p) is not of type %#x\n", handle_idx, handle, type);
         return NULL;
     }
 
@@ -149,7 +149,7 @@ static void *schan_get_object(ULONG_PTR handle_idx, enum schan_handle_type type)
     handle = &schan_handle_table[handle_idx];
     if (handle->type != type)
     {
-        ERR("Handle %ld(%p) is not of type %#x\n", handle_idx, handle, type);
+        ERR("Handle %Id(%p) is not of type %#x\n", handle_idx, handle, type);
         return NULL;
     }
 
@@ -238,7 +238,7 @@ static void read_config(void)
     config_default_disabled_protocols = default_disabled;
     config_read = TRUE;
 
-    TRACE("enabled %x, disabled by default %x\n", config_enabled_protocols, config_default_disabled_protocols);
+    TRACE("enabled %lx, disabled by default %lx\n", config_enabled_protocols, config_default_disabled_protocols);
 }
 
 static SECURITY_STATUS schan_QueryCredentialsAttributes(
@@ -298,7 +298,7 @@ static SECURITY_STATUS SEC_ENTRY schan_QueryCredentialsAttributesA(
 {
     SECURITY_STATUS ret;
 
-    TRACE("(%p, %d, %p)\n", phCredential, ulAttribute, pBuffer);
+    TRACE("(%p, %ld, %p)\n", phCredential, ulAttribute, pBuffer);
 
     switch (ulAttribute)
     {
@@ -318,7 +318,7 @@ static SECURITY_STATUS SEC_ENTRY schan_QueryCredentialsAttributesW(
 {
     SECURITY_STATUS ret;
 
-    TRACE("(%p, %d, %p)\n", phCredential, ulAttribute, pBuffer);
+    TRACE("(%p, %ld, %p)\n", phCredential, ulAttribute, pBuffer);
 
     switch (ulAttribute)
     {
@@ -338,19 +338,19 @@ static SECURITY_STATUS get_cert(const SCHANNEL_CRED *cred, CERT_CONTEXT const **
     SECURITY_STATUS status;
     DWORD i;
 
-    TRACE("dwVersion = %u\n", cred->dwVersion);
-    TRACE("cCreds = %u\n", cred->cCreds);
+    TRACE("dwVersion = %lu\n", cred->dwVersion);
+    TRACE("cCreds = %lu\n", cred->cCreds);
     TRACE("paCred = %p\n", cred->paCred);
     TRACE("hRootStore = %p\n", cred->hRootStore);
-    TRACE("cMappers = %u\n", cred->cMappers);
-    TRACE("cSupportedAlgs = %u:\n", cred->cSupportedAlgs);
+    TRACE("cMappers = %lu\n", cred->cMappers);
+    TRACE("cSupportedAlgs = %lu:\n", cred->cSupportedAlgs);
     for (i = 0; i < cred->cSupportedAlgs; i++) TRACE("%08x\n", cred->palgSupportedAlgs[i]);
-    TRACE("grbitEnabledProtocols = %08x\n", cred->grbitEnabledProtocols);
-    TRACE("dwMinimumCipherStrength = %u\n", cred->dwMinimumCipherStrength);
-    TRACE("dwMaximumCipherStrength = %u\n", cred->dwMaximumCipherStrength);
-    TRACE("dwSessionLifespan = %u\n", cred->dwSessionLifespan);
-    TRACE("dwFlags = %08x\n", cred->dwFlags);
-    TRACE("dwCredFormat = %u\n", cred->dwCredFormat);
+    TRACE("grbitEnabledProtocols = %08lx\n", cred->grbitEnabledProtocols);
+    TRACE("dwMinimumCipherStrength = %lu\n", cred->dwMinimumCipherStrength);
+    TRACE("dwMaximumCipherStrength = %lu\n", cred->dwMaximumCipherStrength);
+    TRACE("dwSessionLifespan = %lu\n", cred->dwSessionLifespan);
+    TRACE("dwFlags = %08lx\n", cred->dwFlags);
+    TRACE("dwCredFormat = %lu\n", cred->dwCredFormat);
 
     switch (cred->dwVersion)
     {
@@ -610,7 +610,7 @@ static SECURITY_STATUS SEC_ENTRY schan_AcquireCredentialsHandleA(
  PLUID pLogonID, PVOID pAuthData, SEC_GET_KEY_FN pGetKeyFn,
  PVOID pGetKeyArgument, PCredHandle phCredential, PTimeStamp ptsExpiry)
 {
-    TRACE("(%s, %s, 0x%08x, %p, %p, %p, %p, %p, %p)\n",
+    TRACE("(%s, %s, 0x%08lx, %p, %p, %p, %p, %p, %p)\n",
      debugstr_a(pszPrincipal), debugstr_a(pszPackage), fCredentialUse,
      pLogonID, pAuthData, pGetKeyFn, pGetKeyArgument, phCredential, ptsExpiry);
     return schan_AcquireCredentialsHandle(fCredentialUse,
@@ -622,7 +622,7 @@ static SECURITY_STATUS SEC_ENTRY schan_AcquireCredentialsHandleW(
  PLUID pLogonID, PVOID pAuthData, SEC_GET_KEY_FN pGetKeyFn,
  PVOID pGetKeyArgument, PCredHandle phCredential, PTimeStamp ptsExpiry)
 {
-    TRACE("(%s, %s, 0x%08x, %p, %p, %p, %p, %p, %p)\n",
+    TRACE("(%s, %s, 0x%08lx, %p, %p, %p, %p, %p, %p)\n",
      debugstr_w(pszPrincipal), debugstr_w(pszPackage), fCredentialUse,
      pLogonID, pAuthData, pGetKeyFn, pGetKeyArgument, phCredential, ptsExpiry);
     return schan_AcquireCredentialsHandle(fCredentialUse,
@@ -674,7 +674,7 @@ static void dump_buffer_desc(SecBufferDesc *desc)
     for (i = 0; i < desc->cBuffers; ++i)
     {
         SecBuffer *b = &desc->pBuffers[i];
-        TRACE("\tbuffer %u: cbBuffer %d, BufferType %#x pvBuffer %p\n", i, b->cbBuffer, b->BufferType, b->pvBuffer);
+        TRACE("\tbuffer %u: cbBuffer %ld, BufferType %#lx pvBuffer %p\n", i, b->cbBuffer, b->BufferType, b->pvBuffer);
     }
 }
 
@@ -704,14 +704,14 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextW(
     struct schan_context *ctx;
     struct schan_buffers *out_buffers;
     struct schan_credentials *cred;
-    SIZE_T expected_size = ~0UL;
+    SIZE_T expected_size = 0;
     SECURITY_STATUS ret;
     SecBuffer *buffer;
     SecBuffer alloc_buffer = { 0 };
     struct handshake_params params;
-    int idx;
+    int idx, i;
 
-    TRACE("%p %p %s 0x%08x %d %d %p %d %p %p %p %p\n", phCredential, phContext,
+    TRACE("%p %p %s 0x%08lx %ld %ld %p %ld %p %p %p %p\n", phCredential, phContext,
      debugstr_w(pszTargetName), fContextReq, Reserved1, TargetDataRep, pInput,
      Reserved1, phNewContext, pOutput, pfContextAttr, ptsExpiry);
 
@@ -722,6 +722,16 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextW(
     {
         ptsExpiry->LowPart = 0;
         ptsExpiry->HighPart = 0;
+    }
+
+    if (!pOutput || !pOutput->cBuffers) return SEC_E_INVALID_TOKEN;
+    for (i = 0; i < pOutput->cBuffers; i++)
+    {
+        ULONG type = pOutput->pBuffers[i].BufferType;
+
+        if (type != SECBUFFER_TOKEN && type != SECBUFFER_ALERT) continue;
+        if (!pOutput->pBuffers[i].cbBuffer && !(fContextReq & ISC_REQ_ALLOCATE_MEMORY))
+            return SEC_E_INSUFFICIENT_MEMORY;
     }
 
     if (!phContext)
@@ -736,7 +746,7 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextW(
 
         if (!(cred->credential_use & SECPKG_CRED_OUTBOUND))
         {
-            WARN("Invalid credential use %#x\n", cred->credential_use);
+            WARN("Invalid credential use %#lx\n", cred->credential_use);
             return SEC_E_INVALID_HANDLE;
         }
 
@@ -795,7 +805,13 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextW(
                 struct set_dtls_mtu_params params = { ctx->transport.session, *(WORD *)buffer->pvBuffer };
                 GNUTLS_CALL( set_dtls_mtu, &params );
             }
-            else WARN("invalid buffer size %u\n", buffer->cbBuffer);
+            else WARN("invalid buffer size %lu\n", buffer->cbBuffer);
+        }
+
+        if (is_dtls_context(ctx))
+        {
+            struct set_dtls_timeouts_params params = { ctx->transport.session, 0, 60000 };
+            GNUTLS_CALL( set_dtls_timeouts, &params );
         }
 
         phNewContext->dwLower = handle;
@@ -807,30 +823,35 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextW(
         unsigned char *ptr;
 
         if (!(ctx = schan_get_object(phContext->dwLower, SCHAN_HANDLE_CTX))) return SEC_E_INVALID_HANDLE;
-        if (!pInput) return is_dtls_context(ctx) ? SEC_E_INSUFFICIENT_MEMORY : SEC_E_INCOMPLETE_MESSAGE;
-        if ((idx = schan_find_sec_buffer_idx(pInput, 0, SECBUFFER_TOKEN)) == -1) return SEC_E_INCOMPLETE_MESSAGE;
+        if (!pInput && !is_dtls_context(ctx)) return SEC_E_INCOMPLETE_MESSAGE;
 
-        buffer = &pInput->pBuffers[idx];
-        ptr = buffer->pvBuffer;
-        expected_size = 0;
-
-        while (buffer->cbBuffer > expected_size + ctx->header_size)
+        if (pInput)
         {
-            record_size = ctx->header_size + read_record_size(ptr, ctx->header_size);
+            if ((idx = schan_find_sec_buffer_idx(pInput, 0, SECBUFFER_TOKEN)) == -1) return SEC_E_INCOMPLETE_MESSAGE;
 
-            if (buffer->cbBuffer < expected_size + record_size) break;
-            expected_size += record_size;
-            ptr += record_size;
+            buffer = &pInput->pBuffers[idx];
+            ptr = buffer->pvBuffer;
+
+            while (buffer->cbBuffer > expected_size + ctx->header_size)
+            {
+                record_size = ctx->header_size + read_record_size(ptr, ctx->header_size);
+
+                if (buffer->cbBuffer < expected_size + record_size) break;
+                expected_size += record_size;
+                ptr += record_size;
+            }
+
+            if (!expected_size)
+            {
+                TRACE("Expected at least %Iu bytes, but buffer only contains %lu bytes.\n",
+                      max(ctx->header_size + 1, record_size), buffer->cbBuffer);
+                return SEC_E_INCOMPLETE_MESSAGE;
+            }
+
+            TRACE("Using expected_size %Iu.\n", expected_size);
         }
 
-        if (!expected_size)
-        {
-            TRACE("Expected at least %lu bytes, but buffer only contains %u bytes.\n",
-                  max(ctx->header_size + 1, record_size), buffer->cbBuffer);
-            return SEC_E_INCOMPLETE_MESSAGE;
-        }
-
-        TRACE("Using expected_size %lu.\n", expected_size);
+        if (phNewContext) *phNewContext = *phContext;
     }
 
     ctx->req_ctx_attr = fContextReq;
@@ -876,6 +897,12 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextW(
         pInput->pBuffers[1].cbBuffer = pInput->pBuffers[0].cbBuffer-ctx->transport.in.offset;
     }
 
+    for (i = 0; i < pOutput->cBuffers; i++)
+    {
+        SecBuffer *buffer = &pOutput->pBuffers[i];
+        if (buffer->BufferType == SECBUFFER_ALERT) buffer->cbBuffer = 0;
+    }
+
     *pfContextAttr = ISC_RET_REPLAY_DETECT | ISC_RET_SEQUENCE_DETECT | ISC_RET_CONFIDENTIALITY | ISC_RET_STREAM;
     if (ctx->req_ctx_attr & ISC_REQ_EXTENDED_ERROR) *pfContextAttr |= ISC_RET_EXTENDED_ERROR;
     if (ctx->req_ctx_attr & ISC_REQ_DATAGRAM) *pfContextAttr |= ISC_RET_DATAGRAM;
@@ -898,7 +925,7 @@ static SECURITY_STATUS SEC_ENTRY schan_InitializeSecurityContextA(
     SECURITY_STATUS ret;
     SEC_WCHAR *target_name = NULL;
 
-    TRACE("%p %p %s %d %d %d %p %d %p %p %p %p\n", phCredential, phContext,
+    TRACE("%p %p %s %ld %ld %ld %p %ld %p %p %p %p\n", phCredential, phContext,
      debugstr_a(pszTargetName), fContextReq, Reserved1, TargetDataRep, pInput,
      Reserved1, phNewContext, pOutput, pfContextAttr, ptsExpiry);
 
@@ -993,7 +1020,7 @@ static SECURITY_STATUS SEC_ENTRY schan_QueryContextAttributesW(
     struct schan_context *ctx;
     SECURITY_STATUS status;
 
-    TRACE("context_handle %p, attribute %#x, buffer %p\n",
+    TRACE("context_handle %p, attribute %#lx, buffer %p\n",
             context_handle, attribute, buffer);
 
     if (!context_handle) return SEC_E_INVALID_HANDLE;
@@ -1014,7 +1041,7 @@ static SECURITY_STATUS SEC_ENTRY schan_QueryContextAttributesW(
                 unsigned int block_size = GNUTLS_CALL( get_session_cipher_block_size, &params );
                 unsigned int message_size = GNUTLS_CALL( get_max_message_size, &params );
 
-                TRACE("Using header size %lu mac bytes %lu, message size %u, block size %u\n",
+                TRACE("Using header size %Iu mac bytes %Iu, message size %u, block size %u\n",
                       ctx->header_size, mac_size, message_size, block_size);
 
                 /* These are defined by the TLS RFC */
@@ -1136,7 +1163,7 @@ static SECURITY_STATUS SEC_ENTRY schan_QueryContextAttributesW(
         }
 
         default:
-            FIXME("Unhandled attribute %#x\n", attribute);
+            FIXME("Unhandled attribute %#lx\n", attribute);
             return SEC_E_UNSUPPORTED_FUNCTION;
     }
 }
@@ -1144,7 +1171,7 @@ static SECURITY_STATUS SEC_ENTRY schan_QueryContextAttributesW(
 static SECURITY_STATUS SEC_ENTRY schan_QueryContextAttributesA(
         PCtxtHandle context_handle, ULONG attribute, PVOID buffer)
 {
-    TRACE("context_handle %p, attribute %#x, buffer %p\n",
+    TRACE("context_handle %p, attribute %#lx, buffer %p\n",
             context_handle, attribute, buffer);
 
     switch(attribute)
@@ -1174,7 +1201,7 @@ static SECURITY_STATUS SEC_ENTRY schan_QueryContextAttributesA(
             return schan_QueryContextAttributesW(context_handle, attribute, buffer);
 
         default:
-            FIXME("Unhandled attribute %#x\n", attribute);
+            FIXME("Unhandled attribute %#lx\n", attribute);
             return SEC_E_UNSUPPORTED_FUNCTION;
     }
 }
@@ -1191,7 +1218,7 @@ static SECURITY_STATUS SEC_ENTRY schan_EncryptMessage(PCtxtHandle context_handle
     char *data;
     int idx;
 
-    TRACE("context_handle %p, quality %d, message %p, message_seq_no %d\n",
+    TRACE("context_handle %p, quality %ld, message %p, message_seq_no %ld\n",
             context_handle, quality, message, message_seq_no);
 
     if (!context_handle) return SEC_E_INVALID_HANDLE;
@@ -1218,14 +1245,14 @@ static SECURITY_STATUS SEC_ENTRY schan_EncryptMessage(PCtxtHandle context_handle
     params.length = &length;
     status = GNUTLS_CALL( send, &params );
 
-    TRACE("Sent %ld bytes.\n", length);
+    TRACE("Sent %Id bytes.\n", length);
 
     if (length != data_size)
         status = SEC_E_INTERNAL_ERROR;
 
     free(data);
 
-    TRACE("Returning %#x.\n", status);
+    TRACE("Returning %#lx.\n", status);
 
     return status;
 }
@@ -1300,7 +1327,7 @@ static SECURITY_STATUS SEC_ENTRY schan_DecryptMessage(PCtxtHandle context_handle
     int idx;
     unsigned char *buf_ptr;
 
-    TRACE("context_handle %p, message %p, message_seq_no %d, quality %p\n",
+    TRACE("context_handle %p, message %p, message_seq_no %ld, quality %p\n",
             context_handle, message, message_seq_no, quality);
 
     if (!context_handle) return SEC_E_INVALID_HANDLE;
@@ -1317,7 +1344,7 @@ static SECURITY_STATUS SEC_ENTRY schan_DecryptMessage(PCtxtHandle context_handle
     expected_size = ctx->header_size + read_record_size(buf_ptr, ctx->header_size);
     if(buffer->cbBuffer < expected_size)
     {
-        TRACE("Expected %u bytes, but buffer only contains %u bytes\n", expected_size, buffer->cbBuffer);
+        TRACE("Expected %u bytes, but buffer only contains %lu bytes\n", expected_size, buffer->cbBuffer);
         buffer->BufferType = SECBUFFER_MISSING;
         buffer->cbBuffer = expected_size - buffer->cbBuffer;
 
@@ -1346,11 +1373,11 @@ static SECURITY_STATUS SEC_ENTRY schan_DecryptMessage(PCtxtHandle context_handle
     if (status != SEC_E_OK && status != SEC_I_RENEGOTIATE)
     {
         free(data);
-        ERR("Returning %x\n", status);
+        ERR("Returning %lx\n", status);
         return status;
     }
 
-    TRACE("Received %ld bytes\n", received);
+    TRACE("Received %Id bytes\n", received);
 
     memcpy(buf_ptr + ctx->header_size, data, received);
     free(data);

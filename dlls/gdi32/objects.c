@@ -152,7 +152,7 @@ DWORD WINAPI GetObjectType( HGDIOBJ handle )
 {
     DWORD type = get_object_type( handle );
 
-    TRACE( "%p -> %u\n", handle, type );
+    TRACE( "%p -> %lu\n", handle, type );
 
     switch (type)
     {
@@ -415,23 +415,6 @@ HGDIOBJ WINAPI GetCurrentObject( HDC hdc, UINT type )
     return NtGdiGetDCObject( hdc, obj_type );
 }
 
-/******************************************************************************
- *              get_system_dpi
- *
- * Get the system DPI, based on the DPI awareness mode.
- */
-static DWORD get_system_dpi(void)
-{
-    static UINT (WINAPI *pGetDpiForSystem)(void);
-
-    if (!pGetDpiForSystem)
-    {
-        HMODULE user = GetModuleHandleW( L"user32.dll" );
-        if (user) pGetDpiForSystem = (void *)GetProcAddress( user, "GetDpiForSystem" );
-    }
-    return pGetDpiForSystem ? pGetDpiForSystem() : 96;
-}
-
 /***********************************************************************
  *           GetStockObject    (GDI32.@)
  */
@@ -443,16 +426,16 @@ HGDIOBJ WINAPI GetStockObject( INT obj )
     switch (obj)
     {
     case OEM_FIXED_FONT:
-        if (get_system_dpi() != 96) obj = 9;
+        if (GetDpiForSystem() != 96) obj = 9;
         break;
     case SYSTEM_FONT:
-        if (get_system_dpi() != 96) obj = STOCK_LAST + 2;
+        if (GetDpiForSystem() != 96) obj = STOCK_LAST + 2;
         break;
     case SYSTEM_FIXED_FONT:
-        if (get_system_dpi() != 96) obj = STOCK_LAST + 3;
+        if (GetDpiForSystem() != 96) obj = STOCK_LAST + 3;
         break;
     case DEFAULT_GUI_FONT:
-        if (get_system_dpi() != 96) obj = STOCK_LAST + 4;
+        if (GetDpiForSystem() != 96) obj = STOCK_LAST + 4;
         break;
     }
 
@@ -674,7 +657,7 @@ HRGN WINAPI ExtCreateRegion( const XFORM *xform, DWORD count, const RGNDATA *dat
  */
 HRGN WINAPI CreatePolyPolygonRgn( const POINT *points, const INT *counts, INT count, INT mode )
 {
-    ULONG ret = NtGdiPolyPolyDraw( ULongToHandle(mode), points, (const UINT *)counts,
+    ULONG ret = NtGdiPolyPolyDraw( ULongToHandle(mode), points, (const ULONG *)counts,
                                    count, NtGdiPolyPolygonRgn );
     return ULongToHandle( ret );
 }
@@ -712,7 +695,7 @@ HRGN WINAPI CreatePolygonRgn( const POINT *points, INT count, INT mode )
  */
 BOOL WINAPI MirrorRgn( HWND hwnd, HRGN hrgn )
 {
-    return NtUserCallTwoParam( HandleToUlong(hwnd), HandleToUlong(hrgn), NtUserMirrorRgn );
+    return NtUserMirrorRgn( hwnd, hrgn );
 }
 
 /***********************************************************************
@@ -1044,7 +1027,7 @@ INT WINAPI EnumObjects( HDC hdc, INT type, GOBJENUMPROC enum_func, LPARAM param 
     LOGPEN pen;
     LOGBRUSH brush;
 
-    TRACE( "%p %d %p %08lx\n", hdc, type, enum_func, param );
+    TRACE( "%p %d %p %08Ix\n", hdc, type, enum_func, param );
 
     switch(type)
     {
@@ -1057,7 +1040,7 @@ INT WINAPI EnumObjects( HDC hdc, INT type, GOBJENUMPROC enum_func, LPARAM param 
             pen.lopnWidth.y = 0;
             pen.lopnColor   = solid_colors[i];
             retval = enum_func( &pen, param );
-            TRACE( "solid pen %08x, ret=%d\n", solid_colors[i], retval );
+            TRACE( "solid pen %08lx, ret=%d\n", solid_colors[i], retval );
             if (!retval) break;
         }
         break;
@@ -1070,7 +1053,7 @@ INT WINAPI EnumObjects( HDC hdc, INT type, GOBJENUMPROC enum_func, LPARAM param 
             brush.lbColor = solid_colors[i];
             brush.lbHatch = 0;
             retval = enum_func( &brush, param );
-            TRACE( "solid brush %08x, ret=%d\n", solid_colors[i], retval );
+            TRACE( "solid brush %08lx, ret=%d\n", solid_colors[i], retval );
             if (!retval) break;
         }
 
@@ -1130,7 +1113,7 @@ BOOL WINAPI LineDDA( INT x_start, INT y_start, INT x_end, INT y_end,
     INT dx = x_end - x_start;
     INT dy = y_end - y_start;
 
-    TRACE( "(%d, %d), (%d, %d), %p, %lx\n", x_start, y_start,
+    TRACE( "(%d, %d), (%d, %d), %p, %Ix\n", x_start, y_start,
            x_end, y_end, callback, lparam );
 
     if (dx < 0)

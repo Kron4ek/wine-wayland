@@ -28,6 +28,7 @@
 #endif
 
 #include "win32u_private.h"
+#include "ntuser_private.h"
 #include "wine/server.h"
 #include "wine/debug.h"
 
@@ -73,6 +74,31 @@ static const char *debugstr_format( UINT id )
 #undef BUILTIN
     default: return wine_dbg_sprintf( "%04x", id );
     }
+}
+
+/**************************************************************************
+ *           NtUserCloseClipboard    (win32u.@)
+ */
+BOOL WINAPI NtUserCloseClipboard(void)
+{
+    HWND viewer = 0, owner = 0;
+    BOOL ret;
+
+    TRACE( "\n" );
+
+    SERVER_START_REQ( close_clipboard )
+    {
+        if ((ret = !wine_server_call_err( req )))
+        {
+            viewer = wine_server_ptr_handle( reply->viewer );
+            owner = wine_server_ptr_handle( reply->owner );
+        }
+    }
+    SERVER_END_REQ;
+
+    if (viewer) NtUserMessageCall( viewer, WM_DRAWCLIPBOARD, (WPARAM)owner, 0,
+                                   0, NtUserSendNotifyMessage, FALSE );
+    return ret;
 }
 
 /**************************************************************************
@@ -168,7 +194,7 @@ INT WINAPI NtUserGetPriorityClipboardFormat( UINT *list, INT count )
  */
 INT WINAPI NtUserGetClipboardFormatName( UINT format, WCHAR *buffer, INT maxlen )
 {
-    char buf[sizeof(ATOM_BASIC_INFORMATION) + 255 * sizeof(WCHAR)];
+    char buf[sizeof(ATOM_BASIC_INFORMATION) + MAX_ATOM_LEN * sizeof(WCHAR)];
     ATOM_BASIC_INFORMATION *abi = (ATOM_BASIC_INFORMATION *)buf;
     UINT length = 0;
 
@@ -206,6 +232,32 @@ HWND WINAPI NtUserGetClipboardOwner(void)
 }
 
 /**************************************************************************
+ *           NtUserSetClipboardViewer    (win32u.@)
+ */
+HWND WINAPI NtUserSetClipboardViewer( HWND hwnd )
+{
+    HWND prev = 0, owner = 0;
+
+    SERVER_START_REQ( set_clipboard_viewer )
+    {
+        req->viewer = wine_server_user_handle( hwnd );
+        if (!wine_server_call_err( req ))
+        {
+            prev = wine_server_ptr_handle( reply->old_viewer );
+            owner = wine_server_ptr_handle( reply->owner );
+        }
+    }
+    SERVER_END_REQ;
+
+    if (hwnd)
+        NtUserMessageCall( hwnd, WM_DRAWCLIPBOARD, (WPARAM)owner, 0,
+                           NULL, NtUserSendNotifyMessage, FALSE );
+
+    TRACE( "%p returning %p\n", hwnd, prev );
+    return prev;
+}
+
+/**************************************************************************
  *           NtUserGetClipboardViewer    (win32u.@)
  */
 HWND WINAPI NtUserGetClipboardViewer(void)
@@ -220,6 +272,32 @@ HWND WINAPI NtUserGetClipboardViewer(void)
 
     TRACE( "returning %p\n", viewer );
     return viewer;
+}
+
+/**************************************************************************
+ *           NtUserChangeClipboardChain    (win32u.@)
+ */
+BOOL WINAPI NtUserChangeClipboardChain( HWND hwnd, HWND next )
+{
+    NTSTATUS status;
+    HWND viewer;
+
+    if (!hwnd) return FALSE;
+
+    SERVER_START_REQ( set_clipboard_viewer )
+    {
+        req->viewer = wine_server_user_handle( next );
+        req->previous = wine_server_user_handle( hwnd );
+        status = wine_server_call( req );
+        viewer = wine_server_ptr_handle( reply->old_viewer );
+    }
+    SERVER_END_REQ;
+
+    if (status == STATUS_PENDING)
+        return !send_message( viewer, WM_CHANGECBCHAIN, (WPARAM)hwnd, (LPARAM)next );
+
+    if (status) SetLastError( RtlNtStatusToDosError( status ));
+    return !status;
 }
 
 /**************************************************************************
@@ -256,6 +334,26 @@ DWORD WINAPI NtUserGetClipboardSequenceNumber(void)
     return seqno;
 }
 
+/* see EnumClipboardFormats */
+UINT enum_clipboard_formats( UINT format )
+{
+    UINT ret = 0;
+
+    SERVER_START_REQ( enum_clipboard_formats )
+    {
+        req->previous = format;
+        if (!wine_server_call_err( req ))
+        {
+            ret = reply->format;
+            SetLastError( ERROR_SUCCESS );
+        }
+    }
+    SERVER_END_REQ;
+
+    TRACE( "%s -> %s\n", debugstr_format( format ), debugstr_format( ret ));
+    return ret;
+}
+
 /**************************************************************************
  *	     NtUserAddClipboardFormatListener    (win32u.@)
  */
@@ -286,4 +384,29 @@ BOOL WINAPI NtUserRemoveClipboardFormatListener( HWND hwnd )
     }
     SERVER_END_REQ;
     return ret;
+}
+
+/**************************************************************************
+ *           release_clipboard_owner
+ */
+void release_clipboard_owner( HWND hwnd )
+{
+    HWND viewer = 0, owner = 0;
+
+    send_message( hwnd, WM_RENDERALLFORMATS, 0, 0 );
+
+    SERVER_START_REQ( release_clipboard )
+    {
+        req->owner = wine_server_user_handle( hwnd );
+        if (!wine_server_call( req ))
+        {
+            viewer = wine_server_ptr_handle( reply->viewer );
+            owner = wine_server_ptr_handle( reply->owner );
+        }
+    }
+    SERVER_END_REQ;
+
+    if (viewer)
+        NtUserMessageCall( viewer, WM_DRAWCLIPBOARD, (WPARAM)owner, 0,
+                           0, NtUserSendNotifyMessage, FALSE );
 }

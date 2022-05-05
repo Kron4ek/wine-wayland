@@ -34,8 +34,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(msvcrt);
 typedef exception cexception;
 CREATE_EXCEPTION_OBJECT(cexception)
 
-static int context_id = -1;
-static int scheduler_id = -1;
+static LONG context_id = -1;
+static LONG scheduler_id = -1;
 
 typedef enum {
     SchedulerKind,
@@ -169,7 +169,7 @@ typedef struct cs_queue
 {
     struct cs_queue *next;
 #if _MSVCR_VER >= 110
-    BOOL free;
+    LONG free;
     int unknown;
 #endif
 } cs_queue;
@@ -249,7 +249,7 @@ typedef struct thread_wait_entry
 typedef struct thread_wait
 {
     void *signaled;
-    int pending_waits;
+    LONG pending_waits;
     thread_wait_entry entries[1];
 } thread_wait;
 
@@ -261,9 +261,10 @@ typedef struct
 } event;
 
 #if _MSVCR_VER >= 110
+#define CV_WAKE (void*)1
 typedef struct cv_queue {
     struct cv_queue *next;
-    BOOL expired;
+    LONG expired;
 } cv_queue;
 
 typedef struct {
@@ -345,7 +346,7 @@ enum ConcRT_EventType
     CONCRT_EVENT_DETACH
 };
 
-static int context_tls_index = TLS_OUT_OF_INDEXES;
+static DWORD context_tls_index = TLS_OUT_OF_INDEXES;
 
 static CRITICAL_SECTION default_scheduler_cs;
 static CRITICAL_SECTION_DEBUG default_scheduler_cs_debug =
@@ -527,7 +528,7 @@ DEFINE_THISCALL_WRAPPER(scheduler_resource_allocation_error_ctor_name, 12)
 scheduler_resource_allocation_error* __thiscall scheduler_resource_allocation_error_ctor_name(
         scheduler_resource_allocation_error *this, const char *name, HRESULT hr)
 {
-    TRACE("(%p %s %x)\n", this, wine_dbgstr_a(name), hr);
+    TRACE("(%p %s %lx)\n", this, wine_dbgstr_a(name), hr);
     __exception_ctor(&this->e, name, &scheduler_resource_allocation_error_vtable);
     this->hr = hr;
     return this;
@@ -620,21 +621,23 @@ static Context* try_get_current_context(void)
     return TlsGetValue(context_tls_index);
 }
 
+static BOOL WINAPI init_context_tls_index(INIT_ONCE *once, void *param, void **context)
+{
+    context_tls_index = TlsAlloc();
+    return context_tls_index != TLS_OUT_OF_INDEXES;
+}
+
 static Context* get_current_context(void)
 {
+    static INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
     Context *ret;
 
-    if (context_tls_index == TLS_OUT_OF_INDEXES) {
-        int tls_index = TlsAlloc();
-        if (tls_index == TLS_OUT_OF_INDEXES) {
-            scheduler_resource_allocation_error e;
-            scheduler_resource_allocation_error_ctor_name(&e, NULL,
-                    HRESULT_FROM_WIN32(GetLastError()));
-            _CxxThrowException(&e, &scheduler_resource_allocation_error_exception_type);
-        }
-
-        if(InterlockedCompareExchange(&context_tls_index, tls_index, TLS_OUT_OF_INDEXES) != TLS_OUT_OF_INDEXES)
-            TlsFree(tls_index);
+    if(!InitOnceExecuteOnce(&init_once, init_context_tls_index, NULL, NULL))
+    {
+        scheduler_resource_allocation_error e;
+        scheduler_resource_allocation_error_ctor_name(&e, NULL,
+                HRESULT_FROM_WIN32(GetLastError()));
+        _CxxThrowException(&e, &scheduler_resource_allocation_error_exception_type);
     }
 
     ret = TlsGetValue(context_tls_index);
@@ -1099,7 +1102,7 @@ static void ThreadScheduler_dtor(ThreadScheduler *this)
 {
     int i;
 
-    if(this->ref != 0) WARN("ref = %d\n", this->ref);
+    if(this->ref != 0) WARN("ref = %ld\n", this->ref);
     SchedulerPolicy_dtor(&this->policy);
 
     for(i=0; i<this->shutdown_count; i++)
@@ -1217,11 +1220,45 @@ DEFINE_THISCALL_WRAPPER(ThreadScheduler_CreateScheduleGroup, 4)
     return NULL;
 }
 
+typedef struct
+{
+    void (__cdecl *proc)(void*);
+    void *data;
+} schedule_task_arg;
+
+static void WINAPI schedule_task_proc(PTP_CALLBACK_INSTANCE instance, void *context, PTP_WORK work)
+{
+    schedule_task_arg arg;
+
+    arg = *(schedule_task_arg*)context;
+    operator_delete(context);
+    arg.proc(arg.data);
+}
+
 DEFINE_THISCALL_WRAPPER(ThreadScheduler_ScheduleTask_loc, 16)
 void __thiscall ThreadScheduler_ScheduleTask_loc(ThreadScheduler *this,
         void (__cdecl *proc)(void*), void* data, /*location*/void *placement)
 {
+    schedule_task_arg *arg;
+    TP_WORK *work;
+
     FIXME("(%p %p %p %p) stub\n", this, proc, data, placement);
+
+    arg = operator_new(sizeof(*arg));
+    arg->proc = proc;
+    arg->data = data;
+
+    work = CreateThreadpoolWork(schedule_task_proc, arg, NULL);
+    if(!work) {
+        scheduler_resource_allocation_error e;
+
+        operator_delete(arg);
+        scheduler_resource_allocation_error_ctor_name(&e, NULL,
+                HRESULT_FROM_WIN32(GetLastError()));
+        _CxxThrowException(&e, &scheduler_resource_allocation_error_exception_type);
+    }
+    SubmitThreadpoolWork(work);
+    CloseThreadpoolWork(work);
 }
 
 DEFINE_THISCALL_WRAPPER(ThreadScheduler_ScheduleTask, 12)
@@ -1229,6 +1266,7 @@ void __thiscall ThreadScheduler_ScheduleTask(ThreadScheduler *this,
         void (__cdecl *proc)(void*), void* data)
 {
     FIXME("(%p %p %p) stub\n", this, proc, data);
+    ThreadScheduler_ScheduleTask_loc(this, proc, data, NULL);
 }
 
 DEFINE_THISCALL_WRAPPER(ThreadScheduler_IsAvailableLocation, 8)
@@ -2297,18 +2335,20 @@ void __thiscall _Condition_variable_dtor(_Condition_variable *this)
 DEFINE_THISCALL_WRAPPER(_Condition_variable_wait, 8)
 void __thiscall _Condition_variable_wait(_Condition_variable *this, critical_section *cs)
 {
-    cv_queue q;
+    cv_queue q, *next;
 
     TRACE("(%p, %p)\n", this, cs);
 
     critical_section_lock(&this->lock);
     q.next = this->queue;
     q.expired = FALSE;
+    next = q.next;
     this->queue = &q;
     critical_section_unlock(&this->lock);
 
     critical_section_unlock(cs);
-    NtWaitForKeyedEvent(keyed_event, &q, 0, NULL);
+    while (q.next != CV_WAKE)
+        RtlWaitOnAddress(&q.next, &next, sizeof(next), NULL);
     critical_section_lock(cs);
 }
 
@@ -2321,7 +2361,7 @@ bool __thiscall _Condition_variable_wait_for(_Condition_variable *this,
     LARGE_INTEGER to;
     NTSTATUS status;
     FILETIME ft;
-    cv_queue *q;
+    cv_queue *q, *next;
 
     TRACE("(%p %p %d)\n", this, cs, timeout);
 
@@ -2329,6 +2369,7 @@ bool __thiscall _Condition_variable_wait_for(_Condition_variable *this,
     critical_section_lock(&this->lock);
     q->next = this->queue;
     q->expired = FALSE;
+    next = q->next;
     this->queue = q;
     critical_section_unlock(&this->lock);
 
@@ -2337,14 +2378,15 @@ bool __thiscall _Condition_variable_wait_for(_Condition_variable *this,
     GetSystemTimeAsFileTime(&ft);
     to.QuadPart = ((LONGLONG)ft.dwHighDateTime << 32) +
         ft.dwLowDateTime + (LONGLONG)timeout * 10000;
-    status = NtWaitForKeyedEvent(keyed_event, q, 0, &to);
-    if(status == STATUS_TIMEOUT) {
-        if(!InterlockedExchange(&q->expired, TRUE)) {
-            critical_section_lock(cs);
-            return FALSE;
+    while (q->next != CV_WAKE) {
+        status = RtlWaitOnAddress(&q->next, &next, sizeof(next), &to);
+        if(status == STATUS_TIMEOUT) {
+            if(!InterlockedExchange(&q->expired, TRUE)) {
+                critical_section_lock(cs);
+                return FALSE;
+            }
+            break;
         }
-        else
-            NtWaitForKeyedEvent(keyed_event, q, 0, 0);
     }
 
     operator_delete(q);
@@ -2374,8 +2416,9 @@ void __thiscall _Condition_variable_notify_one(_Condition_variable *this)
         this->queue = node->next;
         critical_section_unlock(&this->lock);
 
+        node->next = CV_WAKE;
         if(!InterlockedExchange(&node->expired, TRUE)) {
-            NtReleaseKeyedEvent(keyed_event, node, 0, NULL);
+            RtlWakeAddressSingle(&node->next);
             return;
         } else {
             HeapFree(GetProcessHeap(), 0, node);
@@ -2403,8 +2446,9 @@ void __thiscall _Condition_variable_notify_all(_Condition_variable *this)
     while(ptr) {
         cv_queue *next = ptr->next;
 
+        ptr->next = CV_WAKE;
         if(!InterlockedExchange(&ptr->expired, TRUE))
-            NtReleaseKeyedEvent(keyed_event, ptr, 0, NULL);
+            RtlWakeAddressSingle(&ptr->next);
         else
             HeapFree(GetProcessHeap(), 0, ptr);
         ptr = next;
@@ -2729,7 +2773,7 @@ void __cdecl Concurrency_wait(unsigned int time)
 /* ?_Trace_agents@Concurrency@@YAXW4Agents_EventType@1@_JZZ */
 void WINAPIV _Trace_agents(/*enum Concurrency::Agents_EventType*/int type, __int64 id, ...)
 {
-    FIXME("(%d %s)\n", type, wine_dbgstr_longlong(id));
+    FIXME("(%d %#I64x)\n", type, id);
 }
 #endif
 

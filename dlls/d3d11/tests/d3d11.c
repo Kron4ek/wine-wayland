@@ -3788,9 +3788,11 @@ static void test_create_depthstencil_view(void)
         hr = ID3D11Device_CreateTexture2D(device, &texture_desc, NULL, &texture);
         ok(SUCCEEDED(hr), "Test %u: Failed to create 2d texture, hr %#x.\n", i, hr);
 
+        dsview = (void *)0xdeadbeef;
         get_dsv_desc(&dsv_desc, &invalid_desc_tests[i].dsv_desc);
         hr = ID3D11Device_CreateDepthStencilView(device, (ID3D11Resource *)texture, &dsv_desc, &dsview);
         ok(hr == E_INVALIDARG, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(!dsview, "Unexpected pointer %p.\n", dsview);
 
         ID3D11Texture2D_Release(texture);
     }
@@ -4371,16 +4373,20 @@ static void test_create_shader_resource_view(void)
 
     buffer = create_buffer(device, D3D11_BIND_SHADER_RESOURCE, 1024, NULL);
 
+    srview = (void *)0xdeadbeef;
     hr = ID3D11Device_CreateShaderResourceView(device, (ID3D11Resource *)buffer, NULL, &srview);
     ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok(!srview, "Unexpected pointer %p.\n", srview);
 
     srv_desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
     srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
     U1(U(srv_desc).Buffer).ElementOffset = 0;
     U2(U(srv_desc).Buffer).ElementWidth = 64;
 
+    srview = (void *)0xdeadbeef;
     hr = ID3D11Device_CreateShaderResourceView(device, NULL, &srv_desc, &srview);
     ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok(!srview, "Unexpected pointer %p.\n", srview);
 
     expected_refcount = get_refcount(device) + 1;
     hr = ID3D11Device_CreateShaderResourceView(device, (ID3D11Resource *)buffer, &srv_desc, &srview);
@@ -4405,8 +4411,10 @@ static void test_create_shader_resource_view(void)
     /* Without D3D11_BIND_SHADER_RESOURCE. */
     buffer = create_buffer(device, 0, 1024, NULL);
 
+    srview = (void *)0xdeadbeef;
     hr = ID3D11Device_CreateShaderResourceView(device, (ID3D11Resource *)buffer, &srv_desc, &srview);
     ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok(!srview, "Unexpected pointer %p.\n", srview);
 
     ID3D11Buffer_Release(buffer);
 
@@ -4564,9 +4572,11 @@ static void test_create_shader_resource_view(void)
             texture = (ID3D11Resource *)texture3d;
         }
 
+        srview = (void *)0xdeadbeef;
         get_srv_desc(&srv_desc, &invalid_desc_tests[i].srv_desc);
         hr = ID3D11Device_CreateShaderResourceView(device, texture, &srv_desc, &srview);
         ok(hr == E_INVALIDARG, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(!srview, "Unexpected pointer %p.\n", srview);
 
         ID3D11Resource_Release(texture);
     }
@@ -5507,6 +5517,7 @@ static void test_create_rasterizer_state(void)
     D3D10_RASTERIZER_DESC d3d10_desc;
     D3D11_RASTERIZER_DESC desc;
     ID3D11Device *device, *tmp;
+    ID3D11Device1 *device1;
     HRESULT hr;
 
     if (!(device = create_device(NULL)))
@@ -5568,6 +5579,31 @@ static void test_create_rasterizer_state(void)
 
         refcount = ID3D10RasterizerState_Release(d3d10_rast_state);
         ok(refcount == 2, "Got unexpected refcount %u.\n", refcount);
+    }
+
+    if (ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void **)&device1) == S_OK)
+    {
+        ID3D11RasterizerState1 *state_ex1;
+        D3D11_RASTERIZER_DESC1 desc1;
+
+        hr = ID3D11RasterizerState_QueryInterface(rast_state1, &IID_ID3D11RasterizerState1, (void **)&state_ex1);
+        ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+        memset(&desc1, 0xcc, sizeof(desc1));
+        ID3D11RasterizerState1_GetDesc1(state_ex1, &desc1);
+        ok(!memcmp(&desc1, &desc, sizeof(desc)), "D3D11 desc didn't match.\n");
+        ok(!desc1.ForcedSampleCount, "Got forced sample count %u.\n", desc1.ForcedSampleCount);
+
+        ID3D11RasterizerState1_Release(state_ex1);
+
+        memcpy(&desc1, &desc, sizeof(desc));
+        desc1.ForcedSampleCount = 0;
+        hr = ID3D11Device1_CreateRasterizerState1(device1, &desc1, &state_ex1);
+        ok(hr == S_OK, "Got hr %#x.\n", hr);
+
+        ID3D11RasterizerState1_Release(state_ex1);
+
+        ID3D11Device1_Release(device1);
     }
 
     refcount = ID3D11RasterizerState_Release(rast_state2);
@@ -5874,6 +5910,7 @@ static void test_occlusion_query(void)
 
 static void test_pipeline_statistics_query(void)
 {
+    static const D3D11_QUERY_DATA_PIPELINE_STATISTICS zero_data = {0};
     static const struct vec4 red = {1.0f, 0.0f, 0.0f, 1.0f};
     static const float white[] = {1.0f, 1.0f, 1.0f, 1.0f};
 
@@ -5921,18 +5958,29 @@ static void test_pipeline_statistics_query(void)
 
     ID3D11DeviceContext_End(context, query);
     get_query_data(context, query, &data, sizeof(data));
-    ok(data.IAVertices == 4, "Got unexpected IAVertices count: %u.\n", (unsigned int)data.IAVertices);
-    ok(data.IAPrimitives == 2, "Got unexpected IAPrimitives count: %u.\n", (unsigned int)data.IAPrimitives);
-    ok(data.VSInvocations == 4, "Got unexpected VSInvocations count: %u.\n", (unsigned int)data.VSInvocations);
-    ok(!data.GSInvocations, "Got unexpected GSInvocations count: %u.\n", (unsigned int)data.GSInvocations);
-    ok(!data.GSPrimitives, "Got unexpected GSPrimitives count: %u.\n", (unsigned int)data.GSPrimitives);
-    ok(data.CInvocations == 2, "Got unexpected CInvocations count: %u.\n", (unsigned int)data.CInvocations);
-    ok(data.CPrimitives == 2, "Got unexpected CPrimitives count: %u.\n", (unsigned int)data.CPrimitives);
-    todo_wine
-    ok(!data.PSInvocations, "Got unexpected PSInvocations count: %u.\n", (unsigned int)data.PSInvocations);
-    ok(!data.HSInvocations, "Got unexpected HSInvocations count: %u.\n", (unsigned int)data.HSInvocations);
-    ok(!data.DSInvocations, "Got unexpected DSInvocations count: %u.\n", (unsigned int)data.DSInvocations);
-    ok(!data.CSInvocations, "Got unexpected CSInvocations count: %u.\n", (unsigned int)data.CSInvocations);
+
+    /* WARP devices randomly return all-zeroed structures as if the draw did not happen. Flushing and
+     * sleeping a second before ending the query reduces the likelihood of hitting the bug a lot, but
+     * does not eliminate it entirely. To make things work reliably ignore such broken results. */
+    if (is_warp_device(device) && !memcmp(&data, &zero_data, sizeof(data)))
+    {
+        win_skip("WARP device randomly returns zeroed query results.\n");
+    }
+    else
+    {
+        ok(data.IAVertices == 4, "Got unexpected IAVertices count: %u.\n", (unsigned int)data.IAVertices);
+        ok(data.IAPrimitives == 2, "Got unexpected IAPrimitives count: %u.\n", (unsigned int)data.IAPrimitives);
+        ok(data.VSInvocations == 4, "Got unexpected VSInvocations count: %u.\n", (unsigned int)data.VSInvocations);
+        ok(!data.GSInvocations, "Got unexpected GSInvocations count: %u.\n", (unsigned int)data.GSInvocations);
+        ok(!data.GSPrimitives, "Got unexpected GSPrimitives count: %u.\n", (unsigned int)data.GSPrimitives);
+        ok(data.CInvocations == 2, "Got unexpected CInvocations count: %u.\n", (unsigned int)data.CInvocations);
+        ok(data.CPrimitives == 2, "Got unexpected CPrimitives count: %u.\n", (unsigned int)data.CPrimitives);
+        todo_wine
+        ok(!data.PSInvocations, "Got unexpected PSInvocations count: %u.\n", (unsigned int)data.PSInvocations);
+        ok(!data.HSInvocations, "Got unexpected HSInvocations count: %u.\n", (unsigned int)data.HSInvocations);
+        ok(!data.DSInvocations, "Got unexpected DSInvocations count: %u.\n", (unsigned int)data.DSInvocations);
+        ok(!data.CSInvocations, "Got unexpected CSInvocations count: %u.\n", (unsigned int)data.CSInvocations);
+    }
 
     ID3D11DeviceContext_Begin(context, query);
     draw_color_quad(&test_context, &red);
@@ -7396,74 +7444,88 @@ static void test_device_context_state(void)
     refcount = ID3D11VertexShader_Release(tmp_vs);
     ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
 
-    /* context states may be used with other devices instances too */
-    d3d11_device2 = create_device(NULL);
-    ok(!!d3d11_device2, "Failed to create device.\n");
-    hr = ID3D11Device_QueryInterface(d3d11_device2, &IID_ID3D11Device1, (void **)&device2);
-    ok(SUCCEEDED(hr), "Failed to query device interface, hr %#x.\n", hr);
-    ID3D11Device_Release(d3d11_device2);
-    ID3D11Device1_GetImmediateContext1(device2, &context2);
-    ok(!!context2, "Failed to get immediate context.\n");
+    /* context states may be used with other devices instances too
+     *
+     * Or at least, no error is returned right away. Using objects like shaders
+     * from other device instances causes a segfault later on Nvidia Windows
+     * drivers. This suggests the feature tested below is more a bug than a
+     * feature.
+     *
+     * The tests below suggest that a ContextState object stores its own state
+     * for every device it is used with. This isn't entirely true, e.g. the
+     * primitive topology can be transferred between devices, but will cause
+     * odd refcounting behavior afterwards (IAGetPrimitiveTopology will leak 54
+     * references on the context's device for example). */
+    if (0)
+    {
+        d3d11_device2 = create_device(NULL);
+        ok(!!d3d11_device2, "Failed to create device.\n");
+        hr = ID3D11Device_QueryInterface(d3d11_device2, &IID_ID3D11Device1, (void **)&device2);
+        ok(SUCCEEDED(hr), "Failed to query device interface, hr %#x.\n", hr);
+        ID3D11Device_Release(d3d11_device2);
+        ID3D11Device1_GetImmediateContext1(device2, &context2);
+        ok(!!context2, "Failed to get immediate context.\n");
 
-    /* but they track a distinct state on each context */
-    ID3D11DeviceContext1_SwapDeviceContextState(context2, context_state, &tmp_context_state);
-    ok(!!tmp_context_state, "Failed to get context state.\n");
-    tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
-    ID3D11DeviceContext1_VSGetShader(context2, &tmp_vs, NULL, NULL);
-    ok(!tmp_vs, "Got unexpected shader %p.\n", tmp_vs);
+        /* but they track a distinct state on each context */
+        ID3D11DeviceContext1_SwapDeviceContextState(context2, context_state, &tmp_context_state);
+        ok(!!tmp_context_state, "Failed to get context state.\n");
+        tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
+        ID3D11DeviceContext1_VSGetShader(context2, &tmp_vs, NULL, NULL);
+        ok(!tmp_vs, "Got unexpected shader %p.\n", tmp_vs);
 
-    /* updating context2 vertex shader doesn't update other contexts using the same state */
-    ID3D11DeviceContext1_VSSetShader(context2, vs, NULL, 0);
-    ID3D11DeviceContext1_VSGetShader(context, &tmp_vs, NULL, NULL);
-    ok(tmp_vs == vs2, "Got shader %p, expected %p.\n", tmp_vs, vs2);
-    refcount = ID3D11VertexShader_Release(tmp_vs);
-    ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
+        /* updating context2 vertex shader doesn't update other contexts using the same state */
+        ID3D11DeviceContext1_VSSetShader(context2, vs, NULL, 0);
+        ID3D11DeviceContext1_VSGetShader(context, &tmp_vs, NULL, NULL);
+        ok(tmp_vs == vs2, "Got shader %p, expected %p.\n", tmp_vs, vs2);
+        refcount = ID3D11VertexShader_Release(tmp_vs);
+        ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
 
-    ID3D11DeviceContext1_SwapDeviceContextState(context2, tmp_context_state, &context_state2);
-    refcount = ID3DDeviceContextState_Release(tmp_context_state);
-    ok(refcount == 0, "Got refcount %u, expected 1.\n", refcount);
-    refcount = ID3DDeviceContextState_Release(context_state2);
-    ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
-    ok(context_state2 == context_state, "Got unexpected state pointer.\n");
+        ID3D11DeviceContext1_SwapDeviceContextState(context2, tmp_context_state, &context_state2);
+        refcount = ID3DDeviceContextState_Release(tmp_context_state);
+        ok(refcount == 0, "Got refcount %u, expected 1.\n", refcount);
+        refcount = ID3DDeviceContextState_Release(context_state2);
+        ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
+        ok(context_state2 == context_state, "Got unexpected state pointer.\n");
 
-    /* swapping the default state on context2 effectively clears the vertex shader */
-    tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
-    ID3D11DeviceContext1_VSGetShader(context2, &tmp_vs, NULL, NULL);
-    ok(!tmp_vs, "Got unexpected shader %p.\n", tmp_vs);
+        /* swapping the default state on context2 effectively clears the vertex shader */
+        tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
+        ID3D11DeviceContext1_VSGetShader(context2, &tmp_vs, NULL, NULL);
+        ok(!tmp_vs, "Got unexpected shader %p.\n", tmp_vs);
 
-    ID3D11DeviceContext1_SwapDeviceContextState(context2, context_state, &tmp_context_state);
-    ok(!!tmp_context_state, "Failed to get context state.\n");
-    refcount = ID3DDeviceContextState_Release(tmp_context_state);
-    ok(refcount == 0, "Got refcount %u, expected 1.\n", refcount);
+        ID3D11DeviceContext1_SwapDeviceContextState(context2, context_state, &tmp_context_state);
+        ok(!!tmp_context_state, "Failed to get context state.\n");
+        refcount = ID3DDeviceContextState_Release(tmp_context_state);
+        ok(refcount == 0, "Got refcount %u, expected 1.\n", refcount);
 
-    /* clearing the vertex shader on context doesn't have side effect on context2 */
-    ID3D11DeviceContext1_VSSetShader(context, NULL, NULL, 0);
-    refcount = ID3D11VertexShader_Release(vs2);
-    ok(refcount == 0, "Got refcount %u, expected 0.\n", refcount);
-    tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
-    ID3D11DeviceContext1_VSGetShader(context2, &tmp_vs, NULL, NULL);
-    ok(tmp_vs == vs, "Got shader %p, expected %p.\n", tmp_vs, vs);
-    refcount = ID3D11VertexShader_Release(tmp_vs);
-    ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
+        /* clearing the vertex shader on context doesn't have side effect on context2 */
+        ID3D11DeviceContext1_VSSetShader(context, NULL, NULL, 0);
+        refcount = get_refcount(vs2);
+        ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
+        tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
+        ID3D11DeviceContext1_VSGetShader(context2, &tmp_vs, NULL, NULL);
+        ok(tmp_vs == vs, "Got shader %p, expected %p.\n", tmp_vs, vs);
+        refcount = ID3D11VertexShader_Release(tmp_vs);
+        ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
 
-    /* even after swapping it again */
-    ID3D11DeviceContext1_SwapDeviceContextState(context2, context_state, NULL);
-    tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
-    ID3D11DeviceContext1_VSGetShader(context2, &tmp_vs, NULL, NULL);
-    ok(tmp_vs == vs, "Got shader %p, expected %p.\n", tmp_vs, vs);
-    refcount = ID3D11VertexShader_Release(tmp_vs);
-    ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
+        /* even after swapping it again */
+        ID3D11DeviceContext1_SwapDeviceContextState(context2, context_state, NULL);
+        tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
+        ID3D11DeviceContext1_VSGetShader(context2, &tmp_vs, NULL, NULL);
+        ok(tmp_vs == vs, "Got shader %p, expected %p.\n", tmp_vs, vs);
+        refcount = ID3D11VertexShader_Release(tmp_vs);
+        ok(refcount == 1, "Got refcount %u, expected 1.\n", refcount);
 
-    /* swapping the initial state on context2 doesn't have side effect on context either */
-    ID3D11DeviceContext1_SwapDeviceContextState(context2, previous_context_state, NULL);
-    tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
-    ID3D11DeviceContext1_VSGetShader(context, &tmp_vs, NULL, NULL);
-    ok(!tmp_vs, "Got unexpected shader %p.\n", tmp_vs);
+        /* swapping the initial state on context2 doesn't have side effect on context either */
+        ID3D11DeviceContext1_SwapDeviceContextState(context2, previous_context_state, NULL);
+        tmp_vs = (ID3D11VertexShader *)0xdeadbeef;
+        ID3D11DeviceContext1_VSGetShader(context, &tmp_vs, NULL, NULL);
+        ok(!tmp_vs, "Got unexpected shader %p.\n", tmp_vs);
 
-    refcount = ID3D11DeviceContext1_Release(context2);
-    ok(refcount == 0, "Got refcount %u, expected 0.\n", refcount);
-    refcount = ID3D11Device1_Release(device2);
-    ok(refcount == 0, "Got refcount %u, expected 0.\n", refcount);
+        refcount = ID3D11DeviceContext1_Release(context2);
+        ok(refcount == 0, "Got refcount %u, expected 0.\n", refcount);
+        refcount = ID3D11Device1_Release(device2);
+        ok(refcount == 0, "Got refcount %u, expected 0.\n", refcount);
+    }
 
     ID3D11DeviceContext1_SwapDeviceContextState(context, previous_context_state, &tmp_context_state);
     refcount = ID3DDeviceContextState_Release(previous_context_state);
@@ -8132,6 +8194,7 @@ static void test_device_context_state(void)
     if (hs) ID3D11HullShader_Release(hs);
     ID3D11PixelShader_Release(ps);
     ID3D11GeometryShader_Release(gs);
+    ID3D11VertexShader_Release(vs2);
     ID3D11VertexShader_Release(vs);
     ID3D11Buffer_Release(cb);
     ID3D11ShaderResourceView_Release(srv);
@@ -16237,10 +16300,8 @@ static void test_clear_buffer_unordered_access_view(void)
     buffer_desc.Usage = D3D11_USAGE_DEFAULT;
     buffer_desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
     buffer_desc.CPUAccessFlags = 0;
-    buffer_desc.MiscFlags = 0;
-    buffer_desc.StructureByteStride = 0;
     buffer_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    buffer_desc.StructureByteStride = 4;
+    buffer_desc.StructureByteStride = 8;
     hr = ID3D11Device_CreateBuffer(device, &buffer_desc, NULL, &buffer);
     ok(hr == S_OK, "Failed to create a buffer, hr %#x.\n", hr);
 
@@ -16266,9 +16327,10 @@ static void test_clear_buffer_unordered_access_view(void)
 
         ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
         get_buffer_readback(buffer, &rb);
-        SetRect(&rect, 0, 0, U(uav_desc).Buffer.NumElements, 1);
+        SetRect(&rect, 0, 0, U(uav_desc).Buffer.NumElements * buffer_desc.StructureByteStride / sizeof(uvec4.x), 1);
         check_readback_data_color(&rb, &rect, fe_uvec4.x, 0);
-        SetRect(&rect, U(uav_desc).Buffer.NumElements, 0, buffer_desc.ByteWidth / sizeof(uvec4.x), 1);
+        rect.left = rect.right;
+        rect.right = buffer_desc.ByteWidth / sizeof(uvec4.x);
         check_readback_data_color(&rb, &rect, uvec4.x, 0);
         release_resource_readback(&rb);
     }
@@ -19373,8 +19435,10 @@ static void test_create_unordered_access_view(void)
     U(uav_desc).Buffer.NumElements = 64;
     U(uav_desc).Buffer.Flags = 0;
 
+    uav = (void *)0xdeadbeef;
     hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, NULL, &uav);
     ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok(!uav, "Unexpected pointer %p.\n", uav);
 
     expected_refcount = get_refcount(device) + 1;
     hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav);
@@ -19423,8 +19487,10 @@ static void test_create_unordered_access_view(void)
     U(uav_desc).Buffer.NumElements = 64;
     U(uav_desc).Buffer.Flags = 0;
 
+    uav = (void *)0xdeadbeef;
     hr = ID3D11Device_CreateUnorderedAccessView(device, (ID3D11Resource *)buffer, &uav_desc, &uav);
     ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
+    ok(!uav, "Unexpected pointer %p.\n", uav);
 
     ID3D11Buffer_Release(buffer);
 
@@ -19519,9 +19585,11 @@ static void test_create_unordered_access_view(void)
             texture = (ID3D11Resource *)texture3d;
         }
 
+        uav = (void *)0xdeadbeef;
         get_uav_desc(&uav_desc, &invalid_desc_tests[i].uav_desc);
         hr = ID3D11Device_CreateUnorderedAccessView(device, texture, &uav_desc, &uav);
         ok(hr == E_INVALIDARG, "Test %u: Got unexpected hr %#x.\n", i, hr);
+        ok(!uav, "Unexpected pointer %p.\n", uav);
 
         ID3D11Resource_Release(texture);
     }
@@ -20592,8 +20660,9 @@ static void check_format_support(const unsigned int *format_support, D3D_FEATURE
 
         if (formats[i].fl_required <= feature_level)
         {
-            todo_wine ok(supported, "Format %#x - %s not supported, feature_level %#x, format support %#x.\n",
-                    format, feature_name, feature_level, format_support[format]);
+            todo_wine_if (feature_flag == D3D11_FORMAT_SUPPORT_DISPLAY)
+                ok(supported, "Format %#x - %s not supported, feature_level %#x, format support %#x.\n",
+                        format, feature_name, feature_level, format_support[format]);
             continue;
         }
 
@@ -20605,8 +20674,9 @@ static void check_format_support(const unsigned int *format_support, D3D_FEATURE
             continue;
         }
 
-        ok(!supported, "Format %#x - %s supported, feature level %#x, format support %#x.\n",
-                format, feature_name, feature_level, format_support[format]);
+        todo_wine_if (feature_flag != D3D11_FORMAT_SUPPORT_DISPLAY)
+            ok(!supported, "Format %#x - %s supported, feature level %#x, format support %#x.\n",
+                    format, feature_name, feature_level, format_support[format]);
     }
 }
 
@@ -33939,12 +34009,57 @@ static void test_dynamic_map_synchronization(void)
     release_test_context(&test_context);
 }
 
+static void test_user_defined_annotation(void)
+{
+    struct d3d11_test_context test_context;
+    ID3DUserDefinedAnnotation *annotation;
+    ID3D11DeviceContext *context;
+    HRESULT hr;
+    int ret;
+
+    if (!init_test_context(&test_context, NULL))
+        return;
+
+    hr = ID3D11DeviceContext_QueryInterface(test_context.immediate_context,
+            &IID_ID3DUserDefinedAnnotation, (void **)&annotation);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ret = ID3DUserDefinedAnnotation_BeginEvent(annotation, L"Event 1");
+    ok(ret == -1, "Got unexpected ret %d.\n", ret);
+    ret = ID3DUserDefinedAnnotation_EndEvent(annotation);
+    ok(ret == -1, "Got unexpected ret %d.\n", ret);
+    ID3DUserDefinedAnnotation_SetMarker(annotation, L"Marker 1");
+    ret = ID3DUserDefinedAnnotation_GetStatus(annotation);
+    ok(!ret, "Got unexpected status %#x.\n", ret);
+    ID3DUserDefinedAnnotation_Release(annotation);
+
+    hr = ID3D11Device_CreateDeferredContext(test_context.device, 0, &context);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    hr = ID3D11DeviceContext_QueryInterface(context, &IID_ID3DUserDefinedAnnotation, (void **)&annotation);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    ret = ID3DUserDefinedAnnotation_BeginEvent(annotation, L"Event 2");
+    ok(ret == -1, "Got unexpected ret %d.\n", ret);
+    ret = ID3DUserDefinedAnnotation_EndEvent(annotation);
+    ok(ret == -1, "Got unexpected ret %d.\n", ret);
+    ID3DUserDefinedAnnotation_SetMarker(annotation, L"Marker 2");
+    ret = ID3DUserDefinedAnnotation_GetStatus(annotation);
+    ok(!ret, "Got unexpected status %#x.\n", ret);
+    ID3DUserDefinedAnnotation_Release(annotation);
+    ID3D11DeviceContext_Release(context);
+
+    release_test_context(&test_context);
+}
+
 START_TEST(d3d11)
 {
     unsigned int argc, i;
     char **argv;
 
     use_mt = !getenv("WINETEST_NO_MT_D3D");
+    /* Some host drivers (MacOS, Mesa radeonsi) never unmap memory even when
+     * requested. When using the chunk allocator, running the tests with more
+     * than one thread can exceed the 32-bit virtual address space. */
+    if (sizeof(void *) == 4 && !strcmp(winetest_platform, "wine"))
+        use_mt = FALSE;
 
     argc = winetest_get_mainargs(&argv);
     for (i = 2; i < argc; ++i)
@@ -34113,6 +34228,7 @@ START_TEST(d3d11)
     queue_test(test_texture_compressed_3d);
     queue_test(test_constant_buffer_offset);
     queue_test(test_dynamic_map_synchronization);
+    queue_test(test_user_defined_annotation);
 
     run_queued_tests();
 

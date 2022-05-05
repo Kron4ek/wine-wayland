@@ -780,7 +780,7 @@ static ULONG WINAPI DdsFrameDecode_AddRef(IWICBitmapFrameDecode *iface)
     DdsFrameDecode *This = impl_from_IWICBitmapFrameDecode(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) refcount=%u\n", iface, ref);
+    TRACE("(%p) refcount=%lu\n", iface, ref);
 
     return ref;
 }
@@ -790,7 +790,7 @@ static ULONG WINAPI DdsFrameDecode_Release(IWICBitmapFrameDecode *iface)
     DdsFrameDecode *This = impl_from_IWICBitmapFrameDecode(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) refcount=%u\n", iface, ref);
+    TRACE("(%p) refcount=%lu\n", iface, ref);
 
     if (ref == 0) {
         if (This->pixel_data != This->block_data) HeapFree(GetProcessHeap(), 0, This->pixel_data);
@@ -1087,7 +1087,7 @@ static ULONG WINAPI DdsDecoder_AddRef(IWICBitmapDecoder *iface)
     DdsDecoder *This = impl_from_IWICBitmapDecoder(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) refcount=%u\n", iface, ref);
+    TRACE("(%p) refcount=%lu\n", iface, ref);
 
     return ref;
 }
@@ -1097,7 +1097,7 @@ static ULONG WINAPI DdsDecoder_Release(IWICBitmapDecoder *iface)
     DdsDecoder *This = impl_from_IWICBitmapDecoder(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) refcount=%u\n", iface, ref);
+    TRACE("(%p) refcount=%lu\n", iface, ref);
 
     if (ref == 0)
     {
@@ -1331,7 +1331,8 @@ static HRESULT WINAPI DdsDecoder_Dds_GetFrame(IWICDdsDecoder *iface,
     LARGE_INTEGER seek;
     UINT width, height, depth, block_width, block_height, width_in_blocks, height_in_blocks, size;
     UINT frame_width = 0, frame_height = 0, frame_width_in_blocks = 0, frame_height_in_blocks = 0, frame_size = 0;
-    UINT bytes_per_block, bytesread, i;
+    UINT bytes_per_block, i;
+    DWORD bytesread;
     DdsFrameDecode *frame_decode = NULL;
 
     TRACE("(%p,%u,%u,%u,%p)\n", iface, arrayIndex, mipLevel, sliceIndex, bitmapFrame);
@@ -1549,7 +1550,7 @@ static ULONG WINAPI DdsFrameEncode_AddRef(IWICBitmapFrameEncode *iface)
     DdsFrameEncode *This = impl_from_IWICBitmapFrameEncode(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) refcount=%u\n", iface, ref);
+    TRACE("(%p) refcount=%lu\n", iface, ref);
 
     return ref;
 }
@@ -1559,7 +1560,7 @@ static ULONG WINAPI DdsFrameEncode_Release(IWICBitmapFrameEncode *iface)
     DdsFrameEncode *This = impl_from_IWICBitmapFrameEncode(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) refcount=%u\n", iface, ref);
+    TRACE("(%p) refcount=%lu\n", iface, ref);
 
     if (ref == 0)
     {
@@ -1949,7 +1950,7 @@ static ULONG WINAPI DdsEncoder_AddRef(IWICBitmapEncoder *iface)
     DdsEncoder *This = impl_from_IWICBitmapEncoder(iface);
     ULONG ref = InterlockedIncrement(&This->ref);
 
-    TRACE("(%p) refcount=%u\n", iface, ref);
+    TRACE("(%p) refcount=%lu\n", iface, ref);
 
     return ref;
 }
@@ -1959,7 +1960,7 @@ static ULONG WINAPI DdsEncoder_Release(IWICBitmapEncoder *iface)
     DdsEncoder *This = impl_from_IWICBitmapEncoder(iface);
     ULONG ref = InterlockedDecrement(&This->ref);
 
-    TRACE("(%p) refcount=%u\n", iface, ref);
+    TRACE("(%p) refcount=%lu\n", iface, ref);
 
     if (ref == 0) {
         This->lock.DebugInfo->Spare[0] = 0;

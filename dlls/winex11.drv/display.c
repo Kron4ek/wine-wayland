@@ -19,127 +19,36 @@
  */
 
 #include "config.h"
-
-#include <stdarg.h>
-
-#include "windef.h"
-#include "winbase.h"
-#include "rpc.h"
-#include "winreg.h"
-#include "cfgmgr32.h"
-#include "initguid.h"
-#include "devguid.h"
-#include "devpkey.h"
-#include "ntddvdeo.h"
-#include "setupapi.h"
-#define WIN32_NO_STATUS
-#include "winternl.h"
-#include "wine/debug.h"
-#include "wine/unicode.h"
 #include "x11drv.h"
+#include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(x11drv);
-
-/* Wine specific properties */
-DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCMONITOR, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 3);
-
-static const WCHAR displayW[] = {'D','I','S','P','L','A','Y',0};
-static const WCHAR video_keyW[] = {
-    'H','A','R','D','W','A','R','E','\\',
-    'D','E','V','I','C','E','M','A','P','\\',
-    'V','I','D','E','O',0};
 
 static struct x11drv_display_device_handler host_handler;
 struct x11drv_display_device_handler desktop_handler;
 
-/* Cached screen information, protected by screen_section */
-static HKEY video_key;
-static RECT virtual_screen_rect;
-static RECT primary_monitor_rect;
-static FILETIME last_query_screen_time;
-static CRITICAL_SECTION screen_section;
-static CRITICAL_SECTION_DEBUG screen_critsect_debug =
-{
-    0, 0, &screen_section,
-    {&screen_critsect_debug.ProcessLocksList, &screen_critsect_debug.ProcessLocksList},
-     0, 0, {(DWORD_PTR)(__FILE__ ": screen_section")}
-};
-static CRITICAL_SECTION screen_section = {&screen_critsect_debug, -1, 0, 0, 0, 0};
-
 HANDLE get_display_device_init_mutex(void)
 {
-    static const WCHAR init_mutexW[] = {'d','i','s','p','l','a','y','_','d','e','v','i','c','e','_','i','n','i','t',0};
-    HANDLE mutex = CreateMutexW(NULL, FALSE, init_mutexW);
+    static const WCHAR init_mutexW[] = {'d','i','s','p','l','a','y','_','d','e','v','i','c','e','_','i','n','i','t'};
+    UNICODE_STRING name = { sizeof(init_mutexW), sizeof(init_mutexW), (WCHAR *)init_mutexW };
+    OBJECT_ATTRIBUTES attr;
+    HANDLE mutex = 0;
 
-    WaitForSingleObject(mutex, INFINITE);
+    InitializeObjectAttributes( &attr, &name, OBJ_OPENIF, NULL, NULL );
+    NtCreateMutant( &mutex, MUTEX_ALL_ACCESS, &attr, FALSE );
+    if (mutex) NtWaitForSingleObject( mutex, FALSE, NULL );
     return mutex;
 }
 
 void release_display_device_init_mutex(HANDLE mutex)
 {
-    ReleaseMutex(mutex);
-    CloseHandle(mutex);
-}
-
-/* Update screen rectangle cache from SetupAPI if it's outdated, return FALSE on failure and TRUE on success */
-static BOOL update_screen_cache(void)
-{
-    RECT virtual_rect = {0}, primary_rect = {0}, monitor_rect;
-    SP_DEVINFO_DATA device_data = {sizeof(device_data)};
-    HDEVINFO devinfo = INVALID_HANDLE_VALUE;
-    FILETIME filetime = {0};
-    HANDLE mutex = NULL;
-    DWORD i = 0;
-    INT result;
-    DWORD type;
-    BOOL ret = FALSE;
-
-    EnterCriticalSection(&screen_section);
-    if ((!video_key && RegOpenKeyW(HKEY_LOCAL_MACHINE, video_keyW, &video_key))
-        || RegQueryInfoKeyW(video_key, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, &filetime))
-    {
-        LeaveCriticalSection(&screen_section);
-        return FALSE;
-    }
-    result = CompareFileTime(&filetime, &last_query_screen_time);
-    LeaveCriticalSection(&screen_section);
-    if (result < 1)
-        return TRUE;
-
-    mutex = get_display_device_init_mutex();
-
-    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_MONITOR, displayW, NULL, DIGCF_PRESENT);
-    if (devinfo == INVALID_HANDLE_VALUE)
-        goto fail;
-
-    while (SetupDiEnumDeviceInfo(devinfo, i++, &device_data))
-    {
-        if (!SetupDiGetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCMONITOR, &type,
-                                       (BYTE *)&monitor_rect, sizeof(monitor_rect), NULL, 0))
-            goto fail;
-
-        UnionRect(&virtual_rect, &virtual_rect, &monitor_rect);
-        if (i == 1)
-            primary_rect = monitor_rect;
-    }
-
-    EnterCriticalSection(&screen_section);
-    virtual_screen_rect = virtual_rect;
-    primary_monitor_rect = primary_rect;
-    last_query_screen_time = filetime;
-    LeaveCriticalSection(&screen_section);
-    ret = TRUE;
-fail:
-    SetupDiDestroyDeviceInfoList(devinfo);
-    release_display_device_init_mutex(mutex);
-    if (!ret)
-        WARN("Update screen cache failed!\n");
-    return ret;
+    NtReleaseMutant( mutex, NULL );
+    NtClose( mutex );
 }
 
 POINT virtual_screen_to_root(INT x, INT y)
 {
-    RECT virtual = get_virtual_screen_rect();
+    RECT virtual = NtUserGetVirtualScreenRect();
     POINT pt;
 
     pt.x = x - virtual.left;
@@ -149,34 +58,12 @@ POINT virtual_screen_to_root(INT x, INT y)
 
 POINT root_to_virtual_screen(INT x, INT y)
 {
-    RECT virtual = get_virtual_screen_rect();
+    RECT virtual = NtUserGetVirtualScreenRect();
     POINT pt;
 
     pt.x = x + virtual.left;
     pt.y = y + virtual.top;
     return pt;
-}
-
-RECT get_virtual_screen_rect(void)
-{
-    RECT virtual;
-
-    update_screen_cache();
-    EnterCriticalSection(&screen_section);
-    virtual = virtual_screen_rect;
-    LeaveCriticalSection(&screen_section);
-    return virtual;
-}
-
-RECT get_primary_monitor_rect(void)
-{
-    RECT primary;
-
-    update_screen_cache();
-    EnterCriticalSection(&screen_section);
-    primary = primary_monitor_rect;
-    LeaveCriticalSection(&screen_section);
-    return primary;
 }
 
 /* Get the primary monitor rect from the host system */
@@ -291,39 +178,17 @@ void X11DRV_DisplayDevices_RegisterEventHandlers(void)
         handler->register_event_handlers();
 }
 
-static BOOL CALLBACK update_windows_on_display_change(HWND hwnd, LPARAM lparam)
-{
-    struct x11drv_win_data *data;
-    UINT mask = (UINT)lparam;
-
-    if (!(data = get_win_data(hwnd)))
-        return TRUE;
-
-    /* update the full screen state */
-    update_net_wm_states(data);
-
-    if (mask && data->whole_window)
-    {
-        POINT pos = virtual_screen_to_root(data->whole_rect.left, data->whole_rect.top);
-        XWindowChanges changes;
-        changes.x = pos.x;
-        changes.y = pos.y;
-        XReconfigureWMWindow(data->display, data->whole_window, data->vis.screen, mask, &changes);
-    }
-    release_win_data(data);
-    return TRUE;
-}
-
 void X11DRV_DisplayDevices_Update(BOOL send_display_change)
 {
     RECT old_virtual_rect, new_virtual_rect;
     DWORD tid, pid;
     HWND foreground;
-    UINT mask = 0;
+    UINT mask = 0, i;
+    HWND *list;
 
-    old_virtual_rect = get_virtual_screen_rect();
+    old_virtual_rect = NtUserGetVirtualScreenRect();
     X11DRV_DisplayDevices_Init(TRUE);
-    new_virtual_rect = get_virtual_screen_rect();
+    new_virtual_rect = NtUserGetVirtualScreenRect();
 
     /* Calculate XReconfigureWMWindow() mask */
     if (old_virtual_rect.left != new_virtual_rect.left)
@@ -332,20 +197,43 @@ void X11DRV_DisplayDevices_Update(BOOL send_display_change)
         mask |= CWY;
 
     X11DRV_resize_desktop(send_display_change);
-    EnumWindows(update_windows_on_display_change, (LPARAM)mask);
+
+    list = build_hwnd_list();
+    for (i = 0; list && list[i] != HWND_BOTTOM; i++)
+    {
+        struct x11drv_win_data *data;
+
+        if (!(data = get_win_data( list[i] ))) continue;
+
+        /* update the full screen state */
+        update_net_wm_states(data);
+
+        if (mask && data->whole_window)
+        {
+            POINT pos = virtual_screen_to_root(data->whole_rect.left, data->whole_rect.top);
+            XWindowChanges changes;
+            changes.x = pos.x;
+            changes.y = pos.y;
+            XReconfigureWMWindow(data->display, data->whole_window, data->vis.screen, mask, &changes);
+        }
+        release_win_data(data);
+    }
+
+    free( list );
 
     /* forward clip_fullscreen_window request to the foreground window */
-    if ((foreground = GetForegroundWindow()) && (tid = GetWindowThreadProcessId( foreground, &pid )) && pid == GetCurrentProcessId())
+    if ((foreground = NtUserGetForegroundWindow()) &&
+        (tid = NtUserGetWindowThread( foreground, &pid )) && pid == GetCurrentProcessId())
     {
         if (tid == GetCurrentThreadId()) clip_fullscreen_window( foreground, TRUE );
-        else SendNotifyMessageW( foreground, WM_X11DRV_CLIP_CURSOR_REQUEST, TRUE, TRUE );
+        else send_notify_message( foreground, WM_X11DRV_CLIP_CURSOR_REQUEST, TRUE, TRUE );
     }
 }
 
 static BOOL force_display_devices_refresh;
 
-void CDECL X11DRV_UpdateDisplayDevices( const struct gdi_device_manager *device_manager,
-                                        BOOL force, void *param )
+void X11DRV_UpdateDisplayDevices( const struct gdi_device_manager *device_manager,
+                                  BOOL force, void *param )
 {
     struct x11drv_display_device_handler *handler;
     struct gdi_adapter *adapters;

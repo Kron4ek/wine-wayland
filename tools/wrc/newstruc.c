@@ -38,11 +38,11 @@
 #include <pshpack2.h>
 typedef struct
 {
-    DWORD biSize;
-    WORD  biWidth;
-    WORD  biHeight;
-    WORD  biPlanes;
-    WORD  biBitCount;
+    unsigned int   biSize;
+    unsigned short biWidth;
+    unsigned short biHeight;
+    unsigned short biPlanes;
+    unsigned short biBitCount;
 } BITMAPOS2HEADER;
 #include <poppack.h>
 
@@ -185,7 +185,7 @@ ani_any_t *new_ani_any(void)
     return ret;
 }
 
-resource_t *new_resource(enum res_e t, void *res, int memopt, language_t *lan)
+resource_t *new_resource(enum res_e t, void *res, int memopt, language_t lan)
 {
 	resource_t *r = xmalloc(sizeof(resource_t));
 	memset( r, 0, sizeof(*r) );
@@ -194,46 +194,6 @@ resource_t *new_resource(enum res_e t, void *res, int memopt, language_t *lan)
 	r->memopt = memopt;
 	r->lan = lan;
 	return r;
-}
-
-version_t *new_version(DWORD v)
-{
-	version_t *vp = xmalloc(sizeof(version_t));
-	*vp = v;
-	return vp;
-}
-
-characts_t *new_characts(DWORD c)
-{
-	characts_t *cp = xmalloc(sizeof(characts_t));
-	*cp = c;
-	return cp;
-}
-
-language_t *new_language(int id, int sub)
-{
-	language_t *lan = xmalloc(sizeof(language_t));
-	lan->id = id;
-	lan->sub = sub;
-	return lan;
-}
-
-language_t *dup_language(language_t *l)
-{
-	if(!l) return NULL;
-	return new_language(l->id, l->sub);
-}
-
-version_t *dup_version(version_t *v)
-{
-	if(!v) return NULL;
-	return new_version(*v);
-}
-
-characts_t *dup_characts(characts_t *c)
-{
-	if(!c) return NULL;
-	return new_characts(*c);
 }
 
 html_t *new_html(raw_data_t *rd, int *memopt)
@@ -337,10 +297,9 @@ typedef struct {
 	int		id;
 } id_alloc_t;
 
-static int get_new_id(id_alloc_t **list, int *n, language_t *lan)
+static int get_new_id(id_alloc_t **list, int *n, language_t lan)
 {
 	int i;
-	assert(lan != NULL);
 	assert(list != NULL);
 	assert(n != NULL);
 
@@ -348,25 +307,25 @@ static int get_new_id(id_alloc_t **list, int *n, language_t *lan)
 	{
 		*list = xmalloc(sizeof(id_alloc_t));
 		*n = 1;
-		(*list)[0].lan = *lan;
+		(*list)[0].lan = lan;
 		(*list)[0].id = 1;
 		return 1;
 	}
 
 	for(i = 0; i < *n; i++)
 	{
-		if((*list)[i].lan.id == lan->id && (*list)[i].lan.sub == lan->sub)
+		if((*list)[i].lan == lan)
 			return ++((*list)[i].id);
 	}
 
 	*list = xrealloc(*list, sizeof(id_alloc_t) * (*n+1));
-	(*list)[*n].lan = *lan;
+	(*list)[*n].lan = lan;
 	(*list)[*n].id = 1;
 	*n += 1;
 	return 1;
 }
 
-static int alloc_icon_id(language_t *lan)
+static int alloc_icon_id(language_t lan)
 {
 	static id_alloc_t *idlist = NULL;
 	static int nid = 0;
@@ -374,7 +333,7 @@ static int alloc_icon_id(language_t *lan)
 	return get_new_id(&idlist, &nid, lan);
 }
 
-static int alloc_cursor_id(language_t *lan)
+static int alloc_cursor_id(language_t lan)
 {
 	static id_alloc_t *idlist = NULL;
 	static int nid = 0;
@@ -562,16 +521,16 @@ bitmap_t *new_bitmap(raw_data_t *rd, int *memopt)
 ver_words_t *new_ver_words(int i)
 {
 	ver_words_t *w = xmalloc(sizeof(ver_words_t));
-	w->words = xmalloc(sizeof(WORD));
-	w->words[0] = (WORD)i;
+	w->words = xmalloc(sizeof(unsigned short));
+	w->words[0] = i;
 	w->nwords = 1;
 	return w;
 }
 
 ver_words_t *add_ver_words(ver_words_t *w, int i)
 {
-	w->words = xrealloc(w->words, (w->nwords+1) * sizeof(WORD));
-	w->words[w->nwords] = (WORD)i;
+	w->words = xrealloc(w->words, (w->nwords+1) * sizeof(unsigned short));
+	w->words[w->nwords] = i;
 	w->nwords++;
 	return w;
 }
@@ -590,7 +549,7 @@ messagetable_t *new_messagetable(raw_data_t *rd, int *memopt)
 	else
 		msg->memopt = WRC_MO_MOVEABLE | WRC_MO_PURE;
 
-	if(rd->size < sizeof(DWORD))
+	if(rd->size < sizeof(unsigned int))
 		parser_error("Invalid messagetable, size too small");
 
 	return msg;
@@ -665,7 +624,7 @@ style_pair_t *new_style_pair(style_t *style, style_t *exstyle)
 	return sp;
 }
 
-style_t *new_style(DWORD or_mask, DWORD and_mask)
+style_t *new_style(unsigned int or_mask, unsigned int and_mask)
 {
 	style_t *st = xmalloc(sizeof(style_t));
 	st->or_mask = or_mask;

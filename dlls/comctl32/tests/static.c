@@ -27,22 +27,15 @@
 #include "winuser.h"
 #include "commctrl.h"
 #include "resources.h"
-#include "uxtheme.h"
 
 #include "wine/test.h"
 
 #include "v6util.h"
 
-#define TODO_COUNT 1
-
 #define CTRL_ID 1995
 
 static HWND hMainWnd;
 static int g_nReceivedColorStatic;
-
-static HRESULT (WINAPI *pEnableThemeDialogTexture)(HWND, DWORD);
-static HTHEME (WINAPI *pGetWindowTheme)(HWND);
-static BOOL (WINAPI *pIsThemeDialogTextureEnabled)(HWND);
 
 /* try to make sure pending X events have been processed before continuing */
 static void flush_events(void)
@@ -84,13 +77,32 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
     return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
-static void test_updates(int style, int flags)
+static void test_updates(int style)
 {
     HWND hStatic = create_static(style);
-    RECT r1 = {20, 20, 30, 30};
+    RECT r1 = {5, 5, 30, 30}, rcClient;
     int exp;
+    LONG exstyle;
 
     flush_events();
+    trace("Testing style 0x%x\n", style);
+
+    exstyle = GetWindowLongW(hStatic, GWL_EXSTYLE);
+    if (style == SS_ETCHEDHORZ || style == SS_ETCHEDVERT || style == SS_SUNKEN)
+        ok(exstyle == WS_EX_STATICEDGE, "expected WS_EX_STATICEDGE, got %ld\n", exstyle);
+    else
+        ok(exstyle == 0, "expected 0, got %ld\n", exstyle);
+
+    GetClientRect(hStatic, &rcClient);
+    if (style == SS_ETCHEDVERT)
+        ok(rcClient.right == 0, "expected zero width, got %ld\n", rcClient.right);
+    else
+        ok(rcClient.right > 0, "expected non-zero width, got %ld\n", rcClient.right);
+    if (style == SS_ETCHEDHORZ)
+        ok(rcClient.bottom == 0, "expected zero height, got %ld\n", rcClient.bottom);
+    else
+        ok(rcClient.bottom > 0, "expected non-zero height, got %ld\n", rcClient.bottom);
+
     g_nReceivedColorStatic = 0;
     /* during each update parent WndProc will test the WM_CTLCOLORSTATIC message */
     InvalidateRect(hMainWnd, NULL, FALSE);
@@ -106,7 +118,7 @@ static void test_updates(int style, int flags)
     {
         HDC hdc = GetDC(hStatic);
         COLORREF colour = GetPixel(hdc, 10, 10);
-    todo_wine
+        todo_wine
         ok(colour == 0, "Unexpected pixel color.\n");
         ReleaseDC(hStatic, hdc);
     }
@@ -114,15 +126,9 @@ static void test_updates(int style, int flags)
     if (style != SS_ETCHEDHORZ && style != SS_ETCHEDVERT)
         exp = 4;
     else
-        exp = 1; /* SS_ETCHED* seems to send WM_CTLCOLORSTATIC only sometimes */
+        exp = 2; /* SS_ETCHEDHORZ/SS_ETCHEDVERT have empty client rect so WM_CTLCOLORSTATIC is sent only when parent window is invalidated */
 
-    if (flags & TODO_COUNT)
-    todo_wine
-        ok(g_nReceivedColorStatic == exp, "Unexpected WM_CTLCOLORSTATIC value %d\n", g_nReceivedColorStatic);
-    else if ((style & SS_TYPEMASK) == SS_ICON || (style & SS_TYPEMASK) == SS_BITMAP)
-        ok(g_nReceivedColorStatic == exp, "Unexpected %u got %u\n", exp, g_nReceivedColorStatic);
-    else
-        ok(g_nReceivedColorStatic == exp, "Unexpected WM_CTLCOLORSTATIC value %d\n", g_nReceivedColorStatic);
+    ok(g_nReceivedColorStatic == exp, "expected %u, got %u\n", exp, g_nReceivedColorStatic);
     DestroyWindow(hStatic);
 }
 
@@ -170,7 +176,6 @@ static void test_image(HBITMAP image, BOOL is_dib, BOOL is_premult, BOOL is_alph
         ok(bm.bmBits != NULL, "bmBits is NULL\n");
         memcpy(bits, bm.bmBits, 4);
         if (is_premult)
-todo_wine
             ok(bits[0] == 0x05 &&  bits[1] == 0x09 &&  bits[2] == 0x0e && bits[3] == 0x44,
                "bits: %02x %02x %02x %02x\n", bits[0], bits[1], bits[2], bits[3]);
         else if (is_alpha)
@@ -200,7 +205,6 @@ todo_wine
     DeleteDC(hdc);
 
     if (is_premult)
-todo_wine
         ok(bits[0] == 0x05 &&  bits[1] == 0x09 &&  bits[2] == 0x0e && bits[3] == 0x44,
            "bits: %02x %02x %02x %02x\n", bits[0], bits[1], bits[2], bits[3]);
     else if (is_alpha)
@@ -288,10 +292,10 @@ static void test_STM_SETIMAGE(void)
 
     for (type = SS_LEFT; type < SS_ETCHEDFRAME; type++)
     {
-        winetest_push_context("%u", type);
+        winetest_push_context("%lu", type);
 
         hwnd = create_static(type);
-        ok(hwnd != 0, "failed to create static type %#x\n", type);
+        ok(hwnd != 0, "failed to create static type %#lx\n", type);
 
         /* set icon */
         g_nReceivedColorStatic = 0;
@@ -382,118 +386,6 @@ static void test_STM_SETIMAGE(void)
     DeleteEnhMetaFile(emf);
 }
 
-static INT_PTR CALLBACK test_WM_CTLCOLORSTATIC_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
-{
-    static HWND child;
-
-    switch (msg)
-    {
-    case WM_INITDIALOG:
-        child = CreateWindowA(WC_STATICA, "child", WS_CHILD | WS_VISIBLE, 1, 2, 50, 50, hwnd,
-                              (HMENU)100, 0, NULL);
-        ok(child != NULL, "CreateWindowA failed, error %d.\n", GetLastError());
-        return FALSE;
-
-    case WM_CLOSE:
-        DestroyWindow(child);
-        return TRUE;
-
-    default:
-        return FALSE;
-    }
-}
-
-static void test_WM_CTLCOLORSTATIC(void)
-{
-    HWND parent, dialog, child;
-    COLORREF color, old_color;
-    HDC child_hdc, dialog_hdc;
-    int mode, old_mode;
-    HBRUSH brush;
-    HRESULT hr;
-    POINT org;
-    BOOL ret;
-
-    struct
-    {
-        DLGTEMPLATE tmplate;
-        WORD menu;
-        WORD class;
-        WORD title;
-    } temp = {{0}};
-
-    parent = CreateWindowA(WC_STATICA, "parent", WS_POPUP | WS_VISIBLE, 100, 100, 200, 200, 0, 0, 0,
-                           NULL);
-    ok(parent != NULL, "CreateWindowA failed, error %d.\n", GetLastError());
-
-    temp.tmplate.style = WS_CHILD | WS_VISIBLE;
-    temp.tmplate.cx = 80;
-    temp.tmplate.cy = 80;
-    dialog = CreateDialogIndirectParamA(NULL, &temp.tmplate, parent, test_WM_CTLCOLORSTATIC_proc, 0);
-    ok(dialog != NULL, "CreateDialogIndirectParamA failed, error %d.\n", GetLastError());
-    child = GetDlgItem(dialog, 100);
-    ok(child != NULL, "Failed to get child static control, error %d.\n", GetLastError());
-
-    dialog_hdc = GetDC(dialog);
-    child_hdc = GetDC(child);
-    PatBlt(dialog_hdc, 0, 0, 80, 80, BLACKNESS);
-
-    old_mode = SetBkMode(child_hdc, OPAQUE);
-    ok(old_mode != 0, "SetBkMode failed.\n");
-    old_color = SetBkColor(child_hdc, 0xaa5511);
-    ok(old_color != CLR_INVALID, "SetBkColor failed.\n");
-
-    ret = pIsThemeDialogTextureEnabled(dialog);
-    ok(ret, "Expected theme dialog texture supported.\n");
-    ok(pGetWindowTheme(dialog) == NULL, "Expected NULL theme handle.\n");
-
-    brush = (HBRUSH)SendMessageW(dialog, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-    ok(brush == GetSysColorBrush(COLOR_BTNFACE), "Expected brush %p, got %p.\n",
-       GetSysColorBrush(COLOR_BTNFACE), brush);
-    color = SetBkColor(child_hdc, old_color);
-    ok(color == GetSysColor(COLOR_BTNFACE), "Expected background color %#x, got %#x.\n",
-       GetSysColor(COLOR_BTNFACE), color);
-    mode = SetBkMode(child_hdc, old_mode);
-    ok(mode == OPAQUE, "Expected mode %#x, got %#x.\n", OPAQUE, mode);
-    color = GetPixel(dialog_hdc, 40, 40);
-    ok(color == 0, "Expected pixel %#x, got %#x.\n", 0, color);
-
-    /* Test that EnableThemeDialogTexture() doesn't make WM_CTLCOLORSTATIC return a different brush */
-    hr = pEnableThemeDialogTexture(dialog, ETDT_DISABLE);
-    ok(hr == S_OK, "EnableThemeDialogTexture failed, hr %#x.\n", hr);
-    ret = pIsThemeDialogTextureEnabled(dialog);
-    ok(!ret, "Expected theme dialog texture disabled.\n");
-    hr = pEnableThemeDialogTexture(dialog, ETDT_ENABLETAB);
-    ok(hr == S_OK, "EnableThemeDialogTexture failed, hr %#x.\n", hr);
-    ret = pIsThemeDialogTextureEnabled(dialog);
-    ok(ret, "Expected theme dialog texture enabled.\n");
-
-    brush = (HBRUSH)SendMessageW(dialog, WM_CTLCOLORSTATIC, (WPARAM)child_hdc, (LPARAM)child);
-    ok(brush == GetSysColorBrush(COLOR_BTNFACE), "Expected brush %p, got %p.\n",
-       GetSysColorBrush(COLOR_BTNFACE), brush);
-
-    /* Test that WM_CTLCOLORSTATIC doesn't change brush origin */
-    ret = GetBrushOrgEx(child_hdc, &org);
-    ok(ret, "GetBrushOrgEx failed, error %u.\n", GetLastError());
-    ok(org.x == 0 && org.y == 0, "Expected (0,0), got %s.\n", wine_dbgstr_point(&org));
-
-    ReleaseDC(child, child_hdc);
-    ReleaseDC(dialog, dialog_hdc);
-    EndDialog(dialog, 0);
-    DestroyWindow(parent);
-}
-
-static void init_functions(void)
-{
-    HMODULE uxtheme = LoadLibraryA("uxtheme.dll");
-
-#define X(f) p##f = (void *)GetProcAddress(uxtheme, #f);
-    X(EnableThemeDialogTexture)
-    X(GetWindowTheme)
-    X(IsThemeDialogTextureEnabled)
-#undef X
-}
-
 START_TEST(static)
 {
     static const char classname[] = "testclass";
@@ -503,8 +395,6 @@ START_TEST(static)
 
     if (!load_v6_module(&ctx_cookie, &hCtx))
         return;
-
-    init_functions();
 
     wndclass.cbSize         = sizeof(wndclass);
     wndclass.style          = CS_HREDRAW | CS_VREDRAW;
@@ -524,19 +414,24 @@ START_TEST(static)
         GetModuleHandleA(NULL), NULL);
     ShowWindow(hMainWnd, SW_SHOW);
 
-    test_updates(0, 0);
-    test_updates(SS_SIMPLE, 0);
-    test_updates(SS_ICON, 0);
-    test_updates(SS_BITMAP, 0);
-    test_updates(SS_BITMAP | SS_CENTERIMAGE, 0);
-    test_updates(SS_BLACKRECT, TODO_COUNT);
-    test_updates(SS_WHITERECT, TODO_COUNT);
-    test_updates(SS_ETCHEDHORZ, TODO_COUNT);
-    test_updates(SS_ETCHEDVERT, TODO_COUNT);
+    test_updates(0);
+    test_updates(SS_ICON);
+    test_updates(SS_BLACKRECT);
+    test_updates(SS_WHITERECT);
+    test_updates(SS_BLACKFRAME);
+    test_updates(SS_WHITEFRAME);
+    test_updates(SS_USERITEM);
+    test_updates(SS_SIMPLE);
+    test_updates(SS_OWNERDRAW);
+    test_updates(SS_BITMAP);
+    test_updates(SS_BITMAP | SS_CENTERIMAGE);
+    test_updates(SS_ETCHEDHORZ);
+    test_updates(SS_ETCHEDVERT);
+    test_updates(SS_ETCHEDFRAME);
+    test_updates(SS_SUNKEN);
     test_set_text();
     test_set_image();
     test_STM_SETIMAGE();
-    test_WM_CTLCOLORSTATIC();
 
     DestroyWindow(hMainWnd);
 

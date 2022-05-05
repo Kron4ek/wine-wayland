@@ -70,7 +70,7 @@ UINT get_type_size( CIMTYPE type )
     case CIM_REAL32:
         return sizeof(FLOAT);
     default:
-        ERR("unhandled type %u\n", type);
+        ERR( "unhandled type %lu\n", type );
         break;
     }
     return sizeof(LONGLONG);
@@ -250,7 +250,7 @@ HRESULT set_value( const struct table *table, UINT row, UINT column, LONGLONG va
         *(UINT64 *)ptr = val;
         break;
     default:
-        FIXME("unhandled column type %u\n", type);
+        FIXME( "unhandled column type %lu\n", type );
         return WBEM_E_FAILED;
     }
     return S_OK;
@@ -291,7 +291,7 @@ void free_row_values( const struct table *table, UINT row )
         type = table->columns[i].type & COL_TYPE_MASK;
         if (type == CIM_STRING || type == CIM_DATETIME || type == CIM_REFERENCE)
         {
-            if (get_value( table, row, i, &val ) == S_OK) heap_free( (void *)(INT_PTR)val );
+            if (get_value( table, row, i, &val ) == S_OK) free( (void *)(INT_PTR)val );
         }
         else if (type & CIM_FLAG_ARRAY)
         {
@@ -312,7 +312,7 @@ void clear_table( struct table *table )
     {
         table->num_rows = 0;
         table->num_rows_allocated = 0;
-        heap_free( table->data );
+        free( table->data );
         table->data = NULL;
     }
 }
@@ -321,8 +321,8 @@ void free_columns( struct column *columns, UINT num_cols )
 {
     UINT i;
 
-    for (i = 0; i < num_cols; i++) { heap_free( (WCHAR *)columns[i].name ); }
-    heap_free( columns );
+    for (i = 0; i < num_cols; i++) { free( (WCHAR *)columns[i].name ); }
+    free( columns );
 }
 
 void free_table( struct table *table )
@@ -333,11 +333,11 @@ void free_table( struct table *table )
     if (table->flags & TABLE_FLAG_DYNAMIC)
     {
         TRACE("destroying %p\n", table);
-        heap_free( (WCHAR *)table->name );
+        free( (WCHAR *)table->name );
         free_columns( (struct column *)table->columns, table->num_cols );
-        heap_free( table->data );
+        free( table->data );
         list_remove( &table->entry );
-        heap_free( table );
+        free( table );
     }
 }
 
@@ -375,8 +375,8 @@ struct table *create_table( const WCHAR *name, UINT num_cols, const struct colum
 {
     struct table *table;
 
-    if (!(table = heap_alloc( sizeof(*table) ))) return NULL;
-    table->name               = heap_strdupW( name );
+    if (!(table = malloc( sizeof(*table) ))) return NULL;
+    table->name               = wcsdup( name );
     table->num_cols           = num_cols;
     table->columns            = columns;
     table->num_rows           = num_rows;

@@ -1319,15 +1319,13 @@ static void init_symbol_dumper(struct symbol_dumper* sd)
 {
     sd->depth = 0;
     sd->alloc = 16;
-    sd->stack = malloc(sd->alloc * sizeof(sd->stack[0]));
+    sd->stack = xmalloc(sd->alloc * sizeof(sd->stack[0]));
 }
 
 static void push_symbol_dumper(struct symbol_dumper* sd, const union codeview_symbol* sym, unsigned end)
 {
     if (!sd->stack) return;
-    if (sd->depth >= sd->alloc &&
-        !(sd->stack = realloc(sd->stack, (sd->alloc *= 2) * sizeof(sd->stack[0]))))
-        return;
+    if (sd->depth >= sd->alloc) sd->stack = xrealloc(sd->stack, (sd->alloc *= 2) * sizeof(sd->stack[0]));
     sd->stack[sd->depth].end = end;
     sd->stack[sd->depth].sym = sym;
     sd->depth++;
@@ -1752,7 +1750,7 @@ BOOL codeview_dump_symbols(const void* root, unsigned long start, unsigned long 
                 pname = PSTRING(sym, length);
                 length += (pname->namelen + 1 + 3) & ~3;
                 printf("%08x %08x %08x '%s'\n",
-                       *(((const DWORD*)sym) + 1), *(((const DWORD*)sym) + 2), *(((const DWORD*)sym) + 3),
+                       ((const UINT *)sym)[1], ((const UINT *)sym)[2], ((const UINT *)sym)[3],
                        p_string(pname));
             }
             break;
@@ -2127,7 +2125,7 @@ void codeview_dump_linetab2(const char* linetab, DWORD size, const char* strimag
                 }
                 break;
             default:
-                printf("%sUnknown signature %x in INLINEELINES subsection\n", pfx, *(DWORD*)CV_RECORD_AFTER(hdr));
+                printf("%sUnknown signature %x in INLINEELINES subsection\n", pfx, *(UINT *)CV_RECORD_AFTER(hdr));
                 break;
             }
             break;

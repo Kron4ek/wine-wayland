@@ -17,7 +17,7 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
- 
+
 #if 0
 #pragma makedep unix
 #endif
@@ -67,8 +67,10 @@ WINE_DEFAULT_DEBUG_CHANNEL(fsync);
 /* futex_waitv interface */
 
 #ifndef __NR_futex_waitv
-
 # define __NR_futex_waitv 449
+#endif
+
+#ifndef FUTEX_32
 # define FUTEX_32 2
 struct futex_waitv {
     uint64_t   val;
@@ -76,7 +78,6 @@ struct futex_waitv {
     uint32_t   flags;
     uint32_t __reserved;
 };
-
 #endif
 
 #define u64_to_ptr(x) (void *)(uintptr_t)(x)
@@ -195,10 +196,10 @@ void activate_fsync(void) {
 
 int do_fsync(void)
 {
-  
+
   if(!global_fsync_active)
     return 0;
-  
+
 #ifdef __linux__
     static int do_fsync_cached = -1;
 
@@ -269,18 +270,18 @@ static void *get_shm( unsigned int idx )
     void *ret;
 
     pthread_mutex_lock(&shm_addrs_section);
-  
-  
+
+
     //printf("Entry is %d \n", entry);
 
     if (entry >= shm_addrs_size)
     {
         shm_addrs_size = entry + 1;
-        
+
         //Realloc seems to cause crashes
         //for unknown reasons realloc causes crashes
         //use large amount of initial array to avoid crashes
-        //TODO 
+        //TODO
         //probably new addresses needs to be set to zero like in server/fsync.c
         printf("Realloc on %d \n", shm_addrs_size);
         shm_addrs = realloc( shm_addrs, (entry + 1) * sizeof(shm_addrs[0]) );
@@ -288,11 +289,11 @@ static void *get_shm( unsigned int idx )
           ERR("Failed to grow shm_addrs array to size %d.\n", shm_addrs_size);
           printf("Failed to grow shm_addrs array to size %d.\n", shm_addrs_size);
           exit(1);
-        }  
+        }
         //if (!(shm_addrs = RtlReAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY,
         //        shm_addrs, shm_addrs_size * sizeof(shm_addrs[0]) )))
         //        shm_addrs, shm_addrs_size * sizeof(shm_addrs[0]) )))
-            
+
     }
 
     if (!shm_addrs[entry])
@@ -498,7 +499,7 @@ static NTSTATUS open_fsync( enum fsync_type type, HANDLE *handle,
 void fsync_init(void)
 {
     printf("fsync starting \n");
-  
+
     struct stat st;
 
     if (!do_fsync())
@@ -541,7 +542,7 @@ void fsync_init(void)
     //shm_addrs = calloc( 128, 128 * sizeof(shm_addrs[0]) );
     shm_addrs = calloc( 1280000, sizeof(shm_addrs[0]) );
     if(!shm_addrs) {
-      exit(1);  
+      exit(1);
     }
     shm_addrs_size = 1280000;
     printf("Alloc on %p %d %ld \n", shm_addrs, shm_addrs_size, sizeof(shm_addrs[0]));
@@ -898,7 +899,7 @@ static NTSTATUS __fsync_wait_objects( DWORD count, const HANDLE *handles,
     else if (has_server)
         return STATUS_NOT_IMPLEMENTED;
 
-    
+
     #if 0
     if (TRACE_ON(fsync))
     {

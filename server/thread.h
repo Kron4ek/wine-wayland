@@ -90,8 +90,6 @@ struct thread
     struct list            kernel_object; /* list of kernel object pointers */
     data_size_t            desc_len;      /* thread description length in bytes */
     WCHAR                 *desc;          /* thread description string */
-    int                    esync_fd;      /* esync file descriptor (signalled on exit) */
-    int                    esync_apc_fd;  /* esync apc fd (signalled when APCs are present) */
     unsigned int           fsync_idx;
     unsigned int           fsync_apc_idx;
 };

@@ -22,9 +22,6 @@
 
 #include "msvcp90.h"
 
-#include "windef.h"
-#include "winbase.h"
-#include "winternl.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(msvcp);
@@ -706,24 +703,6 @@ unsigned int __cdecl _Random_device(void)
 #endif
 
 #if _MSVCP_VER >= 110
-#ifdef __ASM_USE_THISCALL_WRAPPER
-
-extern void *call_thiscall_func;
-__ASM_GLOBAL_FUNC(call_thiscall_func,
-        "popl %eax\n\t"
-        "popl %edx\n\t"
-        "popl %ecx\n\t"
-        "pushl %eax\n\t"
-        "jmp *%edx\n\t")
-
-#define call_func1(func,this) ((void* (WINAPI*)(void*,void*))&call_thiscall_func)(func,this)
-
-#else /* __i386__ */
-
-#define call_func1(func,this) func(this)
-
-#endif /* __i386__ */
-
 #define MTX_PLAIN 0x1
 #define MTX_TRY 0x2
 #define MTX_TIMED 0x4
@@ -732,7 +711,7 @@ __ASM_GLOBAL_FUNC(call_thiscall_func,
 typedef struct
 {
     DWORD flags;
-    critical_section cs;
+    cs cs;
     DWORD thread_id;
     DWORD count;
 } *_Mtx_t;
@@ -753,7 +732,7 @@ void __cdecl _Mtx_init_in_situ(_Mtx_t mtx, int flags)
         FIXME("unknown flags ignored: %x\n", flags);
 
     mtx->flags = flags;
-    call_func1(critical_section_ctor, &mtx->cs);
+    cs_init(&mtx->cs);
     mtx->thread_id = -1;
     mtx->count = 0;
 }
@@ -767,12 +746,12 @@ int __cdecl _Mtx_init(_Mtx_t *mtx, int flags)
 
 void __cdecl _Mtx_destroy_in_situ(_Mtx_t mtx)
 {
-    call_func1(critical_section_dtor, &mtx->cs);
+    cs_destroy(&mtx->cs);
 }
 
 void __cdecl _Mtx_destroy(_Mtx_arg_t mtx)
 {
-    call_func1(critical_section_dtor, &MTX_T_FROM_ARG(mtx)->cs);
+    cs_destroy(&MTX_T_FROM_ARG(mtx)->cs);
     operator_delete(MTX_T_FROM_ARG(mtx));
 }
 
@@ -784,7 +763,7 @@ int __cdecl _Mtx_current_owns(_Mtx_arg_t mtx)
 int __cdecl _Mtx_lock(_Mtx_arg_t mtx)
 {
     if(MTX_T_FROM_ARG(mtx)->thread_id != GetCurrentThreadId()) {
-        call_func1(critical_section_lock, &MTX_T_FROM_ARG(mtx)->cs);
+        cs_lock(&MTX_T_FROM_ARG(mtx)->cs);
         MTX_T_FROM_ARG(mtx)->thread_id = GetCurrentThreadId();
     }else if(!(MTX_T_FROM_ARG(mtx)->flags & MTX_RECURSIVE)
             && MTX_T_FROM_ARG(mtx)->flags != MTX_PLAIN) {
@@ -801,14 +780,14 @@ int __cdecl _Mtx_unlock(_Mtx_arg_t mtx)
         return 0;
 
     MTX_T_FROM_ARG(mtx)->thread_id = -1;
-    call_func1(critical_section_unlock, &MTX_T_FROM_ARG(mtx)->cs);
+    cs_unlock(&MTX_T_FROM_ARG(mtx)->cs);
     return 0;
 }
 
 int __cdecl _Mtx_trylock(_Mtx_arg_t mtx)
 {
     if(MTX_T_FROM_ARG(mtx)->thread_id != GetCurrentThreadId()) {
-        if(!call_func1(critical_section_trylock, &MTX_T_FROM_ARG(mtx)->cs))
+        if(!cs_trylock(&MTX_T_FROM_ARG(mtx)->cs))
             return MTX_LOCKED;
         MTX_T_FROM_ARG(mtx)->thread_id = GetCurrentThreadId();
     }else if(!(MTX_T_FROM_ARG(mtx)->flags & MTX_RECURSIVE)
@@ -820,27 +799,30 @@ int __cdecl _Mtx_trylock(_Mtx_arg_t mtx)
     return 0;
 }
 
-critical_section* __cdecl _Mtx_getconcrtcs(_Mtx_arg_t mtx)
+void* __cdecl _Mtx_getconcrtcs(_Mtx_arg_t mtx)
 {
     return &MTX_T_FROM_ARG(mtx)->cs;
 }
 
-static inline LONG interlocked_dec_if_nonzero( LONG *dest )
+void __cdecl _Mtx_clear_owner(_Mtx_arg_t mtx)
 {
-    LONG val, tmp;
-    for (val = *dest;; val = tmp)
-    {
-        if (!val || (tmp = InterlockedCompareExchange( dest, val - 1, val )) == val)
-            break;
-    }
-    return val;
+    _Mtx_t m = MTX_T_FROM_ARG(mtx);
+    m->thread_id = -1;
+    m->count--;
+}
+
+void __cdecl _Mtx_reset_owner(_Mtx_arg_t mtx)
+{
+    _Mtx_t m = MTX_T_FROM_ARG(mtx);
+    m->thread_id = GetCurrentThreadId();
+    m->count++;
 }
 
 #define CND_TIMEDOUT 2
 
 typedef struct
 {
-    CONDITION_VARIABLE cv;
+    cv cv;
 } *_Cnd_t;
 
 #if _MSVCP_VER >= 140
@@ -853,19 +835,9 @@ typedef _Cnd_t *_Cnd_arg_t;
 #define CND_T_TO_ARG(c)     (&(c))
 #endif
 
-static HANDLE keyed_event;
-
 void __cdecl _Cnd_init_in_situ(_Cnd_t cnd)
 {
-    InitializeConditionVariable(&cnd->cv);
-
-    if(!keyed_event) {
-        HANDLE event;
-
-        NtCreateKeyedEvent(&event, GENERIC_READ|GENERIC_WRITE, NULL, 0);
-        if(InterlockedCompareExchangePointer(&keyed_event, event, NULL) != NULL)
-            NtClose(event);
-    }
+    cv_init(&cnd->cv);
 }
 
 int __cdecl _Cnd_init(_Cnd_t *cnd)
@@ -877,64 +849,50 @@ int __cdecl _Cnd_init(_Cnd_t *cnd)
 
 int __cdecl _Cnd_wait(_Cnd_arg_t cnd, _Mtx_arg_t mtx)
 {
-    CONDITION_VARIABLE *cv = &CND_T_FROM_ARG(cnd)->cv;
+    cv *cv = &CND_T_FROM_ARG(cnd)->cv;
+    _Mtx_t m = MTX_T_FROM_ARG(mtx);
 
-    InterlockedExchangeAdd( (LONG *)&cv->Ptr, 1 );
-    _Mtx_unlock(mtx);
-
-    NtWaitForKeyedEvent(keyed_event, &cv->Ptr, FALSE, NULL);
-
-    _Mtx_lock(mtx);
+    _Mtx_clear_owner(mtx);
+    cv_wait(cv, &m->cs);
+    _Mtx_reset_owner(mtx);
     return 0;
 }
 
 int __cdecl _Cnd_timedwait(_Cnd_arg_t cnd, _Mtx_arg_t mtx, const xtime *xt)
 {
-    CONDITION_VARIABLE *cv = &CND_T_FROM_ARG(cnd)->cv;
-    LARGE_INTEGER timeout;
-    NTSTATUS status;
+    cv *cv = &CND_T_FROM_ARG(cnd)->cv;
+    _Mtx_t m = MTX_T_FROM_ARG(mtx);
+    bool r;
 
-    InterlockedExchangeAdd( (LONG *)&cv->Ptr, 1 );
-    _Mtx_unlock(mtx);
-
-    timeout.QuadPart = (ULONGLONG)(ULONG)_Xtime_diff_to_millis(xt) * -10000;
-    status = NtWaitForKeyedEvent(keyed_event, &cv->Ptr, FALSE, &timeout);
-    if (status)
-    {
-        if (!interlocked_dec_if_nonzero( (LONG *)&cv->Ptr ))
-            status = NtWaitForKeyedEvent( keyed_event, &cv->Ptr, FALSE, NULL );
-    }
-
-    _Mtx_lock(mtx);
-    return status ? CND_TIMEDOUT : 0;
+    _Mtx_clear_owner(mtx);
+    r = cv_wait_for(cv, &m->cs, _Xtime_diff_to_millis(xt));
+    _Mtx_reset_owner(mtx);
+    return r ? 0 : CND_TIMEDOUT;
 }
 
 int __cdecl _Cnd_broadcast(_Cnd_arg_t cnd)
 {
-    CONDITION_VARIABLE *cv = &CND_T_FROM_ARG(cnd)->cv;
-    LONG val = InterlockedExchange( (LONG *)&cv->Ptr, 0 );
-    while (val-- > 0)
-        NtReleaseKeyedEvent( keyed_event, &cv->Ptr, FALSE, NULL );
+    cv_notify_all(&CND_T_FROM_ARG(cnd)->cv);
     return 0;
 }
 
 int __cdecl _Cnd_signal(_Cnd_arg_t cnd)
 {
-    CONDITION_VARIABLE *cv = &CND_T_FROM_ARG(cnd)->cv;
-    if (interlocked_dec_if_nonzero( (LONG *)&cv->Ptr ))
-        NtReleaseKeyedEvent( keyed_event, &cv->Ptr, FALSE, NULL );
+    cv_notify_one(&CND_T_FROM_ARG(cnd)->cv);
     return 0;
 }
 
 void __cdecl _Cnd_destroy_in_situ(_Cnd_t cnd)
 {
     _Cnd_broadcast(CND_T_TO_ARG(cnd));
+    cv_destroy(&cnd->cv);
 }
 
 void __cdecl _Cnd_destroy(_Cnd_arg_t cnd)
 {
     if(cnd) {
         _Cnd_broadcast(cnd);
+        cv_destroy(&CND_T_FROM_ARG(cnd)->cv);
         operator_delete(CND_T_FROM_ARG(cnd));
     }
 }
@@ -1224,13 +1182,13 @@ typedef int (__cdecl *_Thrd_start_t)(void*);
 
 int __cdecl _Thrd_equal(_Thrd_t a, _Thrd_t b)
 {
-    TRACE("(%p %u %p %u)\n", a.hnd, a.id, b.hnd, b.id);
+    TRACE("(%p %lu %p %lu)\n", a.hnd, a.id, b.hnd, b.id);
     return a.id == b.id;
 }
 
 int __cdecl _Thrd_lt(_Thrd_t a, _Thrd_t b)
 {
-    TRACE("(%p %u %p %u)\n", a.hnd, a.id, b.hnd, b.id);
+    TRACE("(%p %lu %p %lu)\n", a.hnd, a.id, b.hnd, b.id);
     return a.id < b.id;
 }
 
@@ -1258,7 +1216,7 @@ static _Thrd_t thread_current(void)
     }
     ret.id  = GetCurrentThreadId();
 
-    TRACE("(%p %u)\n", ret.hnd, ret.id);
+    TRACE("(%p %lu)\n", ret.hnd, ret.id);
     return ret;
 }
 
@@ -1284,7 +1242,7 @@ ULONGLONG __cdecl _Thrd_current(void)
 
 int __cdecl _Thrd_join(_Thrd_t thr, int *code)
 {
-    TRACE("(%p %u %p)\n", thr.hnd, thr.id, code);
+    TRACE("(%p %lu %p)\n", thr.hnd, thr.id, code);
     if (WaitForSingleObject(thr.hnd, INFINITE))
         return _THRD_ERROR;
 
@@ -1469,7 +1427,7 @@ void __thiscall _Pad__Release(_Pad *this)
 BOOL CDECL MSVCP__crtInitializeCriticalSectionEx(
         CRITICAL_SECTION *cs, DWORD spin_count, DWORD flags)
 {
-    TRACE("(%p %x %x)\n", cs, spin_count, flags);
+    TRACE("(%p %lx %lx)\n", cs, spin_count, flags);
     return InitializeCriticalSectionEx(cs, spin_count, flags);
 }
 
@@ -1479,7 +1437,7 @@ BOOL CDECL MSVCP__crtInitializeCriticalSectionEx(
 HANDLE CDECL MSVCP__crtCreateEventExW(
         SECURITY_ATTRIBUTES *attribs, LPCWSTR name, DWORD flags, DWORD access)
 {
-    TRACE("(%p %s 0x%08x 0x%08x)\n", attribs, debugstr_w(name), flags, access);
+    TRACE("(%p %s %#lx %#lx)\n", attribs, debugstr_w(name), flags, access);
     return CreateEventExW(attribs, name, flags, access);
 }
 
@@ -1514,7 +1472,7 @@ HANDLE CDECL MSVCP__crtCreateSemaphoreExW(
         SECURITY_ATTRIBUTES *attribs, LONG initial_count, LONG max_count, LPCWSTR name,
         DWORD flags, DWORD access)
 {
-    TRACE("(%p %d %d %s 0x%08x 0x%08x)\n", attribs, initial_count, max_count, debugstr_w(name),
+    TRACE("(%p %ld %ld %s %#lx %#lx)\n", attribs, initial_count, max_count, debugstr_w(name),
             flags, access);
     return CreateSemaphoreExW(attribs, initial_count, max_count, name, flags, access);
 }
@@ -1544,7 +1502,7 @@ VOID CDECL MSVCP__crtCloseThreadpoolTimer(TP_TIMER *timer)
 VOID CDECL MSVCP__crtSetThreadpoolTimer(TP_TIMER *timer,
         FILETIME *due_time, DWORD period, DWORD window_length)
 {
-    TRACE("(%p %p 0x%08x 0x%08x)\n", timer, due_time, period, window_length);
+    TRACE("(%p %p %#lx %#lx)\n", timer, due_time, period, window_length);
     return SetThreadpoolTimer(timer, due_time, period, window_length);
 }
 
@@ -1699,7 +1657,7 @@ const char* __cdecl _Syserror_map(int err)
 /* ?_Winerror_message@std@@YAKKPEADK@Z */
 ULONG __cdecl _Winerror_message(ULONG err, char *buf, ULONG size)
 {
-    TRACE("(%u %p %u)\n", err, buf, size);
+    TRACE("(%lu %p %lu)\n", err, buf, size);
 
     return FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL, err, 0, buf, size, NULL);
@@ -1781,8 +1739,6 @@ void init_misc(void *base)
 void free_misc(void)
 {
 #if _MSVCP_VER >= 110
-    if(keyed_event)
-        NtClose(keyed_event);
     HeapFree(GetProcessHeap(), 0, broadcast_at_thread_exit.to_broadcast);
 #endif
 }

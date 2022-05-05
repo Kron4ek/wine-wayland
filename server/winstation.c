@@ -75,7 +75,6 @@ static const struct object_ops winstation_ops =
     no_add_queue,                 /* add_queue */
     NULL,                         /* remove_queue */
     NULL,                         /* signaled */
-    NULL,                         /* get_esync_fd */
     NULL,                         /* get_fsync_idx */
     NULL,                         /* satisfied */
     no_signal,                    /* signal */
@@ -117,7 +116,6 @@ static const struct object_ops desktop_ops =
     no_add_queue,                 /* add_queue */
     NULL,                         /* remove_queue */
     NULL,                         /* signaled */
-    NULL,                         /* get_esync_fd */
     NULL,                         /* get_fsync_idx */
     NULL,                         /* satisfied */
     no_signal,                    /* signal */
@@ -291,8 +289,8 @@ static void desktop_destroy( struct object *obj )
     struct desktop *desktop = (struct desktop *)obj;
 
     free_hotkeys( desktop, 0 );
-    if (desktop->top_window) destroy_window( desktop->top_window );
-    if (desktop->msg_window) destroy_window( desktop->msg_window );
+    if (desktop->top_window) free_window_handle( desktop->top_window );
+    if (desktop->msg_window) free_window_handle( desktop->msg_window );
     if (desktop->global_hooks) release_object( desktop->global_hooks );
     if (desktop->close_timeout) remove_timeout_user( desktop->close_timeout );
     list_remove( &desktop->entry );

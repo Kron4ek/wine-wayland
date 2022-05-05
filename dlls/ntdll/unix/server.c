@@ -80,7 +80,6 @@
 #include "wine/debug.h"
 #include "unix_private.h"
 #include "ddk/wdm.h"
-#include "esync.h"
 #include "fsync.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(server);
@@ -108,7 +107,7 @@ sigset_t server_block_set;  /* signals to block during server calls */
 static int fd_socket = -1;  /* socket to exchange file descriptors with the server */
 static int initial_cwd = -1;
 static pid_t server_pid;
-pthread_mutex_t fd_cache_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t fd_cache_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* atomically exchange a 64-bit value */
 static inline LONG64 interlocked_xchg64( LONG64 *dest, LONG64 val )
@@ -809,7 +808,7 @@ void wine_server_send_fd( int fd )
  *
  * Receive a file descriptor passed from the server.
  */
-int receive_fd( obj_handle_t *handle )
+static int receive_fd( obj_handle_t *handle )
 {
     struct iovec vec;
     struct msghdr msghdr;
@@ -1520,6 +1519,7 @@ size_t server_init_process(void)
         is_wow64 = TRUE;
         NtCurrentTeb()->GdiBatchCount = PtrToUlong( (char *)NtCurrentTeb() - teb_offset );
         NtCurrentTeb()->WowTebOffset  = -teb_offset;
+        wow_peb = (PEB64 *)((char *)peb - page_size);
 #endif
     }
     else
@@ -1550,11 +1550,8 @@ void server_init_process_done(void)
     FILE_FS_DEVICE_INFORMATION info;
 
 
-    TRACE("Begin unix esync load hack\n");
+    TRACE("Begin unix fsync load hack\n");
     //Hack hack hack
-    activate_esync();
-    if (do_esync())
-      esync_init();
     activate_fsync();
     if (do_fsync())
       fsync_init();
@@ -1715,6 +1712,9 @@ NTSTATUS WINAPI NtClose( HANDLE handle )
     NTSTATUS ret;
     int fd;
 
+    if (HandleToLong( handle ) >= ~5 && HandleToLong( handle ) <= ~0)
+        return STATUS_SUCCESS;
+
     server_enter_uninterrupted_section( &fd_cache_mutex, &sigset );
 
     /* always remove the cached fd; if the server request fails we'll just
@@ -1722,8 +1722,6 @@ NTSTATUS WINAPI NtClose( HANDLE handle )
     fd = remove_fd_from_cache( handle );
     if (do_fsync())
         fsync_close( handle );
-    if (do_esync())
-        esync_close( handle );
 
     SERVER_START_REQ( close_handle )
     {

@@ -60,6 +60,7 @@ static int (*pgnutls_cipher_get_block_size)(gnutls_cipher_algorithm_t);
 static void (*pgnutls_transport_set_pull_timeout_function)(gnutls_session_t,
                                                            int (*)(gnutls_transport_ptr_t, unsigned int));
 static void (*pgnutls_dtls_set_mtu)(gnutls_session_t, unsigned int);
+static void (*pgnutls_dtls_set_timeouts)(gnutls_session_t, unsigned int, unsigned int);
 
 /* Not present in gnutls version < 3.2.0. */
 static int (*pgnutls_alpn_get_selected_protocol)(gnutls_session_t, gnutls_datum_t *);
@@ -198,6 +199,12 @@ static void compat_gnutls_dtls_set_mtu(gnutls_session_t session, unsigned int mt
     FIXME("\n");
 }
 
+static void compat_gnutls_dtls_set_timeouts(gnutls_session_t session, unsigned int retrans_timeout,
+        unsigned int total_timeout)
+{
+    FIXME("\n");
+}
+
 static void init_schan_buffers(struct schan_buffers *s, const PSecBufferDesc desc,
         int (*get_next_buffer)(const struct schan_transport *, struct schan_buffers *))
 {
@@ -326,7 +333,8 @@ static char *get_buffer(const struct schan_transport *t, struct schan_buffers *s
     }
 
     buffer = &s->desc->pBuffers[s->current_buffer_idx];
-    TRACE("Using buffer %d: cbBuffer %d, BufferType %#x, pvBuffer %p\n", s->current_buffer_idx, buffer->cbBuffer, buffer->BufferType, buffer->pvBuffer);
+    TRACE("Using buffer %d: cbBuffer %d, BufferType %#x, pvBuffer %p\n",
+          s->current_buffer_idx, (unsigned)buffer->cbBuffer, (unsigned)buffer->BufferType, buffer->pvBuffer);
 
     max_count = buffer->cbBuffer - s->offset;
     if (s->limit != ~0UL && s->limit < max_count)
@@ -365,7 +373,7 @@ static ssize_t pull_adapter(gnutls_transport_ptr_t transport, void *buff, size_t
     SIZE_T len = buff_len;
     char *b;
 
-    TRACE("Push %lu bytes\n", len);
+    TRACE("Pull %lu bytes\n", len);
 
     b = get_buffer(t, &t->in, &len);
     if (!b)
@@ -375,7 +383,7 @@ static ssize_t pull_adapter(gnutls_transport_ptr_t transport, void *buff, size_t
     }
     memcpy(buff, b, len);
     t->in.offset += len;
-    TRACE("Wrote %lu bytes\n", len);
+    TRACE("Read %lu bytes\n", len);
     return len;
 }
 
@@ -454,14 +462,13 @@ static NTSTATUS schan_get_enabled_protocols( void *args )
 static int pull_timeout(gnutls_transport_ptr_t transport, unsigned int timeout)
 {
     struct schan_transport *t = (struct schan_transport*)transport;
-    gnutls_session_t s = (gnutls_session_t)t->session;
     SIZE_T count = 0;
 
     TRACE("\n");
 
     if (get_buffer(t, &t->in, &count)) return 1;
-    pgnutls_transport_set_errno(s, EAGAIN);
-    return -1;
+
+    return 0;
 }
 
 static NTSTATUS schan_create_session( void *args )
@@ -476,7 +483,7 @@ static NTSTATUS schan_create_session( void *args )
 
     if (cred->enabled_protocols & (SP_PROT_DTLS1_0_CLIENT | SP_PROT_DTLS1_2_CLIENT))
     {
-        flags |= GNUTLS_DATAGRAM;
+        flags |= GNUTLS_DATAGRAM | GNUTLS_NONBLOCK;
     }
 
     err = pgnutls_init(s, flags);
@@ -989,6 +996,15 @@ static NTSTATUS schan_set_dtls_mtu( void *args )
     return SEC_E_OK;
 }
 
+static NTSTATUS schan_set_dtls_timeouts( void *args )
+{
+    const struct set_dtls_timeouts_params *params = args;
+    gnutls_session_t s = (gnutls_session_t)params->session;
+
+    pgnutls_dtls_set_timeouts(s, params->retrans_timeout, params->total_timeout);
+    return SEC_E_OK;
+}
+
 static inline void reverse_bytes(BYTE *buf, ULONG len)
 {
     BYTE tmp;
@@ -1029,7 +1045,7 @@ static gnutls_x509_privkey_t get_x509_key(const DATA_BLOB *key_blob)
     if (size < sizeof(BLOBHEADER)) return NULL;
 
     rsakey = (RSAPUBKEY *)(key_blob->pbData + sizeof(BLOBHEADER));
-    TRACE("RSA key bitlen %u pubexp %u\n", rsakey->bitlen, rsakey->pubexp);
+    TRACE("RSA key bitlen %u pubexp %u\n", (unsigned)rsakey->bitlen, (unsigned)rsakey->pubexp);
 
     size -= sizeof(BLOBHEADER) + FIELD_OFFSET(RSAPUBKEY, pubexp);
     set_component(&e, (BYTE *)&rsakey->pubexp, sizeof(rsakey->pubexp), &size);
@@ -1069,7 +1085,7 @@ static gnutls_x509_crt_t get_x509_crt(const CERT_CONTEXT *ctx)
     if (!ctx) return FALSE;
     if (ctx->dwCertEncodingType != X509_ASN_ENCODING)
     {
-        FIXME("encoding type %u not supported\n", ctx->dwCertEncodingType);
+        FIXME("encoding type %u not supported\n", (unsigned)ctx->dwCertEncodingType);
         return NULL;
     }
 
@@ -1245,6 +1261,11 @@ static NTSTATUS process_attach( void *args )
         WARN("gnutls_dtls_set_mtu not found\n");
         pgnutls_dtls_set_mtu = compat_gnutls_dtls_set_mtu;
     }
+    if (!(pgnutls_dtls_set_timeouts = dlsym(libgnutls_handle, "gnutls_dtls_set_timeouts")))
+    {
+        WARN("gnutls_dtls_set_timeouts not found\n");
+        pgnutls_dtls_set_timeouts = compat_gnutls_dtls_set_timeouts;
+    }
     if (!(pgnutls_privkey_export_x509 = dlsym(libgnutls_handle, "gnutls_privkey_export_x509")))
     {
         WARN("gnutls_privkey_export_x509 not found\n");
@@ -1308,6 +1329,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
     schan_set_application_protocols,
     schan_set_dtls_mtu,
     schan_set_session_target,
+    schan_set_dtls_timeouts,
 };
 
 #endif /* SONAME_LIBGNUTLS */

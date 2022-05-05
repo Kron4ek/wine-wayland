@@ -70,6 +70,12 @@ BOOL is_dualshock4_gamepad(WORD vid, WORD pid)
     return FALSE;
 }
 
+BOOL is_dualsense_gamepad(WORD vid, WORD pid)
+{
+    if (vid == 0x054c && pid == 0x0ce6) return TRUE;
+    return FALSE;
+}
+
 struct mouse_device
 {
     struct unix_device unix_device;
@@ -81,7 +87,8 @@ static void mouse_destroy(struct unix_device *iface)
 
 static NTSTATUS mouse_start(struct unix_device *iface)
 {
-    if (!hid_device_begin_report_descriptor(iface, HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE))
+    const USAGE_AND_PAGE device_usage = {.UsagePage = HID_USAGE_PAGE_GENERIC, .Usage = HID_USAGE_GENERIC_MOUSE};
+    if (!hid_device_begin_report_descriptor(iface, &device_usage))
         return STATUS_NO_MEMORY;
     if (!hid_device_add_buttons(iface, HID_USAGE_PAGE_BUTTON, 1, 3))
         return STATUS_NO_MEMORY;
@@ -95,8 +102,14 @@ static void mouse_stop(struct unix_device *iface)
 {
 }
 
-static NTSTATUS mouse_haptics_start(struct unix_device *iface, DWORD duration,
-                                    USHORT rumble_intensity, USHORT buzz_intensity)
+static NTSTATUS mouse_haptics_start(struct unix_device *iface, UINT duration,
+                                    USHORT rumble_intensity, USHORT buzz_intensity,
+                                    USHORT left_intensity, USHORT right_intensity)
+{
+    return STATUS_NOT_SUPPORTED;
+}
+
+static NTSTATUS mouse_haptics_stop(struct unix_device *iface)
 {
     return STATUS_NOT_SUPPORTED;
 }
@@ -129,6 +142,7 @@ static const struct hid_device_vtbl mouse_vtbl =
     mouse_start,
     mouse_stop,
     mouse_haptics_start,
+    mouse_haptics_stop,
     mouse_physical_device_control,
     mouse_physical_device_set_gain,
     mouse_physical_effect_control,
@@ -164,7 +178,8 @@ static void keyboard_destroy(struct unix_device *iface)
 
 static NTSTATUS keyboard_start(struct unix_device *iface)
 {
-    if (!hid_device_begin_report_descriptor(iface, HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD))
+    const USAGE_AND_PAGE device_usage = {.UsagePage = HID_USAGE_PAGE_GENERIC, .Usage = HID_USAGE_GENERIC_KEYBOARD};
+    if (!hid_device_begin_report_descriptor(iface, &device_usage))
         return STATUS_NO_MEMORY;
     if (!hid_device_add_buttons(iface, HID_USAGE_PAGE_KEYBOARD, 0, 101))
         return STATUS_NO_MEMORY;
@@ -178,8 +193,14 @@ static void keyboard_stop(struct unix_device *iface)
 {
 }
 
-static NTSTATUS keyboard_haptics_start(struct unix_device *iface, DWORD duration,
-                                       USHORT rumble_intensity, USHORT buzz_intensity)
+static NTSTATUS keyboard_haptics_start(struct unix_device *iface, UINT duration,
+                                       USHORT rumble_intensity, USHORT buzz_intensity,
+                                       USHORT left_intensity, USHORT right_intensity)
+{
+    return STATUS_NOT_SUPPORTED;
+}
+
+static NTSTATUS keyboard_haptics_stop(struct unix_device *iface)
 {
     return STATUS_NOT_SUPPORTED;
 }
@@ -212,6 +233,7 @@ static const struct hid_device_vtbl keyboard_vtbl =
     keyboard_start,
     keyboard_stop,
     keyboard_haptics_start,
+    keyboard_haptics_stop,
     keyboard_physical_device_control,
     keyboard_physical_device_set_gain,
     keyboard_physical_effect_control,

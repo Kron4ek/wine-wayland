@@ -63,7 +63,6 @@
 #include "request.h"
 #include "user.h"
 #include "security.h"
-#include "esync.h"
 #include "fsync.h"
 
 /* process object */
@@ -97,7 +96,6 @@ static struct security_descriptor *process_get_sd( struct object *obj );
 static void process_poll_event( struct fd *fd, int event );
 static struct list *process_get_kernel_obj_list( struct object *obj );
 static void process_destroy( struct object *obj );
-static int process_get_esync_fd( struct object *obj, enum esync_type *type );
 static unsigned int process_get_fsync_idx( struct object *obj, enum fsync_type *type );
 static void terminate_process( struct process *process, struct thread *skip, int exit_code );
 
@@ -109,7 +107,6 @@ static const struct object_ops process_ops =
     add_queue,                   /* add_queue */
     remove_queue,                /* remove_queue */
     process_signaled,            /* signaled */
-    process_get_esync_fd,        /* get_esync_fd */
     process_get_fsync_idx,       /* get_fsync_idx */
     no_satisfied,                /* satisfied */
     no_signal,                   /* signal */
@@ -162,7 +159,6 @@ static const struct object_ops startup_info_ops =
     add_queue,                     /* add_queue */
     remove_queue,                  /* remove_queue */
     startup_info_signaled,         /* signaled */
-    NULL,                          /* get_esync_fd */
     NULL,                          /* get_fsync_idx */
     no_satisfied,                  /* satisfied */
     no_signal,                     /* signal */
@@ -225,7 +221,6 @@ static const struct object_ops job_ops =
     add_queue,                     /* add_queue */
     remove_queue,                  /* remove_queue */
     job_signaled,                  /* signaled */
-    NULL,                          /* get_esync_fd */
     NULL,                          /* get_fsync_idx */
     no_satisfied,                  /* satisfied */
     no_signal,                     /* signal */
@@ -690,9 +685,8 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     process->trace_data      = 0;
     process->rawinput_mouse  = NULL;
     process->rawinput_kbd    = NULL;
-    process->esync_fd        = -1;
-    process->fsync_idx       = 0;
     memset( &process->image_info, 0, sizeof(process->image_info) );
+    process->fsync_idx       = 0;
     list_init( &process->kernel_object );
     list_init( &process->thread_list );
     list_init( &process->locks );
@@ -747,14 +741,11 @@ struct process *create_process( int fd, struct process *parent, unsigned int fla
     /* Assign a high security label to the token. The default would be medium
      * but Wine provides admin access to all applications right now so high
      * makes more sense for the time being. */
-    if (!token_assign_label( process->token, security_high_label_sid ))
+    if (!token_assign_label( process->token, &high_label_sid ))
         goto error;
 
     if (do_fsync())
         process->fsync_idx = fsync_alloc_shm( 0, 0 );
-
-    if (do_esync())
-        process->esync_fd = esync_create_fd( 0, 0 );
 
     set_fd_events( process->msg_fd, POLLIN );  /* start listening to events */
     return process;
@@ -802,9 +793,6 @@ static void process_destroy( struct object *obj )
     if (process->token) release_object( process->token );
     free( process->dir_cache );
     free( process->image );
-
-    if (do_esync())
-        close( process->esync_fd );
 }
 
 /* dump a process on stdout for debugging purposes */
@@ -822,20 +810,12 @@ static int process_signaled( struct object *obj, struct wait_queue_entry *entry 
     return !process->running_threads;
 }
 
-static int process_get_esync_fd( struct object *obj, enum esync_type *type )
-{
-    struct process *process = (struct process *)obj;
-    *type = ESYNC_MANUAL_SERVER;
-    return process->esync_fd;
-}
-
 static unsigned int process_get_fsync_idx( struct object *obj, enum fsync_type *type )
 {
     struct process *process = (struct process *)obj;
     *type = FSYNC_MANUAL_SERVER;
     return process->fsync_idx;
 }
-
 static unsigned int process_map_access( struct object *obj, unsigned int access )
 {
     access = default_map_access( obj, access );
@@ -858,12 +838,12 @@ static struct security_descriptor *process_get_sd( struct object *obj )
 
     if (!process_default_sd)
     {
-        size_t users_sid_len = security_sid_len( security_domain_users_sid );
-        size_t admins_sid_len = security_sid_len( security_builtin_admins_sid );
-        size_t dacl_len = sizeof(ACL) + 2 * offsetof( ACCESS_ALLOWED_ACE, SidStart )
-                          + users_sid_len + admins_sid_len;
-        ACCESS_ALLOWED_ACE *aaa;
-        ACL *dacl;
+        struct ace *ace;
+        struct acl *dacl;
+        struct sid *sid;
+        size_t users_sid_len = sid_len( &domain_users_sid );
+        size_t admins_sid_len = sid_len( &builtin_admins_sid );
+        size_t dacl_len = sizeof(*dacl) + 2 * sizeof(*ace) + users_sid_len + admins_sid_len;
 
         process_default_sd = mem_alloc( sizeof(*process_default_sd) + admins_sid_len + users_sid_len
                                     + dacl_len );
@@ -872,27 +852,19 @@ static struct security_descriptor *process_get_sd( struct object *obj )
         process_default_sd->group_len = users_sid_len;
         process_default_sd->sacl_len  = 0;
         process_default_sd->dacl_len  = dacl_len;
-        memcpy( process_default_sd + 1, security_builtin_admins_sid, admins_sid_len );
-        memcpy( (char *)(process_default_sd + 1) + admins_sid_len, security_domain_users_sid, users_sid_len );
+        sid = (struct sid *)(process_default_sd + 1);
+        sid = copy_sid( sid, &builtin_admins_sid );
+        sid = copy_sid( sid, &domain_users_sid );
 
-        dacl = (ACL *)((char *)(process_default_sd + 1) + admins_sid_len + users_sid_len);
-        dacl->AclRevision = ACL_REVISION;
-        dacl->Sbz1 = 0;
-        dacl->AclSize = dacl_len;
-        dacl->AceCount = 2;
-        dacl->Sbz2 = 0;
-        aaa = (ACCESS_ALLOWED_ACE *)(dacl + 1);
-        aaa->Header.AceType = ACCESS_ALLOWED_ACE_TYPE;
-        aaa->Header.AceFlags = INHERIT_ONLY_ACE | CONTAINER_INHERIT_ACE;
-        aaa->Header.AceSize = offsetof( ACCESS_ALLOWED_ACE, SidStart ) + users_sid_len;
-        aaa->Mask = GENERIC_READ;
-        memcpy( &aaa->SidStart, security_domain_users_sid, users_sid_len );
-        aaa = (ACCESS_ALLOWED_ACE *)((char *)aaa + aaa->Header.AceSize);
-        aaa->Header.AceType = ACCESS_ALLOWED_ACE_TYPE;
-        aaa->Header.AceFlags = 0;
-        aaa->Header.AceSize = offsetof( ACCESS_ALLOWED_ACE, SidStart ) + admins_sid_len;
-        aaa->Mask = PROCESS_ALL_ACCESS;
-        memcpy( &aaa->SidStart, security_builtin_admins_sid, admins_sid_len );
+        dacl = (struct acl *)((char *)(process_default_sd + 1) + admins_sid_len + users_sid_len);
+        dacl->revision = ACL_REVISION;
+        dacl->pad1     = 0;
+        dacl->size     = dacl_len;
+        dacl->count    = 2;
+        dacl->pad2     = 0;
+        ace = set_ace( ace_first( dacl ), &domain_users_sid, ACCESS_ALLOWED_ACE_TYPE,
+                       INHERIT_ONLY_ACE | CONTAINER_INHERIT_ACE, GENERIC_READ );
+        set_ace( ace_next( ace ), &builtin_admins_sid, ACCESS_ALLOWED_ACE_TYPE, 0, PROCESS_ALL_ACCESS );
     }
     return process_default_sd;
 }
@@ -1376,8 +1348,8 @@ DECL_HANDLER(new_process)
     /* connect to the window station */
     connect_process_winstation( process, parent_thread, parent );
 
-    /* set the process console */
-    if (info->data->console > 3)
+    /* inherit the process console, but keep pseudo handles (< 0), and 0 (= not attached to a console) as is */
+    if ((int)info->data->console > 0)
         info->data->console = duplicate_handle( parent, info->data->console, process,
                                                 0, 0, DUPLICATE_SAME_ACCESS );
 

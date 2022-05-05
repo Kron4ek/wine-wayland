@@ -2,6 +2,12 @@ MODULE = windows.media.speech.dll
 IMPORTS = combase uuid
 
 C_SRCS = \
-	main.c
+	async.c \
+	event_handlers.c \
+	listconstraint.c \
+	main.c \
+	recognizer.c \
+	synthesizer.c \
+	vector.c
 
 IDL_SRCS = classes.idl

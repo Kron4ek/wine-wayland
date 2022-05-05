@@ -1091,7 +1091,7 @@ msgid "Yellow"
 msgstr "Żółty"
 
 #: dlls/comdlg32/comdlg32.rc:134 dlls/light.msstyles/light.rc:29
-#: dlls/light.msstyles/light.rc:36 programs/wordpad/wordpad.rc:137
+#: dlls/light.msstyles/light.rc:35 programs/wordpad/wordpad.rc:137
 msgid "Blue"
 msgstr "Niebieski"
 
@@ -3196,11 +3196,11 @@ msgstr "Zachodni"
 msgid "Central European"
 msgstr "Środkowoeuropejski"
 
-#: dlls/gdi32/gdi32.rc:30
+#: dlls/gdi32/gdi32.rc:30 dlls/kernelbase/kernelbase.rc:33
 msgid "Cyrillic"
 msgstr "Cyrylica"
 
-#: dlls/gdi32/gdi32.rc:31
+#: dlls/gdi32/gdi32.rc:31 dlls/kernelbase/kernelbase.rc:32
 msgid "Greek"
 msgstr "Grecki"
 
@@ -3208,27 +3208,27 @@ msgstr "Grecki"
 msgid "Turkish"
 msgstr "Turecki"
 
-#: dlls/gdi32/gdi32.rc:33
+#: dlls/gdi32/gdi32.rc:33 dlls/kernelbase/kernelbase.rc:40
 msgid "Hebrew"
 msgstr "Hebrajski"
 
-#: dlls/gdi32/gdi32.rc:34
+#: dlls/gdi32/gdi32.rc:34 dlls/kernelbase/kernelbase.rc:41
 msgid "Arabic"
 msgstr "Arabski"
 
-#: dlls/gdi32/gdi32.rc:35
+#: dlls/gdi32/gdi32.rc:35 dlls/kernelbase/kernelbase.rc:31
 msgid "Baltic"
 msgstr "Bałtycki"
 
-#: dlls/gdi32/gdi32.rc:36
+#: dlls/gdi32/gdi32.rc:36 dlls/kernelbase/kernelbase.rc:42
 msgid "Vietnamese"
 msgstr "Wietnamski"
 
-#: dlls/gdi32/gdi32.rc:37
+#: dlls/gdi32/gdi32.rc:37 dlls/kernelbase/kernelbase.rc:39
 msgid "Thai"
 msgstr "Tajski"
 
-#: dlls/gdi32/gdi32.rc:38
+#: dlls/gdi32/gdi32.rc:38 dlls/kernelbase/kernelbase.rc:35
 msgid "Japanese"
 msgstr "Japoński"
 
@@ -3888,15 +3888,15 @@ msgstr "Warunkowa kompilacja jest wyłączona"
 msgid "Expected '@'"
 msgstr "Oczekiwano '@'"
 
-#: dlls/jscript/jscript.rc:80
+#: dlls/jscript/jscript.rc:82
 msgid "Microsoft JScript compilation error"
 msgstr "Błąd kompilacji Microsoft JScript"
 
-#: dlls/jscript/jscript.rc:81
+#: dlls/jscript/jscript.rc:83
 msgid "Microsoft JScript runtime error"
 msgstr "Błąd biblioteki uruchomieniowej Microsoft JScript"
 
-#: dlls/jscript/jscript.rc:82 dlls/vbscript/vbscript.rc:64
+#: dlls/jscript/jscript.rc:84 dlls/vbscript/vbscript.rc:64
 msgid "Unknown runtime error"
 msgstr "Nieznany błąd biblioteki uruchomieniowej"
 
@@ -3989,22 +3989,34 @@ msgstr ""
 "obiekcie"
 
 #: dlls/jscript/jscript.rc:74
+msgid "Cyclic __proto__ value"
+msgstr ""
+
+#: dlls/jscript/jscript.rc:75
+#, fuzzy
+#| msgid "Cannot define property '|': object is not extensible"
+msgid "Cannot create property for a non-extensible object"
+msgstr "Nie można określić własności '|': obiekt jest nierozciągalny"
+
+#: dlls/jscript/jscript.rc:76
 msgid "Cannot define property '|': object is not extensible"
 msgstr "Nie można określić własności '|': obiekt jest nierozciągalny"
 
-#: dlls/jscript/jscript.rc:75
+#: dlls/jscript/jscript.rc:77
 msgid "Cannot redefine non-configurable property '|'"
 msgstr "Nie można określić nieustawialnej własności '|'"
 
-#: dlls/jscript/jscript.rc:76
+#: dlls/jscript/jscript.rc:78
 msgid "Cannot modify non-writable property '|'"
 msgstr "Nie można zmienić niezapisywalnej własności '|'"
 
-#: dlls/jscript/jscript.rc:77
-msgid "'this' is not a Map object"
+#: dlls/jscript/jscript.rc:79
+#, fuzzy
+#| msgid "'this' is not a Map object"
+msgid "'this' is not a | object"
 msgstr "'this' nie jest obiektem Map"
 
-#: dlls/jscript/jscript.rc:78
+#: dlls/jscript/jscript.rc:80
 msgid "Property cannot have both accessors and a value"
 msgstr "Własność nie może mieć zarówno akcesorów i wartości"
 
@@ -4017,2991 +4029,3069 @@ msgstr "DLL jądra Wine"
 msgid "Wine"
 msgstr "Wine"
 
-#: dlls/kernel32/winerror.mc:28
+#: dlls/kernelbase/kernelbase.rc:29
+msgid "Western Europe and United States"
+msgstr "Europa zachodnia i Stany Zjednoczone"
+
+#: dlls/kernelbase/kernelbase.rc:30
+msgid "Central Europe"
+msgstr "Europa centralna"
+
+#: dlls/kernelbase/kernelbase.rc:34
+msgid "Turkic"
+msgstr "Turecki"
+
+#: dlls/kernelbase/kernelbase.rc:36
+msgid "Korean"
+msgstr "Koreański"
+
+#: dlls/kernelbase/kernelbase.rc:37
+msgid "Traditional Chinese"
+msgstr "Chiński tradycyjny"
+
+#: dlls/kernelbase/kernelbase.rc:38
+msgid "Simplified Chinese"
+msgstr "Chiński uproszczony"
+
+#: dlls/kernelbase/kernelbase.rc:43
+msgid "Indic"
+msgstr "Indyjski"
+
+#: dlls/kernelbase/kernelbase.rc:44
+msgid "Georgian"
+msgstr "Gruziński"
+
+#: dlls/kernelbase/kernelbase.rc:45
+msgid "Armenian"
+msgstr "Armeński"
+
+#: dlls/kernelbase/winerror.mc:28
 msgid "Success.\n"
 msgstr "Powodzenie.\n"
 
-#: dlls/kernel32/winerror.mc:33
+#: dlls/kernelbase/winerror.mc:33
 msgid "Invalid function.\n"
 msgstr "Nieprawidłowa funkcja.\n"
 
-#: dlls/kernel32/winerror.mc:38
+#: dlls/kernelbase/winerror.mc:38
 msgid "File not found.\n"
 msgstr "Nie znaleziono pliku.\n"
 
-#: dlls/kernel32/winerror.mc:43
+#: dlls/kernelbase/winerror.mc:43
 msgid "Path not found.\n"
 msgstr "Nie znaleziono ścieżki.\n"
 
-#: dlls/kernel32/winerror.mc:48
+#: dlls/kernelbase/winerror.mc:48 dlls/kernelbase/winerror.mc:3773
 msgid "Too many open files.\n"
 msgstr "Zbyt dużo otwartych plików.\n"
 
-#: dlls/kernel32/winerror.mc:53
+#: dlls/kernelbase/winerror.mc:53 dlls/kernelbase/winerror.mc:3758
 msgid "Access denied.\n"
 msgstr "Odmówiono dostępu.\n"
 
-#: dlls/kernel32/winerror.mc:58
+#: dlls/kernelbase/winerror.mc:58
 msgid "Invalid handle.\n"
 msgstr "Nieprawidłowy uchwyt.\n"
 
-#: dlls/kernel32/winerror.mc:63
+#: dlls/kernelbase/winerror.mc:63
 msgid "Memory trashed.\n"
 msgstr "Pamięć zaśmiecona.\n"
 
-#: dlls/kernel32/winerror.mc:68
+#: dlls/kernelbase/winerror.mc:68
 msgid "Not enough memory.\n"
 msgstr "Zbyt mało pamięci.\n"
 
-#: dlls/kernel32/winerror.mc:73
+#: dlls/kernelbase/winerror.mc:73
 msgid "Invalid block.\n"
 msgstr "Nieprawidłowy blok.\n"
 
-#: dlls/kernel32/winerror.mc:78
+#: dlls/kernelbase/winerror.mc:78
 msgid "Bad environment.\n"
 msgstr "Złe środowisko.\n"
 
-#: dlls/kernel32/winerror.mc:83
+#: dlls/kernelbase/winerror.mc:83
 msgid "Bad format.\n"
 msgstr "Zły format.\n"
 
-#: dlls/kernel32/winerror.mc:88
+#: dlls/kernelbase/winerror.mc:88
 msgid "Invalid access.\n"
 msgstr "Nieprawidłowy dostęp.\n"
 
-#: dlls/kernel32/winerror.mc:93
+#: dlls/kernelbase/winerror.mc:93
 msgid "Invalid data.\n"
 msgstr "Nieprawidłowe dane.\n"
 
-#: dlls/kernel32/winerror.mc:98
+#: dlls/kernelbase/winerror.mc:98
 msgid "Out of memory.\n"
 msgstr "Wyczerpano pamięć.\n"
 
-#: dlls/kernel32/winerror.mc:103
+#: dlls/kernelbase/winerror.mc:103
 msgid "Invalid drive.\n"
 msgstr "Nieprawidłowy napęd.\n"
 
-#: dlls/kernel32/winerror.mc:108
+#: dlls/kernelbase/winerror.mc:108
 msgid "Can't delete current directory.\n"
 msgstr "Nie można usunąć bieżącego katalogu.\n"
 
-#: dlls/kernel32/winerror.mc:113
+#: dlls/kernelbase/winerror.mc:113
 msgid "Not same device.\n"
 msgstr "To nie to samo urządzenie.\n"
 
-#: dlls/kernel32/winerror.mc:118
+#: dlls/kernelbase/winerror.mc:118
 msgid "No more files.\n"
 msgstr "Nie ma więcej plików.\n"
 
-#: dlls/kernel32/winerror.mc:123
+#: dlls/kernelbase/winerror.mc:123
 msgid "Write protected.\n"
 msgstr "Chroniony przed zapisem.\n"
 
-#: dlls/kernel32/winerror.mc:128
+#: dlls/kernelbase/winerror.mc:128
 msgid "Bad unit.\n"
 msgstr "Zła jednostka.\n"
 
-#: dlls/kernel32/winerror.mc:133
+#: dlls/kernelbase/winerror.mc:133
 msgid "Not ready.\n"
 msgstr "Nie gotowe.\n"
 
-#: dlls/kernel32/winerror.mc:138
+#: dlls/kernelbase/winerror.mc:138
 msgid "Bad command.\n"
 msgstr "Złe polecenie.\n"
 
-#: dlls/kernel32/winerror.mc:143
+#: dlls/kernelbase/winerror.mc:143
 msgid "CRC error.\n"
 msgstr "Błąd CRC.\n"
 
-#: dlls/kernel32/winerror.mc:148
+#: dlls/kernelbase/winerror.mc:148
 msgid "Bad length.\n"
 msgstr "Zła długość.\n"
 
-#: dlls/kernel32/winerror.mc:153 dlls/kernel32/winerror.mc:528
+#: dlls/kernelbase/winerror.mc:153 dlls/kernelbase/winerror.mc:528
 msgid "Seek error.\n"
 msgstr "Błąd żądania w pliku.\n"
 
-#: dlls/kernel32/winerror.mc:158
+#: dlls/kernelbase/winerror.mc:158
 msgid "Not DOS disk.\n"
 msgstr "To nie dysk DOS'owy.\n"
 
-#: dlls/kernel32/winerror.mc:163
+#: dlls/kernelbase/winerror.mc:163
 msgid "Sector not found.\n"
 msgstr "Nie znaleziono sektora.\n"
 
-#: dlls/kernel32/winerror.mc:168
+#: dlls/kernelbase/winerror.mc:168
 msgid "Out of paper.\n"
 msgstr "Wyczerpano papier.\n"
 
-#: dlls/kernel32/winerror.mc:173
+#: dlls/kernelbase/winerror.mc:173
 msgid "Write fault.\n"
 msgstr "Niepowodzenie zapisu.\n"
 
-#: dlls/kernel32/winerror.mc:178
+#: dlls/kernelbase/winerror.mc:178
 msgid "Read fault.\n"
 msgstr "Niepowodzenie odczytu.\n"
 
-#: dlls/kernel32/winerror.mc:183
+#: dlls/kernelbase/winerror.mc:183
 msgid "General failure.\n"
 msgstr "Ogólne niepowodzenie.\n"
 
-#: dlls/kernel32/winerror.mc:188
+#: dlls/kernelbase/winerror.mc:188
 msgid "Sharing violation.\n"
 msgstr "Naruszenie współdzielenia.\n"
 
-#: dlls/kernel32/winerror.mc:193
+#: dlls/kernelbase/winerror.mc:193
 msgid "Lock violation.\n"
 msgstr "Naruszenie blokady.\n"
 
-#: dlls/kernel32/winerror.mc:198
+#: dlls/kernelbase/winerror.mc:198
 msgid "Wrong disk.\n"
 msgstr "Nieprawidłowy dysk.\n"
 
-#: dlls/kernel32/winerror.mc:203
+#: dlls/kernelbase/winerror.mc:203
 msgid "Sharing buffer exceeded.\n"
 msgstr "Bufor współdzielenia przepełniony.\n"
 
-#: dlls/kernel32/winerror.mc:208
+#: dlls/kernelbase/winerror.mc:208
 msgid "End of file.\n"
 msgstr "Koniec pliku.\n"
 
-#: dlls/kernel32/winerror.mc:213 dlls/kernel32/winerror.mc:438
+#: dlls/kernelbase/winerror.mc:213 dlls/kernelbase/winerror.mc:438
 msgid "Disk full.\n"
 msgstr "Dysk pełen.\n"
 
-#: dlls/kernel32/winerror.mc:218
+#: dlls/kernelbase/winerror.mc:218
 msgid "Request not supported.\n"
 msgstr "Żądanie niewspierane.\n"
 
-#: dlls/kernel32/winerror.mc:223
+#: dlls/kernelbase/winerror.mc:223
 msgid "Remote machine not listening.\n"
 msgstr "Zdalna maszyna nie nasłuchuje.\n"
 
-#: dlls/kernel32/winerror.mc:228
+#: dlls/kernelbase/winerror.mc:228
 msgid "Duplicate network name.\n"
 msgstr "Powielona nazwa sieci.\n"
 
-#: dlls/kernel32/winerror.mc:233
+#: dlls/kernelbase/winerror.mc:233
 msgid "Bad network path.\n"
 msgstr "Zła ścieżka sieciowa.\n"
 
-#: dlls/kernel32/winerror.mc:238
+#: dlls/kernelbase/winerror.mc:238
 msgid "Network busy.\n"
 msgstr "Sieć zajęta.\n"
 
-#: dlls/kernel32/winerror.mc:243
+#: dlls/kernelbase/winerror.mc:243
 msgid "Device does not exist.\n"
 msgstr "Urządzenie nie istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:248
+#: dlls/kernelbase/winerror.mc:248
 msgid "Too many commands.\n"
 msgstr "Zbyt dużo poleceń.\n"
 
-#: dlls/kernel32/winerror.mc:253
+#: dlls/kernelbase/winerror.mc:253
 msgid "Adapter hardware error.\n"
 msgstr "Sprzętowy błąd adaptera.\n"
 
-#: dlls/kernel32/winerror.mc:258
+#: dlls/kernelbase/winerror.mc:258
 msgid "Bad network response.\n"
 msgstr "Zła odpowiedź sieciowa.\n"
 
-#: dlls/kernel32/winerror.mc:263
+#: dlls/kernelbase/winerror.mc:263
 msgid "Unexpected network error.\n"
 msgstr "Nieoczekiwany błąd sieciowy.\n"
 
-#: dlls/kernel32/winerror.mc:268
+#: dlls/kernelbase/winerror.mc:268
 msgid "Bad remote adapter.\n"
 msgstr "Złu zdalny adapter.\n"
 
-#: dlls/kernel32/winerror.mc:273
+#: dlls/kernelbase/winerror.mc:273
 msgid "Print queue full.\n"
 msgstr "Kolejka drukowania pełna.\n"
 
-#: dlls/kernel32/winerror.mc:278
+#: dlls/kernelbase/winerror.mc:278
 msgid "No spool space.\n"
 msgstr "Brak miejsca spool.\n"
 
-#: dlls/kernel32/winerror.mc:283
+#: dlls/kernelbase/winerror.mc:283
 msgid "Print canceled.\n"
 msgstr "Drukowanie anulowane.\n"
 
-#: dlls/kernel32/winerror.mc:288
+#: dlls/kernelbase/winerror.mc:288
 msgid "Network name deleted.\n"
 msgstr "Nazwa sieci usunięta.\n"
 
-#: dlls/kernel32/winerror.mc:293
+#: dlls/kernelbase/winerror.mc:293
 msgid "Network access denied.\n"
 msgstr "Dostęp sieciowy zastrzeżony.\n"
 
-#: dlls/kernel32/winerror.mc:298
+#: dlls/kernelbase/winerror.mc:298
 msgid "Bad device type.\n"
 msgstr "Zły rodzaj urządzenia.\n"
 
-#: dlls/kernel32/winerror.mc:303
+#: dlls/kernelbase/winerror.mc:303
 msgid "Bad network name.\n"
 msgstr "Zła nazwa sieci.\n"
 
-#: dlls/kernel32/winerror.mc:308
+#: dlls/kernelbase/winerror.mc:308
 msgid "Too many network names.\n"
 msgstr "Zbyt dużo nazw sieciowych.\n"
 
-#: dlls/kernel32/winerror.mc:313
+#: dlls/kernelbase/winerror.mc:313
 msgid "Too many network sessions.\n"
 msgstr "Zbyt dużo sesji sieciowych.\n"
 
-#: dlls/kernel32/winerror.mc:318
+#: dlls/kernelbase/winerror.mc:318
 msgid "Sharing paused.\n"
 msgstr "Współdzielenie wstrzymane.\n"
 
-#: dlls/kernel32/winerror.mc:323
+#: dlls/kernelbase/winerror.mc:323
 msgid "Request not accepted.\n"
 msgstr "Żądanie nie zaakceptowane.\n"
 
-#: dlls/kernel32/winerror.mc:328
+#: dlls/kernelbase/winerror.mc:328
 msgid "Redirector paused.\n"
 msgstr "Przekierowywanie wstrzymane.\n"
 
-#: dlls/kernel32/winerror.mc:333
+#: dlls/kernelbase/winerror.mc:333
 msgid "File exists.\n"
 msgstr "Plik istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:338
+#: dlls/kernelbase/winerror.mc:338
 msgid "Cannot create.\n"
 msgstr "Nie można stworzyć.\n"
 
-#: dlls/kernel32/winerror.mc:343
+#: dlls/kernelbase/winerror.mc:343
 msgid "Int24 failure.\n"
 msgstr "Niepowodzenie Int24.\n"
 
-#: dlls/kernel32/winerror.mc:348
+#: dlls/kernelbase/winerror.mc:348
 msgid "Out of structures.\n"
 msgstr "Wyczerpano struktury.\n"
 
-#: dlls/kernel32/winerror.mc:353
+#: dlls/kernelbase/winerror.mc:353
 msgid "Already assigned.\n"
 msgstr "Już przydzielone.\n"
 
-#: dlls/kernel32/winerror.mc:358 dlls/kernel32/winerror.mc:1713
+#: dlls/kernelbase/winerror.mc:358 dlls/kernelbase/winerror.mc:1713
 msgid "Invalid password.\n"
 msgstr "Niepoprawne hasło.\n"
 
-#: dlls/kernel32/winerror.mc:363
+#: dlls/kernelbase/winerror.mc:363
 msgid "Invalid parameter.\n"
 msgstr "Niepoprawny parametr.\n"
 
-#: dlls/kernel32/winerror.mc:368
+#: dlls/kernelbase/winerror.mc:368
 msgid "Net write fault.\n"
 msgstr "Błąd zapisu Net.\n"
 
-#: dlls/kernel32/winerror.mc:373
+#: dlls/kernelbase/winerror.mc:373
 msgid "No process slots.\n"
 msgstr "Brak slotów procesów.\n"
 
-#: dlls/kernel32/winerror.mc:378
+#: dlls/kernelbase/winerror.mc:378
 msgid "Too many semaphores.\n"
 msgstr "Zbyt dużo semafor.\n"
 
-#: dlls/kernel32/winerror.mc:383
+#: dlls/kernelbase/winerror.mc:383
 msgid "Exclusive semaphore already owned.\n"
 msgstr "Ekskluzywna semafora już ma właściciela.\n"
 
-#: dlls/kernel32/winerror.mc:388
+#: dlls/kernelbase/winerror.mc:388
 msgid "Semaphore is set.\n"
 msgstr "Semafora ustawiona.\n"
 
-#: dlls/kernel32/winerror.mc:393
+#: dlls/kernelbase/winerror.mc:393
 msgid "Too many semaphore requests.\n"
 msgstr "Zbyt dużo żądań semafor.\n"
 
-#: dlls/kernel32/winerror.mc:398
+#: dlls/kernelbase/winerror.mc:398
 msgid "Invalid at interrupt time.\n"
 msgstr "Niepoprawny w czasie przerywania.\n"
 
-#: dlls/kernel32/winerror.mc:403
+#: dlls/kernelbase/winerror.mc:403
 msgid "Semaphore owner died.\n"
 msgstr "Właściciel semafory umarł.\n"
 
-#: dlls/kernel32/winerror.mc:408
+#: dlls/kernelbase/winerror.mc:408
 msgid "Semaphore user limit.\n"
 msgstr "Ograniczenie użytkownika semafory.\n"
 
-#: dlls/kernel32/winerror.mc:413
+#: dlls/kernelbase/winerror.mc:413
 msgid "Insert disk for drive %1.\n"
 msgstr "Włóż dysk do napędu %1.\n"
 
-#: dlls/kernel32/winerror.mc:418
+#: dlls/kernelbase/winerror.mc:418
 msgid "Drive locked.\n"
 msgstr "Napęd zablokowany.\n"
 
-#: dlls/kernel32/winerror.mc:423
+#: dlls/kernelbase/winerror.mc:423
 msgid "Broken pipe.\n"
 msgstr "Uszkodzony symbol potoku.\n"
 
-#: dlls/kernel32/winerror.mc:428
+#: dlls/kernelbase/winerror.mc:428
 msgid "Open failed.\n"
 msgstr "Niepowodzenie otworzenia.\n"
 
-#: dlls/kernel32/winerror.mc:433
+#: dlls/kernelbase/winerror.mc:433
 msgid "Buffer overflow.\n"
 msgstr "Bufor przepełniony.\n"
 
-#: dlls/kernel32/winerror.mc:443
+#: dlls/kernelbase/winerror.mc:443
 msgid "No more search handles.\n"
 msgstr "Nie ma więcej uchwytów do wyszukiwania.\n"
 
-#: dlls/kernel32/winerror.mc:448
+#: dlls/kernelbase/winerror.mc:448
 msgid "Invalid target handle.\n"
 msgstr "Niepoprawny uchwyt celu.\n"
 
-#: dlls/kernel32/winerror.mc:453
+#: dlls/kernelbase/winerror.mc:453
 msgid "Invalid IOCTL.\n"
 msgstr "Niepoprawne IOCTL.\n"
 
-#: dlls/kernel32/winerror.mc:458
+#: dlls/kernelbase/winerror.mc:458
 msgid "Invalid verify switch.\n"
 msgstr "Niepoprawny przełącznik weryfikujący.\n"
 
-#: dlls/kernel32/winerror.mc:463
+#: dlls/kernelbase/winerror.mc:463
 msgid "Bad driver level.\n"
 msgstr "Zły poziom sterownika.\n"
 
-#: dlls/kernel32/winerror.mc:468
+#: dlls/kernelbase/winerror.mc:468
 msgid "Call not implemented.\n"
 msgstr "Wywołanie niezaimplementowane.\n"
 
-#: dlls/kernel32/winerror.mc:473
+#: dlls/kernelbase/winerror.mc:473
 msgid "Semaphore timeout.\n"
 msgstr "Przekroczenie czasu semafory.\n"
 
-#: dlls/kernel32/winerror.mc:478
+#: dlls/kernelbase/winerror.mc:478
 msgid "Insufficient buffer.\n"
 msgstr "Niewystarczający bufor.\n"
 
-#: dlls/kernel32/winerror.mc:483 dlls/mferror/mferror.mc:109
+#: dlls/kernelbase/winerror.mc:483 dlls/mferror/mferror.mc:109
 msgid "Invalid name.\n"
 msgstr "Niepoprawna nazwa.\n"
 
-#: dlls/kernel32/winerror.mc:488
+#: dlls/kernelbase/winerror.mc:488
 msgid "Invalid level.\n"
 msgstr "Niepoprawny poziom.\n"
 
-#: dlls/kernel32/winerror.mc:493
+#: dlls/kernelbase/winerror.mc:493
 msgid "No volume label.\n"
 msgstr "Brak etykiety wolumenu.\n"
 
-#: dlls/kernel32/winerror.mc:498
+#: dlls/kernelbase/winerror.mc:498
 msgid "Module not found.\n"
 msgstr "Nie znaleziono modułu.\n"
 
-#: dlls/kernel32/winerror.mc:503
+#: dlls/kernelbase/winerror.mc:503
 msgid "Procedure not found.\n"
 msgstr "Nie znaleziono procedury.\n"
 
-#: dlls/kernel32/winerror.mc:508
+#: dlls/kernelbase/winerror.mc:508
 msgid "No children to wait for.\n"
 msgstr "Brak procesów potomnych, na które można czekać.\n"
 
-#: dlls/kernel32/winerror.mc:513
+#: dlls/kernelbase/winerror.mc:513
 msgid "Child process has not completed.\n"
 msgstr "Proces potomny nie skończył.\n"
 
-#: dlls/kernel32/winerror.mc:518
+#: dlls/kernelbase/winerror.mc:518
 msgid "Invalid use of direct access handle.\n"
 msgstr "Niepoprawne użycie bezpośredniego uchwytu dostępu.\n"
 
-#: dlls/kernel32/winerror.mc:523
+#: dlls/kernelbase/winerror.mc:523
 msgid "Negative seek.\n"
 msgstr "Ujemne żądanie w pliku.\n"
 
-#: dlls/kernel32/winerror.mc:533
+#: dlls/kernelbase/winerror.mc:533
 msgid "Drive is a JOIN target.\n"
 msgstr "Napęd jest przeznaczeniem JOIN.\n"
 
-#: dlls/kernel32/winerror.mc:538
+#: dlls/kernelbase/winerror.mc:538
 msgid "Drive is already JOINed.\n"
 msgstr "Napęd już jest JOINed.\n"
 
-#: dlls/kernel32/winerror.mc:543
+#: dlls/kernelbase/winerror.mc:543
 msgid "Drive is already SUBSTed.\n"
 msgstr "Napęd już jest SUBSTed.\n"
 
-#: dlls/kernel32/winerror.mc:548
+#: dlls/kernelbase/winerror.mc:548
 msgid "Drive is not JOINed.\n"
 msgstr "Napęd nie jest JOINed.\n"
 
-#: dlls/kernel32/winerror.mc:553
+#: dlls/kernelbase/winerror.mc:553
 msgid "Drive is not SUBSTed.\n"
 msgstr "Napęd nie jest SUBSTed.\n"
 
-#: dlls/kernel32/winerror.mc:558
+#: dlls/kernelbase/winerror.mc:558
 msgid "Attempt to JOIN onto a JOINed drive.\n"
 msgstr "Usiłowanie JOIN na napędzie JOINed.\n"
 
-#: dlls/kernel32/winerror.mc:563
+#: dlls/kernelbase/winerror.mc:563
 msgid "Attempt to SUBST onto a SUBSTed drive.\n"
 msgstr "Usiłowanie SUBST na napędzie SUBSTed.\n"
 
-#: dlls/kernel32/winerror.mc:568
+#: dlls/kernelbase/winerror.mc:568
 msgid "Attempt to JOIN to a SUBSTed drive.\n"
 msgstr "Usiłowanie JOIN na napędzie SUBSTed.\n"
 
-#: dlls/kernel32/winerror.mc:573
+#: dlls/kernelbase/winerror.mc:573
 msgid "Attempt to SUBST to a JOINed drive.\n"
 msgstr "Usiłowanie SUBST na napędzie JOINed.\n"
 
-#: dlls/kernel32/winerror.mc:578
+#: dlls/kernelbase/winerror.mc:578
 msgid "Drive is busy.\n"
 msgstr "Napęd jest zajęty.\n"
 
-#: dlls/kernel32/winerror.mc:583
+#: dlls/kernelbase/winerror.mc:583
 msgid "Same drive.\n"
 msgstr "Ten sam napęd.\n"
 
-#: dlls/kernel32/winerror.mc:588
+#: dlls/kernelbase/winerror.mc:588
 msgid "Not top-level directory.\n"
 msgstr "Katalog nienadrzędny.\n"
 
-#: dlls/kernel32/winerror.mc:593
+#: dlls/kernelbase/winerror.mc:593
 msgid "Directory is not empty.\n"
 msgstr "Katalog nie jest pusty.\n"
 
-#: dlls/kernel32/winerror.mc:598
+#: dlls/kernelbase/winerror.mc:598
 msgid "Path is in use as a SUBST.\n"
 msgstr "Ścieżka jest w użyciu jako SUBST.\n"
 
-#: dlls/kernel32/winerror.mc:603
+#: dlls/kernelbase/winerror.mc:603
 msgid "Path is in use as a JOIN.\n"
 msgstr "Ścieżka jest w użyciu jako JOIN.\n"
 
-#: dlls/kernel32/winerror.mc:608
+#: dlls/kernelbase/winerror.mc:608
 msgid "Path is busy.\n"
 msgstr "Ścieżka jest zajęta.\n"
 
-#: dlls/kernel32/winerror.mc:613
+#: dlls/kernelbase/winerror.mc:613
 msgid "Already a SUBST target.\n"
 msgstr "Już jest przeznaczeniem SUBST.\n"
 
-#: dlls/kernel32/winerror.mc:618
+#: dlls/kernelbase/winerror.mc:618
 msgid "System trace not specified or disallowed.\n"
 msgstr "Śledzenie systemu nie określone lub niedozwolone.\n"
 
-#: dlls/kernel32/winerror.mc:623
+#: dlls/kernelbase/winerror.mc:623
 msgid "Event count for DosMuxSemWait incorrect.\n"
 msgstr "Nieprawidłowa liczba zdarzeń dla DosMuxSemWait.\n"
 
-#: dlls/kernel32/winerror.mc:628
+#: dlls/kernelbase/winerror.mc:628
 msgid "Too many waiters for DosMuxSemWait.\n"
 msgstr "Zbyt dużo oczekujących do DosMuxSemWait.\n"
 
-#: dlls/kernel32/winerror.mc:633
+#: dlls/kernelbase/winerror.mc:633
 msgid "DosSemMuxWait list invalid.\n"
 msgstr "Niepoprawna lista DosSemMuxWait.\n"
 
-#: dlls/kernel32/winerror.mc:638
+#: dlls/kernelbase/winerror.mc:638
 msgid "Volume label too long.\n"
 msgstr "Zbyt długa etykieta dysku.\n"
 
-#: dlls/kernel32/winerror.mc:643
+#: dlls/kernelbase/winerror.mc:643
 msgid "Too many TCBs.\n"
 msgstr "Zbyt dużo TCB-ów.\n"
 
-#: dlls/kernel32/winerror.mc:648
+#: dlls/kernelbase/winerror.mc:648
 msgid "Signal refused.\n"
 msgstr "Sygnał odmówił.\n"
 
-#: dlls/kernel32/winerror.mc:653
+#: dlls/kernelbase/winerror.mc:653
 msgid "Segment discarded.\n"
 msgstr "Segment skasowany.\n"
 
-#: dlls/kernel32/winerror.mc:658
+#: dlls/kernelbase/winerror.mc:658
 msgid "Segment not locked.\n"
 msgstr "Segment niezablokowany.\n"
 
-#: dlls/kernel32/winerror.mc:663
+#: dlls/kernelbase/winerror.mc:663
 msgid "Bad thread ID address.\n"
 msgstr "Zły adres identyfikatora wątku.\n"
 
-#: dlls/kernel32/winerror.mc:668
+#: dlls/kernelbase/winerror.mc:668
 msgid "Bad arguments to DosExecPgm.\n"
 msgstr "Złe argumenty dla DosExecPgm.\n"
 
-#: dlls/kernel32/winerror.mc:673
+#: dlls/kernelbase/winerror.mc:673
 msgid "Path is invalid.\n"
 msgstr "Niepoprawna ścieżka.\n"
 
-#: dlls/kernel32/winerror.mc:678
+#: dlls/kernelbase/winerror.mc:678
 msgid "Signal pending.\n"
 msgstr "Sygnał oczekuje.\n"
 
-#: dlls/kernel32/winerror.mc:683
+#: dlls/kernelbase/winerror.mc:683
 msgid "Max system-wide thread count reached.\n"
 msgstr "Osiągnięto ogólnosystemową maksymalną liczbę licznika wątków.\n"
 
-#: dlls/kernel32/winerror.mc:688
+#: dlls/kernelbase/winerror.mc:688
 msgid "Lock failed.\n"
 msgstr "Nieudane zablokowanie.\n"
 
-#: dlls/kernel32/winerror.mc:693
+#: dlls/kernelbase/winerror.mc:693
 msgid "Resource in use.\n"
 msgstr "Zasoby w użyciu.\n"
 
-#: dlls/kernel32/winerror.mc:698
+#: dlls/kernelbase/winerror.mc:698
 msgid "Cancel violation.\n"
 msgstr "Anuluj naruszenie.\n"
 
-#: dlls/kernel32/winerror.mc:703
+#: dlls/kernelbase/winerror.mc:703
 msgid "Atomic locks not supported.\n"
 msgstr "Blokady atomowe są nieobsługiwane.\n"
 
-#: dlls/kernel32/winerror.mc:708
+#: dlls/kernelbase/winerror.mc:708
 msgid "Invalid segment number.\n"
 msgstr "Niepoprawny numer segmentu.\n"
 
-#: dlls/kernel32/winerror.mc:713
+#: dlls/kernelbase/winerror.mc:713
 msgid "Invalid ordinal for %1.\n"
 msgstr "Niepoprawny liczebnik porządkowy dla %1.\n"
 
-#: dlls/kernel32/winerror.mc:718
+#: dlls/kernelbase/winerror.mc:718
 msgid "File already exists.\n"
 msgstr "Plik już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:723
+#: dlls/kernelbase/winerror.mc:723
 msgid "Invalid flag number.\n"
 msgstr "Niepoprawny numer flagi.\n"
 
-#: dlls/kernel32/winerror.mc:728
+#: dlls/kernelbase/winerror.mc:728
 msgid "Semaphore name not found.\n"
 msgstr "Nie znaleziono nazwy semafory.\n"
 
-#: dlls/kernel32/winerror.mc:733
+#: dlls/kernelbase/winerror.mc:733
 msgid "Invalid starting code segment for %1.\n"
 msgstr "Niepoprawny segment startowy kodu dla %1.\n"
 
-#: dlls/kernel32/winerror.mc:738
+#: dlls/kernelbase/winerror.mc:738
 msgid "Invalid starting stack segment for %1.\n"
 msgstr "Niepoprawny segment startowy stosu dla %1.\n"
 
-#: dlls/kernel32/winerror.mc:743
+#: dlls/kernelbase/winerror.mc:743
 msgid "Invalid module type for %1.\n"
 msgstr "Niepoprawny typ modułu dla %1.\n"
 
-#: dlls/kernel32/winerror.mc:748
+#: dlls/kernelbase/winerror.mc:748
 msgid "Invalid EXE signature in %1.\n"
 msgstr "Niepoprawna sygnatura EXE w %1.\n"
 
-#: dlls/kernel32/winerror.mc:753
+#: dlls/kernelbase/winerror.mc:753
 msgid "EXE %1 is marked invalid.\n"
 msgstr "EXE %1 jest naznaczony jako niepoprawny.\n"
 
-#: dlls/kernel32/winerror.mc:758
+#: dlls/kernelbase/winerror.mc:758
 msgid "Bad EXE format for %1.\n"
 msgstr "Zły format EXE dla %1.\n"
 
-#: dlls/kernel32/winerror.mc:763
+#: dlls/kernelbase/winerror.mc:763
 msgid "Iterated data exceeds 64k in %1.\n"
 msgstr "Iterowana dana przekracza 64k w %1.\n"
 
-#: dlls/kernel32/winerror.mc:768
+#: dlls/kernelbase/winerror.mc:768
 msgid "Invalid MinAllocSize in %1.\n"
 msgstr "Niepoprawne MinAllocSize w %1.\n"
 
-#: dlls/kernel32/winerror.mc:773
+#: dlls/kernelbase/winerror.mc:773
 msgid "Dynlink from invalid ring.\n"
 msgstr "Dynlink z niepoprawnego ring'u.\n"
 
-#: dlls/kernel32/winerror.mc:778
+#: dlls/kernelbase/winerror.mc:778
 msgid "IOPL not enabled.\n"
 msgstr "IOPL nie włączony.\n"
 
-#: dlls/kernel32/winerror.mc:783
+#: dlls/kernelbase/winerror.mc:783
 msgid "Invalid SEGDPL in %1.\n"
 msgstr "Niepoprawny SEGDPL w %1.\n"
 
-#: dlls/kernel32/winerror.mc:788
+#: dlls/kernelbase/winerror.mc:788
 msgid "Auto data segment exceeds 64k.\n"
 msgstr "Automatyczny segment danych przekracza 64k.\n"
 
-#: dlls/kernel32/winerror.mc:793
+#: dlls/kernelbase/winerror.mc:793
 msgid "Ring 2 segment must be movable.\n"
 msgstr "Segment Ring'u 2 musi być ruchomy.\n"
 
-#: dlls/kernel32/winerror.mc:798
+#: dlls/kernelbase/winerror.mc:798
 msgid "Relocation chain exceeds segment limit in %1.\n"
 msgstr "Łańcuch przemieszczenia przekracza granicę segmentu w %1.\n"
 
-#: dlls/kernel32/winerror.mc:803
+#: dlls/kernelbase/winerror.mc:803
 msgid "Infinite loop in relocation chain in %1.\n"
 msgstr "Nieskończona pętla w łańcuchu relokacji w %1.\n"
 
-#: dlls/kernel32/winerror.mc:808
+#: dlls/kernelbase/winerror.mc:808
 msgid "Environment variable not found.\n"
 msgstr "Nie znaleziono zmiennej środowiskowej.\n"
 
-#: dlls/kernel32/winerror.mc:813
+#: dlls/kernelbase/winerror.mc:813
 msgid "No signal sent.\n"
 msgstr "Brak wysłanego sygnału.\n"
 
-#: dlls/kernel32/winerror.mc:818
+#: dlls/kernelbase/winerror.mc:818 programs/cmd/cmd.rc:410
 msgid "File name is too long.\n"
 msgstr "Nazwa pliku zbyt długa.\n"
 
-#: dlls/kernel32/winerror.mc:823
+#: dlls/kernelbase/winerror.mc:823
 msgid "Ring 2 stack in use.\n"
 msgstr "Stos Ring'u 2 w użyciu.\n"
 
-#: dlls/kernel32/winerror.mc:828
+#: dlls/kernelbase/winerror.mc:828
 msgid "Error in use of filename wildcards.\n"
 msgstr "Błąd w użyciu znaków wieloznacznych w nazwie pliku.\n"
 
-#: dlls/kernel32/winerror.mc:833
+#: dlls/kernelbase/winerror.mc:833
 msgid "Invalid signal number.\n"
 msgstr "Niepoprawny numer sygnału.\n"
 
-#: dlls/kernel32/winerror.mc:838
+#: dlls/kernelbase/winerror.mc:838
 msgid "Error setting signal handler.\n"
 msgstr "Błąd w ustawieniu procedury obsługi sygnału.\n"
 
-#: dlls/kernel32/winerror.mc:843
+#: dlls/kernelbase/winerror.mc:843
 msgid "Segment locked.\n"
 msgstr "Segment zablokowany.\n"
 
-#: dlls/kernel32/winerror.mc:848
+#: dlls/kernelbase/winerror.mc:848
 msgid "Too many modules.\n"
 msgstr "Zbyt dużo modułów.\n"
 
-#: dlls/kernel32/winerror.mc:853
+#: dlls/kernelbase/winerror.mc:853
 msgid "Nesting LoadModule calls not allowed.\n"
 msgstr "Zagnieżdżanie wywołań LoadModule nie dozwolone.\n"
 
-#: dlls/kernel32/winerror.mc:858
+#: dlls/kernelbase/winerror.mc:858
 msgid "Machine type mismatch.\n"
 msgstr "Rodzaj maszyny niedopasowany.\n"
 
-#: dlls/kernel32/winerror.mc:863
+#: dlls/kernelbase/winerror.mc:863
 msgid "Bad pipe.\n"
 msgstr "Zły symbol potoku.\n"
 
-#: dlls/kernel32/winerror.mc:868
+#: dlls/kernelbase/winerror.mc:868
 msgid "Pipe busy.\n"
 msgstr "Symbol potoku zajęty.\n"
 
-#: dlls/kernel32/winerror.mc:873
+#: dlls/kernelbase/winerror.mc:873
 msgid "Pipe closed.\n"
 msgstr "Symbol potoku zamknięty.\n"
 
-#: dlls/kernel32/winerror.mc:878
+#: dlls/kernelbase/winerror.mc:878
 msgid "Pipe not connected.\n"
 msgstr "Symbol potoku niepodłączony.\n"
 
-#: dlls/kernel32/winerror.mc:883
+#: dlls/kernelbase/winerror.mc:883
 msgid "More data available.\n"
 msgstr "Więcej danych jest dostępnych.\n"
 
-#: dlls/kernel32/winerror.mc:888
+#: dlls/kernelbase/winerror.mc:888
 msgid "Session canceled.\n"
 msgstr "Sesja anulowana.\n"
 
-#: dlls/kernel32/winerror.mc:893
+#: dlls/kernelbase/winerror.mc:893
 msgid "Invalid extended attribute name.\n"
 msgstr "Niepoprawna nazwa rozszerzonego atrybutu.\n"
 
-#: dlls/kernel32/winerror.mc:898
+#: dlls/kernelbase/winerror.mc:898
 msgid "Extended attribute list inconsistent.\n"
 msgstr "Lista rozszerzonych atrybutów niespójna.\n"
 
-#: dlls/kernel32/winerror.mc:903
+#: dlls/kernelbase/winerror.mc:903
 msgid "No more data available.\n"
 msgstr "Nie ma więcej dostępnych danych.\n"
 
-#: dlls/kernel32/winerror.mc:908
+#: dlls/kernelbase/winerror.mc:908
 msgid "Cannot use Copy API.\n"
 msgstr "Nie można użyć Copy API.\n"
 
-#: dlls/kernel32/winerror.mc:913
+#: dlls/kernelbase/winerror.mc:913
 msgid "Directory name invalid.\n"
 msgstr "Niepoprawna nazwa katalogu.\n"
 
-#: dlls/kernel32/winerror.mc:918
+#: dlls/kernelbase/winerror.mc:918
 msgid "Extended attributes didn't fit.\n"
 msgstr "Rozszerzone atrybuty nie pasują.\n"
 
-#: dlls/kernel32/winerror.mc:923
+#: dlls/kernelbase/winerror.mc:923
 msgid "Extended attribute file corrupt.\n"
 msgstr "Plik rozszerzonych atrybutów zepsuty.\n"
 
-#: dlls/kernel32/winerror.mc:928
+#: dlls/kernelbase/winerror.mc:928
 msgid "Extended attribute table full.\n"
 msgstr "Tablica rozszerzonych atrybutów pełna.\n"
 
-#: dlls/kernel32/winerror.mc:933
+#: dlls/kernelbase/winerror.mc:933
 msgid "Invalid extended attribute handle.\n"
 msgstr "Niepoprawny uchwyt atrybutu rozszerzonego.\n"
 
-#: dlls/kernel32/winerror.mc:938
+#: dlls/kernelbase/winerror.mc:938
 msgid "Extended attributes not supported.\n"
 msgstr "Rozszerzone atrybuty niewspierane.\n"
 
-#: dlls/kernel32/winerror.mc:943
+#: dlls/kernelbase/winerror.mc:943
 msgid "Mutex not owned by caller.\n"
 msgstr "Mutex nie posiadany przez procedurę wywołującą.\n"
 
-#: dlls/kernel32/winerror.mc:948
+#: dlls/kernelbase/winerror.mc:948
 msgid "Too many posts to semaphore.\n"
 msgstr "Zbyt wiele postów do semafory.\n"
 
-#: dlls/kernel32/winerror.mc:953
+#: dlls/kernelbase/winerror.mc:953
 msgid "Read/WriteProcessMemory partially completed.\n"
 msgstr "Read/WriteProcessMemory częściowo ukończyło.\n"
 
-#: dlls/kernel32/winerror.mc:958
+#: dlls/kernelbase/winerror.mc:958
 msgid "The oplock wasn't granted.\n"
 msgstr "Oplock nie został przyznany.\n"
 
-#: dlls/kernel32/winerror.mc:963
+#: dlls/kernelbase/winerror.mc:963
 msgid "Invalid oplock message received.\n"
 msgstr "Otrzymano niepoprawną wiadomość oplock.\n"
 
-#: dlls/kernel32/winerror.mc:968
+#: dlls/kernelbase/winerror.mc:968
 msgid "Message 0x%1 not found in file %2.\n"
 msgstr "Nie znaleziono wiadomości 0x%1 w pliku %2.\n"
 
-#: dlls/kernel32/winerror.mc:973
+#: dlls/kernelbase/winerror.mc:973
 msgid "Invalid address.\n"
 msgstr "Niepoprawny adres.\n"
 
-#: dlls/kernel32/winerror.mc:978
+#: dlls/kernelbase/winerror.mc:978
 msgid "Arithmetic overflow.\n"
 msgstr "Arytmetyczne przepełnienie górne.\n"
 
-#: dlls/kernel32/winerror.mc:983
+#: dlls/kernelbase/winerror.mc:983
 msgid "Pipe connected.\n"
 msgstr "Symbol potoku podłączony.\n"
 
-#: dlls/kernel32/winerror.mc:988
+#: dlls/kernelbase/winerror.mc:988
 msgid "Pipe listening.\n"
 msgstr "Symbol potoku nasłuchuje.\n"
 
-#: dlls/kernel32/winerror.mc:993
+#: dlls/kernelbase/winerror.mc:993
 msgid "Extended attribute access denied.\n"
 msgstr "Dostęp rozszerzonego atrybutu zastrzeżony.\n"
 
-#: dlls/kernel32/winerror.mc:998
+#: dlls/kernelbase/winerror.mc:998
 msgid "I/O operation aborted.\n"
 msgstr "Operacja WE/WY przerwana.\n"
 
-#: dlls/kernel32/winerror.mc:1003
+#: dlls/kernelbase/winerror.mc:1003
 msgid "Overlapped I/O incomplete.\n"
 msgstr "Zachodzące operacje WE/WY niekompletne.\n"
 
-#: dlls/kernel32/winerror.mc:1008
+#: dlls/kernelbase/winerror.mc:1008
 msgid "Overlapped I/O pending.\n"
 msgstr "Zachodzące operacje WE/WY w toku.\n"
 
-#: dlls/kernel32/winerror.mc:1013
+#: dlls/kernelbase/winerror.mc:1013
 msgid "No access to memory location.\n"
 msgstr "Brak dostępu do położenia w pamięci.\n"
 
-#: dlls/kernel32/winerror.mc:1018
+#: dlls/kernelbase/winerror.mc:1018
 msgid "Swap error.\n"
 msgstr "Błąd pliku wymiany.\n"
 
-#: dlls/kernel32/winerror.mc:1023
+#: dlls/kernelbase/winerror.mc:1023
 msgid "Stack overflow.\n"
 msgstr "Przepełnienie stosu.\n"
 
-#: dlls/kernel32/winerror.mc:1028
+#: dlls/kernelbase/winerror.mc:1028
 msgid "Invalid message.\n"
 msgstr "Niepoprawna wiadomość.\n"
 
-#: dlls/kernel32/winerror.mc:1033
+#: dlls/kernelbase/winerror.mc:1033
 msgid "Cannot complete.\n"
 msgstr "Nie można ukończyć.\n"
 
-#: dlls/kernel32/winerror.mc:1038
+#: dlls/kernelbase/winerror.mc:1038
 msgid "Invalid flags.\n"
 msgstr "Niepoprawne flagi.\n"
 
-#: dlls/kernel32/winerror.mc:1043
+#: dlls/kernelbase/winerror.mc:1043
 msgid "Unrecognized volume.\n"
 msgstr "Nierozpoznany wolumen.\n"
 
-#: dlls/kernel32/winerror.mc:1048
+#: dlls/kernelbase/winerror.mc:1048
 msgid "File invalid.\n"
 msgstr "Niepoprawny plik.\n"
 
-#: dlls/kernel32/winerror.mc:1053
+#: dlls/kernelbase/winerror.mc:1053
 msgid "Cannot run full-screen.\n"
 msgstr "Nie można uruchomić w trybie pełnoekranowym.\n"
 
-#: dlls/kernel32/winerror.mc:1058
+#: dlls/kernelbase/winerror.mc:1058
 msgid "Nonexistent token.\n"
 msgstr "Nieistniejący token.\n"
 
-#: dlls/kernel32/winerror.mc:1063
+#: dlls/kernelbase/winerror.mc:1063
 msgid "Registry corrupt.\n"
 msgstr "Rejestr uszkodzony.\n"
 
-#: dlls/kernel32/winerror.mc:1068
+#: dlls/kernelbase/winerror.mc:1068
 msgid "Invalid key.\n"
 msgstr "Niepoprawny klucz.\n"
 
-#: dlls/kernel32/winerror.mc:1073
+#: dlls/kernelbase/winerror.mc:1073
 msgid "Can't open registry key.\n"
 msgstr "Nie można otworzyć klucza rejestru.\n"
 
-#: dlls/kernel32/winerror.mc:1078
+#: dlls/kernelbase/winerror.mc:1078
 msgid "Can't read registry key.\n"
 msgstr "Nie można odczytać klucza rejestru.\n"
 
-#: dlls/kernel32/winerror.mc:1083
+#: dlls/kernelbase/winerror.mc:1083
 msgid "Can't write registry key.\n"
 msgstr "Nie można zapisać klucza rejestru.\n"
 
-#: dlls/kernel32/winerror.mc:1088
+#: dlls/kernelbase/winerror.mc:1088
 msgid "Registry has been recovered.\n"
 msgstr "Rejestr został przywrócony.\n"
 
-#: dlls/kernel32/winerror.mc:1093
+#: dlls/kernelbase/winerror.mc:1093
 msgid "Registry is corrupt.\n"
 msgstr "Rejestr jest zepsuty.\n"
 
-#: dlls/kernel32/winerror.mc:1098
+#: dlls/kernelbase/winerror.mc:1098
 msgid "I/O to registry failed.\n"
 msgstr "Operacje WE/WY do rejestru nieudane.\n"
 
-#: dlls/kernel32/winerror.mc:1103
+#: dlls/kernelbase/winerror.mc:1103
 msgid "Not registry file.\n"
 msgstr "To nie jest plik rejestru.\n"
 
-#: dlls/kernel32/winerror.mc:1108
+#: dlls/kernelbase/winerror.mc:1108
 msgid "Key deleted.\n"
 msgstr "Klucz usunięty.\n"
 
-#: dlls/kernel32/winerror.mc:1113
+#: dlls/kernelbase/winerror.mc:1113
 msgid "No registry log space.\n"
 msgstr "Brak miejsca na log rejestru.\n"
 
-#: dlls/kernel32/winerror.mc:1118
+#: dlls/kernelbase/winerror.mc:1118
 msgid "Registry key has subkeys.\n"
 msgstr "Klucz rejestru ma podklucze.\n"
 
-#: dlls/kernel32/winerror.mc:1123
+#: dlls/kernelbase/winerror.mc:1123
 msgid "Subkey must be volatile.\n"
 msgstr "Podklucz musi być rodzaju volatile.\n"
 
-#: dlls/kernel32/winerror.mc:1128
+#: dlls/kernelbase/winerror.mc:1128
 msgid "Notify change request in progress.\n"
 msgstr "Powiadom o żądaniu zmiany w postępie.\n"
 
-#: dlls/kernel32/winerror.mc:1133
+#: dlls/kernelbase/winerror.mc:1133
 msgid "Dependent services are running.\n"
 msgstr "Zależne usługi są uruchomione.\n"
 
-#: dlls/kernel32/winerror.mc:1138
+#: dlls/kernelbase/winerror.mc:1138
 msgid "Invalid service control.\n"
 msgstr "Niepoprawna kontrola usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1143
+#: dlls/kernelbase/winerror.mc:1143
 msgid "Service request timeout.\n"
 msgstr "Czas wygaśnięcia żądania usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1148
+#: dlls/kernelbase/winerror.mc:1148
 msgid "Cannot create service thread.\n"
 msgstr "Nie można stworzyć wątku usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1153
+#: dlls/kernelbase/winerror.mc:1153
 msgid "Service database locked.\n"
 msgstr "Baza danych usługi zablokowana.\n"
 
-#: dlls/kernel32/winerror.mc:1158
+#: dlls/kernelbase/winerror.mc:1158
 msgid "Service already running.\n"
 msgstr "Usługa już działa.\n"
 
-#: dlls/kernel32/winerror.mc:1163
+#: dlls/kernelbase/winerror.mc:1163
 msgid "Invalid service account.\n"
 msgstr "Niepoprawne konto usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1168
+#: dlls/kernelbase/winerror.mc:1168
 msgid "Service is disabled.\n"
 msgstr "Usługa jest wyłączona.\n"
 
-#: dlls/kernel32/winerror.mc:1173
+#: dlls/kernelbase/winerror.mc:1173
 msgid "Circular dependency.\n"
 msgstr "Kołowa zależność.\n"
 
-#: dlls/kernel32/winerror.mc:1178
+#: dlls/kernelbase/winerror.mc:1178
 msgid "Service does not exist.\n"
 msgstr "Usługa nie istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:1183
+#: dlls/kernelbase/winerror.mc:1183
 msgid "Service cannot accept control message.\n"
 msgstr "Usługa nie może przyjąć wiadomości kontrolnej.\n"
 
-#: dlls/kernel32/winerror.mc:1188
+#: dlls/kernelbase/winerror.mc:1188
 msgid "Service not active.\n"
 msgstr "Usługa nieaktywna.\n"
 
-#: dlls/kernel32/winerror.mc:1193
+#: dlls/kernelbase/winerror.mc:1193
 msgid "Service controller connect failed.\n"
 msgstr "Połączenie do kontrolera usługi nieudane.\n"
 
-#: dlls/kernel32/winerror.mc:1198
+#: dlls/kernelbase/winerror.mc:1198
 msgid "Exception in service.\n"
 msgstr "Wyjątek w usłudze.\n"
 
-#: dlls/kernel32/winerror.mc:1203
+#: dlls/kernelbase/winerror.mc:1203
 msgid "Database does not exist.\n"
 msgstr "Baza danych nie istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:1208
+#: dlls/kernelbase/winerror.mc:1208
 msgid "Service-specific error.\n"
 msgstr "Błąd specyficzny dla usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1213
+#: dlls/kernelbase/winerror.mc:1213
 msgid "Process aborted.\n"
 msgstr "Proces przerwany.\n"
 
-#: dlls/kernel32/winerror.mc:1218
+#: dlls/kernelbase/winerror.mc:1218
 msgid "Service dependency failed.\n"
 msgstr "Zależności usługi nieudane.\n"
 
-#: dlls/kernel32/winerror.mc:1223
+#: dlls/kernelbase/winerror.mc:1223
 msgid "Service login failed.\n"
 msgstr "Zalogowanie usługi nieudane.\n"
 
-#: dlls/kernel32/winerror.mc:1228
+#: dlls/kernelbase/winerror.mc:1228
 msgid "Service start-hang.\n"
 msgstr "Zawieszenie uruchamiania się usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1233
+#: dlls/kernelbase/winerror.mc:1233
 msgid "Invalid service lock.\n"
 msgstr "Nieprawidłowa blokada usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1238
+#: dlls/kernelbase/winerror.mc:1238
 msgid "Service marked for delete.\n"
 msgstr "Usługa naznaczona do usunięcia.\n"
 
-#: dlls/kernel32/winerror.mc:1243
+#: dlls/kernelbase/winerror.mc:1243
 msgid "Service exists.\n"
 msgstr "Usługa istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:1248
+#: dlls/kernelbase/winerror.mc:1248
 msgid "System running last-known-good config.\n"
 msgstr "System uruchomiony na ostatnich dobrych ustawieniach.\n"
 
-#: dlls/kernel32/winerror.mc:1253
+#: dlls/kernelbase/winerror.mc:1253
 msgid "Service dependency deleted.\n"
 msgstr "Zależność usługi usunięta.\n"
 
-#: dlls/kernel32/winerror.mc:1258
+#: dlls/kernelbase/winerror.mc:1258
 msgid "Boot already accepted as last-good config.\n"
 msgstr "Boot już przyjął jako ostatnie dobre ustawienia.\n"
 
-#: dlls/kernel32/winerror.mc:1263
+#: dlls/kernelbase/winerror.mc:1263
 msgid "Service not started since last boot.\n"
 msgstr "Usługa nie wystartowała od czasu ostatniego uruchomienia.\n"
 
-#: dlls/kernel32/winerror.mc:1268
+#: dlls/kernelbase/winerror.mc:1268
 msgid "Duplicate service name.\n"
 msgstr "Powielona nazwa usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1273
+#: dlls/kernelbase/winerror.mc:1273
 msgid "Different service account.\n"
 msgstr "Różne konto usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1278
+#: dlls/kernelbase/winerror.mc:1278
 msgid "Driver failure cannot be detected.\n"
 msgstr "Nie można wykryć niepowodzenia sterownika.\n"
 
-#: dlls/kernel32/winerror.mc:1283
+#: dlls/kernelbase/winerror.mc:1283
 msgid "Process abort cannot be detected.\n"
 msgstr "Nie można wykryć przerwania procesu.\n"
 
-#: dlls/kernel32/winerror.mc:1288
+#: dlls/kernelbase/winerror.mc:1288
 msgid "No recovery program for service.\n"
 msgstr "Brak programu odzyskującego dla usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1293
+#: dlls/kernelbase/winerror.mc:1293
 msgid "Service not implemented by exe.\n"
 msgstr "Usługa niezaimplementowana przez plik wykonywalny exe.\n"
 
-#: dlls/kernel32/winerror.mc:1298
+#: dlls/kernelbase/winerror.mc:1298
 msgid "End of media.\n"
 msgstr "Koniec nośnika.\n"
 
-#: dlls/kernel32/winerror.mc:1303
+#: dlls/kernelbase/winerror.mc:1303
 msgid "Filemark detected.\n"
 msgstr "Znacznik pliku wykryty.\n"
 
-#: dlls/kernel32/winerror.mc:1308
+#: dlls/kernelbase/winerror.mc:1308
 msgid "Beginning of media.\n"
 msgstr "Początek nośnika.\n"
 
-#: dlls/kernel32/winerror.mc:1313
+#: dlls/kernelbase/winerror.mc:1313
 msgid "Setmark detected.\n"
 msgstr "Setmark wykryty.\n"
 
-#: dlls/kernel32/winerror.mc:1318
+#: dlls/kernelbase/winerror.mc:1318
 msgid "No data detected.\n"
 msgstr "Nie wykryto danych.\n"
 
-#: dlls/kernel32/winerror.mc:1323
+#: dlls/kernelbase/winerror.mc:1323
 msgid "Partition failure.\n"
 msgstr "Niepowodzenie partycji.\n"
 
-#: dlls/kernel32/winerror.mc:1328
+#: dlls/kernelbase/winerror.mc:1328
 msgid "Invalid block length.\n"
 msgstr "Niepoprawna długość bloku.\n"
 
-#: dlls/kernel32/winerror.mc:1333
+#: dlls/kernelbase/winerror.mc:1333
 msgid "Device not partitioned.\n"
 msgstr "Urządzenie niepartycjonowane.\n"
 
-#: dlls/kernel32/winerror.mc:1338
+#: dlls/kernelbase/winerror.mc:1338
 msgid "Unable to lock media.\n"
 msgstr "Nie można zablokować nośnika.\n"
 
-#: dlls/kernel32/winerror.mc:1343
+#: dlls/kernelbase/winerror.mc:1343
 msgid "Unable to unload media.\n"
 msgstr "Nie można wysunąć nośnika.\n"
 
-#: dlls/kernel32/winerror.mc:1348
+#: dlls/kernelbase/winerror.mc:1348
 msgid "Media changed.\n"
 msgstr "Zmieniono nośnik.\n"
 
-#: dlls/kernel32/winerror.mc:1353
+#: dlls/kernelbase/winerror.mc:1353
 msgid "I/O bus reset.\n"
 msgstr "Reset szyny WE/WY.\n"
 
-#: dlls/kernel32/winerror.mc:1358
+#: dlls/kernelbase/winerror.mc:1358
 msgid "No media in drive.\n"
 msgstr "Brak nośnika w napędzie.\n"
 
-#: dlls/kernel32/winerror.mc:1363
+#: dlls/kernelbase/winerror.mc:1363
 msgid "No Unicode translation.\n"
 msgstr "Brak tłumaczenia Unicode.\n"
 
-#: dlls/kernel32/winerror.mc:1368
+#: dlls/kernelbase/winerror.mc:1368
 msgid "DLL initialization failed.\n"
 msgstr "Nieudana inicjacja biblioteki DLL.\n"
 
-#: dlls/kernel32/winerror.mc:1373
+#: dlls/kernelbase/winerror.mc:1373
 msgid "Shutdown in progress.\n"
 msgstr "Zamykanie w toku.\n"
 
-#: dlls/kernel32/winerror.mc:1378
+#: dlls/kernelbase/winerror.mc:1378
 msgid "No shutdown in progress.\n"
 msgstr "Brak zamykania w toku.\n"
 
-#: dlls/kernel32/winerror.mc:1383
+#: dlls/kernelbase/winerror.mc:1383
 msgid "I/O device error.\n"
 msgstr "Błąd WE/WY urządzenia.\n"
 
-#: dlls/kernel32/winerror.mc:1388
+#: dlls/kernelbase/winerror.mc:1388
 msgid "No serial devices found.\n"
 msgstr "Nie znaleziono urządzeń szeregowych.\n"
 
-#: dlls/kernel32/winerror.mc:1393
+#: dlls/kernelbase/winerror.mc:1393
 msgid "Shared IRQ busy.\n"
 msgstr "Współdzielone IRQ zajęte.\n"
 
-#: dlls/kernel32/winerror.mc:1398
+#: dlls/kernelbase/winerror.mc:1398
 msgid "Serial I/O completed.\n"
 msgstr "Szeregowe operacje WE/WY ukończone.\n"
 
-#: dlls/kernel32/winerror.mc:1403
+#: dlls/kernelbase/winerror.mc:1403
 msgid "Serial I/O counter timeout.\n"
 msgstr "Czas wygaśnięcia licznika szeregowych operacji WE/WY.\n"
 
-#: dlls/kernel32/winerror.mc:1408
+#: dlls/kernelbase/winerror.mc:1408
 msgid "Floppy ID address mark not found.\n"
 msgstr "Nie znaleziono znacznika adresu dla identyfikatora dyskietki.\n"
 
-#: dlls/kernel32/winerror.mc:1413
+#: dlls/kernelbase/winerror.mc:1413
 msgid "Floppy reports wrong cylinder.\n"
 msgstr "Dyskietka zwraca nieprawidłowy cylinder.\n"
 
-#: dlls/kernel32/winerror.mc:1418
+#: dlls/kernelbase/winerror.mc:1418
 msgid "Unknown floppy error.\n"
 msgstr "Nieznany błąd dyskietki.\n"
 
-#: dlls/kernel32/winerror.mc:1423
+#: dlls/kernelbase/winerror.mc:1423
 msgid "Floppy registers inconsistent.\n"
 msgstr "Rejestry dyskietki niespójne.\n"
 
-#: dlls/kernel32/winerror.mc:1428
+#: dlls/kernelbase/winerror.mc:1428
 msgid "Hard disk recalibrate failed.\n"
 msgstr "Nieudana ponowna kalibracja dysku twardego.\n"
 
-#: dlls/kernel32/winerror.mc:1433
+#: dlls/kernelbase/winerror.mc:1433
 msgid "Hard disk operation failed.\n"
 msgstr "Operacja dysku twardego nieudana.\n"
 
-#: dlls/kernel32/winerror.mc:1438
+#: dlls/kernelbase/winerror.mc:1438
 msgid "Hard disk reset failed.\n"
 msgstr "Reset dysku twardego nieudany.\n"
 
-#: dlls/kernel32/winerror.mc:1443
+#: dlls/kernelbase/winerror.mc:1443
 msgid "End of tape media.\n"
 msgstr "Koniec taśmowego nośnika.\n"
 
-#: dlls/kernel32/winerror.mc:1448
+#: dlls/kernelbase/winerror.mc:1448
 msgid "Not enough server memory.\n"
 msgstr "Nie wystarczająco pamięci serwera.\n"
 
-#: dlls/kernel32/winerror.mc:1453
+#: dlls/kernelbase/winerror.mc:1453
 msgid "Possible deadlock.\n"
 msgstr "Prawdopodobny zastój.\n"
 
-#: dlls/kernel32/winerror.mc:1458
+#: dlls/kernelbase/winerror.mc:1458
 msgid "Incorrect alignment.\n"
 msgstr "Nieprawidłowe wyrównanie.\n"
 
-#: dlls/kernel32/winerror.mc:1463
+#: dlls/kernelbase/winerror.mc:1463
 msgid "Set-power-state vetoed.\n"
 msgstr "Ustawienie stanu czuwania zawetowane.\n"
 
-#: dlls/kernel32/winerror.mc:1468
+#: dlls/kernelbase/winerror.mc:1468
 msgid "Set-power-state failed.\n"
 msgstr "Ustawienie stanu czuwania nieudane.\n"
 
-#: dlls/kernel32/winerror.mc:1473
+#: dlls/kernelbase/winerror.mc:1473
 msgid "Too many links.\n"
 msgstr "Zbyt dużo dowiązań.\n"
 
-#: dlls/kernel32/winerror.mc:1478
+#: dlls/kernelbase/winerror.mc:1478
 msgid "Newer Windows version needed.\n"
 msgstr "Potrzebna nowsza wersja okien.\n"
 
-#: dlls/kernel32/winerror.mc:1483
+#: dlls/kernelbase/winerror.mc:1483
 msgid "Wrong operating system.\n"
 msgstr "Nieprawidłowy system operacyjny.\n"
 
-#: dlls/kernel32/winerror.mc:1488
+#: dlls/kernelbase/winerror.mc:1488
 msgid "Single-instance application.\n"
 msgstr "Jedno-instancyjna aplikacja.\n"
 
-#: dlls/kernel32/winerror.mc:1493
+#: dlls/kernelbase/winerror.mc:1493
 msgid "Real-mode application.\n"
 msgstr "Aplikacja trybu rzeczywistego.\n"
 
-#: dlls/kernel32/winerror.mc:1498
+#: dlls/kernelbase/winerror.mc:1498
 msgid "Invalid DLL.\n"
 msgstr "Niepoprawna biblioteka DLL.\n"
 
-#: dlls/kernel32/winerror.mc:1503
+#: dlls/kernelbase/winerror.mc:1503
 msgid "No associated application.\n"
 msgstr "Brak skojarzonej aplikacji.\n"
 
-#: dlls/kernel32/winerror.mc:1508
+#: dlls/kernelbase/winerror.mc:1508
 msgid "DDE failure.\n"
 msgstr "Niepowodzenie DDE.\n"
 
-#: dlls/kernel32/winerror.mc:1513
+#: dlls/kernelbase/winerror.mc:1513
 msgid "DLL not found.\n"
 msgstr "Nie znaleziono biblioteki DLL.\n"
 
-#: dlls/kernel32/winerror.mc:1518
+#: dlls/kernelbase/winerror.mc:1518
 msgid "Out of user handles.\n"
 msgstr "Wyczerpano uchwyty użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:1523
+#: dlls/kernelbase/winerror.mc:1523
 msgid "Message can only be used in synchronous calls.\n"
 msgstr "Wiadomość może być użyta tylko w wywołaniach synchronicznych.\n"
 
-#: dlls/kernel32/winerror.mc:1528
+#: dlls/kernelbase/winerror.mc:1528
 msgid "The source element is empty.\n"
 msgstr "Element źródła jest pusty.\n"
 
-#: dlls/kernel32/winerror.mc:1533
+#: dlls/kernelbase/winerror.mc:1533
 msgid "The destination element is full.\n"
 msgstr "Element przeznaczenia jest pełny.\n"
 
-#: dlls/kernel32/winerror.mc:1538
+#: dlls/kernelbase/winerror.mc:1538
 msgid "The element address is invalid.\n"
 msgstr "Adres elementu jest niepoprawny.\n"
 
-#: dlls/kernel32/winerror.mc:1543
+#: dlls/kernelbase/winerror.mc:1543
 msgid "The magazine is not present.\n"
 msgstr "Magazyn nie istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:1548
+#: dlls/kernelbase/winerror.mc:1548
 msgid "The device needs reinitialization.\n"
 msgstr "Urządzenie potrzebuje ponownej inicjalizacji.\n"
 
-#: dlls/kernel32/winerror.mc:1553
+#: dlls/kernelbase/winerror.mc:1553
 msgid "The device requires cleaning.\n"
 msgstr "Urządzenie potrzebuje czyszczenia.\n"
 
-#: dlls/kernel32/winerror.mc:1558
+#: dlls/kernelbase/winerror.mc:1558
 msgid "The device door is open.\n"
 msgstr "Klapka urządzenia jest otwarta.\n"
 
-#: dlls/kernel32/winerror.mc:1563
+#: dlls/kernelbase/winerror.mc:1563
 msgid "The device is not connected.\n"
 msgstr "Urządzenie jest niepodłączone.\n"
 
-#: dlls/kernel32/winerror.mc:1568
+#: dlls/kernelbase/winerror.mc:1568
 msgid "Element not found.\n"
 msgstr "Nie znaleziono elementu.\n"
 
-#: dlls/kernel32/winerror.mc:1573
+#: dlls/kernelbase/winerror.mc:1573
 msgid "No match found.\n"
 msgstr "Nie znaleziono odpowiednika.\n"
 
-#: dlls/kernel32/winerror.mc:1578
+#: dlls/kernelbase/winerror.mc:1578
 msgid "Property set not found.\n"
 msgstr "Nie znaleziono zestawu właściwości.\n"
 
-#: dlls/kernel32/winerror.mc:1583
+#: dlls/kernelbase/winerror.mc:1583
 msgid "Point not found.\n"
 msgstr "Nie znaleziono punktu.\n"
 
-#: dlls/kernel32/winerror.mc:1588
+#: dlls/kernelbase/winerror.mc:1588
 msgid "No running tracking service.\n"
 msgstr "Nie jest uruchomiona żadna usługa śledząca.\n"
 
-#: dlls/kernel32/winerror.mc:1593
+#: dlls/kernelbase/winerror.mc:1593
 msgid "No such volume ID.\n"
 msgstr "Brak takiego identyfikatora woluminu.\n"
 
-#: dlls/kernel32/winerror.mc:1598
+#: dlls/kernelbase/winerror.mc:1598
 msgid "Unable to remove the file to be replaced.\n"
 msgstr "Nie można usunąć pliku, który ma być zamieniony.\n"
 
-#: dlls/kernel32/winerror.mc:1603
+#: dlls/kernelbase/winerror.mc:1603
 msgid "Unable to move the replacement file into place.\n"
 msgstr "Nie można przenieść pliku zamiennego.\n"
 
-#: dlls/kernel32/winerror.mc:1608
+#: dlls/kernelbase/winerror.mc:1608
 msgid "Moving the replacement file failed.\n"
 msgstr "Przeniesienie pliku zamiennego nie powiodło się.\n"
 
-#: dlls/kernel32/winerror.mc:1613
+#: dlls/kernelbase/winerror.mc:1613
 msgid "The journal is being deleted.\n"
 msgstr "Dziennik jest usuwany.\n"
 
-#: dlls/kernel32/winerror.mc:1618
+#: dlls/kernelbase/winerror.mc:1618
 msgid "The journal is not active.\n"
 msgstr "Dziennik jest nieaktywny.\n"
 
-#: dlls/kernel32/winerror.mc:1623
+#: dlls/kernelbase/winerror.mc:1623
 msgid "Potential matching file found.\n"
 msgstr "Znaleziono potencjalnie pasujący plik.\n"
 
-#: dlls/kernel32/winerror.mc:1628
+#: dlls/kernelbase/winerror.mc:1628
 msgid "The journal entry was deleted.\n"
 msgstr "Wpis w dzienniku został usunięty.\n"
 
-#: dlls/kernel32/winerror.mc:1633
+#: dlls/kernelbase/winerror.mc:1633
 msgid "Invalid device name.\n"
 msgstr "Niepoprawna nazwa urządzenia.\n"
 
-#: dlls/kernel32/winerror.mc:1638
+#: dlls/kernelbase/winerror.mc:1638
 msgid "Connection unavailable.\n"
 msgstr "Połączenie niedostępne.\n"
 
-#: dlls/kernel32/winerror.mc:1643
+#: dlls/kernelbase/winerror.mc:1643
 msgid "Device already remembered.\n"
 msgstr "Urządzenie już jest zapamiętane.\n"
 
-#: dlls/kernel32/winerror.mc:1648
+#: dlls/kernelbase/winerror.mc:1648
 msgid "No network or bad path.\n"
 msgstr "Brak sieci lub zła ścieżka.\n"
 
-#: dlls/kernel32/winerror.mc:1653
+#: dlls/kernelbase/winerror.mc:1653
 msgid "Invalid network provider name.\n"
 msgstr "Niepoprawna nazwa dostarczyciela sieci.\n"
 
-#: dlls/kernel32/winerror.mc:1658
+#: dlls/kernelbase/winerror.mc:1658
 msgid "Cannot open network connection profile.\n"
 msgstr "Nie można otworzyć profilu połączenia sieciowego.\n"
 
-#: dlls/kernel32/winerror.mc:1663
+#: dlls/kernelbase/winerror.mc:1663
 msgid "Corrupt network connection profile.\n"
 msgstr "Zepsuty profil połączenia sieciowego.\n"
 
-#: dlls/kernel32/winerror.mc:1668
+#: dlls/kernelbase/winerror.mc:1668
 msgid "Not a container.\n"
 msgstr "To nie jest kontener.\n"
 
-#: dlls/kernel32/winerror.mc:1673
+#: dlls/kernelbase/winerror.mc:1673
 msgid "Extended error.\n"
 msgstr "Błąd rozszerzony.\n"
 
-#: dlls/kernel32/winerror.mc:1678
+#: dlls/kernelbase/winerror.mc:1678
 msgid "Invalid group name.\n"
 msgstr "Niepoprawna nazwa grupy.\n"
 
-#: dlls/kernel32/winerror.mc:1683
+#: dlls/kernelbase/winerror.mc:1683
 msgid "Invalid computer name.\n"
 msgstr "Niepoprawna nazwa komputera.\n"
 
-#: dlls/kernel32/winerror.mc:1688
+#: dlls/kernelbase/winerror.mc:1688
 msgid "Invalid event name.\n"
 msgstr "Niepoprawna nazwa zdarzenia.\n"
 
-#: dlls/kernel32/winerror.mc:1693
+#: dlls/kernelbase/winerror.mc:1693
 msgid "Invalid domain name.\n"
 msgstr "Niepoprawna nazwa domeny.\n"
 
-#: dlls/kernel32/winerror.mc:1698
+#: dlls/kernelbase/winerror.mc:1698
 msgid "Invalid service name.\n"
 msgstr "Niepoprawna nazwa usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1703
+#: dlls/kernelbase/winerror.mc:1703
 msgid "Invalid network name.\n"
 msgstr "Niepoprawna nazwa sieci.\n"
 
-#: dlls/kernel32/winerror.mc:1708
+#: dlls/kernelbase/winerror.mc:1708
 msgid "Invalid share name.\n"
 msgstr "Niepoprawna nazwa udziału.\n"
 
-#: dlls/kernel32/winerror.mc:1718
+#: dlls/kernelbase/winerror.mc:1718
 msgid "Invalid message name.\n"
 msgstr "Niepoprawna nazwa wiadomości.\n"
 
-#: dlls/kernel32/winerror.mc:1723
+#: dlls/kernelbase/winerror.mc:1723
 msgid "Invalid message destination.\n"
 msgstr "Niepoprawne przeznaczenie wiadomości.\n"
 
-#: dlls/kernel32/winerror.mc:1728
+#: dlls/kernelbase/winerror.mc:1728
 msgid "Session credential conflict.\n"
 msgstr "Konflikt danych poufnych sesji.\n"
 
-#: dlls/kernel32/winerror.mc:1733
+#: dlls/kernelbase/winerror.mc:1733
 msgid "Remote session limit exceeded.\n"
 msgstr "Przekroczono limit zdalnych sesji.\n"
 
-#: dlls/kernel32/winerror.mc:1738
+#: dlls/kernelbase/winerror.mc:1738
 msgid "Duplicate domain or workgroup name.\n"
 msgstr "Powielona nazwa domeny lub grupy roboczej.\n"
 
-#: dlls/kernel32/winerror.mc:1743
+#: dlls/kernelbase/winerror.mc:1743
 msgid "No network.\n"
 msgstr "Brak sieci.\n"
 
-#: dlls/kernel32/winerror.mc:1748
+#: dlls/kernelbase/winerror.mc:1748
 msgid "Operation canceled by user.\n"
 msgstr "Operacja anulowana przez użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:1753
+#: dlls/kernelbase/winerror.mc:1753
 msgid "File has a user-mapped section.\n"
 msgstr "Plik ma sekcję mapowania użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:1758 dlls/kernel32/winerror.mc:3753
+#: dlls/kernelbase/winerror.mc:1758 dlls/kernelbase/winerror.mc:3783
 msgid "Connection refused.\n"
 msgstr "Połączenie odmówiło.\n"
 
-#: dlls/kernel32/winerror.mc:1763
+#: dlls/kernelbase/winerror.mc:1763
 msgid "Connection gracefully closed.\n"
 msgstr "Połączenie zgrabnie zamknięte.\n"
 
-#: dlls/kernel32/winerror.mc:1768
+#: dlls/kernelbase/winerror.mc:1768
 msgid "Address already associated with transport endpoint.\n"
 msgstr "Adres jest już skojarzony z punktem końcowym transportu.\n"
 
-#: dlls/kernel32/winerror.mc:1773
+#: dlls/kernelbase/winerror.mc:1773
 msgid "Address not associated with transport endpoint.\n"
 msgstr "Adres nie jest skojarzony z punktem końcowym transportu.\n"
 
-#: dlls/kernel32/winerror.mc:1778
+#: dlls/kernelbase/winerror.mc:1778
 msgid "Connection invalid.\n"
 msgstr "Niepoprawne połączenie.\n"
 
-#: dlls/kernel32/winerror.mc:1783
+#: dlls/kernelbase/winerror.mc:1783
 msgid "Connection is active.\n"
 msgstr "Połączenie jest aktywne.\n"
 
-#: dlls/kernel32/winerror.mc:1788
+#: dlls/kernelbase/winerror.mc:1788
 msgid "Network unreachable.\n"
 msgstr "Sieć nieosiągalna.\n"
 
-#: dlls/kernel32/winerror.mc:1793
+#: dlls/kernelbase/winerror.mc:1793
 msgid "Host unreachable.\n"
 msgstr "Host nieosiągalny.\n"
 
-#: dlls/kernel32/winerror.mc:1798
+#: dlls/kernelbase/winerror.mc:1798
 msgid "Protocol unreachable.\n"
 msgstr "Protokół nieosiągalny.\n"
 
-#: dlls/kernel32/winerror.mc:1803
+#: dlls/kernelbase/winerror.mc:1803
 msgid "Port unreachable.\n"
 msgstr "Port nieosiągalny.\n"
 
-#: dlls/kernel32/winerror.mc:1808
+#: dlls/kernelbase/winerror.mc:1808
 msgid "Request aborted.\n"
 msgstr "Żądanie przerwane.\n"
 
-#: dlls/kernel32/winerror.mc:1813
+#: dlls/kernelbase/winerror.mc:1813
 msgid "Connection aborted.\n"
 msgstr "Połączenie przerwane.\n"
 
-#: dlls/kernel32/winerror.mc:1818
+#: dlls/kernelbase/winerror.mc:1818
 msgid "Please retry operation.\n"
 msgstr "Proszę ponowić operację.\n"
 
-#: dlls/kernel32/winerror.mc:1823
+#: dlls/kernelbase/winerror.mc:1823
 msgid "Connection count limit reached.\n"
 msgstr "Osiągnięto liczbę limitu połączeń.\n"
 
-#: dlls/kernel32/winerror.mc:1828
+#: dlls/kernelbase/winerror.mc:1828
 msgid "Login time restriction.\n"
 msgstr "Ograniczenia czasu zalogowania.\n"
 
-#: dlls/kernel32/winerror.mc:1833
+#: dlls/kernelbase/winerror.mc:1833
 msgid "Login workstation restriction.\n"
 msgstr "Ograniczenia zalogowania stacji roboczej.\n"
 
-#: dlls/kernel32/winerror.mc:1838
+#: dlls/kernelbase/winerror.mc:1838
 msgid "Incorrect network address.\n"
 msgstr "Nieprawidłowy adres sieciowy.\n"
 
-#: dlls/kernel32/winerror.mc:1843
+#: dlls/kernelbase/winerror.mc:1843
 msgid "Service already registered.\n"
 msgstr "Usługa już jest zarejestrowana.\n"
 
-#: dlls/kernel32/winerror.mc:1848
+#: dlls/kernelbase/winerror.mc:1848
 msgid "Service not found.\n"
 msgstr "Nie znaleziono usługi.\n"
 
-#: dlls/kernel32/winerror.mc:1853
+#: dlls/kernelbase/winerror.mc:1853
 msgid "User not authenticated.\n"
 msgstr "Użytkownik nie poświadczony.\n"
 
-#: dlls/kernel32/winerror.mc:1858
+#: dlls/kernelbase/winerror.mc:1858
 msgid "User not logged on.\n"
 msgstr "Użytkownik niezalogowany.\n"
 
-#: dlls/kernel32/winerror.mc:1863
+#: dlls/kernelbase/winerror.mc:1863
 msgid "Continue work in progress.\n"
 msgstr "Kontynuacja w toku.\n"
 
-#: dlls/kernel32/winerror.mc:1868
+#: dlls/kernelbase/winerror.mc:1868
 msgid "Already initialized.\n"
 msgstr "Już jest zainicjowane.\n"
 
-#: dlls/kernel32/winerror.mc:1873
+#: dlls/kernelbase/winerror.mc:1873
 msgid "No more local devices.\n"
 msgstr "Nie ma więcej urządzeń lokalnych.\n"
 
-#: dlls/kernel32/winerror.mc:1878
+#: dlls/kernelbase/winerror.mc:1878
 msgid "The site does not exist.\n"
 msgstr "Strona nie istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:1883
+#: dlls/kernelbase/winerror.mc:1883
 msgid "The domain controller already exists.\n"
 msgstr "Kontroler domeny już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:1888
+#: dlls/kernelbase/winerror.mc:1888
 msgid "Supported only when connected.\n"
 msgstr "Wspierane tylko gdy podłączone.\n"
 
-#: dlls/kernel32/winerror.mc:1893
+#: dlls/kernelbase/winerror.mc:1893
 msgid "Perform operation even when nothing changed.\n"
 msgstr "Wykonaj operację nawet gdy nic się nie zmieniło.\n"
 
-#: dlls/kernel32/winerror.mc:1898
+#: dlls/kernelbase/winerror.mc:1898
 msgid "The user profile is invalid.\n"
 msgstr "Profil użytkownika jest niepoprawny.\n"
 
-#: dlls/kernel32/winerror.mc:1903
+#: dlls/kernelbase/winerror.mc:1903
 msgid "Not supported on Small Business Server.\n"
 msgstr "Nie wspierane na Small Business Server.\n"
 
-#: dlls/kernel32/winerror.mc:1908
+#: dlls/kernelbase/winerror.mc:1908
 msgid "Not all privileges assigned.\n"
 msgstr "Nie przydzielono wszystkich praw.\n"
 
-#: dlls/kernel32/winerror.mc:1913
+#: dlls/kernelbase/winerror.mc:1913
 msgid "Some security IDs not mapped.\n"
 msgstr "Niektóre identyfikatory zabezpieczeń niezmapowane.\n"
 
-#: dlls/kernel32/winerror.mc:1918
+#: dlls/kernelbase/winerror.mc:1918
 msgid "No quotas for account.\n"
 msgstr "Brak przydziału dla konta.\n"
 
-#: dlls/kernel32/winerror.mc:1923
+#: dlls/kernelbase/winerror.mc:1923
 msgid "Local user session key.\n"
 msgstr "Klucz sesji lokalnego użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:1928
+#: dlls/kernelbase/winerror.mc:1928
 msgid "Password too complex for LM.\n"
 msgstr "Hasło zbyt skomplikowane dla LM.\n"
 
-#: dlls/kernel32/winerror.mc:1933
+#: dlls/kernelbase/winerror.mc:1933
 msgid "Unknown revision.\n"
 msgstr "Nieznana rewizja.\n"
 
-#: dlls/kernel32/winerror.mc:1938
+#: dlls/kernelbase/winerror.mc:1938
 msgid "Incompatible revision levels.\n"
 msgstr "Niekompatybilne poziomy rewizji.\n"
 
-#: dlls/kernel32/winerror.mc:1943
+#: dlls/kernelbase/winerror.mc:1943
 msgid "Invalid owner.\n"
 msgstr "Niepoprawny właściciel.\n"
 
-#: dlls/kernel32/winerror.mc:1948
+#: dlls/kernelbase/winerror.mc:1948
 msgid "Invalid primary group.\n"
 msgstr "Niepoprawna grupa nadrzędna.\n"
 
-#: dlls/kernel32/winerror.mc:1953
+#: dlls/kernelbase/winerror.mc:1953
 msgid "No impersonation token.\n"
 msgstr "Brak bezosobowego tokena.\n"
 
-#: dlls/kernel32/winerror.mc:1958
+#: dlls/kernelbase/winerror.mc:1958
 msgid "Can't disable mandatory group.\n"
 msgstr "Nie można wyłączyć obowiązującej grupy.\n"
 
-#: dlls/kernel32/winerror.mc:1963
+#: dlls/kernelbase/winerror.mc:1963
 msgid "No logon servers available.\n"
 msgstr "Brak zalogowanych serwerów.\n"
 
-#: dlls/kernel32/winerror.mc:1968
+#: dlls/kernelbase/winerror.mc:1968
 msgid "No such logon session.\n"
 msgstr "Nie ma takiej zalogowanej sesji.\n"
 
-#: dlls/kernel32/winerror.mc:1973
+#: dlls/kernelbase/winerror.mc:1973
 msgid "No such privilege.\n"
 msgstr "Nie ma takiego prawa.\n"
 
-#: dlls/kernel32/winerror.mc:1978
+#: dlls/kernelbase/winerror.mc:1978
 msgid "Privilege not held.\n"
 msgstr "Prawa nie zachowane.\n"
 
-#: dlls/kernel32/winerror.mc:1983
+#: dlls/kernelbase/winerror.mc:1983
 msgid "Invalid account name.\n"
 msgstr "Niepoprawna nazwa konta.\n"
 
-#: dlls/kernel32/winerror.mc:1988
+#: dlls/kernelbase/winerror.mc:1988
 msgid "User already exists.\n"
 msgstr "Użytkownik już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:1993
+#: dlls/kernelbase/winerror.mc:1993
 msgid "No such user.\n"
 msgstr "Nie ma takiego użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:1998
+#: dlls/kernelbase/winerror.mc:1998
 msgid "Group already exists.\n"
 msgstr "Grupa już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:2003
+#: dlls/kernelbase/winerror.mc:2003
 msgid "No such group.\n"
 msgstr "Nie ma takiej grupy.\n"
 
-#: dlls/kernel32/winerror.mc:2008
+#: dlls/kernelbase/winerror.mc:2008
 msgid "User already in group.\n"
 msgstr "Użytkownik już jest w grupie.\n"
 
-#: dlls/kernel32/winerror.mc:2013
+#: dlls/kernelbase/winerror.mc:2013
 msgid "User not in group.\n"
 msgstr "Użytkownik nie jest w grupie.\n"
 
-#: dlls/kernel32/winerror.mc:2018
+#: dlls/kernelbase/winerror.mc:2018
 msgid "Can't delete last admin user.\n"
 msgstr "Nie można usunąć ostatniego administratora.\n"
 
-#: dlls/kernel32/winerror.mc:2023
+#: dlls/kernelbase/winerror.mc:2023
 msgid "Wrong password.\n"
 msgstr "Nieprawidłowe hasło.\n"
 
-#: dlls/kernel32/winerror.mc:2028
+#: dlls/kernelbase/winerror.mc:2028
 msgid "Ill-formed password.\n"
 msgstr "Źle sformułowane hasło.\n"
 
-#: dlls/kernel32/winerror.mc:2033
+#: dlls/kernelbase/winerror.mc:2033
 msgid "Password restriction.\n"
 msgstr "Ograniczenia hasła.\n"
 
-#: dlls/kernel32/winerror.mc:2038
+#: dlls/kernelbase/winerror.mc:2038
 msgid "Logon failure.\n"
 msgstr "Nieudane zalogowanie.\n"
 
-#: dlls/kernel32/winerror.mc:2043
+#: dlls/kernelbase/winerror.mc:2043
 msgid "Account restriction.\n"
 msgstr "Ograniczenia konta.\n"
 
-#: dlls/kernel32/winerror.mc:2048
+#: dlls/kernelbase/winerror.mc:2048
 msgid "Invalid logon hours.\n"
 msgstr "Niepoprawne godziny zalogowania.\n"
 
-#: dlls/kernel32/winerror.mc:2053
+#: dlls/kernelbase/winerror.mc:2053
 msgid "Invalid workstation.\n"
 msgstr "Niepoprawna stacja robocza.\n"
 
-#: dlls/kernel32/winerror.mc:2058
+#: dlls/kernelbase/winerror.mc:2058
 msgid "Password expired.\n"
 msgstr "Hasło wygasło.\n"
 
-#: dlls/kernel32/winerror.mc:2063
+#: dlls/kernelbase/winerror.mc:2063
 msgid "Account disabled.\n"
 msgstr "Konto wyłączone.\n"
 
-#: dlls/kernel32/winerror.mc:2068
+#: dlls/kernelbase/winerror.mc:2068
 msgid "No security ID mapped.\n"
 msgstr "Nie zmapowano identyfikatora zabezpieczeń.\n"
 
-#: dlls/kernel32/winerror.mc:2073
+#: dlls/kernelbase/winerror.mc:2073
 msgid "Too many LUIDs requested.\n"
 msgstr "Zażądano zbyt dużo LUID'ów.\n"
 
-#: dlls/kernel32/winerror.mc:2078
+#: dlls/kernelbase/winerror.mc:2078
 msgid "LUIDs exhausted.\n"
 msgstr "LUID'y wyczerpane.\n"
 
-#: dlls/kernel32/winerror.mc:2083
+#: dlls/kernelbase/winerror.mc:2083
 msgid "Invalid sub authority.\n"
 msgstr "Niepoprawny sub autorytet.\n"
 
-#: dlls/kernel32/winerror.mc:2088
+#: dlls/kernelbase/winerror.mc:2088
 msgid "Invalid ACL.\n"
 msgstr "Niepoprawny ACL.\n"
 
-#: dlls/kernel32/winerror.mc:2093
+#: dlls/kernelbase/winerror.mc:2093
 msgid "Invalid SID.\n"
 msgstr "Niepoprawny SID.\n"
 
-#: dlls/kernel32/winerror.mc:2098
+#: dlls/kernelbase/winerror.mc:2098
 msgid "Invalid security descriptor.\n"
 msgstr "Niepoprawny deskryptor bezpieczeństwa.\n"
 
-#: dlls/kernel32/winerror.mc:2103
+#: dlls/kernelbase/winerror.mc:2103
 msgid "Bad inherited ACL.\n"
 msgstr "Źle odziedziczone ACL.\n"
 
-#: dlls/kernel32/winerror.mc:2108
+#: dlls/kernelbase/winerror.mc:2108
 msgid "Server disabled.\n"
 msgstr "Serwer wyłączony.\n"
 
-#: dlls/kernel32/winerror.mc:2113
+#: dlls/kernelbase/winerror.mc:2113
 msgid "Server not disabled.\n"
 msgstr "Serwer nie wyłączony.\n"
 
-#: dlls/kernel32/winerror.mc:2118
+#: dlls/kernelbase/winerror.mc:2118
 msgid "Invalid ID authority.\n"
 msgstr "Niepoprawny identyfikator autorytetu.\n"
 
-#: dlls/kernel32/winerror.mc:2123
+#: dlls/kernelbase/winerror.mc:2123
 msgid "Allotted space exceeded.\n"
 msgstr "Przydzielone miejsce przekroczone.\n"
 
-#: dlls/kernel32/winerror.mc:2128
+#: dlls/kernelbase/winerror.mc:2128
 msgid "Invalid group attributes.\n"
 msgstr "Niepoprawne atrybuty grupy.\n"
 
-#: dlls/kernel32/winerror.mc:2133
+#: dlls/kernelbase/winerror.mc:2133
 msgid "Bad impersonation level.\n"
 msgstr "Zły poziom bezosobowości.\n"
 
-#: dlls/kernel32/winerror.mc:2138
+#: dlls/kernelbase/winerror.mc:2138
 msgid "Can't open anonymous security token.\n"
 msgstr "Nie można otworzyć anonimowego tokena bezpieczeństwa.\n"
 
-#: dlls/kernel32/winerror.mc:2143
+#: dlls/kernelbase/winerror.mc:2143
 msgid "Bad validation class.\n"
 msgstr "Zła klasa walidacji.\n"
 
-#: dlls/kernel32/winerror.mc:2148
+#: dlls/kernelbase/winerror.mc:2148
 msgid "Bad token type.\n"
 msgstr "Zły rodzaj tokena.\n"
 
-#: dlls/kernel32/winerror.mc:2153
+#: dlls/kernelbase/winerror.mc:2153
 msgid "No security on object.\n"
 msgstr "Brak zabezpieczeń na obiekcie.\n"
 
-#: dlls/kernel32/winerror.mc:2158
+#: dlls/kernelbase/winerror.mc:2158
 msgid "Can't access domain information.\n"
 msgstr "Nie ma dostępu do informacji domeny.\n"
 
-#: dlls/kernel32/winerror.mc:2163
+#: dlls/kernelbase/winerror.mc:2163
 msgid "Invalid server state.\n"
 msgstr "Niepoprawny stan serwera.\n"
 
-#: dlls/kernel32/winerror.mc:2168
+#: dlls/kernelbase/winerror.mc:2168
 msgid "Invalid domain state.\n"
 msgstr "Niepoprawny stan domeny.\n"
 
-#: dlls/kernel32/winerror.mc:2173
+#: dlls/kernelbase/winerror.mc:2173
 msgid "Invalid domain role.\n"
 msgstr "Niepoprawna rola domeny.\n"
 
-#: dlls/kernel32/winerror.mc:2178
+#: dlls/kernelbase/winerror.mc:2178
 msgid "No such domain.\n"
 msgstr "Nie ma takiej domeny.\n"
 
-#: dlls/kernel32/winerror.mc:2183
+#: dlls/kernelbase/winerror.mc:2183
 msgid "Domain already exists.\n"
 msgstr "Domena już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:2188
+#: dlls/kernelbase/winerror.mc:2188
 msgid "Domain limit exceeded.\n"
 msgstr "Przekroczono limit domen.\n"
 
-#: dlls/kernel32/winerror.mc:2193
+#: dlls/kernelbase/winerror.mc:2193
 msgid "Internal database corruption.\n"
 msgstr "Wewnętrzna baza danych zepsuta.\n"
 
-#: dlls/kernel32/winerror.mc:2198
+#: dlls/kernelbase/winerror.mc:2198
 msgid "Internal error.\n"
 msgstr "Błąd wewnętrzny.\n"
 
-#: dlls/kernel32/winerror.mc:2203
+#: dlls/kernelbase/winerror.mc:2203
 msgid "Generic access types not mapped.\n"
 msgstr "Zwykłe typy dostępu nie są zmapowane.\n"
 
-#: dlls/kernel32/winerror.mc:2208
+#: dlls/kernelbase/winerror.mc:2208
 msgid "Bad descriptor format.\n"
 msgstr "Zły format deskryptora.\n"
 
-#: dlls/kernel32/winerror.mc:2213
+#: dlls/kernelbase/winerror.mc:2213
 msgid "Not a logon process.\n"
 msgstr "To nie jest proces zalogowania.\n"
 
-#: dlls/kernel32/winerror.mc:2218
+#: dlls/kernelbase/winerror.mc:2218
 msgid "Logon session ID exists.\n"
 msgstr "Identyfikator sesji zalogowanej istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:2223
+#: dlls/kernelbase/winerror.mc:2223
 msgid "Unknown authentication package.\n"
 msgstr "Nieznana paczka poświadczenia.\n"
 
-#: dlls/kernel32/winerror.mc:2228
+#: dlls/kernelbase/winerror.mc:2228
 msgid "Bad logon session state.\n"
 msgstr "Zły stan zalogowanej sesji.\n"
 
-#: dlls/kernel32/winerror.mc:2233
+#: dlls/kernelbase/winerror.mc:2233
 msgid "Logon session ID collision.\n"
 msgstr "Kolizja identyfikatorów zalogowania sesji.\n"
 
-#: dlls/kernel32/winerror.mc:2238
+#: dlls/kernelbase/winerror.mc:2238
 msgid "Invalid logon type.\n"
 msgstr "Niepoprawny typ zalogowania.\n"
 
-#: dlls/kernel32/winerror.mc:2243
+#: dlls/kernelbase/winerror.mc:2243
 msgid "Cannot impersonate.\n"
 msgstr "Nie można ubezosobowić.\n"
 
-#: dlls/kernel32/winerror.mc:2248
+#: dlls/kernelbase/winerror.mc:2248
 msgid "Invalid transaction state.\n"
 msgstr "Niepoprawny stan transakcji.\n"
 
-#: dlls/kernel32/winerror.mc:2253
+#: dlls/kernelbase/winerror.mc:2253
 msgid "Security DB commit failure.\n"
 msgstr "Porażka dokonania bezpieczeństwa w bazie danych.\n"
 
-#: dlls/kernel32/winerror.mc:2258
+#: dlls/kernelbase/winerror.mc:2258
 msgid "Account is built-in.\n"
 msgstr "Konto jest wbudowane.\n"
 
-#: dlls/kernel32/winerror.mc:2263
+#: dlls/kernelbase/winerror.mc:2263
 msgid "Group is built-in.\n"
 msgstr "Grupa jest wbudowana.\n"
 
-#: dlls/kernel32/winerror.mc:2268
+#: dlls/kernelbase/winerror.mc:2268
 msgid "User is built-in.\n"
 msgstr "Użytkownik jest wbudowany.\n"
 
-#: dlls/kernel32/winerror.mc:2273
+#: dlls/kernelbase/winerror.mc:2273
 msgid "Group is primary for user.\n"
 msgstr "Grupa jest główną dla użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:2278
+#: dlls/kernelbase/winerror.mc:2278
 msgid "Token already in use.\n"
 msgstr "Token jest już używany.\n"
 
-#: dlls/kernel32/winerror.mc:2283
+#: dlls/kernelbase/winerror.mc:2283
 msgid "No such local group.\n"
 msgstr "Nie ma takiej grupy lokalnej.\n"
 
-#: dlls/kernel32/winerror.mc:2288
+#: dlls/kernelbase/winerror.mc:2288
 msgid "User not in local group.\n"
 msgstr "Użytkownik nie jest w grupie lokalnej.\n"
 
-#: dlls/kernel32/winerror.mc:2293
+#: dlls/kernelbase/winerror.mc:2293
 msgid "User already in local group.\n"
 msgstr "Użytkownik już jest w grupie lokalnej.\n"
 
-#: dlls/kernel32/winerror.mc:2298
+#: dlls/kernelbase/winerror.mc:2298
 msgid "Local group already exists.\n"
 msgstr "Lokalna grupa już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:2303 dlls/kernel32/winerror.mc:2328
+#: dlls/kernelbase/winerror.mc:2303 dlls/kernelbase/winerror.mc:2328
 msgid "Logon type not granted.\n"
 msgstr "Logowanie nie przyznane.\n"
 
-#: dlls/kernel32/winerror.mc:2308
+#: dlls/kernelbase/winerror.mc:2308
 msgid "Too many secrets.\n"
 msgstr "Zbyt dużo danych poufnych.\n"
 
-#: dlls/kernel32/winerror.mc:2313
+#: dlls/kernelbase/winerror.mc:2313
 msgid "Secret too long.\n"
 msgstr "Secret zbyt długi.\n"
 
-#: dlls/kernel32/winerror.mc:2318
+#: dlls/kernelbase/winerror.mc:2318
 msgid "Internal security DB error.\n"
 msgstr "Wewnętrzny błąd bezpieczeństwa bazy danych.\n"
 
-#: dlls/kernel32/winerror.mc:2323
+#: dlls/kernelbase/winerror.mc:2323
 msgid "Too many context IDs.\n"
 msgstr "Zbyt dużo identyfikatorów kontekstów.\n"
 
-#: dlls/kernel32/winerror.mc:2333
+#: dlls/kernelbase/winerror.mc:2333
 msgid "Cross-encrypted NT password required.\n"
 msgstr "Wymagane hasło Cross-encrypted NT.\n"
 
-#: dlls/kernel32/winerror.mc:2338
+#: dlls/kernelbase/winerror.mc:2338
 msgid "No such member.\n"
 msgstr "Nie ma takiego członka.\n"
 
-#: dlls/kernel32/winerror.mc:2343
+#: dlls/kernelbase/winerror.mc:2343
 msgid "Invalid member.\n"
 msgstr "Niepoprawny członek.\n"
 
-#: dlls/kernel32/winerror.mc:2348
+#: dlls/kernelbase/winerror.mc:2348
 msgid "Too many SIDs.\n"
 msgstr "Zbyt dużo SID'ów.\n"
 
-#: dlls/kernel32/winerror.mc:2353
+#: dlls/kernelbase/winerror.mc:2353
 msgid "Cross-encrypted LM password required.\n"
 msgstr "Wymagane hasło Cross-encrypted LM.\n"
 
-#: dlls/kernel32/winerror.mc:2358
+#: dlls/kernelbase/winerror.mc:2358
 msgid "No inheritable components.\n"
 msgstr "Brak dziedzicznych składników.\n"
 
-#: dlls/kernel32/winerror.mc:2363
+#: dlls/kernelbase/winerror.mc:2363
 msgid "File or directory corrupt.\n"
 msgstr "Plik lub katalog zepsuty.\n"
 
-#: dlls/kernel32/winerror.mc:2368
+#: dlls/kernelbase/winerror.mc:2368
 msgid "Disk is corrupt.\n"
 msgstr "Dysk jest zepsuty.\n"
 
-#: dlls/kernel32/winerror.mc:2373
+#: dlls/kernelbase/winerror.mc:2373
 msgid "No user session key.\n"
 msgstr "Brak klucza sesji użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:2378
+#: dlls/kernelbase/winerror.mc:2378
 msgid "License quota exceeded.\n"
 msgstr "Przydział licencji przekroczony.\n"
 
-#: dlls/kernel32/winerror.mc:2383
+#: dlls/kernelbase/winerror.mc:2383
 msgid "Wrong target name.\n"
 msgstr "Zła nazwa miejsca docelowego.\n"
 
-#: dlls/kernel32/winerror.mc:2388
+#: dlls/kernelbase/winerror.mc:2388
 msgid "Mutual authentication failed.\n"
 msgstr "Nieudane wzajemne uwierzytelnianie.\n"
 
-#: dlls/kernel32/winerror.mc:2393
+#: dlls/kernelbase/winerror.mc:2393
 msgid "Time skew between client and server.\n"
 msgstr "Przekrzywienie czasu pomiędzy klientem a serwerem.\n"
 
-#: dlls/kernel32/winerror.mc:2398
+#: dlls/kernelbase/winerror.mc:2398
 msgid "Invalid window handle.\n"
 msgstr "Niepoprawny uchwyt okna.\n"
 
-#: dlls/kernel32/winerror.mc:2403
+#: dlls/kernelbase/winerror.mc:2403
 msgid "Invalid menu handle.\n"
 msgstr "Niepoprawny uchwyt menu.\n"
 
-#: dlls/kernel32/winerror.mc:2408
+#: dlls/kernelbase/winerror.mc:2408
 msgid "Invalid cursor handle.\n"
 msgstr "Niepoprawny uchwyt kursora.\n"
 
-#: dlls/kernel32/winerror.mc:2413
+#: dlls/kernelbase/winerror.mc:2413
 msgid "Invalid accelerator table handle.\n"
 msgstr "Niepoprawny uchwyt akceleratora tabeli.\n"
 
-#: dlls/kernel32/winerror.mc:2418
+#: dlls/kernelbase/winerror.mc:2418
 msgid "Invalid hook handle.\n"
 msgstr "Niepoprawny uchwyt zaczepu.\n"
 
-#: dlls/kernel32/winerror.mc:2423
+#: dlls/kernelbase/winerror.mc:2423
 msgid "Invalid DWP handle.\n"
 msgstr "Niepoprawny uchwyt DWP.\n"
 
-#: dlls/kernel32/winerror.mc:2428
+#: dlls/kernelbase/winerror.mc:2428
 msgid "Can't create top-level child window.\n"
 msgstr "Nie można stworzyć okna potomnego top-level.\n"
 
-#: dlls/kernel32/winerror.mc:2433
+#: dlls/kernelbase/winerror.mc:2433
 msgid "Can't find window class.\n"
 msgstr "Nie można znaleźć klasy okna.\n"
 
-#: dlls/kernel32/winerror.mc:2438
+#: dlls/kernelbase/winerror.mc:2438
 msgid "Window owned by another thread.\n"
 msgstr "Okno nabyte w posiadanie przez inny wątek.\n"
 
-#: dlls/kernel32/winerror.mc:2443
+#: dlls/kernelbase/winerror.mc:2443
 msgid "Hotkey already registered.\n"
 msgstr "Klawisz skrótu już jest zarejestrowany.\n"
 
-#: dlls/kernel32/winerror.mc:2448
+#: dlls/kernelbase/winerror.mc:2448
 msgid "Class already exists.\n"
 msgstr "Klasa już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:2453
+#: dlls/kernelbase/winerror.mc:2453
 msgid "Class does not exist.\n"
 msgstr "Klasa nie istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:2458
+#: dlls/kernelbase/winerror.mc:2458
 msgid "Class has open windows.\n"
 msgstr "Klasa ma otwarte okna.\n"
 
-#: dlls/kernel32/winerror.mc:2463 dlls/mferror/mferror.mc:130
+#: dlls/kernelbase/winerror.mc:2463 dlls/mferror/mferror.mc:130
 msgid "Invalid index.\n"
 msgstr "Niepoprawny index.\n"
 
-#: dlls/kernel32/winerror.mc:2468
+#: dlls/kernelbase/winerror.mc:2468
 msgid "Invalid icon handle.\n"
 msgstr "Niepoprawny uchwyt ikony.\n"
 
-#: dlls/kernel32/winerror.mc:2473
+#: dlls/kernelbase/winerror.mc:2473
 msgid "Private dialog index.\n"
 msgstr "Index prywatnego dialogu.\n"
 
-#: dlls/kernel32/winerror.mc:2478
+#: dlls/kernelbase/winerror.mc:2478
 msgid "List box ID not found.\n"
 msgstr "Nie znaleziono identyfikatora listbox'a.\n"
 
-#: dlls/kernel32/winerror.mc:2483
+#: dlls/kernelbase/winerror.mc:2483
 msgid "No wildcard characters.\n"
 msgstr "Brak znaków wildcard.\n"
 
-#: dlls/kernel32/winerror.mc:2488
+#: dlls/kernelbase/winerror.mc:2488
 msgid "Clipboard not open.\n"
 msgstr "Schowek nie otwarty.\n"
 
-#: dlls/kernel32/winerror.mc:2493
+#: dlls/kernelbase/winerror.mc:2493
 msgid "Hotkey not registered.\n"
 msgstr "Klawisz skrótu niezarejestrowany.\n"
 
-#: dlls/kernel32/winerror.mc:2498
+#: dlls/kernelbase/winerror.mc:2498
 msgid "Not a dialog window.\n"
 msgstr "To nie jest okno dialogu.\n"
 
-#: dlls/kernel32/winerror.mc:2503
+#: dlls/kernelbase/winerror.mc:2503
 msgid "Control ID not found.\n"
 msgstr "Nie znaleziono identyfikatora control'a.\n"
 
-#: dlls/kernel32/winerror.mc:2508
+#: dlls/kernelbase/winerror.mc:2508
 msgid "Invalid combo box message.\n"
 msgstr "Niepoprawna wiadomość combo box'a.\n"
 
-#: dlls/kernel32/winerror.mc:2513
+#: dlls/kernelbase/winerror.mc:2513
 msgid "Not a combo box window.\n"
 msgstr "To nie jest okno combo box.\n"
 
-#: dlls/kernel32/winerror.mc:2518
+#: dlls/kernelbase/winerror.mc:2518
 msgid "Invalid edit height.\n"
 msgstr "Nieprawidłowa wysokość edycji.\n"
 
-#: dlls/kernel32/winerror.mc:2523
+#: dlls/kernelbase/winerror.mc:2523
 msgid "DC not found.\n"
 msgstr "Nie znaleziono DC.\n"
 
-#: dlls/kernel32/winerror.mc:2528
+#: dlls/kernelbase/winerror.mc:2528
 msgid "Invalid hook filter.\n"
 msgstr "Niepoprawny filtr zaczepu.\n"
 
-#: dlls/kernel32/winerror.mc:2533
+#: dlls/kernelbase/winerror.mc:2533
 msgid "Invalid filter procedure.\n"
 msgstr "Niepoprawna procedura filtrowania.\n"
 
-#: dlls/kernel32/winerror.mc:2538
+#: dlls/kernelbase/winerror.mc:2538
 msgid "Hook procedure needs module handle.\n"
 msgstr "Procedura zaczepu potrzebuje uchwytu modułu.\n"
 
-#: dlls/kernel32/winerror.mc:2543
+#: dlls/kernelbase/winerror.mc:2543
 msgid "Global-only hook procedure.\n"
 msgstr "Procedura zaczepu tylko-globalna.\n"
 
-#: dlls/kernel32/winerror.mc:2548
+#: dlls/kernelbase/winerror.mc:2548
 msgid "Journal hook already set.\n"
 msgstr "Zaczep dziennika już jest ustawiony.\n"
 
-#: dlls/kernel32/winerror.mc:2553
+#: dlls/kernelbase/winerror.mc:2553
 msgid "Hook procedure not installed.\n"
 msgstr "Procedura zaczepu niezainstalowana.\n"
 
-#: dlls/kernel32/winerror.mc:2558
+#: dlls/kernelbase/winerror.mc:2558
 msgid "Invalid list box message.\n"
 msgstr "Niepoprawna wiadomość listbox'a.\n"
 
-#: dlls/kernel32/winerror.mc:2563
+#: dlls/kernelbase/winerror.mc:2563
 msgid "Invalid LB_SETCOUNT sent.\n"
 msgstr "Wysłano niepoprawny LB_SETCOUNT.\n"
 
-#: dlls/kernel32/winerror.mc:2568
+#: dlls/kernelbase/winerror.mc:2568
 msgid "No tab stops on this list box.\n"
 msgstr "Brak punktów tabulacyjnych w tym listbox'ie.\n"
 
-#: dlls/kernel32/winerror.mc:2573
+#: dlls/kernelbase/winerror.mc:2573
 msgid "Can't destroy object owned by another thread.\n"
 msgstr "Nie można zniszczyć obiektu należącego do innego wątku.\n"
 
-#: dlls/kernel32/winerror.mc:2578
+#: dlls/kernelbase/winerror.mc:2578
 msgid "Child window menus not allowed.\n"
 msgstr "Menu okna potomnego nie dozwolone.\n"
 
-#: dlls/kernel32/winerror.mc:2583
+#: dlls/kernelbase/winerror.mc:2583
 msgid "Window has no system menu.\n"
 msgstr "Okno nie ma menu systemowego.\n"
 
-#: dlls/kernel32/winerror.mc:2588
+#: dlls/kernelbase/winerror.mc:2588
 msgid "Invalid message box style.\n"
 msgstr "Niepoprawny styl messagebox'a.\n"
 
-#: dlls/kernel32/winerror.mc:2593
+#: dlls/kernelbase/winerror.mc:2593
 msgid "Invalid SPI parameter.\n"
 msgstr "Niepoprawny parametr SPI.\n"
 
-#: dlls/kernel32/winerror.mc:2598
+#: dlls/kernelbase/winerror.mc:2598
 msgid "Screen already locked.\n"
 msgstr "Ekran jest już zablokowany.\n"
 
-#: dlls/kernel32/winerror.mc:2603
+#: dlls/kernelbase/winerror.mc:2603
 msgid "Window handles have different parents.\n"
 msgstr "Uchwyty okna mają różne nadrzędne okna.\n"
 
-#: dlls/kernel32/winerror.mc:2608
+#: dlls/kernelbase/winerror.mc:2608
 msgid "Not a child window.\n"
 msgstr "To nie jest okno potomne.\n"
 
-#: dlls/kernel32/winerror.mc:2613
+#: dlls/kernelbase/winerror.mc:2613
 msgid "Invalid GW command.\n"
 msgstr "Niepoprawne polecenie GW.\n"
 
-#: dlls/kernel32/winerror.mc:2618
+#: dlls/kernelbase/winerror.mc:2618
 msgid "Invalid thread ID.\n"
 msgstr "Niepoprawny identyfikator wątku.\n"
 
-#: dlls/kernel32/winerror.mc:2623
+#: dlls/kernelbase/winerror.mc:2623
 msgid "Not an MDI child window.\n"
 msgstr "To nie jest okno potomne MDI.\n"
 
-#: dlls/kernel32/winerror.mc:2628
+#: dlls/kernelbase/winerror.mc:2628
 msgid "Popup menu already active.\n"
 msgstr "Menu popup już jest aktywne.\n"
 
-#: dlls/kernel32/winerror.mc:2633
+#: dlls/kernelbase/winerror.mc:2633
 msgid "No scrollbars.\n"
 msgstr "Brak pasków przewijania.\n"
 
-#: dlls/kernel32/winerror.mc:2638
+#: dlls/kernelbase/winerror.mc:2638
 msgid "Invalid scrollbar range.\n"
 msgstr "Niepoprawny zakres paska przewijania.\n"
 
-#: dlls/kernel32/winerror.mc:2643
+#: dlls/kernelbase/winerror.mc:2643
 msgid "Invalid ShowWin command.\n"
 msgstr "Niepoprawne polecenie ShowWin.\n"
 
-#: dlls/kernel32/winerror.mc:2648
+#: dlls/kernelbase/winerror.mc:2648
 msgid "No system resources.\n"
 msgstr "Brak zasobów systemowych.\n"
 
-#: dlls/kernel32/winerror.mc:2653
+#: dlls/kernelbase/winerror.mc:2653
 msgid "No non-paged system resources.\n"
 msgstr "Brak niestronicowanych zasobów systemowych.\n"
 
-#: dlls/kernel32/winerror.mc:2658
+#: dlls/kernelbase/winerror.mc:2658
 msgid "No paged system resources.\n"
 msgstr "Brak stronicowanych zasobów systemowych.\n"
 
-#: dlls/kernel32/winerror.mc:2663
+#: dlls/kernelbase/winerror.mc:2663
 msgid "No working set quota.\n"
 msgstr "Brak przydziału zestawu roboczego.\n"
 
-#: dlls/kernel32/winerror.mc:2668
+#: dlls/kernelbase/winerror.mc:2668
 msgid "No page file quota.\n"
 msgstr "Brak przydziału pliku stronicowania.\n"
 
-#: dlls/kernel32/winerror.mc:2673
+#: dlls/kernelbase/winerror.mc:2673
 msgid "Exceeded commitment limit.\n"
 msgstr "Przekroczono ograniczenie dokonań.\n"
 
-#: dlls/kernel32/winerror.mc:2678
+#: dlls/kernelbase/winerror.mc:2678
 msgid "Menu item not found.\n"
 msgstr "Nie znaleziono elementu menu.\n"
 
-#: dlls/kernel32/winerror.mc:2683
+#: dlls/kernelbase/winerror.mc:2683
 msgid "Invalid keyboard handle.\n"
 msgstr "Niepoprawny uchwyt klawiatury.\n"
 
-#: dlls/kernel32/winerror.mc:2688
+#: dlls/kernelbase/winerror.mc:2688
 msgid "Hook type not allowed.\n"
 msgstr "Rodzaj zaczepu niedozwolony.\n"
 
-#: dlls/kernel32/winerror.mc:2693
+#: dlls/kernelbase/winerror.mc:2693
 msgid "Interactive window station required.\n"
 msgstr "Wymagana interaktywna stacja okna.\n"
 
-#: dlls/kernel32/winerror.mc:2698
+#: dlls/kernelbase/winerror.mc:2698
 msgid "Timeout.\n"
 msgstr "Limit czasu.\n"
 
-#: dlls/kernel32/winerror.mc:2703
+#: dlls/kernelbase/winerror.mc:2703
 msgid "Invalid monitor handle.\n"
 msgstr "Niepoprawny uchwyt monitora.\n"
 
-#: dlls/kernel32/winerror.mc:2708
+#: dlls/kernelbase/winerror.mc:2708
 msgid "Event log file corrupt.\n"
 msgstr "Uszkodzony plik dziennika zdarzeń.\n"
 
-#: dlls/kernel32/winerror.mc:2713
+#: dlls/kernelbase/winerror.mc:2713
 msgid "Event log can't start.\n"
 msgstr "Dziennik zdarzeń nie może wystartować.\n"
 
-#: dlls/kernel32/winerror.mc:2718
+#: dlls/kernelbase/winerror.mc:2718
 msgid "Event log file full.\n"
 msgstr "Dziennik zdarzeń pełen.\n"
 
-#: dlls/kernel32/winerror.mc:2723
+#: dlls/kernelbase/winerror.mc:2723
 msgid "Event log file changed.\n"
 msgstr "Plik dziennika zdarzeń zmieniony.\n"
 
-#: dlls/kernel32/winerror.mc:2728
+#: dlls/kernelbase/winerror.mc:2728
 msgid "Installer service failed.\n"
 msgstr "Usługa instalatora zakończyła niepowodzeniem.\n"
 
-#: dlls/kernel32/winerror.mc:2733
+#: dlls/kernelbase/winerror.mc:2733
 msgid "Installation aborted by user.\n"
 msgstr "Instalacja przerwana przez użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:2738
+#: dlls/kernelbase/winerror.mc:2738
 msgid "Installation failure.\n"
 msgstr "Niepowodzenie instalacji.\n"
 
-#: dlls/kernel32/winerror.mc:2743
+#: dlls/kernelbase/winerror.mc:2743
 msgid "Installation suspended.\n"
 msgstr "Instalacja wstrzymana.\n"
 
-#: dlls/kernel32/winerror.mc:2748
+#: dlls/kernelbase/winerror.mc:2748
 msgid "Unknown product.\n"
 msgstr "Nieznany produkt.\n"
 
-#: dlls/kernel32/winerror.mc:2753
+#: dlls/kernelbase/winerror.mc:2753
 msgid "Unknown feature.\n"
 msgstr "Nieznana funkcja.\n"
 
-#: dlls/kernel32/winerror.mc:2758
+#: dlls/kernelbase/winerror.mc:2758
 msgid "Unknown component.\n"
 msgstr "Nieznany składnik.\n"
 
-#: dlls/kernel32/winerror.mc:2763
+#: dlls/kernelbase/winerror.mc:2763
 msgid "Unknown property.\n"
 msgstr "Nieznana właściwość.\n"
 
-#: dlls/kernel32/winerror.mc:2768
+#: dlls/kernelbase/winerror.mc:2768
 msgid "Invalid handle state.\n"
 msgstr "Niepoprawny stan uchwytu.\n"
 
-#: dlls/kernel32/winerror.mc:2773
+#: dlls/kernelbase/winerror.mc:2773
 msgid "Bad configuration.\n"
 msgstr "Złe ustawienia.\n"
 
-#: dlls/kernel32/winerror.mc:2778
+#: dlls/kernelbase/winerror.mc:2778
 msgid "Index is missing.\n"
 msgstr "Brakuje wskaźnika.\n"
 
-#: dlls/kernel32/winerror.mc:2783
+#: dlls/kernelbase/winerror.mc:2783
 msgid "Installation source is missing.\n"
 msgstr "Brakuje źródła instalacyjnego.\n"
 
-#: dlls/kernel32/winerror.mc:2788
+#: dlls/kernelbase/winerror.mc:2788
 msgid "Wrong installation package version.\n"
 msgstr "Zła wersja paczki instalacyjnej.\n"
 
-#: dlls/kernel32/winerror.mc:2793
+#: dlls/kernelbase/winerror.mc:2793
 msgid "Product uninstalled.\n"
 msgstr "Produkt odinstalowany.\n"
 
-#: dlls/kernel32/winerror.mc:2798
+#: dlls/kernelbase/winerror.mc:2798
 msgid "Invalid query syntax.\n"
 msgstr "Niepoprawne składnia kwerendy.\n"
 
-#: dlls/kernel32/winerror.mc:2803
+#: dlls/kernelbase/winerror.mc:2803
 msgid "Invalid field.\n"
 msgstr "Niepoprawne pole.\n"
 
-#: dlls/kernel32/winerror.mc:2808
+#: dlls/kernelbase/winerror.mc:2808
 msgid "Device removed.\n"
 msgstr "Urządzenie usunięte.\n"
 
-#: dlls/kernel32/winerror.mc:2813
+#: dlls/kernelbase/winerror.mc:2813
 msgid "Installation already running.\n"
 msgstr "Instalacja już jest uruchomiona.\n"
 
-#: dlls/kernel32/winerror.mc:2818
+#: dlls/kernelbase/winerror.mc:2818
 msgid "Installation package failed to open.\n"
 msgstr "Niepowodzenie przy otwieraniu paczki instalacyjnej.\n"
 
-#: dlls/kernel32/winerror.mc:2823
+#: dlls/kernelbase/winerror.mc:2823
 msgid "Installation package is invalid.\n"
 msgstr "Paczka instalacyjna jest niepoprawna.\n"
 
-#: dlls/kernel32/winerror.mc:2828
+#: dlls/kernelbase/winerror.mc:2828
 msgid "Installer user interface failed.\n"
 msgstr "Niepowodzenie interfejsu użytkownika instalatora.\n"
 
-#: dlls/kernel32/winerror.mc:2833
+#: dlls/kernelbase/winerror.mc:2833
 msgid "Failed to open installation log file.\n"
 msgstr "Niepowodzenie przy otwarciu pliku dziennika instalacyjnego.\n"
 
-#: dlls/kernel32/winerror.mc:2838
+#: dlls/kernelbase/winerror.mc:2838
 msgid "Installation language not supported.\n"
 msgstr "Język instalacji niewspierany.\n"
 
-#: dlls/kernel32/winerror.mc:2843
+#: dlls/kernelbase/winerror.mc:2843
 msgid "Installation transform failed to apply.\n"
 msgstr "Nieudane zastosowanie transformacji instalacji.\n"
 
-#: dlls/kernel32/winerror.mc:2848
+#: dlls/kernelbase/winerror.mc:2848
 msgid "Installation package rejected.\n"
 msgstr "Paczka instalacyjna odrzucona.\n"
 
-#: dlls/kernel32/winerror.mc:2853
+#: dlls/kernelbase/winerror.mc:2853
 msgid "Function could not be called.\n"
 msgstr "Funkcja nie mogła być wywołana.\n"
 
-#: dlls/kernel32/winerror.mc:2858
+#: dlls/kernelbase/winerror.mc:2858
 msgid "Function failed.\n"
 msgstr "Funkcja zakończyła niepowodzeniem.\n"
 
-#: dlls/kernel32/winerror.mc:2863
+#: dlls/kernelbase/winerror.mc:2863
 msgid "Invalid table.\n"
 msgstr "Niepoprawna tabela.\n"
 
-#: dlls/kernel32/winerror.mc:2868
+#: dlls/kernelbase/winerror.mc:2868
 msgid "Data type mismatch.\n"
 msgstr "Niezgodność rodzaju danych.\n"
 
-#: dlls/kernel32/winerror.mc:2873 dlls/kernel32/winerror.mc:3083
+#: dlls/kernelbase/winerror.mc:2873 dlls/kernelbase/winerror.mc:3083
 msgid "Unsupported type.\n"
 msgstr "Niewspierany rodzaj.\n"
 
-#: dlls/kernel32/winerror.mc:2878
+#: dlls/kernelbase/winerror.mc:2878
 msgid "Creation failed.\n"
 msgstr "Utworzenie zakończone niepowodzeniem.\n"
 
-#: dlls/kernel32/winerror.mc:2883
+#: dlls/kernelbase/winerror.mc:2883
 msgid "Temporary directory not writable.\n"
 msgstr "Katalog tymczasowy jest nie do zapisu.\n"
 
-#: dlls/kernel32/winerror.mc:2888
+#: dlls/kernelbase/winerror.mc:2888
 msgid "Installation platform not supported.\n"
 msgstr "Platforma instalacyjna niewspierana.\n"
 
-#: dlls/kernel32/winerror.mc:2893
+#: dlls/kernelbase/winerror.mc:2893
 msgid "Installer not used.\n"
 msgstr "Instalator nie użyty.\n"
 
-#: dlls/kernel32/winerror.mc:2898
+#: dlls/kernelbase/winerror.mc:2898
 msgid "Failed to open the patch package.\n"
 msgstr "Nieudane otwarcie paczki łatającej.\n"
 
-#: dlls/kernel32/winerror.mc:2903
+#: dlls/kernelbase/winerror.mc:2903
 msgid "Invalid patch package.\n"
 msgstr "Niepoprawna paczka łatająca.\n"
 
-#: dlls/kernel32/winerror.mc:2908
+#: dlls/kernelbase/winerror.mc:2908
 msgid "Unsupported patch package.\n"
 msgstr "Niewspierana paczka łatająca.\n"
 
-#: dlls/kernel32/winerror.mc:2913
+#: dlls/kernelbase/winerror.mc:2913
 msgid "Another version is installed.\n"
 msgstr "Inna wersja jest już zainstalowana.\n"
 
-#: dlls/kernel32/winerror.mc:2918
+#: dlls/kernelbase/winerror.mc:2918
 msgid "Invalid command line.\n"
 msgstr "Nieprawidłowy wiersz poleceń.\n"
 
-#: dlls/kernel32/winerror.mc:2923
+#: dlls/kernelbase/winerror.mc:2923
 msgid "Remote installation not allowed.\n"
 msgstr "Zdalna instalacja niedozwolona.\n"
 
-#: dlls/kernel32/winerror.mc:2928
+#: dlls/kernelbase/winerror.mc:2928
 msgid "Reboot initiated after successful install.\n"
 msgstr "Ponowne uruchomienie rozpoczęte po udanej instalacji.\n"
 
-#: dlls/kernel32/winerror.mc:2933
+#: dlls/kernelbase/winerror.mc:2933
 msgid "Invalid string binding.\n"
 msgstr "Nieprawidłowe przypisywanie ciągu znaków.\n"
 
-#: dlls/kernel32/winerror.mc:2938
+#: dlls/kernelbase/winerror.mc:2938
 msgid "Wrong kind of binding.\n"
 msgstr "Nieprawidłowy rodzaj przypisywania.\n"
 
-#: dlls/kernel32/winerror.mc:2943
+#: dlls/kernelbase/winerror.mc:2943
 msgid "Invalid binding.\n"
 msgstr "Nieprawidłowe przypisanie.\n"
 
-#: dlls/kernel32/winerror.mc:2948
+#: dlls/kernelbase/winerror.mc:2948
 msgid "RPC protocol sequence not supported.\n"
 msgstr "Sekwencja protokołu RPC niewspierana.\n"
 
-#: dlls/kernel32/winerror.mc:2953
+#: dlls/kernelbase/winerror.mc:2953
 msgid "Invalid RPC protocol sequence.\n"
 msgstr "Niepoprawna sekwencja protokołu RPC.\n"
 
-#: dlls/kernel32/winerror.mc:2958
+#: dlls/kernelbase/winerror.mc:2958
 msgid "Invalid string UUID.\n"
 msgstr "Niepoprawny łańcuch tekstowy UUID.\n"
 
-#: dlls/kernel32/winerror.mc:2963
+#: dlls/kernelbase/winerror.mc:2963
 msgid "Invalid endpoint format.\n"
 msgstr "Niepoprawny format punktu końcowego.\n"
 
-#: dlls/kernel32/winerror.mc:2968
+#: dlls/kernelbase/winerror.mc:2968
 msgid "Invalid network address.\n"
 msgstr "Niepoprawny adres sieci.\n"
 
-#: dlls/kernel32/winerror.mc:2973
+#: dlls/kernelbase/winerror.mc:2973
 msgid "No endpoint found.\n"
 msgstr "Nie znaleziono punktu końcowego.\n"
 
-#: dlls/kernel32/winerror.mc:2978
+#: dlls/kernelbase/winerror.mc:2978
 msgid "Invalid timeout value.\n"
 msgstr "Niepoprawna wartość czasu wygaśnięcia.\n"
 
-#: dlls/kernel32/winerror.mc:2983
+#: dlls/kernelbase/winerror.mc:2983
 msgid "Object UUID not found.\n"
 msgstr "Nie znaleziono UUID obiektu.\n"
 
-#: dlls/kernel32/winerror.mc:2988
+#: dlls/kernelbase/winerror.mc:2988
 msgid "UUID already registered.\n"
 msgstr "UUID już jest zarejestrowane.\n"
 
-#: dlls/kernel32/winerror.mc:2993
+#: dlls/kernelbase/winerror.mc:2993
 msgid "UUID type already registered.\n"
 msgstr "Typ UUID już jest zarejestrowany.\n"
 
-#: dlls/kernel32/winerror.mc:2998
+#: dlls/kernelbase/winerror.mc:2998
 msgid "Server already listening.\n"
 msgstr "Serwer już nasłuchuje.\n"
 
-#: dlls/kernel32/winerror.mc:3003
+#: dlls/kernelbase/winerror.mc:3003
 msgid "No protocol sequences registered.\n"
 msgstr "Brak zarejestrowanych sekwencji protokołu.\n"
 
-#: dlls/kernel32/winerror.mc:3008
+#: dlls/kernelbase/winerror.mc:3008
 msgid "RPC server not listening.\n"
 msgstr "Serwer RPC nie nasłuchuje.\n"
 
-#: dlls/kernel32/winerror.mc:3013
+#: dlls/kernelbase/winerror.mc:3013
 msgid "Unknown manager type.\n"
 msgstr "Nieznany rodzaj programu zarządzającego.\n"
 
-#: dlls/kernel32/winerror.mc:3018
+#: dlls/kernelbase/winerror.mc:3018
 msgid "Unknown interface.\n"
 msgstr "Nieznany interfejs.\n"
 
-#: dlls/kernel32/winerror.mc:3023
+#: dlls/kernelbase/winerror.mc:3023
 msgid "No bindings.\n"
 msgstr "Brak przypisań.\n"
 
-#: dlls/kernel32/winerror.mc:3028
+#: dlls/kernelbase/winerror.mc:3028
 msgid "No protocol sequences.\n"
 msgstr "Brak sekwencji protokołu.\n"
 
-#: dlls/kernel32/winerror.mc:3033
+#: dlls/kernelbase/winerror.mc:3033
 msgid "Can't create endpoint.\n"
 msgstr "Nie można stworzyć punktu końcowego.\n"
 
-#: dlls/kernel32/winerror.mc:3038
+#: dlls/kernelbase/winerror.mc:3038
 msgid "Out of resources.\n"
 msgstr "Wyczerpano zasoby.\n"
 
-#: dlls/kernel32/winerror.mc:3043
+#: dlls/kernelbase/winerror.mc:3043
 msgid "RPC server unavailable.\n"
 msgstr "Serwer RPC niedostępny.\n"
 
-#: dlls/kernel32/winerror.mc:3048
+#: dlls/kernelbase/winerror.mc:3048
 msgid "RPC server too busy.\n"
 msgstr "Serwer RPC zbyt zajęty.\n"
 
-#: dlls/kernel32/winerror.mc:3053
+#: dlls/kernelbase/winerror.mc:3053
 msgid "Invalid network options.\n"
 msgstr "Niepoprawne ustawienia sieci.\n"
 
-#: dlls/kernel32/winerror.mc:3058
+#: dlls/kernelbase/winerror.mc:3058
 msgid "No RPC call active.\n"
 msgstr "Brak aktywnych wywołań RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3063
+#: dlls/kernelbase/winerror.mc:3063
 msgid "RPC call failed.\n"
 msgstr "Wywołanie RPC nieudane.\n"
 
-#: dlls/kernel32/winerror.mc:3068
+#: dlls/kernelbase/winerror.mc:3068
 msgid "RPC call failed and didn't execute.\n"
 msgstr "Wywołanie RPC nieudane i nie wykonane.\n"
 
-#: dlls/kernel32/winerror.mc:3073
+#: dlls/kernelbase/winerror.mc:3073
 msgid "RPC protocol error.\n"
 msgstr "Błąd protokołu RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3078
+#: dlls/kernelbase/winerror.mc:3078
 msgid "Unsupported transfer syntax.\n"
 msgstr "Niewspierana składnia transferu.\n"
 
-#: dlls/kernel32/winerror.mc:3088
+#: dlls/kernelbase/winerror.mc:3088
 msgid "Invalid tag.\n"
 msgstr "Niepoprawny tag.\n"
 
-#: dlls/kernel32/winerror.mc:3093
+#: dlls/kernelbase/winerror.mc:3093
 msgid "Invalid array bounds.\n"
 msgstr "Niepoprawne granice macierzy.\n"
 
-#: dlls/kernel32/winerror.mc:3098
+#: dlls/kernelbase/winerror.mc:3098
 msgid "No entry name.\n"
 msgstr "Brak nazwy entry.\n"
 
-#: dlls/kernel32/winerror.mc:3103
+#: dlls/kernelbase/winerror.mc:3103
 msgid "Invalid name syntax.\n"
 msgstr "Niepoprawna nazwa składni.\n"
 
-#: dlls/kernel32/winerror.mc:3108
+#: dlls/kernelbase/winerror.mc:3108
 msgid "Unsupported name syntax.\n"
 msgstr "Niewspierana nazwa składni.\n"
 
-#: dlls/kernel32/winerror.mc:3113
+#: dlls/kernelbase/winerror.mc:3113
 msgid "No network address.\n"
 msgstr "Brak adresu sieciowego.\n"
 
-#: dlls/kernel32/winerror.mc:3118
+#: dlls/kernelbase/winerror.mc:3118
 msgid "Duplicate endpoint.\n"
 msgstr "Powielony punkt końcowy.\n"
 
-#: dlls/kernel32/winerror.mc:3123
+#: dlls/kernelbase/winerror.mc:3123
 msgid "Unknown authentication type.\n"
 msgstr "Nieznany typ poświadczenia.\n"
 
-#: dlls/kernel32/winerror.mc:3128
+#: dlls/kernelbase/winerror.mc:3128
 msgid "Maximum calls too low.\n"
 msgstr "Maksymalna liczba wywołań zbyt mała.\n"
 
-#: dlls/kernel32/winerror.mc:3133
+#: dlls/kernelbase/winerror.mc:3133
 msgid "String too long.\n"
 msgstr "Łańcuch znaków zbyt długi.\n"
 
-#: dlls/kernel32/winerror.mc:3138
+#: dlls/kernelbase/winerror.mc:3138
 msgid "Protocol sequence not found.\n"
 msgstr "Nie znaleziono sekwencji protokołu.\n"
 
-#: dlls/kernel32/winerror.mc:3143
+#: dlls/kernelbase/winerror.mc:3143
 msgid "Procedure number out of range.\n"
 msgstr "Numer procedury poza zakresem.\n"
 
-#: dlls/kernel32/winerror.mc:3148
+#: dlls/kernelbase/winerror.mc:3148
 msgid "Binding has no authentication data.\n"
 msgstr "Bindowanie nie ma danych poświadczających.\n"
 
-#: dlls/kernel32/winerror.mc:3153
+#: dlls/kernelbase/winerror.mc:3153
 msgid "Unknown authentication service.\n"
 msgstr "Nieznana usługa poświadczenia.\n"
 
-#: dlls/kernel32/winerror.mc:3158
+#: dlls/kernelbase/winerror.mc:3158
 msgid "Unknown authentication level.\n"
 msgstr "Nieznany poziom poświadczenia.\n"
 
-#: dlls/kernel32/winerror.mc:3163
+#: dlls/kernelbase/winerror.mc:3163
 msgid "Invalid authentication identity.\n"
 msgstr "Niepoprawna tożsamość poświadczająca.\n"
 
-#: dlls/kernel32/winerror.mc:3168
+#: dlls/kernelbase/winerror.mc:3168
 msgid "Unknown authorization service.\n"
 msgstr "Nieznana usługa uwierzytelnienia.\n"
 
-#: dlls/kernel32/winerror.mc:3173
+#: dlls/kernelbase/winerror.mc:3173
 msgid "Invalid entry.\n"
 msgstr "Niepoprawny entry.\n"
 
-#: dlls/kernel32/winerror.mc:3178
+#: dlls/kernelbase/winerror.mc:3178
 msgid "Can't perform operation.\n"
 msgstr "Nie można wykonać operacji.\n"
 
-#: dlls/kernel32/winerror.mc:3183
+#: dlls/kernelbase/winerror.mc:3183
 msgid "Endpoints not registered.\n"
 msgstr "Punkty końcowe niezarejestrowane.\n"
 
-#: dlls/kernel32/winerror.mc:3188
+#: dlls/kernelbase/winerror.mc:3188
 msgid "Nothing to export.\n"
 msgstr "Nic do wyeksportowania.\n"
 
-#: dlls/kernel32/winerror.mc:3193
+#: dlls/kernelbase/winerror.mc:3193
 msgid "Incomplete name.\n"
 msgstr "Niekompletna nazwa.\n"
 
-#: dlls/kernel32/winerror.mc:3198
+#: dlls/kernelbase/winerror.mc:3198
 msgid "Invalid version option.\n"
 msgstr "Niepoprawne ustawienie wersji.\n"
 
-#: dlls/kernel32/winerror.mc:3203
+#: dlls/kernelbase/winerror.mc:3203
 msgid "No more members.\n"
 msgstr "Nie ma więcej członków.\n"
 
-#: dlls/kernel32/winerror.mc:3208
+#: dlls/kernelbase/winerror.mc:3208
 msgid "Not all objects unexported.\n"
 msgstr "Nie wszystkie obiekty niewyeksportowane.\n"
 
-#: dlls/kernel32/winerror.mc:3213
+#: dlls/kernelbase/winerror.mc:3213
 msgid "Interface not found.\n"
 msgstr "Nie znaleziono interfejsu.\n"
 
-#: dlls/kernel32/winerror.mc:3218
+#: dlls/kernelbase/winerror.mc:3218
 msgid "Entry already exists.\n"
 msgstr "Wpis już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:3223
+#: dlls/kernelbase/winerror.mc:3223
 msgid "Entry not found.\n"
 msgstr "Nie znaleziono wpisu.\n"
 
-#: dlls/kernel32/winerror.mc:3228
+#: dlls/kernelbase/winerror.mc:3228
 msgid "Name service unavailable.\n"
 msgstr "Nazwa usługi niedostępna.\n"
 
-#: dlls/kernel32/winerror.mc:3233
+#: dlls/kernelbase/winerror.mc:3233
 msgid "Invalid network address family.\n"
 msgstr "Niepoprawna rodzina adresów sieci.\n"
 
-#: dlls/kernel32/winerror.mc:3238
+#: dlls/kernelbase/winerror.mc:3238
 msgid "Operation not supported.\n"
 msgstr "Operacja niewspierana.\n"
 
-#: dlls/kernel32/winerror.mc:3243
+#: dlls/kernelbase/winerror.mc:3243
 msgid "No security context available.\n"
 msgstr "Brak dostępnego kontekstu zabezpieczeń.\n"
 
-#: dlls/kernel32/winerror.mc:3248
+#: dlls/kernelbase/winerror.mc:3248
 msgid "RPCInternal error.\n"
 msgstr "Wewnętrzny błąd RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3253
+#: dlls/kernelbase/winerror.mc:3253
 msgid "RPC divide-by-zero.\n"
 msgstr "RPC dziel-przez-zero.\n"
 
-#: dlls/kernel32/winerror.mc:3258
+#: dlls/kernelbase/winerror.mc:3258
 msgid "Address error.\n"
 msgstr "Błąd adresu.\n"
 
-#: dlls/kernel32/winerror.mc:3263
+#: dlls/kernelbase/winerror.mc:3263
 msgid "Floating-point divide-by-zero.\n"
 msgstr "Zmiennoprzecinkowa dziel-przez-zero.\n"
 
-#: dlls/kernel32/winerror.mc:3268
+#: dlls/kernelbase/winerror.mc:3268
 msgid "Floating-point underflow.\n"
 msgstr "Zmiennoprzecinkowe przepełnienie dolne.\n"
 
-#: dlls/kernel32/winerror.mc:3273
+#: dlls/kernelbase/winerror.mc:3273
 msgid "Floating-point overflow.\n"
 msgstr "Zmiennoprzecinkowe przepełnienie górne.\n"
 
-#: dlls/kernel32/winerror.mc:3278
+#: dlls/kernelbase/winerror.mc:3278
 msgid "No more entries.\n"
 msgstr "Nie ma więcej wpisów.\n"
 
-#: dlls/kernel32/winerror.mc:3283
+#: dlls/kernelbase/winerror.mc:3283
 msgid "Character translation table open failed.\n"
 msgstr "Otwarcie tablicy tłumaczenia znaków nieudane.\n"
 
-#: dlls/kernel32/winerror.mc:3288
+#: dlls/kernelbase/winerror.mc:3288
 msgid "Character translation table file too small.\n"
 msgstr "Plik tablicy tłumaczenia znaków zbyt mały.\n"
 
-#: dlls/kernel32/winerror.mc:3293
+#: dlls/kernelbase/winerror.mc:3293
 msgid "Null context handle.\n"
 msgstr "Uchwyt kontekstu Null.\n"
 
-#: dlls/kernel32/winerror.mc:3298
+#: dlls/kernelbase/winerror.mc:3298
 msgid "Context handle damaged.\n"
 msgstr "Uchwyt kontekstu uszkodzony.\n"
 
-#: dlls/kernel32/winerror.mc:3303
+#: dlls/kernelbase/winerror.mc:3303
 msgid "Binding handle mismatch.\n"
 msgstr "Niedopasowanie obsługi przypisania.\n"
 
-#: dlls/kernel32/winerror.mc:3308
+#: dlls/kernelbase/winerror.mc:3308
 msgid "Cannot get call handle.\n"
 msgstr "Nie można pobrać uchwytu wywołania.\n"
 
-#: dlls/kernel32/winerror.mc:3313
+#: dlls/kernelbase/winerror.mc:3313
 msgid "Null reference pointer.\n"
 msgstr "Wskaźnik Null.\n"
 
-#: dlls/kernel32/winerror.mc:3318
+#: dlls/kernelbase/winerror.mc:3318
 msgid "Enumeration value out of range.\n"
 msgstr "Wartość rodzaju wyliczeniowego poza zakresem.\n"
 
-#: dlls/kernel32/winerror.mc:3323
+#: dlls/kernelbase/winerror.mc:3323
 msgid "Byte count too small.\n"
 msgstr "Liczba bajtów zbyt mała.\n"
 
-#: dlls/kernel32/winerror.mc:3328
+#: dlls/kernelbase/winerror.mc:3328
 msgid "Bad stub data.\n"
 msgstr "Złe dane zalążka.\n"
 
-#: dlls/kernel32/winerror.mc:3333
+#: dlls/kernelbase/winerror.mc:3333
 msgid "Invalid user buffer.\n"
 msgstr "Niepoprawny bufor użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:3338
+#: dlls/kernelbase/winerror.mc:3338
 msgid "Unrecognized media.\n"
 msgstr "Nierozpoznany nośnik.\n"
 
-#: dlls/kernel32/winerror.mc:3343
+#: dlls/kernelbase/winerror.mc:3343
 msgid "No trust secret.\n"
 msgstr "Brak sekretu zaufania.\n"
 
-#: dlls/kernel32/winerror.mc:3348
+#: dlls/kernelbase/winerror.mc:3348
 msgid "No trust SAM account.\n"
 msgstr "Niezaufane konto SAM.\n"
 
-#: dlls/kernel32/winerror.mc:3353
+#: dlls/kernelbase/winerror.mc:3353
 msgid "Trusted domain failure.\n"
 msgstr "Niepowodzenie zaufanej domeny.\n"
 
-#: dlls/kernel32/winerror.mc:3358
+#: dlls/kernelbase/winerror.mc:3358
 msgid "Trusted relationship failure.\n"
 msgstr "Niepowodzenie zaufanych stosunków.\n"
 
-#: dlls/kernel32/winerror.mc:3363
+#: dlls/kernelbase/winerror.mc:3363
 msgid "Trust logon failure.\n"
 msgstr "Niepowodzenie zaufanego zalogowania.\n"
 
-#: dlls/kernel32/winerror.mc:3368
+#: dlls/kernelbase/winerror.mc:3368
 msgid "RPC call already in progress.\n"
 msgstr "Wywołanie RPC już postępuje.\n"
 
-#: dlls/kernel32/winerror.mc:3373
+#: dlls/kernelbase/winerror.mc:3373
 msgid "NETLOGON is not started.\n"
 msgstr "NETLOGON nie wystartował.\n"
 
-#: dlls/kernel32/winerror.mc:3378
+#: dlls/kernelbase/winerror.mc:3378
 msgid "Account expired.\n"
 msgstr "Konto wygasło.\n"
 
-#: dlls/kernel32/winerror.mc:3383
+#: dlls/kernelbase/winerror.mc:3383
 msgid "Redirector has open handles.\n"
 msgstr "Przekierowywanie ma otwarte uchwyty.\n"
 
-#: dlls/kernel32/winerror.mc:3388
+#: dlls/kernelbase/winerror.mc:3388
 msgid "Printer driver already installed.\n"
 msgstr "Sterownik drukarki już jest zainstalowany.\n"
 
-#: dlls/kernel32/winerror.mc:3393
+#: dlls/kernelbase/winerror.mc:3393
 msgid "Unknown port.\n"
 msgstr "Nieznany port.\n"
 
-#: dlls/kernel32/winerror.mc:3398
+#: dlls/kernelbase/winerror.mc:3398
 msgid "Unknown printer driver.\n"
 msgstr "Nieznany sterownik drukarki.\n"
 
-#: dlls/kernel32/winerror.mc:3403
+#: dlls/kernelbase/winerror.mc:3403
 msgid "Unknown print processor.\n"
 msgstr "Nieznany procesor druku.\n"
 
-#: dlls/kernel32/winerror.mc:3408
+#: dlls/kernelbase/winerror.mc:3408
 msgid "Invalid separator file.\n"
 msgstr "Niepoprawna separator pliku.\n"
 
-#: dlls/kernel32/winerror.mc:3413
+#: dlls/kernelbase/winerror.mc:3413
 msgid "Invalid priority.\n"
 msgstr "Niepoprawna priorytet.\n"
 
-#: dlls/kernel32/winerror.mc:3418
+#: dlls/kernelbase/winerror.mc:3418
 msgid "Invalid printer name.\n"
 msgstr "Nieprawidłowa nazwa drukarki.\n"
 
-#: dlls/kernel32/winerror.mc:3423
+#: dlls/kernelbase/winerror.mc:3423
 msgid "Printer already exists.\n"
 msgstr "Drukarka już istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:3428
+#: dlls/kernelbase/winerror.mc:3428
 msgid "Invalid printer command.\n"
 msgstr "Nieprawidłowe polecenie drukarki.\n"
 
-#: dlls/kernel32/winerror.mc:3433
+#: dlls/kernelbase/winerror.mc:3433
 msgid "Invalid data type.\n"
 msgstr "Nieprawidłowy rodzaj danych.\n"
 
-#: dlls/kernel32/winerror.mc:3438
+#: dlls/kernelbase/winerror.mc:3438
 msgid "Invalid environment.\n"
 msgstr "Nieprawidłowe środowisko.\n"
 
-#: dlls/kernel32/winerror.mc:3443
+#: dlls/kernelbase/winerror.mc:3443
 msgid "No more bindings.\n"
 msgstr "Nie ma więcej bindingów.\n"
 
-#: dlls/kernel32/winerror.mc:3448
+#: dlls/kernelbase/winerror.mc:3448
 msgid "Can't log on with inter-domain trust account.\n"
 msgstr "Nie można zalogować z kontem zaufanym interdomain.\n"
 
-#: dlls/kernel32/winerror.mc:3453
+#: dlls/kernelbase/winerror.mc:3453
 msgid "Can't log on with workstation trust account.\n"
 msgstr "Nie można zalogować z kontem zaufanym stacji roboczej.\n"
 
-#: dlls/kernel32/winerror.mc:3458
+#: dlls/kernelbase/winerror.mc:3458
 msgid "Can't log on with server trust account.\n"
 msgstr "Nie można zalogować z kontem zaufanym serwera.\n"
 
-#: dlls/kernel32/winerror.mc:3463
+#: dlls/kernelbase/winerror.mc:3463
 msgid "Domain trust information inconsistent.\n"
 msgstr "Niespójne informacje zaufania domenie.\n"
 
-#: dlls/kernel32/winerror.mc:3468
+#: dlls/kernelbase/winerror.mc:3468
 msgid "Server has open handles.\n"
 msgstr "Serwer ma otwarte uchwyty.\n"
 
-#: dlls/kernel32/winerror.mc:3473
+#: dlls/kernelbase/winerror.mc:3473
 msgid "Resource data not found.\n"
 msgstr "Nie znaleziono danych zasobów.\n"
 
-#: dlls/kernel32/winerror.mc:3478
+#: dlls/kernelbase/winerror.mc:3478
 msgid "Resource type not found.\n"
 msgstr "Nie znaleziono rodzaju zasobów.\n"
 
-#: dlls/kernel32/winerror.mc:3483
+#: dlls/kernelbase/winerror.mc:3483
 msgid "Resource name not found.\n"
 msgstr "Nie znaleziono nazwy zasobów.\n"
 
-#: dlls/kernel32/winerror.mc:3488
+#: dlls/kernelbase/winerror.mc:3488
 msgid "Resource language not found.\n"
 msgstr "Nie znaleziono języka zasobów.\n"
 
-#: dlls/kernel32/winerror.mc:3493
+#: dlls/kernelbase/winerror.mc:3493
 msgid "Not enough quota.\n"
 msgstr "Niewystarczający przydział.\n"
 
-#: dlls/kernel32/winerror.mc:3498
+#: dlls/kernelbase/winerror.mc:3498
 msgid "No interfaces.\n"
 msgstr "Brak interfejsów.\n"
 
-#: dlls/kernel32/winerror.mc:3503
+#: dlls/kernelbase/winerror.mc:3503
 msgid "RPC call canceled.\n"
 msgstr "Wywołanie RPC anulowane.\n"
 
-#: dlls/kernel32/winerror.mc:3508
+#: dlls/kernelbase/winerror.mc:3508
 msgid "Binding incomplete.\n"
 msgstr "Binding niekompletny.\n"
 
-#: dlls/kernel32/winerror.mc:3513
+#: dlls/kernelbase/winerror.mc:3513
 msgid "RPC comm failure.\n"
 msgstr "Niepowodzenie RPC comm.\n"
 
-#: dlls/kernel32/winerror.mc:3518
+#: dlls/kernelbase/winerror.mc:3518
 msgid "Unsupported authorization level.\n"
 msgstr "Niewspierany poziom autoryzacji.\n"
 
-#: dlls/kernel32/winerror.mc:3523
+#: dlls/kernelbase/winerror.mc:3523
 msgid "No principal name registered.\n"
 msgstr "Brak zarejestrowanej nazwy głównej.\n"
 
-#: dlls/kernel32/winerror.mc:3528
+#: dlls/kernelbase/winerror.mc:3528
 msgid "Not an RPC error.\n"
 msgstr "Błąd nie-RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3533
+#: dlls/kernelbase/winerror.mc:3533
 msgid "UUID is local only.\n"
 msgstr "UUID jest tylko lokalny.\n"
 
-#: dlls/kernel32/winerror.mc:3538
+#: dlls/kernelbase/winerror.mc:3538
 msgid "Security package error.\n"
 msgstr "Błąd pakietu zabezpieczeń.\n"
 
-#: dlls/kernel32/winerror.mc:3543
+#: dlls/kernelbase/winerror.mc:3543
 msgid "Thread not canceled.\n"
 msgstr "Wątek nie anulowany.\n"
 
-#: dlls/kernel32/winerror.mc:3548
+#: dlls/kernelbase/winerror.mc:3548
 msgid "Invalid handle operation.\n"
 msgstr "Nieprawidłowe działanie na uchwycie.\n"
 
-#: dlls/kernel32/winerror.mc:3553
+#: dlls/kernelbase/winerror.mc:3553
 msgid "Wrong serializing package version.\n"
 msgstr "Zła wersja paczki serializującej.\n"
 
-#: dlls/kernel32/winerror.mc:3558
+#: dlls/kernelbase/winerror.mc:3558
 msgid "Wrong stub version.\n"
 msgstr "Nieprawidłowa wersja stub.\n"
 
-#: dlls/kernel32/winerror.mc:3563
+#: dlls/kernelbase/winerror.mc:3563
 msgid "Invalid pipe object.\n"
 msgstr "Nieprawidłowy obiekt symbolu potoku.\n"
 
-#: dlls/kernel32/winerror.mc:3568
+#: dlls/kernelbase/winerror.mc:3568
 msgid "Wrong pipe order.\n"
 msgstr "Nieprawidłowa kolejność symbolu potoku.\n"
 
-#: dlls/kernel32/winerror.mc:3573
+#: dlls/kernelbase/winerror.mc:3573
 msgid "Wrong pipe version.\n"
 msgstr "Nieprawidłowa wersja symbolu potoku.\n"
 
-#: dlls/kernel32/winerror.mc:3578
+#: dlls/kernelbase/winerror.mc:3578
 msgid "Group member not found.\n"
 msgstr "Nie znaleziono członka grupy.\n"
 
-#: dlls/kernel32/winerror.mc:3583
+#: dlls/kernelbase/winerror.mc:3583
 msgid "Can't create endpoint mapper DB.\n"
 msgstr "Nie można utworzyć bazy danych mapowania punktu końcowego.\n"
 
-#: dlls/kernel32/winerror.mc:3588
+#: dlls/kernelbase/winerror.mc:3588
 msgid "Invalid object.\n"
 msgstr "Nieprawidłowy obiekt.\n"
 
-#: dlls/kernel32/winerror.mc:3593
+#: dlls/kernelbase/winerror.mc:3593
 msgid "Invalid time.\n"
 msgstr "Nieprawidłowy czas.\n"
 
-#: dlls/kernel32/winerror.mc:3598
+#: dlls/kernelbase/winerror.mc:3598
 msgid "Invalid form name.\n"
 msgstr "Nieprawidłowa nazwa formularza.\n"
 
-#: dlls/kernel32/winerror.mc:3603
+#: dlls/kernelbase/winerror.mc:3603
 msgid "Invalid form size.\n"
 msgstr "Nieprawidłowy rozmiar formularza.\n"
 
-#: dlls/kernel32/winerror.mc:3608
+#: dlls/kernelbase/winerror.mc:3608
 msgid "Already awaiting printer handle.\n"
 msgstr "Właśnie oczekuje uchwytu drukarki.\n"
 
-#: dlls/kernel32/winerror.mc:3613
+#: dlls/kernelbase/winerror.mc:3613
 msgid "Printer deleted.\n"
 msgstr "Drukarka usunięta.\n"
 
-#: dlls/kernel32/winerror.mc:3618
+#: dlls/kernelbase/winerror.mc:3618
 msgid "Invalid printer state.\n"
 msgstr "Nieprawidłowy stan drukarki.\n"
 
-#: dlls/kernel32/winerror.mc:3623
+#: dlls/kernelbase/winerror.mc:3623
 msgid "User must change password.\n"
 msgstr "Użytkownik musi zmienić hasło.\n"
 
-#: dlls/kernel32/winerror.mc:3628
+#: dlls/kernelbase/winerror.mc:3628
 msgid "Domain controller not found.\n"
 msgstr "Nie znaleziono kontrolera domeny.\n"
 
-#: dlls/kernel32/winerror.mc:3633
+#: dlls/kernelbase/winerror.mc:3633
 msgid "Account locked out.\n"
 msgstr "Konto zamknięte.\n"
 
-#: dlls/kernel32/winerror.mc:3638
+#: dlls/kernelbase/winerror.mc:3638
 msgid "Invalid pixel format.\n"
 msgstr "Nieprawidłowy format piksela.\n"
 
-#: dlls/kernel32/winerror.mc:3643
+#: dlls/kernelbase/winerror.mc:3643
 msgid "Invalid driver.\n"
 msgstr "Nieprawidłowy sterownik.\n"
 
-#: dlls/kernel32/winerror.mc:3648
+#: dlls/kernelbase/winerror.mc:3648
 msgid "Invalid object resolver set.\n"
 msgstr "Ustawiono niepoprawny przelicznik obiektu.\n"
 
-#: dlls/kernel32/winerror.mc:3653
+#: dlls/kernelbase/winerror.mc:3653
 msgid "Incomplete RPC send.\n"
 msgstr "Wysłano niekompletne RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3658
+#: dlls/kernelbase/winerror.mc:3658
 msgid "Invalid asynchronous RPC handle.\n"
 msgstr "Nieprawidłowy asynchroniczny uchwyt RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3663
+#: dlls/kernelbase/winerror.mc:3663
 msgid "Invalid asynchronous RPC call.\n"
 msgstr "Nieprawidłowe asynchroniczne wywołanie RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3668
+#: dlls/kernelbase/winerror.mc:3668
 msgid "RPC pipe closed.\n"
 msgstr "Symbol potoku RPC zamknięty.\n"
 
-#: dlls/kernel32/winerror.mc:3673
+#: dlls/kernelbase/winerror.mc:3673
 msgid "Discipline error on RPC pipe.\n"
 msgstr "Błąd dyscypliny na symbolu potoku RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3678
+#: dlls/kernelbase/winerror.mc:3678
 msgid "No data on RPC pipe.\n"
 msgstr "Brak danych na symbolu potoku RPC.\n"
 
-#: dlls/kernel32/winerror.mc:3683
+#: dlls/kernelbase/winerror.mc:3683
 msgid "No site name available.\n"
 msgstr "Nazwa sieci niedostępna.\n"
 
-#: dlls/kernel32/winerror.mc:3688
+#: dlls/kernelbase/winerror.mc:3688
 msgid "The file cannot be accessed.\n"
 msgstr "Nie można uzyskać dostępu do pliku.\n"
 
-#: dlls/kernel32/winerror.mc:3693
+#: dlls/kernelbase/winerror.mc:3693
 msgid "The filename cannot be resolved.\n"
 msgstr "Nie można rozbić nazwy pliku.\n"
 
-#: dlls/kernel32/winerror.mc:3698
+#: dlls/kernelbase/winerror.mc:3698
 msgid "RPC entry type mismatch.\n"
 msgstr "Rodzaj wpisu RPC niezgodny.\n"
 
-#: dlls/kernel32/winerror.mc:3703
+#: dlls/kernelbase/winerror.mc:3703
 msgid "Not all objects could be exported.\n"
 msgstr "Nie można było wyeksportować wszystkich obiektów.\n"
 
-#: dlls/kernel32/winerror.mc:3708
+#: dlls/kernelbase/winerror.mc:3708
 msgid "The interface could not be exported.\n"
 msgstr "Nie można było wyeksportować interfejsu.\n"
 
-#: dlls/kernel32/winerror.mc:3713
+#: dlls/kernelbase/winerror.mc:3713
 msgid "The profile could not be added.\n"
 msgstr "Nie można było dodać profilu.\n"
 
-#: dlls/kernel32/winerror.mc:3718
+#: dlls/kernelbase/winerror.mc:3718
 msgid "The profile element could not be added.\n"
 msgstr "Nie można było dodać elementu profilu.\n"
 
-#: dlls/kernel32/winerror.mc:3723
+#: dlls/kernelbase/winerror.mc:3723
 msgid "The profile element could not be removed.\n"
 msgstr "Nie można było usunąć elementu profilu.\n"
 
-#: dlls/kernel32/winerror.mc:3728
+#: dlls/kernelbase/winerror.mc:3728
 msgid "The group element could not be added.\n"
 msgstr "Nie można było dodać elementu grupy.\n"
 
-#: dlls/kernel32/winerror.mc:3733
+#: dlls/kernelbase/winerror.mc:3733
 msgid "The group element could not be removed.\n"
 msgstr "Nie można było usunąć elementu grupy.\n"
 
-#: dlls/kernel32/winerror.mc:3738
+#: dlls/kernelbase/winerror.mc:3738
 msgid "The username could not be found.\n"
 msgstr "Nie można było znaleźć użytkownika.\n"
 
-#: dlls/kernel32/winerror.mc:3743
+#: dlls/kernelbase/winerror.mc:3743
 msgid "This network connection does not exist.\n"
 msgstr "Połączenie sieciowe nie istnieje.\n"
 
-#: dlls/kernel32/winerror.mc:3748
+#: dlls/kernelbase/winerror.mc:3748
+#, fuzzy
+#| msgid "Invalid at interrupt time.\n"
+msgid "Call interrupted.\n"
+msgstr "Niepoprawny w czasie przerywania.\n"
+
+#: dlls/kernelbase/winerror.mc:3753
+#, fuzzy
+#| msgid "Invalid handle.\n"
+msgid "Invalid file handle.\n"
+msgstr "Nieprawidłowy uchwyt.\n"
+
+#: dlls/kernelbase/winerror.mc:3763
+#, fuzzy
+#| msgid "Invalid network address.\n"
+msgid "Invalid pointer address.\n"
+msgstr "Niepoprawny adres sieci.\n"
+
+#: dlls/kernelbase/winerror.mc:3768
+#, fuzzy
+#| msgid "Invalid name.\n"
+msgid "Invalid argument.\n"
+msgstr "Niepoprawna nazwa.\n"
+
+#: dlls/kernelbase/winerror.mc:3778
 msgid "Connection reset by peer.\n"
 msgstr "Połączenie wyzerowane przez uczestnika.\n"
 
-#: dlls/kernel32/winerror.mc:3767
+#: dlls/kernelbase/winerror.mc:3788
+#, fuzzy
+#| msgid "Point not found.\n"
+msgid "Host not found.\n"
+msgstr "Nie znaleziono punktu.\n"
+
+#: dlls/kernelbase/winerror.mc:3793
+#, fuzzy
+#| msgid "Attribute is not found.\n"
+msgid "Nonauthoritative host not found.\n"
+msgstr "Nie znaleziono atrybutu.\n"
+
+#: dlls/kernelbase/winerror.mc:3798
+#, fuzzy
+#| msgid "Unrecoverable error occurred.\n"
+msgid "Nonrecoverable error.\n"
+msgstr "Wystąpił błąd bez możliwości kontynuacji.\n"
+
+#: dlls/kernelbase/winerror.mc:3803
+msgid "Name valid, no data record.\n"
+msgstr ""
+
+#: dlls/kernelbase/winerror.mc:3817
 msgid "Not implemented.\n"
 msgstr "Niezaimplementowane.\n"
 
-#: dlls/kernel32/winerror.mc:3788
+#: dlls/kernelbase/winerror.mc:3838
 msgid "Call failed.\n"
 msgstr "Nie udało się wywołać.\n"
 
-#: dlls/kernel32/winerror.mc:3760
+#: dlls/kernelbase/winerror.mc:3810
 msgid "No Signature found in file.\n"
 msgstr "Nie znaleziono podpisu w pliku.\n"
 
-#: dlls/kernel32/winerror.mc:3774
+#: dlls/kernelbase/winerror.mc:3824
 msgid "Invalid call.\n"
 msgstr "Nieprawidłowe wywołanie.\n"
 
-#: dlls/kernel32/winerror.mc:3781
+#: dlls/kernelbase/winerror.mc:3831
 msgid "Resource is not currently available.\n"
 msgstr "Zasób jest obecnie niedostępny.\n"
 
-#: dlls/light.msstyles/light.rc:30 dlls/light.msstyles/light.rc:37
-msgid "Classic Blue"
-msgstr "Klasyczny niebieski"
-
-#: dlls/light.msstyles/light.rc:43 dlls/light.msstyles/light.rc:49
+#: dlls/light.msstyles/light.rc:41 dlls/light.msstyles/light.rc:47
 #: programs/winhlp32/winhlp32.rc:53 programs/winhlp32/winhlp32.rc:73
 msgid "Normal"
 msgstr "Normalne"
@@ -10335,10 +10425,12 @@ msgid "Select Source"
 msgstr "Zaznacz źródło"
 
 #: dlls/tzres/tzres.rc:126
+msgctxt "maximum 31 characters"
 msgid "China Standard Time"
 msgstr "Czas urzędowy Chin"
 
 #: dlls/tzres/tzres.rc:127
+msgctxt "maximum 31 characters"
 msgid "China Daylight Time"
 msgstr "Czas letni Chin"
 
@@ -10347,10 +10439,12 @@ msgid "(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi"
 msgstr "(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi"
 
 #: dlls/tzres/tzres.rc:267
+msgctxt "maximum 31 characters"
 msgid "North Asia Standard Time"
 msgstr "Czas urzędowy Azji północnej"
 
 #: dlls/tzres/tzres.rc:268
+msgctxt "maximum 31 characters"
 msgid "North Asia Daylight Time"
 msgstr "Czas letni Azji północnej"
 
@@ -10359,10 +10453,12 @@ msgid "(UTC+07:00) Krasnoyarsk"
 msgstr "(UTC+07:00) Krasnojarsk"
 
 #: dlls/tzres/tzres.rc:168
+msgctxt "maximum 31 characters"
 msgid "Georgian Standard Time"
 msgstr "Czas urzędowy Gruzji"
 
 #: dlls/tzres/tzres.rc:169
+msgctxt "maximum 31 characters"
 msgid "Georgian Daylight Time"
 msgstr "Czas letni Gruzji"
 
@@ -10371,6 +10467,7 @@ msgid "(UTC+04:00) Tbilisi"
 msgstr "(UTC+04:00) Tbilisi"
 
 #: dlls/tzres/tzres.rc:393 dlls/tzres/tzres.rc:394
+msgctxt "maximum 31 characters"
 msgid "UTC+12"
 msgstr "UTC+12"
 
@@ -10379,10 +10476,12 @@ msgid "(UTC+12:00) Coordinated Universal Time+12"
 msgstr "(UTC+12:00) Uniwersalny Czas Koordynowany+12"
 
 #: dlls/tzres/tzres.rc:252
+msgctxt "maximum 31 characters"
 msgid "Nepal Standard Time"
 msgstr "Czas urzędowy Nepalu"
 
 #: dlls/tzres/tzres.rc:253
+msgctxt "maximum 31 characters"
 msgid "Nepal Daylight Time"
 msgstr "Czas letni Nepalu"
 
@@ -10391,10 +10490,14 @@ msgid "(UTC+05:45) Kathmandu"
 msgstr "(UTC+05:45) Katmandu"
 
 #: dlls/tzres/tzres.rc:90
+#, fuzzy
+#| msgid "Cape Verde Standard Time"
+msgctxt "maximum 31 characters"
 msgid "Cape Verde Standard Time"
 msgstr "Czas urzędowy Zielonego Przylądka"
 
 #: dlls/tzres/tzres.rc:91
+msgctxt "maximum 31 characters"
 msgid "Cape Verde Daylight Time"
 msgstr "Czas letni Zielonego Przylądka"
 
@@ -10403,10 +10506,12 @@ msgid "(UTC-01:00) Cabo Verde Is."
 msgstr "(UTC-01:00) Wyspy Zielonego Przylądka"
 
 #: dlls/tzres/tzres.rc:183
+msgctxt "maximum 31 characters"
 msgid "Haiti Standard Time"
 msgstr "Czas urzędowy Haiti"
 
 #: dlls/tzres/tzres.rc:184
+msgctxt "maximum 31 characters"
 msgid "Haiti Daylight Time"
 msgstr "Czas letni Haiti"
 
@@ -10415,10 +10520,12 @@ msgid "(UTC-05:00) Haiti"
 msgstr "(UTC-05:00) Haiti"
 
 #: dlls/tzres/tzres.rc:111
+msgctxt "maximum 31 characters"
 msgid "Central European Standard Time"
 msgstr "Czas urzędowy Europy środkowej"
 
 #: dlls/tzres/tzres.rc:112
+msgctxt "maximum 31 characters"
 msgid "Central European Daylight Time"
 msgstr "Czas letni Europy środkowej"
 
@@ -10427,10 +10534,12 @@ msgid "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb"
 msgstr "(UTC+01:00) Sarajewo, Skopia, Warszawa, Zagrzeb"
 
 #: dlls/tzres/tzres.rc:234
+msgctxt "maximum 31 characters"
 msgid "Morocco Standard Time"
 msgstr "Czas urzędowy Maroka"
 
 #: dlls/tzres/tzres.rc:235
+msgctxt "maximum 31 characters"
 msgid "Morocco Daylight Time"
 msgstr "Czas letni Maroka"
 
@@ -10439,6 +10548,7 @@ msgid "(UTC+01:00) Casablanca"
 msgstr "(UTC+01:00) Casablanka"
 
 #: dlls/tzres/tzres.rc:402 dlls/tzres/tzres.rc:403
+msgctxt "maximum 31 characters"
 msgid "UTC-08"
 msgstr "UTC-08"
 
@@ -10447,10 +10557,12 @@ msgid "(UTC-08:00) Coordinated Universal Time-08"
 msgstr "(UTC-08:00) Uniwersalny Czas Koordynowany-08"
 
 #: dlls/tzres/tzres.rc:39
+msgctxt "maximum 31 characters"
 msgid "Altai Standard Time"
 msgstr "Czas urzędowy Altai"
 
 #: dlls/tzres/tzres.rc:40
+msgctxt "maximum 31 characters"
 msgid "Altai Daylight Time"
 msgstr "Czas letni Altai"
 
@@ -10459,10 +10571,12 @@ msgid "(UTC+07:00) Barnaul, Gorno-Altaysk"
 msgstr "(UTC+07:00) Barnaul, Gorno-Altaysk"
 
 #: dlls/tzres/tzres.rc:108
+msgctxt "maximum 31 characters"
 msgid "Central Europe Standard Time"
 msgstr "Czas urzędowy Europy środkowej"
 
 #: dlls/tzres/tzres.rc:109
+msgctxt "maximum 31 characters"
 msgid "Central Europe Daylight Time"
 msgstr "Czas letni Europy środkowej"
 
@@ -10471,10 +10585,12 @@ msgid "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague"
 msgstr "(UTC+01:00) Belgrad, Bratysława, Budapeszt, Ljubljana, Praga"
 
 #: dlls/tzres/tzres.rc:192
+msgctxt "maximum 31 characters"
 msgid "Iran Standard Time"
 msgstr "Czas urzędowy Iranu"
 
 #: dlls/tzres/tzres.rc:193
+msgctxt "maximum 31 characters"
 msgid "Iran Daylight Time"
 msgstr "Czas letni Iranu"
 
@@ -10483,10 +10599,12 @@ msgid "(UTC+03:30) Tehran"
 msgstr "(UTC+03:30) Teheran"
 
 #: dlls/tzres/tzres.rc:318
+msgctxt "maximum 31 characters"
 msgid "Saint Pierre Standard Time"
 msgstr "Czas urzędowy Saint Pierre"
 
 #: dlls/tzres/tzres.rc:319
+msgctxt "maximum 31 characters"
 msgid "Saint Pierre Daylight Time"
 msgstr "Czas letni Saint Pierre"
 
@@ -10495,10 +10613,12 @@ msgid "(UTC-03:00) Saint Pierre and Miquelon"
 msgstr "(UTC-03:00) Saint Pierre i Miquelon"
 
 #: dlls/tzres/tzres.rc:327
+msgctxt "maximum 31 characters"
 msgid "Sao Tome Standard Time"
 msgstr "Czas urzędowy Sao Tome"
 
 #: dlls/tzres/tzres.rc:328
+msgctxt "maximum 31 characters"
 msgid "Sao Tome Daylight Time"
 msgstr "Czas letni Sao Tome"
 
@@ -10507,10 +10627,12 @@ msgid "(UTC+00:00) Sao Tome"
 msgstr "(UTC+00:00) Sao Tome"
 
 #: dlls/tzres/tzres.rc:249
+msgctxt "maximum 31 characters"
 msgid "Namibia Standard Time"
 msgstr "Czas urzędowy Namibii"
 
 #: dlls/tzres/tzres.rc:250
+msgctxt "maximum 31 characters"
 msgid "Namibia Daylight Time"
 msgstr "Czas letni Namibii"
 
@@ -10519,10 +10641,12 @@ msgid "(UTC+02:00) Windhoek"
 msgstr "(UTC+02:00) Windhuk"
 
 #: dlls/tzres/tzres.rc:369
+msgctxt "maximum 31 characters"
 msgid "Tonga Standard Time"
 msgstr "Czas urzędowy Tonga"
 
 #: dlls/tzres/tzres.rc:370
+msgctxt "maximum 31 characters"
 msgid "Tonga Daylight Time"
 msgstr "Czas letni Tonga"
 
@@ -10531,10 +10655,12 @@ msgid "(UTC+13:00) Nuku'alofa"
 msgstr "(UTC+13:00) Nuku'alofa"
 
 #: dlls/tzres/tzres.rc:240
+msgctxt "maximum 31 characters"
 msgid "Mountain Standard Time (Mexico)"
 msgstr "Czas urzędowy górski (Meksyk)"
 
 #: dlls/tzres/tzres.rc:241
+msgctxt "maximum 31 characters"
 msgid "Mountain Daylight Time (Mexico)"
 msgstr "Czas letni górski (Meksyk)"
 
@@ -10543,10 +10669,12 @@ msgid "(UTC-07:00) Chihuahua, La Paz, Mazatlan"
 msgstr "(UTC-07:00) Chihuahua, La Paz, Mazatlan"
 
 #: dlls/tzres/tzres.rc:171
+msgctxt "maximum 31 characters"
 msgid "GMT Standard Time"
 msgstr "Czas urzędowy GMT"
 
 #: dlls/tzres/tzres.rc:172
+msgctxt "maximum 31 characters"
 msgid "GMT Daylight Time"
 msgstr "Czas letni GMT"
 
@@ -10557,12 +10685,14 @@ msgstr "(UTC+00:00) Dublin, Edynburg, Lizbona, Londyn"
 #: dlls/tzres/tzres.rc:342
 #, fuzzy
 #| msgid "Sudan Standard Time"
+msgctxt "maximum 31 characters"
 msgid "South Sudan Standard Time"
 msgstr "Czas urzędowy Sudanu"
 
 #: dlls/tzres/tzres.rc:343
 #, fuzzy
 #| msgid "Sudan Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "South Sudan Daylight Time"
 msgstr "Czas letni Sudanu"
 
@@ -10573,10 +10703,12 @@ msgid "(UTC+02:00) Juba"
 msgstr "(UTC+02:00) Jeruzalem"
 
 #: dlls/tzres/tzres.rc:102
+msgctxt "maximum 31 characters"
 msgid "Central Asia Standard Time"
 msgstr "Czas urzędowy Azji środkowej"
 
 #: dlls/tzres/tzres.rc:103
+msgctxt "maximum 31 characters"
 msgid "Central Asia Daylight Time"
 msgstr "Czas letni Azji środkowej"
 
@@ -10585,10 +10717,12 @@ msgid "(UTC+06:00) Astana"
 msgstr "(UTC+06:00) Astana"
 
 #: dlls/tzres/tzres.rc:213
+msgctxt "maximum 31 characters"
 msgid "Lord Howe Standard Time"
 msgstr "Czas urzędowy Lord Howe"
 
 #: dlls/tzres/tzres.rc:214
+msgctxt "maximum 31 characters"
 msgid "Lord Howe Daylight Time"
 msgstr "Czas letni Lord Howe"
 
@@ -10597,10 +10731,12 @@ msgid "(UTC+10:30) Lord Howe Island"
 msgstr "(UTC+10:30) Wyspy Lord Howe"
 
 #: dlls/tzres/tzres.rc:48
+msgctxt "maximum 31 characters"
 msgid "Arabic Standard Time"
 msgstr "Czas urzędowy arabski"
 
 #: dlls/tzres/tzres.rc:49
+msgctxt "maximum 31 characters"
 msgid "Arabic Daylight Time"
 msgstr "Czas letni arabski"
 
@@ -10609,6 +10745,7 @@ msgid "(UTC+03:00) Baghdad"
 msgstr "(UTC+03:00) Bagdad"
 
 #: dlls/tzres/tzres.rc:396 dlls/tzres/tzres.rc:397
+msgctxt "maximum 31 characters"
 msgid "UTC+13"
 msgstr "UTC+13"
 
@@ -10617,10 +10754,12 @@ msgid "(UTC+13:00) Coordinated Universal Time+13"
 msgstr "(UTC+13:00) Uniwersalny Czas Koordynowany+13"
 
 #: dlls/tzres/tzres.rc:216
+msgctxt "maximum 31 characters"
 msgid "Magadan Standard Time"
 msgstr "Czas urzędowy Magadan"
 
 #: dlls/tzres/tzres.rc:217
+msgctxt "maximum 31 characters"
 msgid "Magadan Daylight Time"
 msgstr "Czas letni Magadan"
 
@@ -10629,10 +10768,12 @@ msgid "(UTC+11:00) Magadan"
 msgstr "(UTC+11:00) Magadan"
 
 #: dlls/tzres/tzres.rc:258
+msgctxt "maximum 31 characters"
 msgid "Newfoundland Standard Time"
 msgstr "Czas urzędowy Nowej Fundlandii"
 
 #: dlls/tzres/tzres.rc:259
+msgctxt "maximum 31 characters"
 msgid "Newfoundland Daylight Time"
 msgstr "Czas letni Nowej Fundlandii"
 
@@ -10641,10 +10782,12 @@ msgid "(UTC-03:30) Newfoundland"
 msgstr "(UTC-03:30) Nowa Fundlandia"
 
 #: dlls/tzres/tzres.rc:348
+msgctxt "maximum 31 characters"
 msgid "Sudan Standard Time"
 msgstr "Czas urzędowy Sudanu"
 
 #: dlls/tzres/tzres.rc:349
+msgctxt "maximum 31 characters"
 msgid "Sudan Daylight Time"
 msgstr "Czas letni Sudanu"
 
@@ -10653,10 +10796,14 @@ msgid "(UTC+02:00) Khartoum"
 msgstr "(UTC+02:00) Chartum"
 
 #: dlls/tzres/tzres.rc:438
+#, fuzzy
+#| msgid "West Pacific Standard Time"
+msgctxt "maximum 31 characters"
 msgid "West Pacific Standard Time"
 msgstr "Czas urzędowy pacyficzny zachodni"
 
 #: dlls/tzres/tzres.rc:439
+msgctxt "maximum 31 characters"
 msgid "West Pacific Daylight Time"
 msgstr "Czas letni pacyficzny zachodni"
 
@@ -10665,10 +10812,12 @@ msgid "(UTC+10:00) Guam, Port Moresby"
 msgstr "(UTC+10:00) Guam, Port Moresby"
 
 #: dlls/tzres/tzres.rc:279
+msgctxt "maximum 31 characters"
 msgid "Pacific Standard Time"
 msgstr "Czas urzędowy pacyficzny"
 
 #: dlls/tzres/tzres.rc:280
+msgctxt "maximum 31 characters"
 msgid "Pacific Daylight Time"
 msgstr "Czas letni pacyficzny"
 
@@ -10677,10 +10826,12 @@ msgid "(UTC-08:00) Pacific Time (US & Canada)"
 msgstr "(UTC-08:00) Czas pacyficzny (US & Canada)"
 
 #: dlls/tzres/tzres.rc:69
+msgctxt "maximum 31 characters"
 msgid "Azerbaijan Standard Time"
 msgstr "Czas urzędowy Azerbejdżanu"
 
 #: dlls/tzres/tzres.rc:70
+msgctxt "maximum 31 characters"
 msgid "Azerbaijan Daylight Time"
 msgstr "Czas letni Azerbejdżanu"
 
@@ -10689,10 +10840,12 @@ msgid "(UTC+04:00) Baku"
 msgstr "(UTC+04:00) Baku"
 
 #: dlls/tzres/tzres.rc:219
+msgctxt "maximum 31 characters"
 msgid "Magallanes Standard Time"
 msgstr "Czas urzędowy Magallanes"
 
 #: dlls/tzres/tzres.rc:220
+msgctxt "maximum 31 characters"
 msgid "Magallanes Daylight Time"
 msgstr "Czas letni Magallanes"
 
@@ -10701,10 +10854,12 @@ msgid "(UTC-03:00) Punta Arenas"
 msgstr "(UTC-03:00) Punta Arenas"
 
 #: dlls/tzres/tzres.rc:324
+msgctxt "maximum 31 characters"
 msgid "Samoa Standard Time"
 msgstr "Czas urzędowy Samoa"
 
 #: dlls/tzres/tzres.rc:325
+msgctxt "maximum 31 characters"
 msgid "Samoa Daylight Time"
 msgstr "Czas letni Samoa"
 
@@ -10713,10 +10868,12 @@ msgid "(UTC+13:00) Samoa"
 msgstr "(UTC+13:00) Samoa"
 
 #: dlls/tzres/tzres.rc:201
+msgctxt "maximum 31 characters"
 msgid "Kaliningrad Standard Time"
 msgstr "Czas urzędowy Kaliningradu"
 
 #: dlls/tzres/tzres.rc:202
+msgctxt "maximum 31 characters"
 msgid "Kaliningrad Daylight Time"
 msgstr "Czas letni Kaliningradu"
 
@@ -10725,10 +10882,14 @@ msgid "(UTC+02:00) Kaliningrad"
 msgstr "(UTC+02:00) Kaliningrad"
 
 #: dlls/tzres/tzres.rc:282
+#, fuzzy
+#| msgid "Pacific Standard Time (Mexico)"
+msgctxt "maximum 31 characters"
 msgid "Pacific Standard Time (Mexico)"
 msgstr "Czas urzędowy pacyficzny (Meksyk)"
 
 #: dlls/tzres/tzres.rc:283
+msgctxt "maximum 31 characters"
 msgid "Pacific Daylight Time (Mexico)"
 msgstr "Czas letni pacyficzny (Meksyk)"
 
@@ -10737,10 +10898,12 @@ msgid "(UTC-08:00) Baja California"
 msgstr "(UTC-08:00) Baja Kalifornia"
 
 #: dlls/tzres/tzres.rc:228
+msgctxt "maximum 31 characters"
 msgid "Middle East Standard Time"
 msgstr "Czas urzędowy bliskiego wschodu"
 
 #: dlls/tzres/tzres.rc:229
+msgctxt "maximum 31 characters"
 msgid "Middle East Daylight Time"
 msgstr "Czas letni Bliskiego Wschodu"
 
@@ -10749,10 +10912,12 @@ msgid "(UTC+02:00) Beirut"
 msgstr "(UTC+02:00) Bejrut"
 
 #: dlls/tzres/tzres.rc:363
+msgctxt "maximum 31 characters"
 msgid "Tokyo Standard Time"
 msgstr "Czas urzędowy Tokyo"
 
 #: dlls/tzres/tzres.rc:364
+msgctxt "maximum 31 characters"
 msgid "Tokyo Daylight Time"
 msgstr "Czas letni Tokyo"
 
@@ -10761,10 +10926,12 @@ msgid "(UTC+09:00) Osaka, Sapporo, Tokyo"
 msgstr "(UTC+09:00) Osaka, Sapporo, Tokio"
 
 #: dlls/tzres/tzres.rc:210
+msgctxt "maximum 31 characters"
 msgid "Line Islands Standard Time"
 msgstr "Czas urzędowy Wysp Line"
 
 #: dlls/tzres/tzres.rc:211
+msgctxt "maximum 31 characters"
 msgid "Line Islands Daylight Time"
 msgstr "Czas letni Wysp Line"
 
@@ -10773,10 +10940,12 @@ msgid "(UTC+14:00) Kiritimati Island"
 msgstr "(UTC+14:00) Wyspy Kiritimati"
 
 #: dlls/tzres/tzres.rc:129
+msgctxt "maximum 31 characters"
 msgid "Cuba Standard Time"
 msgstr "Czas urzędowy Kuby"
 
 #: dlls/tzres/tzres.rc:130
+msgctxt "maximum 31 characters"
 msgid "Cuba Daylight Time"
 msgstr "Czas letni Kuby"
 
@@ -10785,10 +10954,12 @@ msgid "(UTC-05:00) Havana"
 msgstr "(UTC-05:00) Hawana"
 
 #: dlls/tzres/tzres.rc:198
+msgctxt "maximum 31 characters"
 msgid "Jordan Standard Time"
 msgstr "Czas urzędowy Jordanu"
 
 #: dlls/tzres/tzres.rc:199
+msgctxt "maximum 31 characters"
 msgid "Jordan Daylight Time"
 msgstr "Czas letni Jordanu"
 
@@ -10797,10 +10968,12 @@ msgid "(UTC+02:00) Amman"
 msgstr "(UTC+02:00) Amman"
 
 #: dlls/tzres/tzres.rc:117
+msgctxt "maximum 31 characters"
 msgid "Central Standard Time"
 msgstr "Czas urzędowy środkowy"
 
 #: dlls/tzres/tzres.rc:118
+msgctxt "maximum 31 characters"
 msgid "Central Daylight Time"
 msgstr "Czas letni środkowy"
 
@@ -10809,6 +10982,7 @@ msgid "(UTC-06:00) Central Time (US & Canada)"
 msgstr "(UTC-06:00) Czas środkowy (US & Canada)"
 
 #: dlls/tzres/tzres.rc:303 dlls/tzres/tzres.rc:304
+msgctxt "maximum 31 characters"
 msgid "Russia Time Zone 3"
 msgstr "Rosyjska strefa czasowa 3"
 
@@ -10817,10 +10991,12 @@ msgid "(UTC+04:00) Izhevsk, Samara"
 msgstr "(UTC+04:00) Izhevsk, Samara"
 
 #: dlls/tzres/tzres.rc:417
+msgctxt "maximum 31 characters"
 msgid "Volgograd Standard Time"
 msgstr "Czas urzędowy Wołgogradu"
 
 #: dlls/tzres/tzres.rc:418
+msgctxt "maximum 31 characters"
 msgid "Volgograd Daylight Time"
 msgstr "Czas letni Wołgogradu"
 
@@ -10829,10 +11005,12 @@ msgid "(UTC+04:00) Volgograd"
 msgstr "(UTC+04:00) Wołgograd"
 
 #: dlls/tzres/tzres.rc:72
+msgctxt "maximum 31 characters"
 msgid "Azores Standard Time"
 msgstr "Czas urzędowy Azorów"
 
 #: dlls/tzres/tzres.rc:73
+msgctxt "maximum 31 characters"
 msgid "Azores Daylight Time"
 msgstr "Czas letni Azorów"
 
@@ -10841,10 +11019,16 @@ msgid "(UTC-01:00) Azores"
 msgstr "(UTC-01:00) Azory"
 
 #: dlls/tzres/tzres.rc:264
+#, fuzzy
+#| msgid "North Asia East Standard Time"
+msgctxt "maximum 31 characters"
 msgid "North Asia East Standard Time"
 msgstr "Czas urzędowy Azji północnej wschodni"
 
 #: dlls/tzres/tzres.rc:265
+#, fuzzy
+#| msgid "North Asia East Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "North Asia East Daylight Time"
 msgstr "Czas letni Azji północnej wschodni"
 
@@ -10853,6 +11037,7 @@ msgid "(UTC+08:00) Irkutsk"
 msgstr "(UTC+08:00) Irkuck"
 
 #: dlls/tzres/tzres.rc:408 dlls/tzres/tzres.rc:409
+msgctxt "maximum 31 characters"
 msgid "UTC-11"
 msgstr "UTC-11"
 
@@ -10861,10 +11046,12 @@ msgid "(UTC-11:00) Coordinated Universal Time-11"
 msgstr "(UTC-11:00) Uniwersalny Czas Koordynowany-11"
 
 #: dlls/tzres/tzres.rc:51
+msgctxt "maximum 31 characters"
 msgid "Argentina Standard Time"
 msgstr "Czas urzędowy Argentyny"
 
 #: dlls/tzres/tzres.rc:52
+msgctxt "maximum 31 characters"
 msgid "Argentina Daylight Time"
 msgstr "Czas letni Argentyny"
 
@@ -10873,10 +11060,12 @@ msgid "(UTC-03:00) City of Buenos Aires"
 msgstr "(UTC-03:00) Miasto Buenos Aires"
 
 #: dlls/tzres/tzres.rc:378
+msgctxt "maximum 31 characters"
 msgid "Turks And Caicos Standard Time"
 msgstr "Czas urzędowy Turks i Caicos"
 
 #: dlls/tzres/tzres.rc:379
+msgctxt "maximum 31 characters"
 msgid "Turks And Caicos Daylight Time"
 msgstr "Czas letni Turks i Caicos"
 
@@ -10885,10 +11074,12 @@ msgid "(UTC-05:00) Turks and Caicos"
 msgstr "(UTC-05:00) Turks i Caicos"
 
 #: dlls/tzres/tzres.rc:222
+msgctxt "maximum 31 characters"
 msgid "Marquesas Standard Time"
 msgstr "Czas urzędowy Marquesas"
 
 #: dlls/tzres/tzres.rc:223
+msgctxt "maximum 31 characters"
 msgid "Marquesas Daylight Time"
 msgstr "Czas letni Marquesas"
 
@@ -10897,10 +11088,12 @@ msgid "(UTC-09:30) Marquesas Islands"
 msgstr "(UTC-09:30) Wyspy Marquesas"
 
 #: dlls/tzres/tzres.rc:243
+msgctxt "maximum 31 characters"
 msgid "Myanmar Standard Time"
 msgstr "Czas urzędowy Myanmaru"
 
 #: dlls/tzres/tzres.rc:244
+msgctxt "maximum 31 characters"
 msgid "Myanmar Daylight Time"
 msgstr "Czas letni Myanmar"
 
@@ -10909,6 +11102,7 @@ msgid "(UTC+06:30) Yangon (Rangoon)"
 msgstr "(UTC+06:30) Yangon (Rangoon)"
 
 #: dlls/tzres/tzres.rc:390 dlls/tzres/tzres.rc:391
+msgctxt "maximum 31 characters"
 msgid "Coordinated Universal Time"
 msgstr "Uniwersalny Czas Koordynowany"
 
@@ -10917,10 +11111,12 @@ msgid "(UTC) Coordinated Universal Time"
 msgstr "(UTC) Uniwersalny Czas Koordynowany"
 
 #: dlls/tzres/tzres.rc:189
+msgctxt "maximum 31 characters"
 msgid "India Standard Time"
 msgstr "Czas urzędowy Indii"
 
 #: dlls/tzres/tzres.rc:190
+msgctxt "maximum 31 characters"
 msgid "India Daylight Time"
 msgstr "Czas letni Indii"
 
@@ -10929,10 +11125,12 @@ msgid "(UTC+05:30) Chennai, Kolkata, Mumbai, New Delhi"
 msgstr "(UTC+05:30) Chennai, Kolkata, Mumbai, Nowe Delhi"
 
 #: dlls/tzres/tzres.rc:180
+msgctxt "maximum 31 characters"
 msgid "GTB Standard Time"
 msgstr "Czas urzędowy GTB"
 
 #: dlls/tzres/tzres.rc:181
+msgctxt "maximum 31 characters"
 msgid "GTB Daylight Time"
 msgstr "Czas letni GTB"
 
@@ -10941,10 +11139,12 @@ msgid "(UTC+02:00) Athens, Bucharest"
 msgstr "(UTC+02:00) Ateny, Bukareszt"
 
 #: dlls/tzres/tzres.rc:375
+msgctxt "maximum 31 characters"
 msgid "Turkey Standard Time"
 msgstr "Czas urzędowy Turcji"
 
 #: dlls/tzres/tzres.rc:376
+msgctxt "maximum 31 characters"
 msgid "Turkey Daylight Time"
 msgstr "Czas letni Turcji"
 
@@ -10953,10 +11153,12 @@ msgid "(UTC+03:00) Istanbul"
 msgstr "(UTC+03:00) Istambuł"
 
 #: dlls/tzres/tzres.rc:54
+msgctxt "maximum 31 characters"
 msgid "Astrakhan Standard Time"
 msgstr "Czas urzędowy Astrakhan"
 
 #: dlls/tzres/tzres.rc:55
+msgctxt "maximum 31 characters"
 msgid "Astrakhan Daylight Time"
 msgstr "Czas letni Astrakhanu"
 
@@ -10965,10 +11167,12 @@ msgid "(UTC+04:00) Astrakhan, Ulyanovsk"
 msgstr "(UTC+04:00) Astrakhan, Ulyanovsk"
 
 #: dlls/tzres/tzres.rc:162
+msgctxt "maximum 31 characters"
 msgid "Fiji Standard Time"
 msgstr "Czas urzędowy Fidżi"
 
 #: dlls/tzres/tzres.rc:163
+msgctxt "maximum 31 characters"
 msgid "Fiji Daylight Time"
 msgstr "Czas letni Fidżi"
 
@@ -10977,10 +11181,12 @@ msgid "(UTC+12:00) Fiji"
 msgstr "(UTC+12:00) Fidżi"
 
 #: dlls/tzres/tzres.rc:87
+msgctxt "maximum 31 characters"
 msgid "Canada Central Standard Time"
 msgstr "Czas urzędowy Kanady środkowej"
 
 #: dlls/tzres/tzres.rc:88
+msgctxt "maximum 31 characters"
 msgid "Canada Central Daylight Time"
 msgstr "Czas letni Kanady środkowej "
 
@@ -10989,10 +11195,12 @@ msgid "(UTC-06:00) Saskatchewan"
 msgstr "(UTC-06:00) Saskatchewan"
 
 #: dlls/tzres/tzres.rc:444
+msgctxt "maximum 31 characters"
 msgid "Yukon Standard Time"
 msgstr "Czas urzędowy Jukonu"
 
 #: dlls/tzres/tzres.rc:445
+msgctxt "maximum 31 characters"
 msgid "Yukon Daylight Time"
 msgstr "Czas letni Jukonu"
 
@@ -11001,10 +11209,12 @@ msgid "(UTC-07:00) Yukon"
 msgstr "(UTC-07:00) Jukon"
 
 #: dlls/tzres/tzres.rc:354
+msgctxt "maximum 31 characters"
 msgid "Taipei Standard Time"
 msgstr "Czas urzędowy Taipei"
 
 #: dlls/tzres/tzres.rc:355
+msgctxt "maximum 31 characters"
 msgid "Taipei Daylight Time"
 msgstr "Czas letni Taipei"
 
@@ -11013,10 +11223,12 @@ msgid "(UTC+08:00) Taipei"
 msgstr "(UTC+08:00) Tajpej"
 
 #: dlls/tzres/tzres.rc:426
+msgctxt "maximum 31 characters"
 msgid "W. Europe Standard Time"
 msgstr "Czas urzędowy Europy zachodniej"
 
 #: dlls/tzres/tzres.rc:427
+msgctxt "maximum 31 characters"
 msgid "W. Europe Daylight Time"
 msgstr "Czas letni Europy zachodniej"
 
@@ -11025,10 +11237,12 @@ msgid "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna"
 msgstr "(UTC+01:00) Amsterdam, Berlin, Brno, Rzym, Sztokholm, Wiedeń"
 
 #: dlls/tzres/tzres.rc:231
+msgctxt "maximum 31 characters"
 msgid "Montevideo Standard Time"
 msgstr "Czas urzędowy Montevideo"
 
 #: dlls/tzres/tzres.rc:232
+msgctxt "maximum 31 characters"
 msgid "Montevideo Daylight Time"
 msgstr "Czas letni Montevideo"
 
@@ -11037,10 +11251,12 @@ msgid "(UTC-03:00) Montevideo"
 msgstr "(UTC-03:00) Montevideo"
 
 #: dlls/tzres/tzres.rc:285
+msgctxt "maximum 31 characters"
 msgid "Pakistan Standard Time"
 msgstr "Czas urzędowy Pakistanu"
 
 #: dlls/tzres/tzres.rc:286
+msgctxt "maximum 31 characters"
 msgid "Pakistan Daylight Time"
 msgstr "Czas letni Pakistanu"
 
@@ -11049,10 +11265,12 @@ msgid "(UTC+05:00) Islamabad, Karachi"
 msgstr "(UTC+05:00) Islamabad, Karachi"
 
 #: dlls/tzres/tzres.rc:366
+msgctxt "maximum 31 characters"
 msgid "Tomsk Standard Time"
 msgstr "Czas urzędowy Tomska"
 
 #: dlls/tzres/tzres.rc:367
+msgctxt "maximum 31 characters"
 msgid "Tomsk Daylight Time"
 msgstr "Czas letni Tomska"
 
@@ -11061,10 +11279,12 @@ msgid "(UTC+07:00) Tomsk"
 msgstr "(UTC+07:00) Tomsk"
 
 #: dlls/tzres/tzres.rc:93
+msgctxt "maximum 31 characters"
 msgid "Caucasus Standard Time"
 msgstr "Czas urzędowy kaukaski"
 
 #: dlls/tzres/tzres.rc:94
+msgctxt "maximum 31 characters"
 msgid "Caucasus Daylight Time"
 msgstr "Czas letni kaukaski"
 
@@ -11073,10 +11293,14 @@ msgid "(UTC+04:00) Yerevan"
 msgstr "(UTC+04:00) Erywań"
 
 #: dlls/tzres/tzres.rc:66
+#, fuzzy
+#| msgid "AUS Eastern Standard Time"
+msgctxt "maximum 31 characters"
 msgid "AUS Eastern Standard Time"
 msgstr "Czas urzędowy Australii wschodni"
 
 #: dlls/tzres/tzres.rc:67
+msgctxt "maximum 31 characters"
 msgid "AUS Eastern Daylight Time"
 msgstr "Czas letni Australii wschodniej"
 
@@ -11085,10 +11309,16 @@ msgid "(UTC+10:00) Canberra, Melbourne, Sydney"
 msgstr "(UTC+10:00) Canberra, Melbourne, Sydney"
 
 #: dlls/tzres/tzres.rc:246
+#, fuzzy
+#| msgid "N. Central Asia Standard Time"
+msgctxt "maximum 31 characters"
 msgid "N. Central Asia Standard Time"
 msgstr "Czas urzędowy Azji środkowej północny"
 
 #: dlls/tzres/tzres.rc:247
+#, fuzzy
+#| msgid "N. Central Asia Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "N. Central Asia Daylight Time"
 msgstr "Czas letni Azji północno-środkowej"
 
@@ -11097,10 +11327,12 @@ msgid "(UTC+07:00) Novosibirsk"
 msgstr "(UTC+07:00) Nowosybirsk"
 
 #: dlls/tzres/tzres.rc:150
+msgctxt "maximum 31 characters"
 msgid "Eastern Standard Time"
 msgstr "Czas urzędowy wschodni"
 
 #: dlls/tzres/tzres.rc:151
+msgctxt "maximum 31 characters"
 msgid "Eastern Daylight Time"
 msgstr "Czas letni wschodni"
 
@@ -11109,10 +11341,12 @@ msgid "(UTC-05:00) Eastern Time (US & Canada)"
 msgstr "(UTC-05:00) Czas wschodni (US & Canada)"
 
 #: dlls/tzres/tzres.rc:372
+msgctxt "maximum 31 characters"
 msgid "Transbaikal Standard Time"
 msgstr "Czas urzędowy Transbajkału"
 
 #: dlls/tzres/tzres.rc:373
+msgctxt "maximum 31 characters"
 msgid "Transbaikal Daylight Time"
 msgstr "Czas letni Transbajkału"
 
@@ -11121,10 +11355,12 @@ msgid "(UTC+09:00) Chita"
 msgstr "(UTC+09:00) Chita"
 
 #: dlls/tzres/tzres.rc:141
+msgctxt "maximum 31 characters"
 msgid "E. Europe Standard Time"
 msgstr "Czas urzędowy Europy wschodniej"
 
 #: dlls/tzres/tzres.rc:142
+msgctxt "maximum 31 characters"
 msgid "E. Europe Daylight Time"
 msgstr "Czas letni Europy wschodniej"
 
@@ -11133,10 +11369,12 @@ msgid "(UTC+02:00) Chisinau"
 msgstr "(UTC+02:00) Kiszyniów"
 
 #: dlls/tzres/tzres.rc:120
+msgctxt "maximum 31 characters"
 msgid "Central Standard Time (Mexico)"
 msgstr "Czas urzędowy środkowy (Meksyk)"
 
 #: dlls/tzres/tzres.rc:121
+msgctxt "maximum 31 characters"
 msgid "Central Daylight Time (Mexico)"
 msgstr "Czas letni środkowy (Meksyk)"
 
@@ -11145,10 +11383,12 @@ msgid "(UTC-06:00) Guadalajara, Mexico City, Monterrey"
 msgstr "(UTC-06:00) Guadalajara, Mexico City, Monterrey"
 
 #: dlls/tzres/tzres.rc:330
+msgctxt "maximum 31 characters"
 msgid "Saratov Standard Time"
 msgstr "Czas urzędowy Saratowa"
 
 #: dlls/tzres/tzres.rc:331
+msgctxt "maximum 31 characters"
 msgid "Saratov Daylight Time"
 msgstr "Czas letni Saratowa"
 
@@ -11157,10 +11397,12 @@ msgid "(UTC+04:00) Saratov"
 msgstr "(UTC+04:00) Saratów"
 
 #: dlls/tzres/tzres.rc:57
+msgctxt "maximum 31 characters"
 msgid "Atlantic Standard Time"
 msgstr "Czas urzędowy atlantycki"
 
 #: dlls/tzres/tzres.rc:58
+msgctxt "maximum 31 characters"
 msgid "Atlantic Daylight Time"
 msgstr "Czas letni atlantycki"
 
@@ -11169,10 +11411,12 @@ msgid "(UTC-04:00) Atlantic Time (Canada)"
 msgstr "(UTC-04:00) Czas atlantycki (Canada)"
 
 #: dlls/tzres/tzres.rc:237
+msgctxt "maximum 31 characters"
 msgid "Mountain Standard Time"
 msgstr "Czas urzędowy górski"
 
 #: dlls/tzres/tzres.rc:238
+msgctxt "maximum 31 characters"
 msgid "Mountain Daylight Time"
 msgstr "Czas letni górski"
 
@@ -11181,10 +11425,16 @@ msgid "(UTC-07:00) Mountain Time (US & Canada)"
 msgstr "(UTC-07:00) Czas górski (US & Canada)"
 
 #: dlls/tzres/tzres.rc:384
+#, fuzzy
+#| msgid "US Eastern Standard Time"
+msgctxt "maximum 31 characters"
 msgid "US Eastern Standard Time"
 msgstr "Czas urzędowy Standów Zjednoczonych wschodni"
 
 #: dlls/tzres/tzres.rc:385
+#, fuzzy
+#| msgid "US Eastern Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "US Eastern Daylight Time"
 msgstr "Czas letni Stanów Zjednoczonych wschodnich"
 
@@ -11193,10 +11443,12 @@ msgid "(UTC-05:00) Indiana (East)"
 msgstr "(UTC-05:00) Indiana (Wschód)"
 
 #: dlls/tzres/tzres.rc:321
+msgctxt "maximum 31 characters"
 msgid "Sakhalin Standard Time"
 msgstr "Czas urzędowy Sachalina"
 
 #: dlls/tzres/tzres.rc:322
+msgctxt "maximum 31 characters"
 msgid "Sakhalin Daylight Time"
 msgstr "Czas letni Sachalinu"
 
@@ -11205,10 +11457,12 @@ msgid "(UTC+11:00) Sakhalin"
 msgstr "(UTC+11:00) Sachalin"
 
 #: dlls/tzres/tzres.rc:270
+msgctxt "maximum 31 characters"
 msgid "North Korea Standard Time"
 msgstr "Czas urzędowy Korei Północnej"
 
 #: dlls/tzres/tzres.rc:271
+msgctxt "maximum 31 characters"
 msgid "North Korea Daylight Time"
 msgstr "Czas letni Korei Północnej"
 
@@ -11217,10 +11471,12 @@ msgid "(UTC+09:00) Pyongyang"
 msgstr "(UTC+09:00) Pjongjang"
 
 #: dlls/tzres/tzres.rc:357
+msgctxt "maximum 31 characters"
 msgid "Tasmania Standard Time"
 msgstr "Czas urzędowy Tasmanii"
 
 #: dlls/tzres/tzres.rc:358
+msgctxt "maximum 31 characters"
 msgid "Tasmania Daylight Time"
 msgstr "Czas letni Tasmanii"
 
@@ -11229,10 +11485,12 @@ msgid "(UTC+10:00) Hobart"
 msgstr "(UTC+10:00) Hobart"
 
 #: dlls/tzres/tzres.rc:99
+msgctxt "maximum 31 characters"
 msgid "Central America Standard Time"
 msgstr "Czas urzędowy Ameryki środkowej"
 
 #: dlls/tzres/tzres.rc:100
+msgctxt "maximum 31 characters"
 msgid "Central America Daylight Time"
 msgstr "Czas letni Ameryki środkowej"
 
@@ -11241,6 +11499,7 @@ msgid "(UTC-06:00) Central America"
 msgstr "(UTC-06:00) Ameryka środkowa"
 
 #: dlls/tzres/tzres.rc:399 dlls/tzres/tzres.rc:400
+msgctxt "maximum 31 characters"
 msgid "UTC-02"
 msgstr "UTC-02"
 
@@ -11249,10 +11508,16 @@ msgid "(UTC-02:00) Coordinated Universal Time-02"
 msgstr "(UTC-02:00) Uniwersalny Czas Koordynowany-02"
 
 #: dlls/tzres/tzres.rc:387
+#, fuzzy
+#| msgid "US Mountain Standard Time"
+msgctxt "maximum 31 characters"
 msgid "US Mountain Standard Time"
 msgstr "Czas urzędowy Stanów Zjednoczonych górski"
 
 #: dlls/tzres/tzres.rc:388
+#, fuzzy
+#| msgid "US Mountain Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "US Mountain Daylight Time"
 msgstr "Czas letni Stanów Zjednoczonych górski"
 
@@ -11261,10 +11526,14 @@ msgid "(UTC-07:00) Arizona"
 msgstr "(UTC-07:00) Arizona"
 
 #: dlls/tzres/tzres.rc:339
+#, fuzzy
+#| msgid "South Africa Standard Time"
+msgctxt "maximum 31 characters"
 msgid "South Africa Standard Time"
 msgstr "Czas urzędowy Afryki południowej"
 
 #: dlls/tzres/tzres.rc:340
+msgctxt "maximum 31 characters"
 msgid "South Africa Daylight Time"
 msgstr "Czas letni Afryki południowej"
 
@@ -11273,10 +11542,14 @@ msgid "(UTC+02:00) Harare, Pretoria"
 msgstr "(UTC+02:00) Harare, Pretoria"
 
 #: dlls/tzres/tzres.rc:96
+#, fuzzy
+#| msgid "Cen. Australia Standard Time"
+msgctxt "maximum 31 characters"
 msgid "Cen. Australia Standard Time"
 msgstr "Czas urzędowy Australii środkowej"
 
 #: dlls/tzres/tzres.rc:97
+msgctxt "maximum 31 characters"
 msgid "Cen. Australia Daylight Time"
 msgstr "Czas letni Australii środkowej"
 
@@ -11285,6 +11558,7 @@ msgid "(UTC+09:30) Adelaide"
 msgstr "(UTC+09:30) Adelajda"
 
 #: dlls/tzres/tzres.rc:405 dlls/tzres/tzres.rc:406
+msgctxt "maximum 31 characters"
 msgid "UTC-09"
 msgstr "UTC-09"
 
@@ -11293,10 +11567,12 @@ msgid "(UTC-09:00) Coordinated Universal Time-09"
 msgstr "(UTC-09:00) Uniwersalny Czas Koordynowany-09"
 
 #: dlls/tzres/tzres.rc:345
+msgctxt "maximum 31 characters"
 msgid "Sri Lanka Standard Time"
 msgstr "Czas urzędowy Sri Lanki"
 
 #: dlls/tzres/tzres.rc:346
+msgctxt "maximum 31 characters"
 msgid "Sri Lanka Daylight Time"
 msgstr "Czas letni Sri Lanki"
 
@@ -11305,10 +11581,12 @@ msgid "(UTC+05:30) Sri Jayawardenepura"
 msgstr "(UTC+05:30) Sri Jayawardenepura"
 
 #: dlls/tzres/tzres.rc:30
+msgctxt "maximum 31 characters"
 msgid "Afghanistan Standard Time"
 msgstr "Czas urzędowy Afganistanu"
 
 #: dlls/tzres/tzres.rc:31
+msgctxt "maximum 31 characters"
 msgid "Afghanistan Daylight Time"
 msgstr "Czas letni Afganistanu"
 
@@ -11317,10 +11595,12 @@ msgid "(UTC+04:30) Kabul"
 msgstr "(UTC+04:30) Kabul"
 
 #: dlls/tzres/tzres.rc:441
+msgctxt "maximum 31 characters"
 msgid "Yakutsk Standard Time"
 msgstr "Czas urzędowy Jakucka"
 
 #: dlls/tzres/tzres.rc:442
+msgctxt "maximum 31 characters"
 msgid "Yakutsk Daylight Time"
 msgstr "Czas letni Jakucka"
 
@@ -11329,10 +11609,16 @@ msgid "(UTC+09:00) Yakutsk"
 msgstr "(UTC+09:00) Jakuck"
 
 #: dlls/tzres/tzres.rc:309
+#, fuzzy
+#| msgid "SA Eastern Standard Time"
+msgctxt "maximum 31 characters"
 msgid "SA Eastern Standard Time"
 msgstr "Czas urzędowy Ameryki Południowej wschodni"
 
 #: dlls/tzres/tzres.rc:310
+#, fuzzy
+#| msgid "SA Eastern Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "SA Eastern Daylight Time"
 msgstr "Czas letni Ameryki Południowej wschodniej"
 
@@ -11341,10 +11627,12 @@ msgid "(UTC-03:00) Cayenne, Fortaleza"
 msgstr "(UTC-03:00) Cayenne, Fortaleza"
 
 #: dlls/tzres/tzres.rc:42
+msgctxt "maximum 31 characters"
 msgid "Arab Standard Time"
 msgstr "Czas urzędowy arabski"
 
 #: dlls/tzres/tzres.rc:43
+msgctxt "maximum 31 characters"
 msgid "Arab Daylight Time"
 msgstr "Czas letni arabski"
 
@@ -11353,10 +11641,12 @@ msgid "(UTC+03:00) Kuwait, Riyadh"
 msgstr "(UTC+03:00) Kuwejt, Rijad"
 
 #: dlls/tzres/tzres.rc:45
+msgctxt "maximum 31 characters"
 msgid "Arabian Standard Time"
 msgstr "Czas urzędowy arabski"
 
 #: dlls/tzres/tzres.rc:46
+msgctxt "maximum 31 characters"
 msgid "Arabian Daylight Time"
 msgstr "Czas letni arabski"
 
@@ -11365,10 +11655,12 @@ msgid "(UTC+04:00) Abu Dhabi, Muscat"
 msgstr "(UTC+04:00) Abu Dhabi, Muscat"
 
 #: dlls/tzres/tzres.rc:360
+msgctxt "maximum 31 characters"
 msgid "Tocantins Standard Time"
 msgstr "Czas urzędowy Tocantins"
 
 #: dlls/tzres/tzres.rc:361
+msgctxt "maximum 31 characters"
 msgid "Tocantins Daylight Time"
 msgstr "Czas letni Tocantins"
 
@@ -11377,10 +11669,12 @@ msgid "(UTC-03:00) Araguaina"
 msgstr "(UTC-03:00) Araguaina"
 
 #: dlls/tzres/tzres.rc:306
+msgctxt "maximum 31 characters"
 msgid "Russian Standard Time"
 msgstr "Czas urzędowy Rosji"
 
 #: dlls/tzres/tzres.rc:307
+msgctxt "maximum 31 characters"
 msgid "Russian Daylight Time"
 msgstr "Czas letni Rosji"
 
@@ -11389,10 +11683,16 @@ msgid "(UTC+03:00) Moscow, St. Petersburg"
 msgstr "(UTC+03:00) Moskwa, St. Petersburg"
 
 #: dlls/tzres/tzres.rc:63
+#, fuzzy
+#| msgid "Aus Central W. Standard Time"
+msgctxt "maximum 31 characters"
 msgid "Aus Central W. Standard Time"
 msgstr "Czas urzędowy Australii środkowej wschodni"
 
 #: dlls/tzres/tzres.rc:64
+#, fuzzy
+#| msgid "Aus Central W. Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "Aus Central W. Daylight Time"
 msgstr "Czas letni Australii środkowej zachodni"
 
@@ -11401,10 +11701,12 @@ msgid "(UTC+08:45) Eucla"
 msgstr "(UTC+08:45) Eucla"
 
 #: dlls/tzres/tzres.rc:294
+msgctxt "maximum 31 characters"
 msgid "Romance Standard Time"
 msgstr "Czas urzędowy romański"
 
 #: dlls/tzres/tzres.rc:295
+msgctxt "maximum 31 characters"
 msgid "Romance Daylight Time"
 msgstr "Czas letni romański"
 
@@ -11413,10 +11715,12 @@ msgid "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris"
 msgstr "(UTC+01:00) Bruksela, Kopenhaga, Madryt, Paryż"
 
 #: dlls/tzres/tzres.rc:159
+msgctxt "maximum 31 characters"
 msgid "Ekaterinburg Standard Time"
 msgstr "Czas urzędowy Jekaterynburga"
 
 #: dlls/tzres/tzres.rc:160
+msgctxt "maximum 31 characters"
 msgid "Ekaterinburg Daylight Time"
 msgstr "Czas letni Jekaterynburga"
 
@@ -11425,6 +11729,7 @@ msgid "(UTC+05:00) Ekaterinburg"
 msgstr "(UTC+05:00) Jekaterynburg"
 
 #: dlls/tzres/tzres.rc:300 dlls/tzres/tzres.rc:301
+msgctxt "maximum 31 characters"
 msgid "Russia Time Zone 11"
 msgstr "Rosyjska strefa czasowa 11"
 
@@ -11433,10 +11738,14 @@ msgid "(UTC+12:00) Anadyr, Petropavlovsk-Kamchatsky"
 msgstr "(UTC+12:00) Anadyr, Pietropawłowsk-Kamczacki"
 
 #: dlls/tzres/tzres.rc:435
+#, fuzzy
+#| msgid "West Bank Standard Time"
+msgctxt "maximum 31 characters"
 msgid "West Bank Standard Time"
 msgstr "Czas urzędowy zachodniego wybrzeża"
 
 #: dlls/tzres/tzres.rc:436
+msgctxt "maximum 31 characters"
 msgid "West Bank Daylight Time"
 msgstr "Czas letni zachodniego wybrzeża"
 
@@ -11445,10 +11754,12 @@ msgid "(UTC+02:00) Gaza, Hebron"
 msgstr "(UTC+02:00) Gaza, Hebron"
 
 #: dlls/tzres/tzres.rc:351
+msgctxt "maximum 31 characters"
 msgid "Syria Standard Time"
 msgstr "Czas urzędowy Syrii"
 
 #: dlls/tzres/tzres.rc:352
+msgctxt "maximum 31 characters"
 msgid "Syria Daylight Time"
 msgstr "Czas letni Syrii"
 
@@ -11457,10 +11768,14 @@ msgid "(UTC+02:00) Damascus"
 msgstr "(UTC+02:00) Damaszek"
 
 #: dlls/tzres/tzres.rc:60
+#, fuzzy
+#| msgid "AUS Central Standard Time"
+msgctxt "maximum 31 characters"
 msgid "AUS Central Standard Time"
 msgstr "Czas urzędowy Australii środkowej"
 
 #: dlls/tzres/tzres.rc:61
+msgctxt "maximum 31 characters"
 msgid "AUS Central Daylight Time"
 msgstr "Czas letni Australii środkowej"
 
@@ -11469,10 +11784,12 @@ msgid "(UTC+09:30) Darwin"
 msgstr "(UTC+09:30) Darwin"
 
 #: dlls/tzres/tzres.rc:177
+msgctxt "maximum 31 characters"
 msgid "Greenwich Standard Time"
 msgstr "Czas urzędowy Greenwich"
 
 #: dlls/tzres/tzres.rc:178
+msgctxt "maximum 31 characters"
 msgid "Greenwich Daylight Time"
 msgstr "Czas letni Greenwich"
 
@@ -11481,10 +11798,12 @@ msgid "(UTC+00:00) Monrovia, Reykjavik"
 msgstr "(UTC+00:00) Monrovia, Reykjavik"
 
 #: dlls/tzres/tzres.rc:381
+msgctxt "maximum 31 characters"
 msgid "Ulaanbaatar Standard Time"
 msgstr "Czas urzędowy Ułan Batoru"
 
 #: dlls/tzres/tzres.rc:382
+msgctxt "maximum 31 characters"
 msgid "Ulaanbaatar Daylight Time"
 msgstr "Czas letni Ułan Batoru"
 
@@ -11493,10 +11812,12 @@ msgid "(UTC+08:00) Ulaanbaatar"
 msgstr "(UTC+08:00) Ułanbator"
 
 #: dlls/tzres/tzres.rc:261
+msgctxt "maximum 31 characters"
 msgid "Norfolk Standard Time"
 msgstr "Czas urzędowy Norfolku"
 
 #: dlls/tzres/tzres.rc:262
+msgctxt "maximum 31 characters"
 msgid "Norfolk Daylight Time"
 msgstr "Czas letni Norfolku"
 
@@ -11505,10 +11826,12 @@ msgid "(UTC+11:00) Norfolk Island"
 msgstr "(UTC+11:00) Wyspy Norfolk"
 
 #: dlls/tzres/tzres.rc:195
+msgctxt "maximum 31 characters"
 msgid "Israel Standard Time"
 msgstr "Czas urzędowy Izraelu"
 
 #: dlls/tzres/tzres.rc:196
+msgctxt "maximum 31 characters"
 msgid "Israel Daylight Time"
 msgstr "Czas letni Izraelu"
 
@@ -11517,10 +11840,12 @@ msgid "(UTC+02:00) Jerusalem"
 msgstr "(UTC+02:00) Jeruzalem"
 
 #: dlls/tzres/tzres.rc:78
+msgctxt "maximum 31 characters"
 msgid "Bangladesh Standard Time"
 msgstr "Czas urzędowy Bangladeszu"
 
 #: dlls/tzres/tzres.rc:79
+msgctxt "maximum 31 characters"
 msgid "Bangladesh Daylight Time"
 msgstr "Czas letni Bangladeszu"
 
@@ -11529,10 +11854,16 @@ msgid "(UTC+06:00) Dhaka"
 msgstr "(UTC+06:00) Dhaka"
 
 #: dlls/tzres/tzres.rc:312
+#, fuzzy
+#| msgid "SA Pacific Standard Time"
+msgctxt "maximum 31 characters"
 msgid "SA Pacific Standard Time"
 msgstr "Czas urzędowy Ameryki Południowej pacyficzny"
 
 #: dlls/tzres/tzres.rc:313
+#, fuzzy
+#| msgid "SA Pacific Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "SA Pacific Daylight Time"
 msgstr "Czas letni Ameryki Południowej pacyficzny"
 
@@ -11541,10 +11872,12 @@ msgid "(UTC-05:00) Bogota, Lima, Quito, Rio Branco"
 msgstr "(UTC-05:00) Bogota, Lima, Quito, Rio Branco"
 
 #: dlls/tzres/tzres.rc:432
+msgctxt "maximum 31 characters"
 msgid "West Asia Standard Time"
 msgstr "Czas urzędowy Azji zachodniej"
 
 #: dlls/tzres/tzres.rc:433
+msgctxt "maximum 31 characters"
 msgid "West Asia Daylight Time"
 msgstr "Czas letni Azji zachodniej"
 
@@ -11553,10 +11886,12 @@ msgid "(UTC+05:00) Ashgabat, Tashkent"
 msgstr "(UTC+05:00) Ashgabat, Taszkent"
 
 #: dlls/tzres/tzres.rc:33
+msgctxt "maximum 31 characters"
 msgid "Alaskan Standard Time"
 msgstr "Czas urzędowy Alaski"
 
 #: dlls/tzres/tzres.rc:34
+msgctxt "maximum 31 characters"
 msgid "Alaskan Daylight Time"
 msgstr "Czas letni Alaski"
 
@@ -11565,10 +11900,12 @@ msgid "(UTC-09:00) Alaska"
 msgstr "(UTC-09:00) Alaska"
 
 #: dlls/tzres/tzres.rc:288
+msgctxt "maximum 31 characters"
 msgid "Paraguay Standard Time"
 msgstr "Czas urzędowy Paragwaju"
 
 #: dlls/tzres/tzres.rc:289
+msgctxt "maximum 31 characters"
 msgid "Paraguay Daylight Time"
 msgstr "Czas letni Paragwaju"
 
@@ -11577,10 +11914,12 @@ msgid "(UTC-04:00) Asuncion"
 msgstr "(UTC-04:00) Asuncion"
 
 #: dlls/tzres/tzres.rc:132
+msgctxt "maximum 31 characters"
 msgid "Dateline Standard Time"
 msgstr "Czas urzędowy linii zmiany daty"
 
 #: dlls/tzres/tzres.rc:133
+msgctxt "maximum 31 characters"
 msgid "Dateline Daylight Time"
 msgstr "Czas letni linii zmiany daty"
 
@@ -11589,10 +11928,12 @@ msgid "(UTC-12:00) International Date Line West"
 msgstr "(UTC-12:00) Międzynarodowa linia daty zachodnia"
 
 #: dlls/tzres/tzres.rc:207
+msgctxt "maximum 31 characters"
 msgid "Libya Standard Time"
 msgstr "Czas urzędowy Libii"
 
 #: dlls/tzres/tzres.rc:208
+msgctxt "maximum 31 characters"
 msgid "Libya Daylight Time"
 msgstr "Czas letni Libii"
 
@@ -11601,10 +11942,12 @@ msgid "(UTC+02:00) Tripoli"
 msgstr "(UTC+02:00) Tripoli"
 
 #: dlls/tzres/tzres.rc:75
+msgctxt "maximum 31 characters"
 msgid "Bahia Standard Time"
 msgstr "Czas urzędowy Bahia"
 
 #: dlls/tzres/tzres.rc:76
+msgctxt "maximum 31 characters"
 msgid "Bahia Daylight Time"
 msgstr "Czas letni Bahia"
 
@@ -11613,10 +11956,12 @@ msgid "(UTC-03:00) Salvador"
 msgstr "(UTC-03:00) Salwador"
 
 #: dlls/tzres/tzres.rc:411
+msgctxt "maximum 31 characters"
 msgid "Venezuela Standard Time"
 msgstr "Czas urzędowy Wenezueli"
 
 #: dlls/tzres/tzres.rc:412
+msgctxt "maximum 31 characters"
 msgid "Venezuela Daylight Time"
 msgstr "Czas letni Wenezueli"
 
@@ -11625,10 +11970,12 @@ msgid "(UTC-04:00) Caracas"
 msgstr "(UTC-04:00) Karakas"
 
 #: dlls/tzres/tzres.rc:84
+msgctxt "maximum 31 characters"
 msgid "Bougainville Standard Time"
 msgstr "Czas urzędowy Bougainville"
 
 #: dlls/tzres/tzres.rc:85
+msgctxt "maximum 31 characters"
 msgid "Bougainville Daylight Time"
 msgstr "Czas letni Bougainville"
 
@@ -11637,10 +11984,12 @@ msgid "(UTC+11:00) Bougainville Island"
 msgstr "(UTC+11:00) Wyspy Bougainville"
 
 #: dlls/tzres/tzres.rc:186
+msgctxt "maximum 31 characters"
 msgid "Hawaiian Standard Time"
 msgstr "Czas urzędowy Hawajów"
 
 #: dlls/tzres/tzres.rc:187
+msgctxt "maximum 31 characters"
 msgid "Hawaiian Daylight Time"
 msgstr "Czas letni Hawajów"
 
@@ -11649,10 +11998,16 @@ msgid "(UTC-10:00) Hawaii"
 msgstr "(UTC-10:00) Hawaje"
 
 #: dlls/tzres/tzres.rc:333
+#, fuzzy
+#| msgid "SE Asia Standard Time"
+msgctxt "maximum 31 characters"
 msgid "SE Asia Standard Time"
 msgstr "Czas urzędowy Azji południowo-wschodniej"
 
 #: dlls/tzres/tzres.rc:334
+#, fuzzy
+#| msgid "SE Asia Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "SE Asia Daylight Time"
 msgstr "Czas letni Azji południowo-wschodniej"
 
@@ -11661,10 +12016,12 @@ msgid "(UTC+07:00) Bangkok, Hanoi, Jakarta"
 msgstr "(UTC+07:00) Bangkok, Hanoi, Jakarta"
 
 #: dlls/tzres/tzres.rc:291
+msgctxt "maximum 31 characters"
 msgid "Qyzylorda Standard Time"
 msgstr "Czas urzędowy Qyzylorda"
 
 #: dlls/tzres/tzres.rc:292
+msgctxt "maximum 31 characters"
 msgid "Qyzylorda Daylight Time"
 msgstr "Czas letni Qyzylorda"
 
@@ -11673,10 +12030,14 @@ msgid "(UTC+05:00) Qyzylorda"
 msgstr "(UTC+05:00) Qyzylorda"
 
 #: dlls/tzres/tzres.rc:429
+#, fuzzy
+#| msgid "W. Mongolia Standard Time"
+msgctxt "maximum 31 characters"
 msgid "W. Mongolia Standard Time"
 msgstr "Czas urzędowy zachodniej Mongolii"
 
 #: dlls/tzres/tzres.rc:430
+msgctxt "maximum 31 characters"
 msgid "W. Mongolia Daylight Time"
 msgstr "Czas letni zachodniej Mongolii"
 
@@ -11685,10 +12046,12 @@ msgid "(UTC+07:00) Hovd"
 msgstr "(UTC+07:00) Hovd"
 
 #: dlls/tzres/tzres.rc:255
+msgctxt "maximum 31 characters"
 msgid "New Zealand Standard Time"
 msgstr "Czas urzędowy Nowej Zelandii"
 
 #: dlls/tzres/tzres.rc:256
+msgctxt "maximum 31 characters"
 msgid "New Zealand Daylight Time"
 msgstr "Czas letni Nowej Zelandii"
 
@@ -11697,10 +12060,12 @@ msgid "(UTC+12:00) Auckland, Wellington"
 msgstr "(UTC+12:00) Auckland, Wellington"
 
 #: dlls/tzres/tzres.rc:36
+msgctxt "maximum 31 characters"
 msgid "Aleutian Standard Time"
 msgstr "Czas urzędowy Aleut"
 
 #: dlls/tzres/tzres.rc:37
+msgctxt "maximum 31 characters"
 msgid "Aleutian Daylight Time"
 msgstr "Czas letni Aleut"
 
@@ -11709,10 +12074,12 @@ msgid "(UTC-10:00) Aleutian Islands"
 msgstr "(UTC-10:00) Wyspy Aleutian"
 
 #: dlls/tzres/tzres.rc:273
+msgctxt "maximum 31 characters"
 msgid "Omsk Standard Time"
 msgstr "Czas urzędowy Omska"
 
 #: dlls/tzres/tzres.rc:274
+msgctxt "maximum 31 characters"
 msgid "Omsk Daylight Time"
 msgstr "Czas letni Omska"
 
@@ -11721,10 +12088,14 @@ msgid "(UTC+06:00) Omsk"
 msgstr "(UTC+06:00) Omsk"
 
 #: dlls/tzres/tzres.rc:105
+#, fuzzy
+#| msgid "Central Brazilian Standard Time"
+msgctxt "maximum 31 characters"
 msgid "Central Brazilian Standard Time"
 msgstr "Czas urzędowy Brazylii środkowej"
 
 #: dlls/tzres/tzres.rc:106
+msgctxt "maximum 31 characters"
 msgid "Central Brazilian Daylight Time"
 msgstr "Czas letni Brazylii środkowej"
 
@@ -11733,10 +12104,12 @@ msgid "(UTC-04:00) Cuiaba"
 msgstr "(UTC-04:00) Cuiaba"
 
 #: dlls/tzres/tzres.rc:81
+msgctxt "maximum 31 characters"
 msgid "Belarus Standard Time"
 msgstr "Czas urzędowy Białorusi"
 
 #: dlls/tzres/tzres.rc:82
+msgctxt "maximum 31 characters"
 msgid "Belarus Daylight Time"
 msgstr "Czas letni Białorusi"
 
@@ -11745,10 +12118,16 @@ msgid "(UTC+03:00) Minsk"
 msgstr "(UTC+03:00) Mińsk"
 
 #: dlls/tzres/tzres.rc:315
+#, fuzzy
+#| msgid "SA Western Standard Time"
+msgctxt "maximum 31 characters"
 msgid "SA Western Standard Time"
 msgstr "Czas urzędowy Ameryki Południowej wschodni"
 
 #: dlls/tzres/tzres.rc:316
+#, fuzzy
+#| msgid "SA Western Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "SA Western Daylight Time"
 msgstr "Czas letni Ameryki Południowej zachodniej"
 
@@ -11757,10 +12136,12 @@ msgid "(UTC-04:00) Georgetown, La Paz, Manaus, San Juan"
 msgstr "(UTC-04:00) Georgetown, La Paz, Manaus, San Juan"
 
 #: dlls/tzres/tzres.rc:174
+msgctxt "maximum 31 characters"
 msgid "Greenland Standard Time"
 msgstr "Czas urzędowy Grenlandii"
 
 #: dlls/tzres/tzres.rc:175
+msgctxt "maximum 31 characters"
 msgid "Greenland Daylight Time"
 msgstr "Czas letni Grenlandii"
 
@@ -11769,10 +12150,14 @@ msgid "(UTC-03:00) Greenland"
 msgstr "(UTC-03:00) Grenlandia"
 
 #: dlls/tzres/tzres.rc:147
+#, fuzzy
+#| msgid "Easter Island Standard Time"
+msgctxt "maximum 31 characters"
 msgid "Easter Island Standard Time"
 msgstr "Czas urzędowy Wysp Wielkanocnych"
 
 #: dlls/tzres/tzres.rc:148
+msgctxt "maximum 31 characters"
 msgid "Easter Island Daylight Time"
 msgstr "Czas letni Wysp Wielkanocnych"
 
@@ -11781,6 +12166,7 @@ msgid "(UTC-06:00) Easter Island"
 msgstr "(UTC-06:00) Wyspa Wielkanocna"
 
 #: dlls/tzres/tzres.rc:297 dlls/tzres/tzres.rc:298
+msgctxt "maximum 31 characters"
 msgid "Russia Time Zone 10"
 msgstr "Rosyjska strefa czasowa 10"
 
@@ -11789,10 +12175,12 @@ msgid "(UTC+11:00) Chokurdakh"
 msgstr "(UTC+11:00) Chokurdakh"
 
 #: dlls/tzres/tzres.rc:156
+msgctxt "maximum 31 characters"
 msgid "Egypt Standard Time"
 msgstr "Czas urzędowy Egiptu"
 
 #: dlls/tzres/tzres.rc:157
+msgctxt "maximum 31 characters"
 msgid "Egypt Daylight Time"
 msgstr "Czas letni Egiptu"
 
@@ -11801,10 +12189,12 @@ msgid "(UTC+02:00) Cairo"
 msgstr "(UTC+02:00) Kair"
 
 #: dlls/tzres/tzres.rc:153
+msgctxt "maximum 31 characters"
 msgid "Eastern Standard Time (Mexico)"
 msgstr "Czas urzędowy wschodni (Meksyk)"
 
 #: dlls/tzres/tzres.rc:154
+msgctxt "maximum 31 characters"
 msgid "Eastern Daylight Time (Mexico)"
 msgstr "Czas letni wschodni (Meksyk)"
 
@@ -11813,10 +12203,12 @@ msgid "(UTC-05:00) Chetumal"
 msgstr "(UTC-05:00) Chetumal"
 
 #: dlls/tzres/tzres.rc:225
+msgctxt "maximum 31 characters"
 msgid "Mauritius Standard Time"
 msgstr "Czas urzędowy Mauritiusa"
 
 #: dlls/tzres/tzres.rc:226
+msgctxt "maximum 31 characters"
 msgid "Mauritius Daylight Time"
 msgstr "Czas letni Mauritiusa"
 
@@ -11825,10 +12217,12 @@ msgid "(UTC+04:00) Port Louis"
 msgstr "(UTC+04:00) Port Louis"
 
 #: dlls/tzres/tzres.rc:414
+msgctxt "maximum 31 characters"
 msgid "Vladivostok Standard Time"
 msgstr "Czas urzędowy Władywostoku"
 
 #: dlls/tzres/tzres.rc:415
+msgctxt "maximum 31 characters"
 msgid "Vladivostok Daylight Time"
 msgstr "Czas letni Władywostoku"
 
@@ -11837,10 +12231,12 @@ msgid "(UTC+10:00) Vladivostok"
 msgstr "(UTC+10:00) Władywostok"
 
 #: dlls/tzres/tzres.rc:336
+msgctxt "maximum 31 characters"
 msgid "Singapore Standard Time"
 msgstr "Czas urzędowy Singapuru"
 
 #: dlls/tzres/tzres.rc:337
+msgctxt "maximum 31 characters"
 msgid "Singapore Daylight Time"
 msgstr "Czas letni Singapuru"
 
@@ -11849,10 +12245,12 @@ msgid "(UTC+08:00) Kuala Lumpur, Singapore"
 msgstr "(UTC+08:00) Kuala Lumpur, Singapur"
 
 #: dlls/tzres/tzres.rc:204
+msgctxt "maximum 31 characters"
 msgid "Korea Standard Time"
 msgstr "Czas urzędowy Korei"
 
 #: dlls/tzres/tzres.rc:205
+msgctxt "maximum 31 characters"
 msgid "Korea Daylight Time"
 msgstr "Czas letni Korei"
 
@@ -11861,10 +12259,12 @@ msgid "(UTC+09:00) Seoul"
 msgstr "(UTC+09:00) Seul"
 
 #: dlls/tzres/tzres.rc:123
+msgctxt "maximum 31 characters"
 msgid "Chatham Islands Standard Time"
 msgstr "Czas urzędowy Wysp Chatham"
 
 #: dlls/tzres/tzres.rc:124
+msgctxt "maximum 31 characters"
 msgid "Chatham Islands Daylight Time"
 msgstr "Czas letni Wysp Chatham"
 
@@ -11873,10 +12273,12 @@ msgid "(UTC+12:45) Chatham Islands"
 msgstr "(UTC+12:45) Wyspy Chatham"
 
 #: dlls/tzres/tzres.rc:135
+msgctxt "maximum 31 characters"
 msgid "E. Africa Standard Time"
 msgstr "Czas urzędowy Afryki wschodniej"
 
 #: dlls/tzres/tzres.rc:136
+msgctxt "maximum 31 characters"
 msgid "E. Africa Daylight Time"
 msgstr "Czas letni Afryki wschodniej"
 
@@ -11885,10 +12287,12 @@ msgid "(UTC+03:00) Nairobi"
 msgstr "(UTC+03:00) Nairobi"
 
 #: dlls/tzres/tzres.rc:165
+msgctxt "maximum 31 characters"
 msgid "FLE Standard Time"
 msgstr "Czas urzędowy FLE"
 
 #: dlls/tzres/tzres.rc:166
+msgctxt "maximum 31 characters"
 msgid "FLE Daylight Time"
 msgstr "Czas letni FLE"
 
@@ -11897,10 +12301,16 @@ msgid "(UTC+02:00) Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius"
 msgstr "(UTC+02:00) Helsinki, Kijów, Ryga, Sofia, Tallinn, Vilnius"
 
 #: dlls/tzres/tzres.rc:144
+#, fuzzy
+#| msgid "E. South America Standard Time"
+msgctxt "maximum 31 characters"
 msgid "E. South America Standard Time"
 msgstr "Czas urzędowy Ameryki Południowej wschodni"
 
 #: dlls/tzres/tzres.rc:145
+#, fuzzy
+#| msgid "E. South America Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "E. South America Daylight Time"
 msgstr "Czas letni Ameryki Południowej wschodni"
 
@@ -11909,10 +12319,14 @@ msgid "(UTC-03:00) Brasilia"
 msgstr "(UTC-03:00) Brasilia"
 
 #: dlls/tzres/tzres.rc:114
+#, fuzzy
+#| msgid "Central Pacific Standard Time"
+msgctxt "maximum 31 characters"
 msgid "Central Pacific Standard Time"
 msgstr "Czas urzędowy pacyficzny środkowy"
 
 #: dlls/tzres/tzres.rc:115
+msgctxt "maximum 31 characters"
 msgid "Central Pacific Daylight Time"
 msgstr "Czas letni pacyficzny środkowy"
 
@@ -11921,10 +12335,16 @@ msgid "(UTC+11:00) Solomon Is., New Caledonia"
 msgstr "(UTC+11:00) Wyspy Salomona, Nowa Kaledonia"
 
 #: dlls/tzres/tzres.rc:423
+#, fuzzy
+#| msgid "W. Central Africa Standard Time"
+msgctxt "maximum 31 characters"
 msgid "W. Central Africa Standard Time"
 msgstr "Czas urzędowy Afryki środkowej zachodni"
 
 #: dlls/tzres/tzres.rc:424
+#, fuzzy
+#| msgid "W. Central Africa Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "W. Central Africa Daylight Time"
 msgstr "Czas letni Afryki zachodnio-środkowej"
 
@@ -11933,10 +12353,16 @@ msgid "(UTC+01:00) West Central Africa"
 msgstr "(UTC+01:00) Zachodniośrodkowa Afryka"
 
 #: dlls/tzres/tzres.rc:276
+#, fuzzy
+#| msgid "Pacific SA Standard Time"
+msgctxt "maximum 31 characters"
 msgid "Pacific SA Standard Time"
 msgstr "Czas urzędowy pacyficzny Ameryki Południowej"
 
 #: dlls/tzres/tzres.rc:277
+#, fuzzy
+#| msgid "Pacific SA Daylight Time"
+msgctxt "maximum 31 characters"
 msgid "Pacific SA Daylight Time"
 msgstr "Czas letni pacyficzny Ameryki Południowej"
 
@@ -11945,10 +12371,14 @@ msgid "(UTC-04:00) Santiago"
 msgstr "(UTC-04:00) Santiago"
 
 #: dlls/tzres/tzres.rc:138
+#, fuzzy
+#| msgid "E. Australia Standard Time"
+msgctxt "maximum 31 characters"
 msgid "E. Australia Standard Time"
 msgstr "Czas urzędowy Australii wschodniej"
 
 #: dlls/tzres/tzres.rc:139
+msgctxt "maximum 31 characters"
 msgid "E. Australia Daylight Time"
 msgstr "Czas letni Australii wschodniej"
 
@@ -11957,10 +12387,14 @@ msgid "(UTC+10:00) Brisbane"
 msgstr "(UTC+10:00) Brisbane"
 
 #: dlls/tzres/tzres.rc:420
+#, fuzzy
+#| msgid "W. Australia Standard Time"
+msgctxt "maximum 31 characters"
 msgid "W. Australia Standard Time"
 msgstr "Czas urzędowy Australii zachodniej"
 
 #: dlls/tzres/tzres.rc:421
+msgctxt "maximum 31 characters"
 msgid "W. Australia Daylight Time"
 msgstr "Czas letni Australii zachodniej"
 
@@ -18420,8 +18854,8 @@ msgid ""
 msgstr ""
 "Jeżeli problem ten nie występuje w systemie Windows i nie został jeszcze "
 "zgłoszony, to możesz zapisać szczegółowe informacje do pliku używając "
-"przycisku \"Zapisz jako\", a następnie <a href=\"https://wiki.winehq.org/Bugs"
-"\">wypełnić zgłoszenie o błędzie</a> i dołączyć ten plik do zgłoszenia."
+"przycisku \"Zapisz jako\", a następnie <a href=\"https://wiki.winehq.org/"
+"Bugs\">wypełnić zgłoszenie o błędzie</a> i dołączyć ten plik do zgłoszenia."
 
 #: programs/winedbg/winedbg.rc:40
 msgid ""

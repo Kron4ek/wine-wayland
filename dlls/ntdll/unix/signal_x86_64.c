@@ -144,6 +144,8 @@ __ASM_GLOBAL_FUNC( alloc_fs_sel,
 
 #elif defined(__FreeBSD__) || defined (__FreeBSD_kernel__)
 
+#include <machine/trap.h>
+
 #define RAX_sig(context)     ((context)->uc_mcontext.mc_rax)
 #define RBX_sig(context)     ((context)->uc_mcontext.mc_rbx)
 #define RCX_sig(context)     ((context)->uc_mcontext.mc_rcx)
@@ -238,6 +240,27 @@ __ASM_GLOBAL_FUNC( alloc_fs_sel,
 
 enum i386_trap_code
 {
+#if defined(__FreeBSD__) || defined (__FreeBSD_kernel__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+    TRAP_x86_DIVIDE     = T_DIVIDE,     /* Division by zero exception */
+    TRAP_x86_TRCTRAP    = T_TRCTRAP,    /* Single-step exception */
+    TRAP_x86_NMI        = T_NMI,        /* NMI interrupt */
+    TRAP_x86_BPTFLT     = T_BPTFLT,     /* Breakpoint exception */
+    TRAP_x86_OFLOW      = T_OFLOW,      /* Overflow exception */
+    TRAP_x86_BOUND      = T_BOUND,      /* Bound range exception */
+    TRAP_x86_PRIVINFLT  = T_PRIVINFLT,  /* Invalid opcode exception */
+    TRAP_x86_DNA        = T_DNA,        /* Device not available exception */
+    TRAP_x86_DOUBLEFLT  = T_DOUBLEFLT,  /* Double fault exception */
+    TRAP_x86_FPOPFLT    = T_FPOPFLT,    /* Coprocessor segment overrun */
+    TRAP_x86_TSSFLT     = T_TSSFLT,     /* Invalid TSS exception */
+    TRAP_x86_SEGNPFLT   = T_SEGNPFLT,   /* Segment not present exception */
+    TRAP_x86_STKFLT     = T_STKFLT,     /* Stack fault */
+    TRAP_x86_PROTFLT    = T_PROTFLT,    /* General protection fault */
+    TRAP_x86_PAGEFLT    = T_PAGEFLT,    /* Page fault */
+    TRAP_x86_ARITHTRAP  = T_ARITHTRAP,  /* Floating point exception */
+    TRAP_x86_ALIGNFLT   = T_ALIGNFLT,   /* Alignment check exception */
+    TRAP_x86_MCHK       = T_MCHK,       /* Machine check exception */
+    TRAP_x86_CACHEFLT   = T_XMMFLT      /* Cache flush exception */
+#else
     TRAP_x86_DIVIDE     = 0,   /* Division by zero exception */
     TRAP_x86_TRCTRAP    = 1,   /* Single-step exception */
     TRAP_x86_NMI        = 2,   /* NMI interrupt */
@@ -257,6 +280,7 @@ enum i386_trap_code
     TRAP_x86_ALIGNFLT   = 17,  /* Alignment check exception */
     TRAP_x86_MCHK       = 18,  /* Machine check exception */
     TRAP_x86_CACHEFLT   = 19   /* Cache flush exception */
+#endif
 };
 
 /* stack layout when calling an exception raise function */
@@ -387,12 +411,23 @@ static inline void context_init_xstate( CONTEXT *context, void *xstate_buffer )
     xctx->Legacy.Length = sizeof(CONTEXT);
     xctx->Legacy.Offset = -(LONG)sizeof(CONTEXT);
 
-    xctx->XState.Length = sizeof(XSTATE);
-    xctx->XState.Offset = (BYTE *)xstate_buffer - (BYTE *)xctx;
+    if (xstate_buffer)
+    {
+        xctx->XState.Length = sizeof(XSTATE);
+        xctx->XState.Offset = (BYTE *)xstate_buffer - (BYTE *)xctx;
+        context->ContextFlags |= CONTEXT_XSTATE;
 
-    xctx->All.Length = sizeof(CONTEXT) + xctx->XState.Offset + xctx->XState.Length;
+        xctx->All.Length = sizeof(CONTEXT) + xctx->XState.Offset + xctx->XState.Length;
+    }
+    else
+    {
+        xctx->XState.Length = 25;
+        xctx->XState.Offset = 0;
+
+        xctx->All.Length = sizeof(CONTEXT) + 24; /* sizeof(CONTEXT_EX) minus 8 alignment bytes on x64. */
+    }
+
     xctx->All.Offset = -(LONG)sizeof(CONTEXT);
-    context->ContextFlags |= CONTEXT_XSTATE;
 }
 
 static USHORT cs32_sel;  /* selector for %cs in 32-bit mode */
@@ -2170,6 +2205,10 @@ static void setup_raise_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec
             dst_xs->Mask = 4;
             memcpy( &dst_xs->YmmContext, &src_xs->YmmContext, sizeof(dst_xs->YmmContext) );
         }
+    }
+    else
+    {
+        context_init_xstate( &stack->context, NULL );
     }
 
     CS_sig(sigcontext)  = cs64_sel;

@@ -476,8 +476,8 @@ typedef struct
 struct _IMAGELIST;
 typedef struct _IMAGELIST *HIMAGELIST;
 
-#define CLR_NONE         0xFFFFFFFF
-#define CLR_DEFAULT      0xFF000000
+#define CLR_NONE         __MSABI_LONG(0xFFFFFFFF)
+#define CLR_DEFAULT      __MSABI_LONG(0xFF000000)
 #define CLR_HILIGHT      CLR_DEFAULT
 
 #define ILC_MASK             0x00000001
@@ -3158,11 +3158,18 @@ static const WCHAR WC_LISTVIEWW[] = { 'S','y','s',
 #define LVNI_SELECTED		0x0002
 #define LVNI_CUT		0x0004
 #define LVNI_DROPHILITED	0x0008
+#define LVNI_STATEMASK          (LVNI_FOCUSED | LVNI_SELECTED | LVNI_CUT | LVNI_DROPHILITED)
+
+#define LVNI_VISIBLEORDER       0x0010
+#define LVNI_PREVIOUS           0x0020
+#define LVNI_VISIBLEONLY        0x0040
+#define LVNI_SAMEGROUPONLY      0x0080
 
 #define LVNI_ABOVE		0x0100
 #define LVNI_BELOW		0x0200
 #define LVNI_TOLEFT		0x0400
 #define LVNI_TORIGHT		0x0800
+#define LVNI_DIRECTIONMASK      (LVNI_ABOVE | LVNI_BELOW | LVNI_TOLEFT | LVNI_TORIGHT)
 
 #define LVHT_NOWHERE		0x0001
 #define LVHT_ONITEMICON		0x0002
@@ -3201,6 +3208,12 @@ static const WCHAR WC_LISTVIEWW[] = { 'S','y','s',
 #define LVGS_NORMAL             0x00000000
 #define LVGS_COLLAPSED          0x00000001
 #define LVGS_HIDDEN             0x00000002
+#define LVGS_NOHEADER           0x00000004
+#define LVGS_COLLAPSIBLE        0x00000008
+#define LVGS_FOCUSED            0x00000010
+#define LVGS_SELECTED           0x00000020
+#define LVGS_SUBSETED           0x00000040
+#define LVGS_SUBSETLINKFOCUSED  0x00000080
 
 #define LVGA_HEADER_LEFT        0x00000001
 #define LVGA_HEADER_CENTER      0x00000002

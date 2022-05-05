@@ -1114,7 +1114,7 @@
 @ stub -arch=win64 ?_Assign@_Concurrent_queue_iterator_base_v4@details@Concurrency@@IEAAXAEBV123@@Z
 @ stub ?_Atexit@@YAXP6AXXZ@Z
 @ extern ?_BADOFF@std@@3_JB msvcp120.?_BADOFF@std@@3_JB
-# extern ?_Byte_reverse_table@details@Concurrency@@3QBEB
+@ extern ?_Byte_reverse_table@details@Concurrency@@3QBEB msvcp120.?_Byte_reverse_table@details@Concurrency@@3QBEB
 @ cdecl -arch=arm ?_C_str@?$_Yarn@D@std@@QBAPBDXZ(ptr) msvcp120.?_C_str@?$_Yarn@D@std@@QBAPBDXZ
 @ thiscall -arch=i386 ?_C_str@?$_Yarn@D@std@@QBEPBDXZ(ptr) msvcp120.?_C_str@?$_Yarn@D@std@@QBEPBDXZ
 @ cdecl -arch=win64 ?_C_str@?$_Yarn@D@std@@QEBAPEBDXZ(ptr) msvcp120.?_C_str@?$_Yarn@D@std@@QEBAPEBDXZ
@@ -3762,13 +3762,13 @@
 @ extern _LZero msvcp120._LZero
 @ cdecl _Lock_shared_ptr_spin_lock() msvcp120._Lock_shared_ptr_spin_lock
 @ cdecl _Mbrtowc(ptr ptr long ptr ptr) msvcp120._Mbrtowc
-@ stub _Mtx_clear_owner
+@ cdecl _Mtx_clear_owner(ptr) msvcp120._Mtx_clear_owner
 @ cdecl _Mtx_current_owns(ptr) msvcp120._Mtx_current_owns
 @ cdecl _Mtx_destroy(ptr) msvcp120._Mtx_destroy
 @ cdecl _Mtx_getconcrtcs(ptr) msvcp120._Mtx_getconcrtcs
 @ cdecl _Mtx_init(ptr long) msvcp120._Mtx_init
 @ cdecl _Mtx_lock(ptr) msvcp120._Mtx_lock
-@ stub _Mtx_reset_owner
+@ cdecl _Mtx_reset_owner(ptr) msvcp120._Mtx_reset_owner
 @ stub _Mtx_timedlock
 @ cdecl _Mtx_trylock(ptr) msvcp120._Mtx_trylock
 @ cdecl _Mtx_unlock(ptr) msvcp120._Mtx_unlock

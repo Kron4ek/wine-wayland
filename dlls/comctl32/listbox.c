@@ -2404,7 +2404,7 @@ static void LISTBOX_HandleMouseMove( LB_DESCR *descr,
     /* Start/stop the system timer */
 
     if (dir != LB_TIMER_NONE)
-        SetSystemTimer( descr->self, LB_TIMER_ID, LB_SCROLL_TIMEOUT, NULL);
+        SetSystemTimer( descr->self, LB_TIMER_ID, LB_SCROLL_TIMEOUT, 0 );
     else if (LISTBOX_Timer != LB_TIMER_NONE)
         KillSystemTimer( descr->self, LB_TIMER_ID );
     LISTBOX_Timer = dir;
@@ -2683,7 +2683,7 @@ static LRESULT CALLBACK LISTBOX_WindowProc( HWND hwnd, UINT msg, WPARAM wParam, 
     }
     if (descr->style & LBS_COMBOBOX) lphc = descr->lphc;
 
-    TRACE("[%p]: msg %#x wp %08lx lp %08lx\n", descr->self, msg, wParam, lParam );
+    TRACE("[%p]: msg %#x, wp %Ix, lp %Ix\n", descr->self, msg, wParam, lParam );
 
     switch(msg)
     {
@@ -3143,8 +3143,7 @@ static LRESULT CALLBACK LISTBOX_WindowProc( HWND hwnd, UINT msg, WPARAM wParam, 
 
     default:
         if ((msg >= WM_USER) && (msg < 0xc000))
-            WARN("[%p]: unknown msg %04x wp %08lx lp %08lx\n",
-                 hwnd, msg, wParam, lParam );
+            WARN("[%p]: unknown msg %04x, wp %Ix, lp %Ix\n", hwnd, msg, wParam, lParam );
     }
 
     return DefWindowProcW( hwnd, msg, wParam, lParam );

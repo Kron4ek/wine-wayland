@@ -110,7 +110,7 @@ STATUSBAR_ComputeHeight(STATUS_INFO *infoPtr)
     margin = (tm.tmInternalLeading ? tm.tmInternalLeading : 2);
     height = max(tm.tmHeight + margin + 2*GetSystemMetrics(SM_CYBORDER), infoPtr->minHeight) + infoPtr->verticalBorder;
 
-    TRACE("    textHeight=%d+%d, final height=%d\n", tm.tmHeight, tm.tmInternalLeading, height);
+    TRACE("    textHeight=%ld+%ld, final height=%d\n", tm.tmHeight, tm.tmInternalLeading, height);
     return height;
 }
 
@@ -139,21 +139,16 @@ STATUSBAR_DrawSizeGrip (HTHEME theme, HDC hdc, LPRECT lpRect)
     DrawFrameControl( hdc, &rc, DFC_SCROLL, DFCS_SCROLLSIZEGRIP );
 }
 
-
 static void
 STATUSBAR_DrawPart (const STATUS_INFO *infoPtr, HDC hdc, const STATUSWINDOWPART *part, int itemID)
 {
     RECT r = part->bound;
-    UINT border = BDR_SUNKENOUTER;
+    UINT border;
     HTHEME theme = GetWindowTheme (infoPtr->Self);
     int themePart = SP_PANE;
     int x = 0;
 
     TRACE("part bound %s\n", wine_dbgstr_rect(&r));
-    if (part->style & SBT_POPOUT)
-        border = BDR_RAISEDOUTER;
-    else if (part->style & SBT_NOBORDERS)
-        border = 0;
 
     if (theme)
     {
@@ -163,7 +158,15 @@ STATUSBAR_DrawPart (const STATUS_INFO *infoPtr, HDC hdc, const STATUSWINDOWPART 
         DrawThemeBackground(theme, hdc, themePart, 0, &r, NULL);
     }
     else
+    {
+        if (part->style & SBT_POPOUT)
+            border = BDR_RAISEDOUTER;
+        else if (part->style & SBT_NOBORDERS)
+            border = 0;
+        else
+            border = BDR_SUNKENOUTER;
         DrawEdge(hdc, &r, border, BF_RECT|BF_ADJUST);
+    }
 
     if (part->hIcon) {
         INT cy = r.bottom - r.top;
@@ -183,7 +186,7 @@ STATUSBAR_DrawPart (const STATUS_INFO *infoPtr, HDC hdc, const STATUSWINDOWPART 
         SendMessageW (infoPtr->Notify, WM_DRAWITEM, dis.CtlID, (LPARAM)&dis);
     } else {
         r.left += x;
-        DrawStatusTextW (hdc, &r, part->text, SBT_NOBORDERS);
+        COMCTL32_DrawStatusText(hdc, &r, part->text, 0, FALSE);
     }
 }
 
@@ -191,32 +194,12 @@ STATUSBAR_DrawPart (const STATUS_INFO *infoPtr, HDC hdc, const STATUSWINDOWPART 
 static void
 STATUSBAR_RefreshPart (const STATUS_INFO *infoPtr, HDC hdc, const STATUSWINDOWPART *part, int itemID)
 {
-    HBRUSH hbrBk;
-    HTHEME theme;
-
     TRACE("item %d\n", itemID);
 
     if (part->bound.right < part->bound.left) return;
 
     if (!RectVisible(hdc, &part->bound))
         return;
-
-    if ((theme = GetWindowTheme (infoPtr->Self)))
-    {
-        RECT cr;
-        GetClientRect (infoPtr->Self, &cr);
-        DrawThemeBackground(theme, hdc, 0, 0, &cr, &part->bound);
-    }
-    else
-    {
-        if (infoPtr->clrBk != CLR_DEFAULT)
-                hbrBk = CreateSolidBrush (infoPtr->clrBk);
-        else
-                hbrBk = GetSysColorBrush (COLOR_3DFACE);
-        FillRect(hdc, &part->bound, hbrBk);
-        if (infoPtr->clrBk != CLR_DEFAULT)
-                DeleteObject (hbrBk);
-    }
 
     STATUSBAR_DrawPart (infoPtr, hdc, part, itemID);
 }
@@ -559,7 +542,7 @@ STATUSBAR_SetBkColor (STATUS_INFO *infoPtr, COLORREF color)
     infoPtr->clrBk = color;
     InvalidateRect(infoPtr->Self, NULL, FALSE);
 
-    TRACE("CREF: %08x -> %08x\n", oldBkColor, infoPtr->clrBk);
+    TRACE("CREF: %#lx -> %#lx\n", oldBkColor, infoPtr->clrBk);
     return oldBkColor;
 }
 
@@ -1118,7 +1101,7 @@ STATUSBAR_SendMouseNotify(const STATUS_INFO *infoPtr, UINT code, UINT msg, WPARA
 {
     NMMOUSE  nm;
 
-    TRACE("code %04x, lParam=%lx\n", code, lParam);
+    TRACE("code %04x, lParam %Ix\n", code, lParam);
     nm.hdr.hwndFrom = infoPtr->Self;
     nm.hdr.idFrom = GetWindowLongPtrW(infoPtr->Self, GWLP_ID);
     nm.hdr.code = code;
@@ -1145,7 +1128,8 @@ StatusWindowProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     INT nPart = ((INT) wParam) & 0x00ff;
     LRESULT res;
 
-    TRACE("hwnd=%p msg=%x wparam=%lx lparam=%lx\n", hwnd, msg, wParam, lParam);
+    TRACE("hwnd %p, msg %x, wparam %Ix, lparam %Ix\n", hwnd, msg, wParam, lParam);
+
     if (!infoPtr && msg != WM_CREATE)
         return DefWindowProcW (hwnd, msg, wParam, lParam);
 
@@ -1284,8 +1268,7 @@ StatusWindowProc (HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 	default:
 	    if ((msg >= WM_USER) && (msg < WM_APP) && !COMCTL32_IsReflectedMessage(msg))
-		ERR("unknown msg %04x wp=%04lx lp=%08lx\n",
-		     msg, wParam, lParam);
+		ERR("unknown msg %04x wp=%Ix lp=%Ix\n", msg, wParam, lParam);
 	    return DefWindowProcW (hwnd, msg, wParam, lParam);
     }
 }

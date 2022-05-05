@@ -63,7 +63,6 @@
 #include "prsht.h"
 #include "comctl32.h"
 #include "uxtheme.h"
-#include "vsstyle.h"
 
 #include "wine/debug.h"
 
@@ -141,7 +140,6 @@ typedef struct
  */
 
 static const WCHAR PropSheetInfoStr[] = L"PropertySheetInfo";
-static const WCHAR PropSheetPageBackgroundBrush[] = L"PropSheetPageBackgroundBrush";
 
 #define PSP_INTERNAL_UNICODE 0x80000000
 
@@ -323,7 +321,7 @@ static void PROPSHEET_CollectSheetInfoA(LPCPROPSHEETHEADERA lppsh,
   psInfo->useCallback = (dwFlags & PSH_USECALLBACK )&& (lppsh->pfnCallback);
 
   memcpy(&psInfo->ppshheader,lppsh,dwSize);
-  TRACE("\n** PROPSHEETHEADER **\ndwSize\t\t%d\ndwFlags\t\t%08x\nhwndParent\t%p\nhInstance\t%p\npszCaption\t'%s'\nnPages\t\t%d\npfnCallback\t%p\n",
+  TRACE("\n** PROPSHEETHEADER **\ndwSize\t\t%ld\ndwFlags\t\t%#lx\nhwndParent\t%p\nhInstance\t%p\npszCaption\t'%s'\nnPages\t\t%d\npfnCallback\t%p\n",
 	lppsh->dwSize, lppsh->dwFlags, lppsh->hwndParent, lppsh->hInstance,
 	debugstr_a(lppsh->pszCaption), lppsh->nPages, lppsh->pfnCallback);
 
@@ -367,7 +365,7 @@ static void PROPSHEET_CollectSheetInfoW(LPCPROPSHEETHEADERW lppsh,
   psInfo->useCallback = (dwFlags & PSH_USECALLBACK) && (lppsh->pfnCallback);
 
   memcpy(&psInfo->ppshheader,lppsh,dwSize);
-  TRACE("\n** PROPSHEETHEADER **\ndwSize\t\t%d\ndwFlags\t\t%08x\nhwndParent\t%p\nhInstance\t%p\npszCaption\t%s\nnPages\t\t%d\npfnCallback\t%p\n",
+  TRACE("\n** PROPSHEETHEADER **\ndwSize\t\t%ld\ndwFlags\t\t%#lx\nhwndParent\t%p\nhInstance\t%p\npszCaption\t%s\nnPages\t\t%d\npfnCallback\t%p\n",
       lppsh->dwSize, lppsh->dwFlags, lppsh->hwndParent, lppsh->hInstance, debugstr_w(lppsh->pszCaption), lppsh->nPages, lppsh->pfnCallback);
 
   if (lppsh->dwFlags & INTRNL_ANY_WIZARD)
@@ -767,8 +765,7 @@ static BOOL PROPSHEET_AdjustSize(HWND hwndDlg, PropSheetInfo* psInfo)
 
   rc.right -= rc.left;
   rc.bottom -= rc.top;
-  TRACE("setting tab %p, rc (0,0)-(%d,%d)\n",
-        hwndTabCtrl, rc.right, rc.bottom);
+  TRACE("setting tab %p, rc (0,0)-(%ld,%ld)\n", hwndTabCtrl, rc.right, rc.bottom);
   SetWindowPos(hwndTabCtrl, 0, 0, 0, rc.right, rc.bottom,
                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
@@ -789,8 +786,7 @@ static BOOL PROPSHEET_AdjustSize(HWND hwndDlg, PropSheetInfo* psInfo)
   /*
    * Resize the property sheet.
    */
-  TRACE("setting dialog %p, rc (0,0)-(%d,%d)\n",
-        hwndDlg, rc.right, rc.bottom);
+  TRACE("setting dialog %p, rc (0,0)-(%ld,%ld)\n", hwndDlg, rc.right, rc.bottom);
   SetWindowPos(hwndDlg, 0, 0, 0, rc.right, rc.bottom,
                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
   return TRUE;
@@ -822,8 +818,7 @@ static BOOL PROPSHEET_AdjustSizeWizard(HWND hwndDlg, const PropSheetInfo* psInfo
   AdjustWindowRect(&rc, GetWindowLongW(hwndDlg, GWL_STYLE), FALSE);
 
   /* Resize the property sheet */
-  TRACE("setting dialog %p, rc (0,0)-(%d,%d)\n",
-        hwndDlg, rc.right, rc.bottom);
+  TRACE("setting dialog %p, rc (0,0)-(%ld,%ld)\n", hwndDlg, rc.right, rc.bottom);
   SetWindowPos(hwndDlg, 0, 0, 0, rc.right - rc.left, rc.bottom - rc.top,
                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
@@ -1198,136 +1193,6 @@ PROPSHEET_WizardSubclassProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
   return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
 
-static HBRUSH get_propsheet_background_brush(HWND hwnd)
-{
-    HBITMAP bitmap, old_bitmap;
-    HDC hdc, hdc_screen;
-    HBRUSH brush;
-    HTHEME theme;
-    HRESULT hr;
-    RECT rect;
-    SIZE size;
-
-    brush = GetPropW(hwnd, PropSheetPageBackgroundBrush);
-    if (brush)
-        return brush;
-
-    theme = OpenThemeData(NULL, L"Tab");
-    if (!theme)
-        return NULL;
-
-    hr = GetThemePartSize(theme, NULL, TABP_BODY, 0, NULL, TS_TRUE, &size);
-    if (FAILED(hr))
-    {
-        size.cx = 10;
-        size.cy = 600;
-    }
-
-    hdc_screen = GetDC(NULL);
-    hdc = CreateCompatibleDC(hdc_screen);
-    bitmap = CreateCompatibleBitmap(hdc_screen, size.cx, size.cy);
-    old_bitmap = SelectObject(hdc, bitmap);
-
-    SetRect(&rect, 0, 0, size.cx, size.cy);
-    /* FIXME: XP draws the tab body bitmap directly without transparency even if there is */
-    FillRect(hdc, &rect, GetSysColorBrush(COLOR_3DFACE));
-    hr = DrawThemeBackground(theme, hdc, TABP_BODY, 0, &rect, NULL);
-    if (SUCCEEDED(hr))
-    {
-        brush = CreatePatternBrush(bitmap);
-        SetPropW(hwnd, PropSheetPageBackgroundBrush, brush);
-    }
-
-    SelectObject(hdc, old_bitmap);
-    DeleteDC(hdc);
-    ReleaseDC(NULL, hdc_screen);
-    CloseThemeData(theme);
-    return brush;
-}
-
-/* Subclassing window procedure for theming dialogs in property sheet pages */
-static LRESULT CALLBACK PROPSHEET_ThemedSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
-                                                     UINT_PTR id, DWORD_PTR ref)
-{
-    POINT org, old_org;
-    LOGBRUSH logbrush;
-    WNDPROC dlgproc;
-    HBRUSH brush;
-    LRESULT lr;
-    RECT rect;
-    HDC hdc;
-
-    switch (msg)
-    {
-    case WM_THEMECHANGED:
-    {
-        brush = GetPropW(hwnd, PropSheetPageBackgroundBrush);
-        if (brush)
-        {
-            RemovePropW(hwnd, PropSheetPageBackgroundBrush);
-            if (GetObjectW(brush, sizeof(logbrush), &logbrush) == sizeof(logbrush))
-                DeleteObject((HBITMAP)logbrush.lbHatch);
-            DeleteObject(brush);
-        }
-        InvalidateRect(hwnd, NULL, TRUE);
-        break;
-    }
-    case WM_ERASEBKGND:
-    {
-        if (!IsThemeActive() || !IsThemeDialogTextureEnabled(hwnd))
-            break;
-
-        dlgproc = (WNDPROC)GetWindowLongPtrW(hwnd, DWLP_DLGPROC);
-        lr = CallWindowProcW(dlgproc, hwnd, msg, wp, lp);
-        if (lr)
-            return lr;
-
-        brush = get_propsheet_background_brush(hwnd);
-        if (!brush)
-            break;
-
-        /* Using FillRect() to draw background could introduce a tiling effect if the destination
-         * rectangle is larger than the pattern brush size, which is usually 10x600. This bug is
-         * visible on property sheet pages if system DPI is set to 192. However, the same bug also
-         * exists on XP and explains why vista+ don't use gradient tab body background anymore */
-        hdc = (HDC)wp;
-        GetViewportOrgEx(hdc, &org);
-        SetBrushOrgEx(hdc, org.x, org.y, &old_org);
-        GetClientRect(hwnd, &rect);
-        FillRect(hdc, &rect, brush);
-        SetBrushOrgEx(hdc, old_org.x, old_org.y, NULL);
-        return TRUE;
-    }
-
-    case WM_CTLCOLORSTATIC:
-    {
-        if (!IsThemeActive() || !IsThemeDialogTextureEnabled(hwnd))
-            break;
-
-        dlgproc = (WNDPROC)GetWindowLongPtrW(hwnd, DWLP_DLGPROC);
-        lr = CallWindowProcW(dlgproc, hwnd, msg, wp, lp);
-        if (lr)
-            return lr;
-
-        brush = get_propsheet_background_brush(hwnd);
-        if (!brush)
-            break;
-
-        hdc = (HDC)wp;
-        SetBkColor(hdc, GetSysColor(COLOR_BTNFACE));
-        SetBkMode(hdc, TRANSPARENT);
-
-        org.x = 0;
-        org.y = 0;
-        MapWindowPoints((HWND)lp, hwnd, &org, 1);
-        SetBrushOrgEx(hdc, -org.x, -org.y, NULL);
-        return (LRESULT)brush;
-    }
-    }
-
-    return DefSubclassProc(hwnd, msg, wp, lp);
-}
-
 /*
  * Get the size of an in-memory Template
  *
@@ -1429,7 +1294,7 @@ static UINT GetTemplateSize(const DLGTEMPLATE* pTemplate)
 	  p++;
 	  break;
 	case 0xffff:
-          TRACE("class ordinal 0x%08x\n",*(const DWORD*)p);
+          TRACE("class ordinal %#lx\n",*(const DWORD*)p);
 	  p += 2;
 	  break;
 	default:
@@ -1445,7 +1310,7 @@ static UINT GetTemplateSize(const DLGTEMPLATE* pTemplate)
 	  p++;
 	  break;
 	case 0xffff:
-          TRACE("text ordinal 0x%08x\n",*(const DWORD*)p);
+          TRACE("text ordinal %#lx\n",*(const DWORD*)p);
 	  p += 2;
 	  break;
 	default:
@@ -1537,7 +1402,7 @@ static BOOL PROPSHEET_CreatePage(HWND hwndParent,
   if (!pTemplateCopy)
     return FALSE;
   
-  TRACE("copying pTemplate %p into pTemplateCopy %p (%d)\n", pTemplate, pTemplateCopy, resSize);
+  TRACE("copying pTemplate %p into pTemplateCopy %p (%ld)\n", pTemplate, pTemplateCopy, resSize);
   memcpy(pTemplateCopy, pTemplate, resSize);
 
   if (((MyDLGTEMPLATEEX*)pTemplateCopy)->signature == 0xFFFF)
@@ -1598,10 +1463,6 @@ static BOOL PROPSHEET_CreatePage(HWND hwndParent,
   {
       SetWindowSubclass(hwndPage, PROPSHEET_WizardSubclassProc, 1,
                         (DWORD_PTR)ppshpage);
-  }
-  else
-  {
-      SetWindowSubclass(hwndPage, PROPSHEET_ThemedSubclassProc, 1, (DWORD_PTR)ppshpage);
   }
   if (!(psInfo->ppshheader.dwFlags & INTRNL_ANY_WIZARD))
       EnableThemeDialogTexture (hwndPage, ETDT_ENABLETAB);
@@ -1810,7 +1671,7 @@ static BOOL PROPSHEET_Finish(HWND hwndDlg)
 
   msgResult = SendMessageW(hwndPage, WM_NOTIFY, 0, (LPARAM) &psn);
 
-  TRACE("msg result %ld\n", msgResult);
+  TRACE("msg result %Id\n", msgResult);
 
   if (msgResult != 0)
     return FALSE;
@@ -2166,7 +2027,7 @@ static BOOL PROPSHEET_SetCurSel(HWND hwndDlg,
      * NOTE: The resizing happens every time the page is selected and
      * not only when it's created (some applications depend on it). */
     PROPSHEET_GetPageRect(psInfo, hwndDlg, &rc, ppshpage);
-    TRACE("setting page %p, rc (%s) w=%d, h=%d\n",
+    TRACE("setting page %p, rc (%s) w=%ld, h=%ld\n",
           psInfo->proppage[index].hwndPage, wine_dbgstr_rect(&rc),
           rc.right - rc.left, rc.bottom - rc.top);
     SetWindowPos(psInfo->proppage[index].hwndPage, HWND_TOP,
@@ -2272,7 +2133,7 @@ static void PROPSHEET_SetTitleW(HWND hwndDlg, DWORD dwStyle, LPCWSTR lpszText)
   PropSheetInfo* psInfo = GetPropW(hwndDlg, PropSheetInfoStr);
   WCHAR szTitle[256];
 
-  TRACE("%s (style %08x)\n", debugstr_w(lpszText), dwStyle);
+  TRACE("%s (style %#lx)\n", debugstr_w(lpszText), dwStyle);
   if (IS_INTRESOURCE(lpszText)) {
     if (!LoadStringW(psInfo->ppshheader.hInstance, LOWORD(lpszText), szTitle, ARRAY_SIZE(szTitle)))
       return;
@@ -2487,8 +2348,6 @@ static BOOL PROPSHEET_RemovePage(HWND hwndDlg,
   PropSheetInfo * psInfo = GetPropW(hwndDlg, PropSheetInfoStr);
   HWND hwndTabControl = GetDlgItem(hwndDlg, IDC_TABCONTROL);
   PropPageInfo* oldPages;
-  LOGBRUSH logbrush;
-  HBRUSH brush;
 
   TRACE("index %d, hpage %p\n", index, hpage);
   if (!psInfo) {
@@ -2546,18 +2405,6 @@ static BOOL PROPSHEET_RemovePage(HWND hwndDlg,
      RemoveWindowSubclass(psInfo->proppage[index].hwndPage,
                           PROPSHEET_WizardSubclassProc, 1);
   }
-  else
-  {
-      RemoveWindowSubclass(psInfo->proppage[index].hwndPage, PROPSHEET_ThemedSubclassProc, 1);
-      brush = GetPropW(psInfo->proppage[index].hwndPage, PropSheetPageBackgroundBrush);
-      if (brush)
-      {
-          RemovePropW(psInfo->proppage[index].hwndPage, PropSheetPageBackgroundBrush);
-          if (GetObjectW(brush, sizeof(logbrush), &logbrush) == sizeof(logbrush))
-              DeleteObject((HBITMAP)logbrush.lbHatch);
-          DeleteObject(brush);
-      }
-  }
 
   /* Destroy page dialog window */
   DestroyWindow(psInfo->proppage[index].hwndPage);
@@ -2608,7 +2455,7 @@ static void PROPSHEET_SetWizButtons(HWND hwndDlg, DWORD dwFlags)
   HWND hwndFinish = GetDlgItem(hwndDlg, IDC_FINISH_BUTTON);
   BOOL enable_finish = ((dwFlags & PSWIZB_FINISH) || psInfo->hasFinish) && !(dwFlags & PSWIZB_DISABLEDFINISH);
 
-  TRACE("%d\n", dwFlags);
+  TRACE("%lx\n", dwFlags);
 
   EnableWindow(hwndBack, dwFlags & PSWIZB_BACK);
   EnableWindow(hwndNext, dwFlags & PSWIZB_NEXT);
@@ -2855,8 +2702,6 @@ static int PROPSHEET_GetPageIndex(HPROPSHEETPAGE page, const PropSheetInfo* psIn
  */
 static void PROPSHEET_CleanUp(HWND hwndDlg)
 {
-  LOGBRUSH logbrush;
-  HBRUSH brush;
   int i;
   PropSheetInfo* psInfo = RemovePropW(hwndDlg, PropSheetInfoStr);
 
@@ -2876,18 +2721,6 @@ static void PROPSHEET_CleanUp(HWND hwndDlg)
      {
         RemoveWindowSubclass(psInfo->proppage[i].hwndPage,
                              PROPSHEET_WizardSubclassProc, 1);
-     }
-     else
-     {
-         RemoveWindowSubclass(psInfo->proppage[i].hwndPage, PROPSHEET_ThemedSubclassProc, 1);
-         brush = GetPropW(psInfo->proppage[i].hwndPage, PropSheetPageBackgroundBrush);
-         if (brush)
-         {
-             RemovePropW(psInfo->proppage[i].hwndPage, PropSheetPageBackgroundBrush);
-             if (GetObjectW(brush, sizeof(logbrush), &logbrush) == sizeof(logbrush))
-                 DeleteObject((HBITMAP)logbrush.lbHatch);
-             DeleteObject(brush);
-         }
      }
 
      if(psInfo->proppage[i].hwndPage)
@@ -3608,8 +3441,7 @@ static LRESULT PROPSHEET_Paint(HWND hwnd, HDC hdcParam)
 static INT_PTR CALLBACK
 PROPSHEET_DialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-  TRACE("hwnd=%p msg=0x%04x wparam=%lx lparam=%lx\n",
-	hwnd, uMsg, wParam, lParam);
+  TRACE("hwnd %p, msg=0x%04x, wparam %Ix, lparam %Ix\n", hwnd, uMsg, wParam, lParam);
 
   switch (uMsg)
   {

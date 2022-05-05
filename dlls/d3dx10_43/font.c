@@ -66,7 +66,7 @@ static ULONG WINAPI d3dx_font_AddRef(ID3DX10Font *iface)
     struct d3dx_font *font = impl_from_ID3DX10Font(iface);
     ULONG refcount = InterlockedIncrement(&font->refcount);
 
-    TRACE("%p increasing refcount to %u.\n", iface, refcount);
+    TRACE("%p increasing refcount to %lu.\n", iface, refcount);
     return refcount;
 }
 
@@ -75,7 +75,7 @@ static ULONG WINAPI d3dx_font_Release(ID3DX10Font *iface)
     struct d3dx_font *font = impl_from_ID3DX10Font(iface);
     ULONG refcount = InterlockedDecrement(&font->refcount);
 
-    TRACE("%p decreasing refcount to %u.\n", iface, refcount);
+    TRACE("%p decreasing refcount to %lu.\n", iface, refcount);
 
     if (!refcount)
     {
@@ -310,7 +310,7 @@ static INT WINAPI d3dx_font_DrawTextA(ID3DX10Font *iface, ID3DX10Sprite *sprite,
 }
 
 static INT WINAPI d3dx_font_DrawTextW(ID3DX10Font *iface, ID3DX10Sprite *sprite,
-        const WCHAR *string, INT count, RECT *rect, DWORD format, D3DXCOLOR color)
+        const WCHAR *string, INT count, RECT *rect, UINT format, D3DXCOLOR color)
 {
     FIXME("iface %p, sprite %p, string %s, count %d, rect %s, format %#x, color {%.8e,%.8e,%.8e,%.8e} stub!\n",
             iface, sprite, debugstr_wn(string, count), count, wine_dbgstr_rect(rect),

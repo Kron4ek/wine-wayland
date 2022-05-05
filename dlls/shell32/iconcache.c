@@ -35,7 +35,6 @@
 #include "objbase.h"
 #include "pidl.h"
 #include "shell32_main.h"
-#include "undocshell.h"
 #include "shresdef.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(shell);
@@ -79,7 +78,7 @@ static INT CALLBACK SIC_CompareEntries( LPVOID p1, LPVOID p2, LPARAM lparam)
 {
         LPSIC_ENTRY e1 = p1, e2 = p2;
 
-	TRACE("%p %p %8lx\n", p1, p2, lparam);
+	TRACE("%p %p %8Ix\n", p1, p2, lparam);
 
 	/* Icons in the cache are keyed by the name of the file they are
 	 * loaded from, their resource index and the fact if they have a shortcut
@@ -296,7 +295,7 @@ static INT SIC_IconAppend (const WCHAR *sourcefile, INT src_index, HICON *hicons
     SIC_ENTRY *entry;
     unsigned int i;
 
-    TRACE("%s %i %p %#x\n", debugstr_w(sourcefile), src_index, hicons, flags);
+    TRACE("%s %i %p %#lx\n", debugstr_w(sourcefile), src_index, hicons, flags);
 
     entry = SHAlloc(sizeof(*entry));
 
@@ -337,9 +336,13 @@ static INT SIC_IconAppend (const WCHAR *sourcefile, INT src_index, HICON *hicons
 
 static BOOL get_imagelist_icon_size(int list, SIZE *size)
 {
+    int cx, cy;
     if (list < 0 || list >= ARRAY_SIZE(shell_imagelists)) return FALSE;
 
-    return ImageList_GetIconSize( shell_imagelists[list], &size->cx, &size->cy );
+    if (!ImageList_GetIconSize( shell_imagelists[list], &cx, &cy )) return FALSE;
+    size->cx = cx;
+    size->cy = cy;
+    return TRUE;
 }
 
 /****************************************************************************
@@ -358,8 +361,8 @@ static INT SIC_LoadIcon (const WCHAR *sourcefile, INT index, DWORD flags)
 
     for (i = 0; i < ARRAY_SIZE(hicons); i++)
     {
-        get_imagelist_icon_size( i, &size );
-        if (!PrivateExtractIconsW( sourcefile, index, size.cx, size.cy, &hicons[i], 0, 1, 0 ))
+        if (!get_imagelist_icon_size( i, &size ) ||
+            !PrivateExtractIconsW( sourcefile, index, size.cx, size.cy, &hicons[i], 0, 1, 0 ))
             WARN("Failed to load icon %d from %s.\n", index, debugstr_w(sourcefile));
         if (!hicons[i]) goto fail;
     }
@@ -449,7 +452,7 @@ static BOOL WINAPI SIC_Initialize( INIT_ONCE *once, void *param, void **context 
     sizes[SHIL_SYSSMALL].cy = GetSystemMetrics( SM_CYSMICON );
     sizes[SHIL_JUMBO].cx = sizes[SHIL_JUMBO].cy = 256;
 
-    TRACE("large %dx%d small %dx%d\n", sizes[SHIL_LARGE].cx, sizes[SHIL_LARGE].cy, sizes[SHIL_SMALL].cx, sizes[SHIL_SMALL].cy);
+    TRACE("large %ldx%ld small %ldx%ld\n", sizes[SHIL_LARGE].cx, sizes[SHIL_LARGE].cy, sizes[SHIL_SMALL].cx, sizes[SHIL_SMALL].cy);
 
     sic_hdpa = DPA_Create(16);
     if (!sic_hdpa)

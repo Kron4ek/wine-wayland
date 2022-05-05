@@ -1,4 +1,4 @@
-EXTRADEFS = -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI=
+EXTRADEFS = -DWINE_NO_LONG_TYPES -D_NTSYSTEM_ -D_ACRTIMP= -DWINBASEAPI=
 MODULE    = ntdll.dll
 UNIXLIB   = ntdll.so
 IMPORTLIB = ntdll
@@ -58,7 +58,6 @@ C_SRCS = \
 	unix/signal_arm64.c \
 	unix/signal_i386.c \
 	unix/signal_x86_64.c \
-	unix/esync.c \
 	unix/fsync.c \
 	unix/socket.c \
 	unix/sync.c \

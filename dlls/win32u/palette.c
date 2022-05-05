@@ -27,17 +27,8 @@
 #pragma makedep unix
 #endif
 
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "windef.h"
-#include "winbase.h"
-#include "winerror.h"
-#include "wingdi.h"
-#include "winuser.h"
-
 #include "ntgdi_private.h"
+#include "ntuser_private.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(palette);
@@ -517,12 +508,22 @@ static BOOL PALETTE_DeleteObject( HGDIOBJ handle )
  */
 HPALETTE WINAPI NtUserSelectPalette( HDC hdc, HPALETTE hpal, WORD bkg )
 {
+    BOOL is_primary = FALSE;
     HPALETTE ret = 0;
     DC *dc;
 
     TRACE("%p %p\n", hdc, hpal );
 
-    /* FIXME: move primary palette handling from user32 */
+    if (!bkg && hpal != get_stock_object( DEFAULT_PALETTE ))
+    {
+        HWND hwnd = NtUserWindowFromDC( hdc );
+        if (hwnd)
+        {
+            /* set primary palette if it's related to current active */
+            HWND foreground = NtUserGetForegroundWindow();
+            is_primary = foreground == hwnd || is_child( foreground, hwnd );
+        }
+    }
 
     if (get_gdi_object_type(hpal) != NTGDI_OBJ_PAL)
     {
@@ -533,7 +534,7 @@ HPALETTE WINAPI NtUserSelectPalette( HDC hdc, HPALETTE hpal, WORD bkg )
     {
         ret = dc->hPalette;
         dc->hPalette = hpal;
-        if (!bkg) hPrimaryPalette = hpal;
+        if (is_primary) hPrimaryPalette = hpal;
         release_dc_ptr( dc );
     }
     return ret;
@@ -545,6 +546,7 @@ HPALETTE WINAPI NtUserSelectPalette( HDC hdc, HPALETTE hpal, WORD bkg )
  */
 UINT realize_palette( HDC hdc )
 {
+    BOOL is_primary = FALSE;
     UINT realized = 0;
     DC* dc = get_dc_ptr( hdc );
 
@@ -568,18 +570,25 @@ UINT realize_palette( HDC hdc )
                                                         (dc->hPalette == hPrimaryPalette) );
             palPtr->unrealize = physdev->funcs->pUnrealizePalette;
             GDI_ReleaseObj( dc->hPalette );
+            is_primary = dc->hPalette == hPrimaryPalette;
         }
     }
     else TRACE("  skipping (hLastRealizedPalette = %p)\n", hLastRealizedPalette);
 
     release_dc_ptr( dc );
     TRACE("   realized %i colors.\n", realized );
+
+    /* do not send anything if no colors were changed */
+    if (realized && is_primary)
+    {
+        /* send palette change notification */
+        HWND hwnd = NtUserWindowFromDC( hdc );
+        if (hwnd) send_message_timeout( HWND_BROADCAST, WM_PALETTECHANGED, HandleToUlong(hwnd), 0,
+                                        SMTO_ABORTIFHUNG, 2000, NULL, FALSE );
+    }
     return realized;
 }
 
-
-typedef HWND (WINAPI *WindowFromDC_funcptr)( HDC );
-typedef BOOL (WINAPI *RedrawWindow_funcptr)( HWND, const RECT *, HRGN, UINT );
 
 /**********************************************************************
  *           NtGdiUpdateColors    (win32u.@)
@@ -592,14 +601,13 @@ BOOL WINAPI NtGdiUpdateColors( HDC hDC )
     HWND hwnd;
 
     if (!size) return FALSE;
-    if (!user_callbacks) return TRUE;
 
-    hwnd = user_callbacks->pWindowFromDC( hDC );
+    hwnd = NtUserWindowFromDC( hDC );
 
     /* Docs say that we have to remap current drawable pixel by pixel
      * but it would take forever given the speed of XGet/PutPixel.
      */
-    if (hwnd && size) user_callbacks->pRedrawWindow( hwnd, NULL, 0, RDW_INVALIDATE );
+    if (hwnd && size) NtUserRedrawWindow( hwnd, NULL, 0, RDW_INVALIDATE );
     return TRUE;
 }
 

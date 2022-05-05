@@ -693,7 +693,7 @@ static struct symt* codeview_add_type_array(struct codeview_type_parse* ctp,
     if (symt_get_info(ctp->module, elem, TI_GET_LENGTH, &elem_size) && elem_size)
     {
         if (arr_len % (DWORD)elem_size)
-            FIXME("array size should be a multiple of element size %u %u\n", arr_len, (DWORD)elem_size);
+            FIXME("array size should be a multiple of element size %u %I64u\n", arr_len, elem_size);
         count = arr_len / (unsigned)elem_size;
     }
     return &symt_new_array(ctp->module, 0, count, elem, index)->symt;
@@ -1465,7 +1465,7 @@ static void codeview_snarf_linetab(const struct msc_debug_info* msc_dbg, const B
                     /* FIXME: at least labels support line numbers */
                     if (!symt_check_tag(&func->symt, SymTagFunction) && !symt_check_tag(&func->symt, SymTagInlineSite))
                     {
-                        WARN("--not a func at %04x:%08x %lx tag=%d\n",
+                        WARN("--not a func at %04x:%08x %Ix tag=%d\n",
                              ltb->seg, ltb->offsets[k], addr, func ? func->symt.tag : -1);
                         func = NULL;
                         break;
@@ -1871,7 +1871,7 @@ static BOOL cv_dbgsubsect_find_inlinee(const struct msc_debug_info* msc_dbg,
             }
             break;
         default:
-            FIXME("Unknown signature %x in INLINEELINES subsection\n", *(DWORD*)CV_RECORD_AFTER(hdr));
+            FIXME("Unknown signature %lx in INLINEELINES subsection\n", *(DWORD*)CV_RECORD_AFTER(hdr));
             break;
         }
     }
@@ -2761,7 +2761,7 @@ static void* pdb_jg_read(const struct PDB_JG_HEADER* pdb, const WORD* block_list
     return buffer;
 }
 
-static void* pdb_ds_read(const struct PDB_DS_HEADER* pdb, const DWORD* block_list,
+static void* pdb_ds_read(const struct PDB_DS_HEADER* pdb, const UINT *block_list,
                          int size)
 {
     int                         i, num_blocks;
@@ -2797,7 +2797,7 @@ static void* pdb_read_jg_file(const struct PDB_JG_HEADER* pdb,
 static void* pdb_read_ds_file(const struct PDB_DS_HEADER* pdb,
                               const struct PDB_DS_TOC* toc, DWORD file_nr)
 {
-    const DWORD*                block_list;
+    const UINT *block_list;
     DWORD                       i;
 
     if (!toc || file_nr >= toc->num_files) return NULL;
@@ -3179,8 +3179,7 @@ static BOOL pdb_init(const struct pdb_lookup* pdb_lookup, struct pdb_file_info* 
         struct PDB_DS_ROOT*         root;
 
         pdb_file->u.ds.toc =
-            pdb_ds_read(pdb, 
-                        (const DWORD*)((const char*)pdb + pdb->toc_page * pdb->block_size), 
+            pdb_ds_read(pdb, (const UINT*)((const char*)pdb + pdb->toc_page * pdb->block_size),
                         pdb->toc_size);
         root = pdb_read_ds_file(pdb, pdb_file->u.ds.toc, 1);
         if (!root)
@@ -3193,7 +3192,7 @@ static BOOL pdb_init(const struct pdb_lookup* pdb_lookup, struct pdb_file_info* 
         case 20000404:
             break;
         default:
-            ERR("-Unknown root block version %d\n", root->Version);
+            ERR("-Unknown root block version %u\n", root->Version);
         }
         pdb_file->kind = PDB_DS;
         pdb_file->u.ds.guid = root->guid;
@@ -3359,7 +3358,7 @@ static BOOL pdb_process_internal(const struct process* pcs,
         case 19990903:
             break;
         default:
-            ERR("-Unknown symbol info version %d %08x\n",
+            ERR("-Unknown symbol info version %u %08x\n",
                 symbols.version, symbols.version);
         }
 
@@ -3377,7 +3376,7 @@ static BOOL pdb_process_internal(const struct process* pcs,
             pdb_file->fpoext_stream = psi->FPO_EXT;
             break;
         default:
-            FIXME("Unknown PDB_STREAM_INDEXES size (%d)\n", symbols.stream_index_size);
+            FIXME("Unknown PDB_STREAM_INDEXES size (%u)\n", symbols.stream_index_size);
             break;
         }
         files_image = pdb_read_strings(pdb_file);
@@ -3673,7 +3672,7 @@ static BOOL  pev_binop(struct pevaluator* pev, char op)
     case '%': c = v1 % v2; break;
     default: return PEV_ERROR1(pev, "binop: unknown op (%c)", op);
     }
-    snprintf(res, sizeof(res), "%ld", c);
+    snprintf(res, sizeof(res), "%Id", c);
     pev_push(pev, res);
     return TRUE;
 }
@@ -3686,8 +3685,8 @@ static BOOL  pev_deref(struct pevaluator* pev)
 
     if (!pev_pop_val(pev, &v1)) return FALSE;
     if (!sw_read_mem(pev->csw, v1, &v2, pev->csw->cpu->word_size))
-        return PEV_ERROR1(pev, "deref: cannot read mem at %lx\n", v1);
-    snprintf(res, sizeof(res), "%ld", v2);
+        return PEV_ERROR1(pev, "deref: cannot read mem at %Ix\n", v1);
+    snprintf(res, sizeof(res), "%Id", v2);
     pev_push(pev, res);
     return TRUE;
 }
@@ -3802,7 +3801,7 @@ BOOL pdb_virtual_unwind(struct cpu_stack_walk *csw, DWORD_PTR ip,
     if (!module_init_pair(&pair, csw->hProcess, ip)) return FALSE;
     if (!pair.effective->format_info[DFI_PDB]) return FALSE;
     pdb_info = pair.effective->format_info[DFI_PDB]->u.pdb_info;
-    TRACE("searching %lx => %lx\n", ip, ip - (DWORD_PTR)pair.effective->module.BaseOfImage);
+    TRACE("searching %Ix => %Ix\n", ip, ip - (DWORD_PTR)pair.effective->module.BaseOfImage);
     ip -= (DWORD_PTR)pair.effective->module.BaseOfImage;
 
     strbase = pdb_read_strings(&pdb_info->pdb_files[0]);
@@ -3961,7 +3960,7 @@ static BOOL codeview_process_info(const struct process* pcs,
         break;
     }
     default:
-        ERR("Unknown CODEVIEW signature %08x in module %s\n",
+        ERR("Unknown CODEVIEW signature %08lx in module %s\n",
             *signature, debugstr_w(msc_dbg->module->modulename));
         break;
     }

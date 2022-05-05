@@ -31,6 +31,7 @@
 #include "windef.h"
 #include "winbase.h"
 #include "ntgdi.h"
+#include "ntuser.h"
 #include "winuser.h"
 #include "winnls.h"
 #include "winreg.h"
@@ -864,7 +865,7 @@ static DWORD decode_surrogate_pair(const WCHAR *str, unsigned int index, unsigne
     if (index < end-1 && IS_SURROGATE_PAIR(str[index],str[index+1]))
     {
         DWORD ch = 0x10000 + ((str[index] - 0xd800) << 10) + (str[index+1] - 0xdc00);
-        TRACE("Surrogate Pair %x %x => %x\n",str[index], str[index+1], ch);
+        TRACE("Surrogate Pair %x %x => %lx\n",str[index], str[index+1], ch);
         return ch;
     }
     return 0;
@@ -1125,7 +1126,7 @@ HRESULT WINAPI ScriptRecordDigitSubstitution(LCID locale, SCRIPT_DIGITSUBSTITUTE
 {
     DWORD plgid, sub;
 
-    TRACE("0x%x, %p\n", locale, sds);
+    TRACE("0x%lx, %p\n", locale, sds);
 
     /* This implementation appears to be correct for all languages, but it's
      * not clear if sds->DigitSubstitute is ever set to anything except 
@@ -1908,7 +1909,7 @@ HRESULT WINAPI ScriptStringAnalyse(HDC hdc, const void *pString, int cString,
     BYTE   *BidiLevel;
     WCHAR *iString = NULL;
 
-    TRACE("(%p,%p,%d,%d,%d,0x%x,%d,%p,%p,%p,%p,%p,%p)\n",
+    TRACE("(%p,%p,%d,%d,%d,0x%lx,%d,%p,%p,%p,%p,%p,%p)\n",
           hdc, pString, cString, cGlyphs, iCharset, dwFlags, iReqWidth,
           psControl, psState, piDx, pTabdef, pbInClass, pssa);
 
@@ -2107,19 +2108,6 @@ static inline BOOL does_glyph_start_cluster(const SCRIPT_VISATTR *pva, const WOR
     return FALSE;
 }
 
-static DWORD get_sys_color(INT index)
-{
-    static DWORD (WINAPI *pGetSysColor)(INT index);
-
-    if (!pGetSysColor)
-    {
-        HMODULE user = GetModuleHandleW( L"user32.dll" );
-        if (user) pGetSysColor = (void *)GetProcAddress( user, "GetSysColor" );
-    }
-
-    return pGetSysColor(index);
-}
-
 static HRESULT SS_ItemOut( SCRIPT_STRING_ANALYSIS ssa,
                            int iX,
                            int iY,
@@ -2159,11 +2147,11 @@ static HRESULT SS_ItemOut( SCRIPT_STRING_ANALYSIS ssa,
         BkMode = GetBkMode(analysis->hdc);
         SetBkMode( analysis->hdc, OPAQUE);
         BkColor = GetBkColor(analysis->hdc);
-        SetBkColor(analysis->hdc, get_sys_color(COLOR_HIGHLIGHT));
+        SetBkColor(analysis->hdc, NtUserGetSysColor(COLOR_HIGHLIGHT));
         if (!fDisabled)
         {
             TextColor = GetTextColor(analysis->hdc);
-            SetTextColor(analysis->hdc, get_sys_color(COLOR_HIGHLIGHTTEXT));
+            SetTextColor(analysis->hdc, NtUserGetSysColor(COLOR_HIGHLIGHTTEXT));
         }
     }
     if (analysis->glyphs[iItem].fallbackFont)
@@ -2251,7 +2239,7 @@ static HRESULT SS_ItemOut( SCRIPT_STRING_ANALYSIS ssa,
                        &analysis->glyphs[iItem].piAdvance[iGlyph], NULL,
                        &analysis->glyphs[iItem].pGoffset[iGlyph]);
 
-    TRACE("ScriptTextOut hr=%08x\n", hr);
+    TRACE("ScriptTextOut hr=%08lx\n", hr);
 
     if (fSelected)
     {
@@ -3000,7 +2988,7 @@ HRESULT WINAPI ScriptIsComplex(const WCHAR *chars, int len, DWORD flag)
     enum usp10_script script;
     unsigned int i, consumed;
 
-    TRACE("(%s,%d,0x%x)\n", debugstr_wn(chars, len), len, flag);
+    TRACE("(%s,%d,0x%lx)\n", debugstr_wn(chars, len), len, flag);
 
     if (!chars || len < 0)
         return E_INVALIDARG;
@@ -3481,7 +3469,7 @@ HRESULT WINAPI ScriptGetCMap(HDC hdc, SCRIPT_CACHE *psc, const WCHAR *pwcInChars
     HRESULT hr;
     int i;
 
-    TRACE("(%p,%p,%s,%d,0x%x,%p)\n", hdc, psc, debugstr_wn(pwcInChars, cChars),
+    TRACE("(%p,%p,%s,%d,0x%lx,%p)\n", hdc, psc, debugstr_wn(pwcInChars, cChars),
           cChars, dwFlags, pwOutGlyphs);
 
     if ((hr = init_script_cache(hdc, psc)) != S_OK) return hr;

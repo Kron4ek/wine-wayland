@@ -117,6 +117,7 @@ static inline struct base_device *impl_from_unix_device(struct unix_device *ifac
 }
 
 #define QUIRK_DS4_BT 0x1
+#define QUIRK_DUALSENSE_BT 0x2
 
 struct hidraw_device
 {
@@ -295,7 +296,7 @@ static void hidraw_device_stop(struct unix_device *iface)
 }
 
 static NTSTATUS hidraw_device_get_report_descriptor(struct unix_device *iface, BYTE *buffer,
-                                                    DWORD length, DWORD *out_length)
+                                                    UINT length, UINT *out_length)
 {
 #ifdef HAVE_LINUX_HIDRAW_H
     struct hidraw_report_descriptor descriptor;
@@ -356,14 +357,65 @@ static void hidraw_device_read_report(struct unix_device *iface)
             buff[0] = 1;
         }
 
+        /* The behavior of DualSense is very similar to DS4 described above with a few exceptions.
+         *
+         * The report number #41 is used for the extended bluetooth input report. The report comes
+         * with only one extra byte in front and the format is not exactly the same as the one used
+         * for the report #1 so we need to shuffle a few bytes around.
+         *
+         * Basic #1 report:
+         *   X  Y  Z  RZ  Buttons[3]  TriggerLeft  TriggerRight
+         *
+         * Extended #41 report:
+         *   Prefix X  Y  Z  Rz  TriggerLeft  TriggerRight  Counter  Buttons[3] ...
+         */
+        if ((impl->quirks & QUIRK_DUALSENSE_BT) && report_buffer[0] == 0x31 && size >= 11)
+        {
+            BYTE trigger[2];
+            size = 10;
+            buff += 1;
+
+            buff[0] = 1; /* fake report #1 */
+
+            trigger[0] = buff[5]; /* TriggerLeft*/
+            trigger[1] = buff[6]; /* TriggerRight */
+
+            buff[5] = buff[8];    /* Buttons[0] */
+            buff[6] = buff[9];    /* Buttons[1] */
+            buff[7] = buff[10];   /* Buttons[2] */
+            buff[8] = trigger[0]; /* TriggerLeft */
+            buff[9] = trigger[1]; /* TirggerRight */
+        }
+
         bus_event_queue_input_report(&event_queue, iface, buff, size);
+    }
+}
+
+static void hidraw_disable_sony_quirks(struct unix_device *iface)
+{
+    struct hidraw_device *impl = hidraw_impl_from_unix_device(iface);
+
+    /* FIXME: we may want to validate CRC at the end of the outbound HID reports,
+     * as controllers do not switch modes if it is incorrect.
+     */
+
+    if ((impl->quirks & QUIRK_DS4_BT))
+    {
+        TRACE("Disabling report quirk for Bluetooth DualShock4 controller iface %p\n", iface);
+        impl->quirks &= ~QUIRK_DS4_BT;
+    }
+
+    if ((impl->quirks & QUIRK_DUALSENSE_BT))
+    {
+        TRACE("Disabling report quirk for Bluetooth DualSense controller iface %p\n", iface);
+        impl->quirks &= ~QUIRK_DUALSENSE_BT;
     }
 }
 
 static void hidraw_device_set_output_report(struct unix_device *iface, HID_XFER_PACKET *packet, IO_STATUS_BLOCK *io)
 {
     struct hidraw_device *impl = hidraw_impl_from_unix_device(iface);
-    ULONG length = packet->reportBufferLen;
+    unsigned int length = packet->reportBufferLen;
     BYTE buffer[8192];
     int count = 0;
 
@@ -379,6 +431,7 @@ static void hidraw_device_set_output_report(struct unix_device *iface, HID_XFER_
 
     if (count > 0)
     {
+        hidraw_disable_sony_quirks(iface);
         io->Information = count;
         io->Status = STATUS_SUCCESS;
     }
@@ -395,7 +448,7 @@ static void hidraw_device_get_feature_report(struct unix_device *iface, HID_XFER
 {
 #if defined(HAVE_LINUX_HIDRAW_H) && defined(HIDIOCGFEATURE)
     struct hidraw_device *impl = hidraw_impl_from_unix_device(iface);
-    ULONG length = packet->reportBufferLen;
+    unsigned int length = packet->reportBufferLen;
     BYTE buffer[8192];
     int count = 0;
 
@@ -411,6 +464,7 @@ static void hidraw_device_get_feature_report(struct unix_device *iface, HID_XFER
 
     if (count > 0)
     {
+        hidraw_disable_sony_quirks(iface);
         io->Information = count;
         io->Status = STATUS_SUCCESS;
     }
@@ -431,7 +485,7 @@ static void hidraw_device_set_feature_report(struct unix_device *iface, HID_XFER
 {
 #if defined(HAVE_LINUX_HIDRAW_H) && defined(HIDIOCSFEATURE)
     struct hidraw_device *impl = hidraw_impl_from_unix_device(iface);
-    ULONG length = packet->reportBufferLen;
+    unsigned int length = packet->reportBufferLen;
     BYTE buffer[8192];
     int count = 0;
 
@@ -447,6 +501,7 @@ static void hidraw_device_set_feature_report(struct unix_device *iface, HID_XFER
 
     if (count > 0)
     {
+        hidraw_disable_sony_quirks(iface);
         io->Information = count;
         io->Status = STATUS_SUCCESS;
     }
@@ -500,16 +555,16 @@ static struct base_device *find_device_from_syspath(const char *path)
 
 #define test_bit(arr,bit) (((BYTE*)(arr))[(bit)>>3]&(1<<((bit)&7)))
 
-static const BYTE* what_am_I(struct udev_device *dev)
+static const USAGE_AND_PAGE *what_am_I(struct udev_device *dev, int fd)
 {
-    static const BYTE Unknown[2]     = {HID_USAGE_PAGE_GENERIC, 0};
-    static const BYTE Mouse[2]       = {HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_MOUSE};
-    static const BYTE Keyboard[2]    = {HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYBOARD};
-    static const BYTE Gamepad[2]     = {HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_GAMEPAD};
-    static const BYTE Keypad[2]      = {HID_USAGE_PAGE_GENERIC, HID_USAGE_GENERIC_KEYPAD};
-    static const BYTE Tablet[2]      = {HID_USAGE_PAGE_DIGITIZER, HID_USAGE_DIGITIZER_PEN};
-    static const BYTE Touchscreen[2] = {HID_USAGE_PAGE_DIGITIZER, HID_USAGE_DIGITIZER_TOUCH_SCREEN};
-    static const BYTE Touchpad[2]    = {HID_USAGE_PAGE_DIGITIZER, HID_USAGE_DIGITIZER_TOUCH_PAD};
+    static const USAGE_AND_PAGE Unknown     = {.UsagePage = HID_USAGE_PAGE_GENERIC, .Usage = 0};
+    static const USAGE_AND_PAGE Mouse       = {.UsagePage = HID_USAGE_PAGE_GENERIC, .Usage = HID_USAGE_GENERIC_MOUSE};
+    static const USAGE_AND_PAGE Keyboard    = {.UsagePage = HID_USAGE_PAGE_GENERIC, .Usage = HID_USAGE_GENERIC_KEYBOARD};
+    static const USAGE_AND_PAGE Gamepad     = {.UsagePage = HID_USAGE_PAGE_GENERIC, .Usage = HID_USAGE_GENERIC_GAMEPAD};
+    static const USAGE_AND_PAGE Keypad      = {.UsagePage = HID_USAGE_PAGE_GENERIC, .Usage = HID_USAGE_GENERIC_KEYPAD};
+    static const USAGE_AND_PAGE Tablet      = {.UsagePage = HID_USAGE_PAGE_DIGITIZER, .Usage = HID_USAGE_DIGITIZER_PEN};
+    static const USAGE_AND_PAGE Touchscreen = {.UsagePage = HID_USAGE_PAGE_DIGITIZER, .Usage = HID_USAGE_DIGITIZER_TOUCH_SCREEN};
+    static const USAGE_AND_PAGE Touchpad    = {.UsagePage = HID_USAGE_PAGE_DIGITIZER, .Usage = HID_USAGE_DIGITIZER_TOUCH_PAD};
 
     struct udev_device *parent = dev;
 
@@ -517,23 +572,24 @@ static const BYTE* what_am_I(struct udev_device *dev)
     while (parent)
     {
         if (udev_device_get_property_value(parent, "ID_INPUT_MOUSE"))
-            return Mouse;
+            return &Mouse;
         else if (udev_device_get_property_value(parent, "ID_INPUT_KEYBOARD"))
-            return Keyboard;
+            return &Keyboard;
         else if (udev_device_get_property_value(parent, "ID_INPUT_JOYSTICK"))
-            return Gamepad;
+            return &Gamepad;
         else if (udev_device_get_property_value(parent, "ID_INPUT_KEY"))
-            return Keypad;
+            return &Keypad;
         else if (udev_device_get_property_value(parent, "ID_INPUT_TOUCHPAD"))
-            return Touchpad;
+            return &Touchpad;
         else if (udev_device_get_property_value(parent, "ID_INPUT_TOUCHSCREEN"))
-            return Touchscreen;
+            return &Touchscreen;
         else if (udev_device_get_property_value(parent, "ID_INPUT_TABLET"))
-            return Tablet;
+            return &Tablet;
 
         parent = udev_device_get_parent_with_subsystem_devtype(parent, "input", NULL);
     }
-    return Unknown;
+
+    return &Unknown;
 }
 
 static INT count_buttons(int device_fd, BYTE *map)
@@ -587,8 +643,8 @@ static NTSTATUS build_report_descriptor(struct unix_device *iface, struct udev_d
     USHORT count = 0;
     USAGE usages[16];
     INT i, button_count, abs_count, rel_count, hat_count;
-    const BYTE *device_usage = what_am_I(dev);
     struct lnxev_device *impl = lnxev_impl_from_unix_device(iface);
+    const USAGE_AND_PAGE device_usage = *what_am_I(dev, impl->base.device_fd);
 
     if (ioctl(impl->base.device_fd, EVIOCGBIT(EV_REL, sizeof(relbits)), relbits) == -1)
     {
@@ -606,10 +662,10 @@ static NTSTATUS build_report_descriptor(struct unix_device *iface, struct udev_d
         memset(ffbits, 0, sizeof(ffbits));
     }
 
-    if (!hid_device_begin_report_descriptor(iface, device_usage[0], device_usage[1]))
+    if (!hid_device_begin_report_descriptor(iface, &device_usage))
         return STATUS_NO_MEMORY;
 
-    if (!hid_device_begin_input_report(iface))
+    if (!hid_device_begin_input_report(iface, &device_usage))
         return STATUS_NO_MEMORY;
 
     abs_count = 0;
@@ -810,8 +866,9 @@ static void lnxev_device_read_report(struct unix_device *iface)
         bus_event_queue_input_report(&event_queue, iface, state->report_buf, state->report_len);
 }
 
-static NTSTATUS lnxev_device_haptics_start(struct unix_device *iface, DWORD duration_ms,
-                                           USHORT rumble_intensity, USHORT buzz_intensity)
+static NTSTATUS lnxev_device_haptics_start(struct unix_device *iface, UINT duration_ms,
+                                           USHORT rumble_intensity, USHORT buzz_intensity,
+                                           USHORT left_intensity, USHORT right_intensity)
 {
     struct lnxev_device *impl = lnxev_impl_from_unix_device(iface);
     struct ff_effect effect =
@@ -821,8 +878,8 @@ static NTSTATUS lnxev_device_haptics_start(struct unix_device *iface, DWORD dura
     };
     struct input_event event;
 
-    TRACE("iface %p, duration_ms %u, rumble_intensity %u, buzz_intensity %u.\n", iface,
-          duration_ms, rumble_intensity, buzz_intensity);
+    TRACE("iface %p, duration_ms %u, rumble_intensity %u, buzz_intensity %u, left_intensity %u, right_intensity %u.\n",
+          iface, duration_ms, rumble_intensity, buzz_intensity, left_intensity, right_intensity);
 
     effect.replay.length = duration_ms;
     effect.u.rumble.strong_magnitude = rumble_intensity;
@@ -847,6 +904,29 @@ static NTSTATUS lnxev_device_haptics_start(struct unix_device *iface, DWORD dura
         WARN("couldn't start haptics rumble effect: %d %s\n", errno, strerror(errno));
         return STATUS_UNSUCCESSFUL;
     }
+
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS lnxev_device_haptics_stop(struct unix_device *iface)
+{
+    struct lnxev_device *impl = lnxev_impl_from_unix_device(iface);
+    struct ff_effect effect =
+    {
+        .id = impl->haptic_effect_id,
+        .type = FF_RUMBLE,
+    };
+    struct input_event event;
+
+    TRACE("iface %p.\n", iface);
+
+    if (effect.id == -1) return STATUS_SUCCESS;
+
+    event.type = EV_FF;
+    event.code = effect.id;
+    event.value = 0;
+    if (write(impl->base.device_fd, &event, sizeof(event)) == -1)
+        WARN("couldn't stop haptics rumble effect: %d %s\n", errno, strerror(errno));
 
     return STATUS_SUCCESS;
 }
@@ -1130,6 +1210,7 @@ static const struct hid_device_vtbl lnxev_device_vtbl =
     lnxev_device_start,
     lnxev_device_stop,
     lnxev_device_haptics_start,
+    lnxev_device_haptics_stop,
     lnxev_device_physical_device_control,
     lnxev_device_physical_device_set_gain,
     lnxev_device_physical_effect_control,
@@ -1201,6 +1282,9 @@ static void hidraw_set_quirks(struct hidraw_device *impl, DWORD bus_type, WORD v
 {
     if (bus_type == BUS_BLUETOOTH && is_dualshock4_gamepad(vid, pid))
         impl->quirks |= QUIRK_DS4_BT;
+
+    if (bus_type == BUS_BLUETOOTH && is_dualsense_gamepad(vid, pid))
+        impl->quirks |= QUIRK_DUALSENSE_BT;
 }
 
 static void udev_add_device(struct udev_device *dev, int fd)

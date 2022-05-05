@@ -62,7 +62,7 @@ static void set_entry_point( HMODULE module, const char *name, DWORD rva )
                 WORD ordinal = ordinals[pos];
                 DWORD oldprot;
 
-                TRACE( "setting %s at %p to %08x\n", name, &functions[ordinal], rva );
+                TRACE( "setting %s at %p to %08lx\n", name, &functions[ordinal], rva );
                 VirtualProtect( functions + ordinal, sizeof(*functions), PAGE_READWRITE, &oldprot );
                 functions[ordinal] = rva;
                 VirtualProtect( functions + ordinal, sizeof(*functions), oldprot, &oldprot );
@@ -123,6 +123,7 @@ static BOOL process_attach( HMODULE module )
     RtlSetUnhandledExceptionFilter( UnhandledExceptionFilter );
 
     NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
+    kernelbase_global_data = KernelBaseGetGlobalData();
 
     copy_startup_info();
 

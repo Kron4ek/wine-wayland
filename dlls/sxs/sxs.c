@@ -19,11 +19,11 @@
  */
 
 #include <stdarg.h>
+#include <stdlib.h>
 
 #include "windef.h"
 #include "winbase.h"
 
-#include "wine/heap.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(sxs);
@@ -104,7 +104,7 @@ BOOL WINAPI SxsLookupClrGuid(DWORD flags, GUID *clsid, HANDLE actctx, void *buff
     char *ret_strings;
     ULONG_PTR cookie;
 
-    TRACE("%#x, %s, %p, %p, %lx, %p.\n", flags, wine_dbgstr_guid(clsid), actctx,
+    TRACE("%#lx, %s, %p, %p, %Ix, %p.\n", flags, wine_dbgstr_guid(clsid), actctx,
           buffer, buffer_len, buffer_len_required);
 
     if (flags & SXS_LOOKUP_CLR_GUID_USE_ACTCTX)
@@ -147,7 +147,7 @@ BOOL WINAPI SxsLookupClrGuid(DWORD flags, GUID *clsid, HANDLE actctx, void *buff
         goto out;
     }
 
-    assembly_info = heap_alloc(bytes_assembly_info);
+    assembly_info = malloc(bytes_assembly_info);
     if (!(retval = QueryActCtxW(0, guid_info.hActCtx, &guid_info.ulAssemblyRosterIndex,
             AssemblyDetailedInformationInActivationContext, assembly_info,
             bytes_assembly_info, &bytes_assembly_info)))
@@ -219,6 +219,6 @@ out:
     if (flags & SXS_LOOKUP_CLR_GUID_USE_ACTCTX)
         DeactivateActCtx(0, cookie);
 
-    heap_free(assembly_info);
+    free(assembly_info);
     return retval;
 }

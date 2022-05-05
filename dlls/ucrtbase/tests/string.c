@@ -66,7 +66,7 @@ static void __cdecl test_invalid_parameter_handler(const wchar_t *expression,
     ok(function == NULL, "function is not NULL\n");
     ok(file == NULL, "file is not NULL\n");
     ok(line == 0, "line = %u\n", line);
-    ok(arg == 0, "arg = %lx\n", (UINT_PTR)arg);
+    ok(arg == 0, "arg = %Ix\n", arg);
 }
 
 _ACRTIMP int __cdecl _o_tolower(int);
@@ -491,6 +491,20 @@ static void test__strnicmp(void)
     ok(!ret, "got %d.\n", ret);
 }
 
+static void test_wcsnicmp(void)
+{
+    static const wchar_t str1[] = L"TEST";
+    static const wchar_t str2[] = L"test";
+    int ret;
+
+    errno = 0xdeadbeef;
+    ret = wcsnicmp(str1, str2, -1);
+    ok(!ret, "got %d.\n", ret);
+
+    ret = wcsnicmp(str1, str2, 0x7fffffff);
+    ok(!ret, "got %d.\n", ret);
+}
+
 static void test_SpecialCasing(void)
 {
     int i;
@@ -602,6 +616,7 @@ START_TEST(string)
     test_mbsspn();
     test_wcstok();
     test__strnicmp();
+    test_wcsnicmp();
     test_SpecialCasing();
     test__mbbtype_l();
 }

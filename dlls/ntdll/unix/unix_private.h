@@ -57,9 +57,7 @@ struct ntdll_thread_data
     int                reply_fd;      /* fd for receiving server replies */
     int                wait_fd[2];    /* fd for sleeping server requests */
     pthread_t          pthread_id;    /* pthread thread id */
-    int                esync_queue_fd;/* fd to wait on for driver events */
-    int                esync_apc_fd;  /* fd to wait on for user APCs */
-    int               *fsync_apc_futex;
+    int                *fsync_apc_futex;/* fd to wait on for driver events */
     struct list        entry;         /* entry in TEB list */
     PRTL_THREAD_START_ROUTINE start;  /* thread entry point */
     void              *param;         /* thread entry point parameter */
@@ -87,7 +85,7 @@ static const SIZE_T page_size = 0x1000;
 static const SIZE_T teb_size = 0x3800;  /* TEB64 + TEB32 + debug info */
 static const SIZE_T signal_stack_mask = 0xffff;
 static const SIZE_T signal_stack_size = 0x10000 - 0x3800;
-static const SIZE_T kernel_stack_size = 0x20000;
+static const SIZE_T kernel_stack_size = 0x100000;
 static const SIZE_T min_kernel_stack  = 0x2000;
 static const LONG teb_offset = 0x2000;
 
@@ -177,7 +175,6 @@ extern size_t server_init_process(void) DECLSPEC_HIDDEN;
 extern void server_init_process_done(void) DECLSPEC_HIDDEN;
 extern void server_init_thread( void *entry_point, BOOL *suspend ) DECLSPEC_HIDDEN;
 extern int server_pipe( int fd[2] ) DECLSPEC_HIDDEN;
-extern int receive_fd( obj_handle_t *handle ) DECLSPEC_HIDDEN;
 
 extern void fpux_to_fpu( I386_FLOATING_SAVE_AREA *fpu, const XSAVE_FORMAT *fpux ) DECLSPEC_HIDDEN;
 extern void fpu_to_fpux( XSAVE_FORMAT *fpux, const I386_FLOATING_SAVE_AREA *fpu ) DECLSPEC_HIDDEN;
@@ -278,6 +275,7 @@ extern NTSTATUS get_device_info( int fd, struct _FILE_FS_DEVICE_INFORMATION *inf
 extern void init_files(void) DECLSPEC_HIDDEN;
 extern void init_cpu_info(void) DECLSPEC_HIDDEN;
 extern void add_completion( HANDLE handle, ULONG_PTR value, NTSTATUS status, ULONG info, BOOL async ) DECLSPEC_HIDDEN;
+extern void set_async_direct_result( HANDLE *optional_handle, NTSTATUS status, ULONG_PTR information, BOOL mark_pending );
 
 extern void dbg_init(void) DECLSPEC_HIDDEN;
 
@@ -396,11 +394,15 @@ static inline client_ptr_t iosb_client_ptr( IO_STATUS_BLOCK *io )
 
 #ifdef _WIN64
 typedef TEB32 WOW_TEB;
+typedef PEB32 WOW_PEB;
 static inline TEB64 *NtCurrentTeb64(void) { return NULL; }
 #else
 typedef TEB64 WOW_TEB;
+typedef PEB64 WOW_PEB;
 static inline TEB64 *NtCurrentTeb64(void) { return (TEB64 *)NtCurrentTeb()->GdiBatchCount; }
 #endif
+
+extern WOW_PEB *wow_peb DECLSPEC_HIDDEN;
 
 static inline WOW_TEB *get_wow_teb( TEB *teb )
 {
@@ -447,6 +449,14 @@ static inline void init_unicode_string( UNICODE_STRING *str, const WCHAR *data )
     str->Length = wcslen(data) * sizeof(WCHAR);
     str->MaximumLength = str->Length + sizeof(WCHAR);
     str->Buffer = (WCHAR *)data;
+}
+
+static inline NTSTATUS map_section( HANDLE mapping, void **ptr, SIZE_T *size, ULONG protect )
+{
+    *ptr = NULL;
+    *size = 0;
+    return NtMapViewOfSection( mapping, NtCurrentProcess(), ptr, is_win64 && wow_peb ? 0x7fffffff : 0,
+                               0, NULL, size, ViewShare, 0, protect );
 }
 
 #endif /* __NTDLL_UNIX_PRIVATE_H */

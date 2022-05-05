@@ -386,7 +386,7 @@ static void fill_surface(IDirectDrawSurface *surface, D3DCOLOR color)
     ok(SUCCEEDED(hr), "Failed to unlock surface, hr %#x.\n", hr);
 }
 
-static void check_rect(IDirectDrawSurface *surface, RECT r, const char *message)
+static void check_rect(IDirectDrawSurface *surface, RECT r)
 {
     LONG x_coords[2][2] =
     {
@@ -417,8 +417,7 @@ static void check_rect(IDirectDrawSurface *surface, RECT r, const char *message)
                     if (x < 0 || x >= 640 || y < 0 || y >= 480)
                         continue;
                     color = get_surface_color(surface, x, y);
-                    ok(color == expected, "%s: Pixel (%d, %d) has color %08x, expected %08x\n",
-                            message, x, y, color, expected);
+                    ok(color == expected, "Pixel (%d, %d) has color %08x, expected %08x.\n", x, y, color, expected);
                 }
             }
         }
@@ -2067,7 +2066,11 @@ static void test_ck_default(void)
     hr = IDirect3DDevice_EndScene(device);
     ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
     color = get_surface_color(rt, 320, 240);
-    ok(compare_color(color, 0x0000ff00, 1), "Got unexpected color 0x%08x.\n", color);
+    /* Color keying is supposed to be on by default in ddraw1, but used only if a ckey is set.
+     * WARP begs to differ. The default of D3DRENDERSTATE_COLORKEYENABLE is random, and it
+     * doesn't mind the absence of a color key (the latter part affects other tests, not this one). */
+    ok(compare_color(color, 0x0000ff00, 1) || broken(ddraw_is_warp(ddraw) && compare_color(color, 0x000000ff, 1)),
+            "Got unexpected color 0x%08x.\n", color);
 
     hr = IDirect3DViewport_Clear(viewport, 1, &clear_rect, D3DCLEAR_TARGET);
     ok(SUCCEEDED(hr), "Failed to clear viewport, hr %#x.\n", hr);
@@ -2585,14 +2588,16 @@ static void test_window_style(void)
 {
     LONG style, exstyle, tmp, expected_style;
     RECT fullscreen_rect, r;
+    HWND window, window2;
     IDirectDraw *ddraw;
-    HWND window;
     HRESULT hr;
     ULONG ref;
     BOOL ret;
 
     window = CreateWindowA("static", "ddraw_test", WS_OVERLAPPEDWINDOW,
             0, 0, 100, 100, 0, 0, 0, 0);
+    window2 = CreateWindowA("static", "ddraw_test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            0, 0, 50, 50, 0, 0, 0, 0);
     ddraw = create_ddraw();
     ok(!!ddraw, "Failed to create a ddraw object.\n");
 
@@ -2636,6 +2641,133 @@ static void test_window_style(void)
     tmp = GetWindowLongA(window, GWL_EXSTYLE);
     ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
 
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN | DDSCL_NOWINDOWCHANGES);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    todo_wine ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    todo_wine ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL | DDSCL_NOWINDOWCHANGES);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ret = SetForegroundWindow(window);
+    ok(ret, "Failed to set foreground window.\n");
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    ShowWindow(window, SW_SHOW);
+    ret = SetForegroundWindow(GetDesktopWindow());
+    ok(ret, "Failed to set foreground window.\n");
+    SetActiveWindow(window);
+    ok(GetActiveWindow() == window, "Unexpected active window.\n");
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    GetWindowRect(window, &r);
+    ok(EqualRect(&r, &fullscreen_rect), "Expected %s, got %s.\n",
+            wine_dbgstr_rect(&fullscreen_rect), wine_dbgstr_rect(&r));
+
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    SetWindowPos(window, NULL, 0, 0, 100, 100, SWP_NOZORDER | SWP_NOACTIVATE);
+    GetWindowRect(window, &r);
+    ok(!EqualRect(&r, &fullscreen_rect), "Window resize failed? got %s.\n",
+            wine_dbgstr_rect(&r));
+
+    ret = SetForegroundWindow(window2);
+    ok(ret, "Failed to set foreground window.\n");
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    todo_wine ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
+    GetWindowRect(window, &r);
+    ok(EqualRect(&r, &fullscreen_rect), "Expected %s, got %s.\n",
+            wine_dbgstr_rect(&fullscreen_rect), wine_dbgstr_rect(&r));
+
+    ret = SetForegroundWindow(window);
+    ok(ret, "Failed to set foreground window.\n");
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    expected_style = style | WS_VISIBLE;
+    todo_wine ok(tmp == expected_style, "Expected window style %#x, got %#x.\n", expected_style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    expected_style = exstyle | WS_EX_TOPMOST;
+    todo_wine ok(tmp == expected_style, "Expected window extended style %#x, got %#x.\n", expected_style, tmp);
+
+    ShowWindow(window, SW_HIDE);
+    hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
+
+    tmp = GetWindowLongA(window, GWL_STYLE);
+    ok(tmp == style, "Expected window style %#x, got %#x.\n", style, tmp);
+    tmp = GetWindowLongA(window, GWL_EXSTYLE);
+    ok(tmp == exstyle, "Expected window extended style %#x, got %#x.\n", exstyle, tmp);
+
     ShowWindow(window, SW_SHOW);
     hr = IDirectDraw_SetCooperativeLevel(ddraw, window, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN);
     ok(SUCCEEDED(hr), "SetCooperativeLevel failed, hr %#x.\n", hr);
@@ -2659,6 +2791,7 @@ static void test_window_style(void)
     ref = IDirectDraw_Release(ddraw);
     ok(ref == 0, "The ddraw object was not properly freed: refcount %u.\n", ref);
 
+    DestroyWindow(window2);
     DestroyWindow(window);
 }
 
@@ -8256,6 +8389,20 @@ static void test_texturemapblend(void)
     emit_set_rs(&ptr, D3DRENDERSTATE_TEXTUREMAPBLEND, D3DTBLEND_MODULATE);
     emit_set_rs(&ptr, D3DRENDERSTATE_TEXTUREHANDLE, texture_handle);
 
+    /* SPECULARENABLE shouldn't matter in this test, but WARP begs to
+     * differ. In the event that color keying is randomly on (see comments
+     * in test_ck_default for reference), WARP will randomly discard
+     * fragments based on something, even though texture and diffuse color
+     * alpha components are non-zero. Setting SPECULARENABLE to FALSE
+     * prevents this in some cases - presumably WARP multiplies the
+     * specular color "alpha" channel into the final result and then
+     * alpha tests the result. Since the specular property normally does
+     * not have an alpha component the actual specular color we set in
+     * the vertex data above does not matter. Setting FOGENABLE = FALSE
+     * does not help either (specular alpha can contain a per-vertex fog
+     * factor. Doesn't seem to matter here). */
+    emit_set_rs(&ptr, D3DRENDERSTATE_SPECULARENABLE, FALSE);
+
     emit_tquad(&ptr, 0);
     emit_tquad(&ptr, 4);
     emit_end(&ptr);
@@ -8273,6 +8420,7 @@ static void test_texturemapblend(void)
     hr = IDirect3DDevice_EndScene(device);
     ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
 
+    /* The above SPECULARENABLE = FALSE on WARP matters here.*/
     color = get_surface_color(rt, 5, 5);
     ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
     color = get_surface_color(rt, 400, 5);
@@ -8342,14 +8490,25 @@ static void test_texturemapblend(void)
     hr = IDirect3DDevice_EndScene(device);
     ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
 
+    /* Despite our best efforts at not making color keying randomly triggering, those
+     * four broken() results occur every now and then on WARP. Presumably the non-
+     * existent alpha channel sometimes samples 0.0 instead of the expected 1.0. */
     color = get_surface_color(rt, 5, 5);
-    ok(compare_color(color, 0x000000ff, 2), "Got unexpected color 0x%08x.\n", color);
+    ok(compare_color(color, 0x000000ff, 2)
+            || broken(ddraw_is_warp(ddraw) && compare_color(color, 0x00000000, 2)),
+            "Got unexpected color 0x%08x.\n", color);
     color = get_surface_color(rt, 400, 5);
-    ok(compare_color(color, 0x000000ff, 2), "Got unexpected color 0x%08x.\n", color);
+    ok(compare_color(color, 0x000000ff, 2)
+            || broken(ddraw_is_warp(ddraw) && compare_color(color, 0x00000000, 2)),
+            "Got unexpected color 0x%08x.\n", color);
     color = get_surface_color(rt, 5, 245);
-    ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
+    ok(compare_color(color, 0x00000080, 2)
+            || broken(ddraw_is_warp(ddraw) && compare_color(color, 0x00000000, 2)),
+            "Got unexpected color 0x%08x.\n", color);
     color = get_surface_color(rt, 400, 245);
-    ok(compare_color(color, 0x00000080, 2), "Got unexpected color 0x%08x.\n", color);
+    ok(compare_color(color, 0x00000080, 2)
+            || broken(ddraw_is_warp(ddraw) && compare_color(color, 0x00000000, 2)),
+            "Got unexpected color 0x%08x.\n", color);
 
     IDirect3DTexture_Release(texture);
     ref = IDirectDrawSurface_Release(surface);
@@ -11742,6 +11901,8 @@ static void test_texture_load(void)
     emit_process_vertices(&ptr, D3DPROCESSVERTICES_COPY, 0, 4);
     emit_texture_load(&ptr, dst_texture_handle, src_texture_handle);
     emit_set_rs(&ptr, D3DRENDERSTATE_TEXTUREHANDLE, dst_texture_handle);
+    /* WARP randomly applies color keying without having a key set. */
+    emit_set_rs(&ptr, D3DRENDERSTATE_COLORKEYENABLE, FALSE);
     emit_tquad(&ptr, 0);
     emit_end(&ptr);
     inst_length = (BYTE *)ptr - (BYTE *)exec_desc.lpData - sizeof(tquad);
@@ -13112,11 +13273,13 @@ static void test_viewport(void)
 
     for (j = 0; j < ARRAY_SIZE(tests); ++j)
     {
+        winetest_push_context(tests[j].message);
+
         hr = IDirect3DViewport_Clear(full_viewport, 1, &clear_rect, D3DCLEAR_TARGET);
-        ok(SUCCEEDED(hr), "Failed to clear viewport, hr %#x (j %u).\n", hr, j);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
         hr = IDirect3D_CreateViewport(d3d, &viewport, NULL);
-        ok(SUCCEEDED(hr), "Failed to create viewport, hr %#x (j %u).\n", hr, j);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
         memset(&vp, 0, sizeof(vp));
         vp.dwSize = sizeof(vp);
         vp.dwX = tests[j].vp.dwX;
@@ -13130,26 +13293,27 @@ static void test_viewport(void)
         vp.dvMinZ = 0.0f;
         vp.dvMaxZ = 1.0f;
         hr = IDirect3DViewport_SetViewport(viewport, &vp);
-        ok(hr == D3DERR_VIEWPORTHASNODEVICE,
-                "Setting viewport data returned unexpected hr %#x (j %u).\n", hr, j);
+        ok(hr == D3DERR_VIEWPORTHASNODEVICE, "Got unexpected hr %#x.\n", hr);
         hr = IDirect3DDevice_AddViewport(device, viewport);
-        ok(SUCCEEDED(hr), "Failed to add viewport, hr %#x (j %u).\n", hr, j);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
         hr = IDirect3DViewport_SetViewport(viewport, &vp);
-        ok(SUCCEEDED(hr), "Failed to set viewport data, hr %#x (j %u).\n", hr, j);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
         hr = IDirect3DDevice_BeginScene(device);
-        ok(SUCCEEDED(hr), "Failed to begin scene, hr %#x (j %u).\n", hr, j);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
         set_execute_data(execute_buffer, 4, sizeof(quad), inst_length);
         hr = IDirect3DDevice_Execute(device, execute_buffer, viewport, D3DEXECUTE_CLIPPED);
-        ok(SUCCEEDED(hr), "Failed to execute exec buffer, hr %#x (j %u).\n", hr, j);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
         hr = IDirect3DDevice_EndScene(device);
-        ok(SUCCEEDED(hr), "Failed to end scene, hr %#x (j %u).\n", hr, j);
+        ok(hr == DD_OK, "Got unexpected hr %#x.\n", hr);
 
-        check_rect(rt, tests[j].expected_rect, tests[j].message);
+        check_rect(rt, tests[j].expected_rect);
 
         destroy_viewport(device, viewport);
+
+        winetest_pop_context();
     }
 
     destroy_viewport(device, full_viewport);

@@ -360,8 +360,6 @@ jboolean motion_event( JNIEnv *env, jobject obj, jint win, jint action, jint x, 
 }
 
 
-extern void __wine_esync_set_queue_fd( int fd );
-
 /***********************************************************************
  *           init_event_queue
  */
@@ -375,7 +373,6 @@ static void init_event_queue(void)
         ERR( "could not create data\n" );
         ExitProcess(1);
     }
-    __wine_esync_set_queue_fd( event_pipe[0] );
     if (wine_server_fd_to_handle( event_pipe[0], GENERIC_READ | SYNCHRONIZE, 0, &handle ))
     {
         ERR( "Can't allocate handle for event fd\n" );
@@ -655,7 +652,7 @@ static void apply_line_region( DWORD *dst, int width, int x, int y, const RECT *
 /***********************************************************************
  *           android_surface_lock
  */
-static void CDECL android_surface_lock( struct window_surface *window_surface )
+static void android_surface_lock( struct window_surface *window_surface )
 {
     struct android_window_surface *surface = get_android_surface( window_surface );
 
@@ -665,7 +662,7 @@ static void CDECL android_surface_lock( struct window_surface *window_surface )
 /***********************************************************************
  *           android_surface_unlock
  */
-static void CDECL android_surface_unlock( struct window_surface *window_surface )
+static void android_surface_unlock( struct window_surface *window_surface )
 {
     struct android_window_surface *surface = get_android_surface( window_surface );
 
@@ -675,7 +672,7 @@ static void CDECL android_surface_unlock( struct window_surface *window_surface 
 /***********************************************************************
  *           android_surface_get_bitmap_info
  */
-static void *CDECL android_surface_get_bitmap_info( struct window_surface *window_surface, BITMAPINFO *info )
+static void *android_surface_get_bitmap_info( struct window_surface *window_surface, BITMAPINFO *info )
 {
     struct android_window_surface *surface = get_android_surface( window_surface );
 
@@ -686,7 +683,7 @@ static void *CDECL android_surface_get_bitmap_info( struct window_surface *windo
 /***********************************************************************
  *           android_surface_get_bounds
  */
-static RECT *CDECL android_surface_get_bounds( struct window_surface *window_surface )
+static RECT *android_surface_get_bounds( struct window_surface *window_surface )
 {
     struct android_window_surface *surface = get_android_surface( window_surface );
 
@@ -696,7 +693,7 @@ static RECT *CDECL android_surface_get_bounds( struct window_surface *window_sur
 /***********************************************************************
  *           android_surface_set_region
  */
-static void CDECL android_surface_set_region( struct window_surface *window_surface, HRGN region )
+static void android_surface_set_region( struct window_surface *window_surface, HRGN region )
 {
     struct android_window_surface *surface = get_android_surface( window_surface );
 
@@ -720,7 +717,7 @@ static void CDECL android_surface_set_region( struct window_surface *window_surf
 /***********************************************************************
  *           android_surface_flush
  */
-static void CDECL android_surface_flush( struct window_surface *window_surface )
+static void android_surface_flush( struct window_surface *window_surface )
 {
     struct android_window_surface *surface = get_android_surface( window_surface );
     ANativeWindow_Buffer buffer;
@@ -803,7 +800,7 @@ static void CDECL android_surface_flush( struct window_surface *window_surface )
 /***********************************************************************
  *           android_surface_destroy
  */
-static void CDECL android_surface_destroy( struct window_surface *window_surface )
+static void android_surface_destroy( struct window_surface *window_surface )
 {
     struct android_window_surface *surface = get_android_surface( window_surface );
 
@@ -1204,8 +1201,8 @@ static LRESULT CALLBACK desktop_wndproc_wrapper( HWND hwnd, UINT msg, WPARAM wp,
 /***********************************************************************
  *           ANDROID_MsgWaitForMultipleObjectsEx
  */
-DWORD CDECL ANDROID_MsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *handles,
-                                                 DWORD timeout, DWORD mask, DWORD flags )
+DWORD ANDROID_MsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *handles,
+                                           DWORD timeout, DWORD mask, DWORD flags )
 {
     if (GetCurrentThreadId() == desktop_tid)
     {
@@ -1220,7 +1217,7 @@ DWORD CDECL ANDROID_MsgWaitForMultipleObjectsEx( DWORD count, const HANDLE *hand
 /**********************************************************************
  *           ANDROID_CreateWindow
  */
-BOOL CDECL ANDROID_CreateWindow( HWND hwnd )
+BOOL ANDROID_CreateWindow( HWND hwnd )
 {
     TRACE( "%p\n", hwnd );
 
@@ -1240,7 +1237,7 @@ BOOL CDECL ANDROID_CreateWindow( HWND hwnd )
 /***********************************************************************
  *           ANDROID_DestroyWindow
  */
-void CDECL ANDROID_DestroyWindow( HWND hwnd )
+void ANDROID_DestroyWindow( HWND hwnd )
 {
     struct android_win_data *data;
 
@@ -1290,9 +1287,9 @@ static inline BOOL get_surface_rect( const RECT *visible_rect, RECT *surface_rec
 /***********************************************************************
  *           ANDROID_WindowPosChanging
  */
-BOOL CDECL ANDROID_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flags,
-                                      const RECT *window_rect, const RECT *client_rect, RECT *visible_rect,
-                                      struct window_surface **surface )
+BOOL ANDROID_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flags,
+                                const RECT *window_rect, const RECT *client_rect, RECT *visible_rect,
+                                struct window_surface **surface )
 {
     struct android_win_data *data = get_win_data( hwnd );
     RECT surface_rect;
@@ -1345,10 +1342,10 @@ done:
 /***********************************************************************
  *           ANDROID_WindowPosChanged
  */
-void CDECL ANDROID_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags,
-                                    const RECT *window_rect, const RECT *client_rect,
-                                    const RECT *visible_rect, const RECT *valid_rects,
-                                    struct window_surface *surface )
+void ANDROID_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags,
+                               const RECT *window_rect, const RECT *client_rect,
+                               const RECT *visible_rect, const RECT *valid_rects,
+                               struct window_surface *surface )
 {
     struct android_win_data *data;
     DWORD new_style = GetWindowLongW( hwnd, GWL_STYLE );
@@ -1383,7 +1380,7 @@ void CDECL ANDROID_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flag
 /***********************************************************************
  *           ANDROID_ShowWindow
  */
-UINT CDECL ANDROID_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp )
+UINT ANDROID_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp )
 {
     if (!IsIconic( hwnd )) return swp;
     /* always hide icons off-screen */
@@ -1399,7 +1396,7 @@ UINT CDECL ANDROID_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp )
 /*****************************************************************
  *	     ANDROID_SetParent
  */
-void CDECL ANDROID_SetParent( HWND hwnd, HWND parent, HWND old_parent )
+void ANDROID_SetParent( HWND hwnd, HWND parent, HWND old_parent )
 {
     struct android_win_data *data;
 
@@ -1417,7 +1414,7 @@ void CDECL ANDROID_SetParent( HWND hwnd, HWND parent, HWND old_parent )
 /***********************************************************************
  *           ANDROID_SetCapture
  */
-void CDECL ANDROID_SetCapture( HWND hwnd, UINT flags )
+void ANDROID_SetCapture( HWND hwnd, UINT flags )
 {
     if (!(flags & (GUI_INMOVESIZE | GUI_INMENUMODE))) return;
     ioctl_set_capture( hwnd );
@@ -1427,7 +1424,7 @@ void CDECL ANDROID_SetCapture( HWND hwnd, UINT flags )
 /***********************************************************************
  *           ANDROID_SetCursor
  */
-void CDECL ANDROID_SetCursor( HCURSOR handle )
+void ANDROID_SetCursor( HCURSOR handle )
 {
     static HCURSOR last_cursor;
     static DWORD last_cursor_change;
@@ -1472,7 +1469,7 @@ void CDECL ANDROID_SetCursor( HCURSOR handle )
 /***********************************************************************
  *           ANDROID_SetWindowStyle
  */
-void CDECL ANDROID_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+void ANDROID_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
 {
     struct android_win_data *data;
     DWORD changed = style->styleNew ^ style->styleOld;
@@ -1496,7 +1493,7 @@ void CDECL ANDROID_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
 /***********************************************************************
  *           ANDROID_SetWindowRgn
  */
-void CDECL ANDROID_SetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw )
+void ANDROID_SetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw )
 {
     struct android_win_data *data;
 
@@ -1512,7 +1509,7 @@ void CDECL ANDROID_SetWindowRgn( HWND hwnd, HRGN hrgn, BOOL redraw )
 /***********************************************************************
  *	     ANDROID_SetLayeredWindowAttributes
  */
-void CDECL ANDROID_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DWORD flags )
+void ANDROID_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DWORD flags )
 {
     struct android_win_data *data;
 
@@ -1530,8 +1527,8 @@ void CDECL ANDROID_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alp
 /*****************************************************************************
  *           ANDROID_UpdateLayeredWindow
  */
-BOOL CDECL ANDROID_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO *info,
-                                        const RECT *window_rect )
+BOOL ANDROID_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO *info,
+                                  const RECT *window_rect )
 {
     struct window_surface *surface;
     struct android_win_data *data;
@@ -1618,7 +1615,7 @@ done:
 /**********************************************************************
  *           ANDROID_WindowMessage
  */
-LRESULT CDECL ANDROID_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
+LRESULT ANDROID_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
 {
     struct android_win_data *data;
 

@@ -131,8 +131,6 @@ static HRESULT stack_pop_object(script_ctx_t *ctx, IDispatch **r)
 
     v = stack_pop(ctx);
     if(is_object_instance(v)) {
-        if(!get_object(v))
-            return JS_E_OBJECT_REQUIRED;
         *r = get_object(v);
         return S_OK;
     }
@@ -147,7 +145,7 @@ static inline HRESULT stack_pop_int(script_ctx_t *ctx, INT *r)
     return to_int32(ctx, stack_pop(ctx), r);
 }
 
-static inline HRESULT stack_pop_uint(script_ctx_t *ctx, DWORD *r)
+static inline HRESULT stack_pop_uint(script_ctx_t *ctx, UINT32 *r)
 {
     return to_uint32(ctx, stack_pop(ctx), r);
 }
@@ -539,10 +537,7 @@ HRESULT jsval_strict_equal(jsval_t lval, jsval_t rval, BOOL *ret)
     TRACE("\n");
 
     if(type != jsval_type(rval)) {
-        if(is_null_instance(lval))
-            *ret = is_null_instance(rval);
-        else
-            *ret = FALSE;
+        *ret = FALSE;
         return S_OK;
     }
 
@@ -592,7 +587,8 @@ static HRESULT detach_scope(script_ctx_t *ctx, call_frame_t *frame, scope_chain_
         scope->obj = to_disp(scope->jsobj);
     }
 
-    if (scope == frame->base_scope && func->name && ctx->version >= SCRIPTLANGUAGEVERSION_ES5)
+    if (scope == frame->base_scope && func->name && func->local_ref == INVALID_LOCAL_REF &&
+        ctx->version >= SCRIPTLANGUAGEVERSION_ES5)
         jsdisp_propput_name(scope->jsobj, func->name, jsval_obj(jsdisp_addref(frame->function_instance)));
 
     index = scope->scope_index;
@@ -721,7 +717,8 @@ static HRESULT identifier_eval(script_ctx_t *ctx, BSTR identifier, exprval_t *re
                 }
 
                 /* ECMA-262 5.1 Edition    13 */
-                if(func->name && ctx->version >= SCRIPTLANGUAGEVERSION_ES5 && !wcscmp(identifier, func->name)) {
+                if(func->name && ctx->version >= SCRIPTLANGUAGEVERSION_ES5 &&
+                   func->local_ref == INVALID_LOCAL_REF && !wcscmp(identifier, func->name)) {
                     TRACE("returning a function from scope chain\n");
                     ret->type = EXPRVAL_JSVAL;
                     ret->u.val = jsval_obj(jsdisp_addref(scope->frame->function_instance));
@@ -837,7 +834,7 @@ static HRESULT interp_forin(script_ctx_t *ctx)
     id = get_number(stack_top(ctx));
 
     if(!stack_topn_exprval(ctx, 1, &prop_ref)) {
-        FIXME("invalid ref: %08x\n", prop_ref.u.hres);
+        FIXME("invalid ref: %08lx\n", prop_ref.u.hres);
         return E_FAIL;
     }
 
@@ -992,7 +989,7 @@ static HRESULT interp_pop_scope(script_ctx_t *ctx)
     if(ctx->call_ctx->scope->ref > 1) {
         HRESULT hres = detach_variable_object(ctx, ctx->call_ctx, FALSE);
         if(FAILED(hres))
-            ERR("Failed to detach variable object: %08x\n", hres);
+            ERR("Failed to detach variable object: %08lx\n", hres);
     }
 
     scope_pop(&ctx->call_ctx->scope);
@@ -1034,7 +1031,7 @@ static void set_error_value(script_ctx_t *ctx, jsval_t value)
     ei->valid_value = TRUE;
     ei->value = value;
 
-    if(is_object_instance(value) && get_object(value) && (obj = to_jsdisp(get_object(value)))) {
+    if(is_object_instance(value) && (obj = to_jsdisp(get_object(value)))) {
         UINT32 number;
         jsstr_t *str;
         jsval_t v;
@@ -1073,7 +1070,7 @@ static HRESULT interp_throw_ref(script_ctx_t *ctx)
 {
     const HRESULT arg = get_op_uint(ctx, 0);
 
-    TRACE("%08x\n", arg);
+    TRACE("%08lx\n", arg);
 
     return arg;
 }
@@ -1084,7 +1081,7 @@ static HRESULT interp_throw_type(script_ctx_t *ctx)
     jsstr_t *str = get_op_str(ctx, 1);
     const WCHAR *ptr;
 
-    TRACE("%08x %s\n", hres, debugstr_jsstr(str));
+    TRACE("%08lx %s\n", hres, debugstr_jsstr(str));
 
     ptr = jsstr_flatten(str);
     return ptr ? throw_error(ctx, hres, ptr) : E_OUTOFMEMORY;
@@ -1320,7 +1317,7 @@ static HRESULT interp_memberid(script_ctx_t *ctx)
             exprval_set_exception(&ref, JS_E_INVALID_PROPERTY);
             hres = S_OK;
         }else {
-            ERR("failed %08x\n", hres);
+            ERR("failed %08lx\n", hres);
             return hres;
         }
     }
@@ -1360,11 +1357,9 @@ static HRESULT interp_new(script_ctx_t *ctx)
     /* NOTE: Should use to_object here */
 
     if(is_null(constr))
-        return JS_E_OBJECT_EXPECTED;
-    else if(!is_object_instance(constr))
+        return is_null_disp(constr) ? JS_E_INVALID_PROPERTY : JS_E_OBJECT_EXPECTED;
+    if(!is_object_instance(constr))
         return JS_E_INVALID_ACTION;
-    else if(!get_object(constr))
-        return JS_E_INVALID_PROPERTY;
 
     clear_acc(ctx);
     return disp_call_value(ctx, get_object(constr), NULL, DISPATCH_CONSTRUCT | DISPATCH_JSCRIPT_CALLEREXECSSOURCE,
@@ -1807,7 +1802,7 @@ static HRESULT interp_instanceof(script_ctx_t *ctx)
     HRESULT hres;
 
     v = stack_pop(ctx);
-    if(!is_object_instance(v) || !get_object(v)) {
+    if(!is_object_instance(v)) {
         jsval_release(v);
         return JS_E_FUNCTION_EXPECTED;
     }
@@ -1830,7 +1825,9 @@ static HRESULT interp_instanceof(script_ctx_t *ctx)
 
     v = stack_pop(ctx);
 
-    if(is_object_instance(prot)) {
+    if(is_null_disp(v))
+        hres = JS_E_OBJECT_EXPECTED;
+    else if(is_object_instance(prot)) {
         if(is_object_instance(v))
             tmp = iface_to_jsdisp(get_object(v));
         for(iter = tmp; !ret && iter; iter = iter->prototype) {
@@ -1867,7 +1864,7 @@ static HRESULT interp_in(script_ctx_t *ctx)
     TRACE("\n");
 
     obj = stack_pop(ctx);
-    if(!is_object_instance(obj) || !get_object(obj)) {
+    if(!is_object_instance(obj)) {
         jsval_release(obj);
         return JS_E_OBJECT_EXPECTED;
     }
@@ -2126,7 +2123,7 @@ static HRESULT typeof_string(jsval_t v, const WCHAR **ret)
     case JSV_OBJECT: {
         jsdisp_t *dispex;
 
-        if(get_object(v) && (dispex = iface_to_jsdisp(get_object(v)))) {
+        if((dispex = iface_to_jsdisp(get_object(v)))) {
             *ret = is_class(dispex, JSCLASS_FUNCTION) ? L"function" : L"object";
             jsdisp_release(dispex);
         }else {
@@ -2325,12 +2322,6 @@ static HRESULT equal_values(script_ctx_t *ctx, jsval_t lval, jsval_t rval, BOOL 
 {
     if(jsval_type(lval) == jsval_type(rval) || (is_number(lval) && is_number(rval)))
        return jsval_strict_equal(lval, rval, ret);
-
-    /* FIXME: NULL disps should be handled in more general way */
-    if(is_object_instance(lval) && !get_object(lval))
-        return equal_values(ctx, jsval_null(), rval, ret);
-    if(is_object_instance(rval) && !get_object(rval))
-        return equal_values(ctx, lval, jsval_null(), ret);
 
     if((is_null(lval) && is_undefined(rval)) || (is_undefined(lval) && is_null(rval))) {
         *ret = TRUE;
@@ -2643,7 +2634,7 @@ static HRESULT interp_neg(script_ctx_t *ctx)
 /* ECMA-262 3rd Edition    11.7.1 */
 static HRESULT interp_lshift(script_ctx_t *ctx)
 {
-    DWORD r;
+    UINT32 r;
     INT l;
     HRESULT hres;
 
@@ -2661,7 +2652,7 @@ static HRESULT interp_lshift(script_ctx_t *ctx)
 /* ECMA-262 3rd Edition    11.7.2 */
 static HRESULT interp_rshift(script_ctx_t *ctx)
 {
-    DWORD r;
+    UINT32 r;
     INT l;
     HRESULT hres;
 
@@ -2679,7 +2670,7 @@ static HRESULT interp_rshift(script_ctx_t *ctx)
 /* ECMA-262 3rd Edition    11.7.3 */
 static HRESULT interp_rshift2(script_ctx_t *ctx)
 {
-    DWORD r, l;
+    UINT32 r, l;
     HRESULT hres;
 
     hres = stack_pop_uint(ctx, &r);
@@ -2705,7 +2696,7 @@ static HRESULT interp_to_string(script_ctx_t *ctx)
     hres = to_string(ctx, v, &str);
     jsval_release(v);
     if(FAILED(hres)) {
-        WARN("failed %08x\n", hres);
+        WARN("failed %08lx\n", hres);
         return hres;
     }
 
@@ -2765,7 +2756,7 @@ static HRESULT interp_set_member(script_ctx_t *ctx)
         jsstr_release(get_string(namev));
     }
     if(FAILED(hres)) {
-        WARN("failed %08x\n", hres);
+        WARN("failed %08lx\n", hres);
         jsval_release(value);
         return hres;
     }
@@ -2913,7 +2904,7 @@ static void pop_call_frame(script_ctx_t *ctx)
     if(frame->scope && frame->scope->ref > 1) {
         HRESULT hres = detach_variable_object(ctx, frame, TRUE);
         if(FAILED(hres))
-            ERR("Failed to detach variable object: %08x\n", hres);
+            ERR("Failed to detach variable object: %08lx\n", hres);
     }
 
     if(frame->arguments_obj)
@@ -2984,7 +2975,7 @@ static HRESULT unwind_exception(script_ctx_t *ctx, HRESULT exception_hres)
         jsdisp_t *error_obj;
         jsval_t msg;
 
-        WARN("Exception %08x %s", exception_hres, debugstr_jsval(ei->valid_value ? ei->value : jsval_undefined()));
+        WARN("Exception %08lx %s", exception_hres, debugstr_jsval(ei->valid_value ? ei->value : jsval_undefined()));
         if(ei->valid_value && jsval_type(ei->value) == JSV_OBJECT) {
             error_obj = to_jsdisp(get_object(ei->value));
             if(error_obj) {
@@ -3125,7 +3116,7 @@ static HRESULT bind_event_target(script_ctx_t *ctx, function_code_t *func, jsdis
         hres = IBindEventHandler_BindHandler(target, func->name, (IDispatch*)&func_obj->IDispatchEx_iface);
         IBindEventHandler_Release(target);
         if(FAILED(hres))
-            WARN("BindEvent failed: %08x\n", hres);
+            WARN("BindEvent failed: %08lx\n", hres);
     }else {
         FIXME("No IBindEventHandler, not yet supported binding\n");
     }

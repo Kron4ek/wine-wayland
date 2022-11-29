@@ -887,6 +887,28 @@ BOOL WINAPI DECLSPEC_HOTPATCH GetConsoleMode( HANDLE handle, DWORD *mode )
 
 
 /***********************************************************************
+ *	GetConsoleOriginalTitleA   (kernelbase.@)
+ */
+DWORD WINAPI DECLSPEC_HOTPATCH GetConsoleOriginalTitleA( LPSTR title, DWORD size )
+{
+    FIXME( ": (%p, %lu) stub!\n", title, size );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return 0;
+}
+
+
+/***********************************************************************
+ *	GetConsoleOriginalTitleW   (kernelbase.@)
+ */
+DWORD WINAPI DECLSPEC_HOTPATCH GetConsoleOriginalTitleW( LPWSTR title, DWORD size )
+{
+    FIXME( ": (%p, %lu) stub!\n", title, size );
+    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+    return 0;
+}
+
+
+/***********************************************************************
  *	GetConsoleOutputCP   (kernelbase.@)
  */
 UINT WINAPI DECLSPEC_HOTPATCH GetConsoleOutputCP(void)
@@ -1012,12 +1034,11 @@ DWORD WINAPI DECLSPEC_HOTPATCH GetConsoleTitleA( LPSTR title, DWORD size )
     DWORD ret;
 
     if (!ptr) return 0;
+
     ret = GetConsoleTitleW( ptr, size );
     if (ret)
-    {
-        WideCharToMultiByte( GetConsoleOutputCP(), 0, ptr, ret + 1, title, size, NULL, NULL);
-        ret = strlen(title);
-    }
+        WideCharToMultiByte( GetConsoleOutputCP(), 0, ptr, -1, title, size, NULL, NULL);
+
     HeapFree( GetProcessHeap(), 0, ptr );
     return ret;
 }
@@ -1028,15 +1049,27 @@ DWORD WINAPI DECLSPEC_HOTPATCH GetConsoleTitleA( LPSTR title, DWORD size )
  */
 DWORD WINAPI DECLSPEC_HOTPATCH GetConsoleTitleW( LPWSTR title, DWORD size )
 {
-    if (!size) return 0;
+    struct condrv_title_params *params;
+    size_t max_size = sizeof(*params) + (size - 1) * sizeof(WCHAR);
 
-    if (!console_ioctl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle, IOCTL_CONDRV_GET_TITLE,
-                        NULL, 0, title, (size - 1) * sizeof(WCHAR), &size ))
+    if (!title || !size) return 0;
+
+    if (!(params = HeapAlloc( GetProcessHeap(), 0, max_size )))
         return 0;
 
-    size /= sizeof(WCHAR);
-    title[size] = 0;
-    return size + 1;
+    if (console_ioctl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle, IOCTL_CONDRV_GET_TITLE,
+                       NULL, 0, params, max_size, &size ) &&
+        size >= sizeof(*params))
+    {
+        size -= sizeof(*params);
+        memcpy( title, params->buffer, size );
+        title[ size / sizeof(WCHAR) ] = 0;
+        size = params->title_len;
+    }
+    else size = 0;
+
+    HeapFree( GetProcessHeap(), 0, params );
+    return size;
 }
 
 

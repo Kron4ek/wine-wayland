@@ -241,6 +241,7 @@ HRESULT init_dispex(jsdisp_t*,script_ctx_t*,const builtin_info_t*,jsdisp_t*) DEC
 HRESULT init_dispex_from_constr(jsdisp_t*,script_ctx_t*,const builtin_info_t*,jsdisp_t*) DECLSPEC_HIDDEN;
 
 HRESULT disp_call(script_ctx_t*,IDispatch*,DISPID,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
+HRESULT disp_call_name(script_ctx_t*,IDispatch*,const WCHAR*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT disp_call_value(script_ctx_t*,IDispatch*,IDispatch*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT jsdisp_call_value(jsdisp_t*,IDispatch*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT jsdisp_call(jsdisp_t*,DISPID,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
@@ -317,6 +318,7 @@ HRESULT variant_date_to_string(script_ctx_t*,double,jsstr_t**) DECLSPEC_HIDDEN;
 HRESULT decode_source(WCHAR*) DECLSPEC_HIDDEN;
 
 HRESULT double_to_string(double,jsstr_t**) DECLSPEC_HIDDEN;
+WCHAR *idx_to_str(DWORD,WCHAR*) DECLSPEC_HIDDEN;
 
 static inline BOOL is_digit(WCHAR c)
 {
@@ -386,29 +388,35 @@ struct _script_ctx_t {
     DWORD last_match_index;
     DWORD last_match_length;
 
-    jsdisp_t *global;
-    jsdisp_t *function_constr;
-    jsdisp_t *array_constr;
-    jsdisp_t *bool_constr;
-    jsdisp_t *date_constr;
-    jsdisp_t *enumerator_constr;
-    jsdisp_t *error_constr;
-    jsdisp_t *eval_error_constr;
-    jsdisp_t *range_error_constr;
-    jsdisp_t *reference_error_constr;
-    jsdisp_t *regexp_error_constr;
-    jsdisp_t *syntax_error_constr;
-    jsdisp_t *type_error_constr;
-    jsdisp_t *uri_error_constr;
-    jsdisp_t *number_constr;
-    jsdisp_t *object_constr;
-    jsdisp_t *object_prototype;
-    jsdisp_t *regexp_constr;
-    jsdisp_t *string_constr;
-    jsdisp_t *vbarray_constr;
-    jsdisp_t *map_prototype;
-    jsdisp_t *set_prototype;
+    union {
+        struct {
+            jsdisp_t *global;
+            jsdisp_t *function_constr;
+            jsdisp_t *array_constr;
+            jsdisp_t *bool_constr;
+            jsdisp_t *date_constr;
+            jsdisp_t *enumerator_constr;
+            jsdisp_t *error_constr;
+            jsdisp_t *eval_error_constr;
+            jsdisp_t *range_error_constr;
+            jsdisp_t *reference_error_constr;
+            jsdisp_t *regexp_error_constr;
+            jsdisp_t *syntax_error_constr;
+            jsdisp_t *type_error_constr;
+            jsdisp_t *uri_error_constr;
+            jsdisp_t *number_constr;
+            jsdisp_t *object_constr;
+            jsdisp_t *object_prototype;
+            jsdisp_t *regexp_constr;
+            jsdisp_t *string_constr;
+            jsdisp_t *vbarray_constr;
+            jsdisp_t *map_prototype;
+            jsdisp_t *set_prototype;
+        };
+        jsdisp_t *global_objects[22];
+    };
 };
+C_ASSERT(RTL_SIZEOF_THROUGH_FIELD(script_ctx_t, set_prototype) == RTL_SIZEOF_THROUGH_FIELD(script_ctx_t, global_objects));
 
 void script_release(script_ctx_t*) DECLSPEC_HIDDEN;
 
@@ -449,6 +457,7 @@ HRESULT regexp_string_match(script_ctx_t*,jsdisp_t*,jsstr_t*,jsval_t*) DECLSPEC_
 
 BOOL bool_obj_value(jsdisp_t*) DECLSPEC_HIDDEN;
 unsigned array_get_length(jsdisp_t*) DECLSPEC_HIDDEN;
+HRESULT localize_number(script_ctx_t*,DOUBLE,BOOL,jsstr_t**) DECLSPEC_HIDDEN;
 
 HRESULT JSGlobal_eval(script_ctx_t*,jsval_t,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT Object_get_proto_(script_ctx_t*,jsval_t,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
@@ -523,7 +532,7 @@ static inline DWORD make_grfdex(script_ctx_t *ctx, DWORD flags)
 #define JS_E_OBJECT_NONEXTENSIBLE    MAKE_JSERROR(IDS_OBJECT_NONEXTENSIBLE)
 #define JS_E_NONCONFIGURABLE_REDEFINED MAKE_JSERROR(IDS_NONCONFIGURABLE_REDEFINED)
 #define JS_E_NONWRITABLE_MODIFIED    MAKE_JSERROR(IDS_NONWRITABLE_MODIFIED)
-#define JS_E_MAP_EXPECTED            MAKE_JSERROR(IDS_MAP_EXPECTED)
+#define JS_E_WRONG_THIS              MAKE_JSERROR(IDS_WRONG_THIS)
 #define JS_E_PROP_DESC_MISMATCH      MAKE_JSERROR(IDS_PROP_DESC_MISMATCH)
 #define JS_E_INVALID_WRITABLE_PROP_DESC MAKE_JSERROR(IDS_INVALID_WRITABLE_PROP_DESC)
 

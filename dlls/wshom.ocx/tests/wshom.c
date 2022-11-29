@@ -81,7 +81,8 @@ static void test_wshshell(void)
     EXCEPINFO ei;
     VARIANT arg, res, arg2;
     BSTR str, ret;
-    DWORD retval, attrs;
+    int retval;
+    DWORD attrs;
     UINT err;
 
     hr = CoCreateInstance(&CLSID_WshShell, NULL, CLSCTX_INPROC_SERVER|CLSCTX_INPROC_HANDLER,
@@ -227,21 +228,23 @@ static void test_wshshell(void)
     retval = 10;
     hr = IWshShell3_Run(sh3, str, NULL, &arg2, &retval);
     ok(hr == E_POINTER, "Unexpected hr %#lx.\n", hr);
-    ok(retval == 10, "Unexpected retval %lu.\n", retval);
+    ok(retval == 10, "Unexpected retval %d.\n", retval);
 
     retval = 10;
     hr = IWshShell3_Run(sh3, str, &arg, NULL, &retval);
     ok(hr == E_POINTER, "Unexpected hr %#lx.\n", hr);
-    ok(retval == 10, "Unexpected retval %lu.\n", retval);
+    ok(retval == 10, "Unexpected retval %d.\n", retval);
 
     retval = 10;
     V_VT(&arg2) = VT_ERROR;
     V_ERROR(&arg2) = 0;
     hr = IWshShell3_Run(sh3, str, &arg, &arg2, &retval);
     ok(hr == DISP_E_TYPEMISMATCH, "Unexpected hr %#lx.\n", hr);
-    ok(retval == 10, "Unexpected retval %lu.\n", retval);
+    ok(retval == 10, "Unexpected retval %d.\n", retval);
     SysFreeString(str);
 
+    V_VT(&arg) = VT_ERROR;
+    V_ERROR(&arg) = DISP_E_PARAMNOTFOUND;
     V_VT(&arg2) = VT_BOOL;
     V_BOOL(&arg2) = VARIANT_TRUE;
 
@@ -249,14 +252,24 @@ static void test_wshshell(void)
     str = SysAllocString(L"cmd.exe /c rd /s /q c:\\nosuchdir");
     hr = IWshShell3_Run(sh3, str, &arg, &arg2, &retval);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
-    todo_wine ok(retval == ERROR_FILE_NOT_FOUND, "Unexpected retval %lu.\n", retval);
+    todo_wine ok(retval == ERROR_FILE_NOT_FOUND, "Unexpected retval %d.\n", retval);
+    SysFreeString(str);
+
+    V_VT(&arg) = VT_I2;
+    V_I2(&arg) = 0;
+
+    retval = 0xdeadbeef;
+    str = SysAllocString(L"cmd.exe /c rd /s /q c:\\nosuchdir");
+    hr = IWshShell3_Run(sh3, str, &arg, &arg2, &retval);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    todo_wine ok(retval == ERROR_FILE_NOT_FOUND, "Unexpected retval %d.\n", retval);
     SysFreeString(str);
 
     retval = 0xdeadbeef;
     str = SysAllocString(L"\"cmd.exe \" /c rd /s /q c:\\nosuchdir");
     hr = IWshShell3_Run(sh3, str, &arg, &arg2, &retval);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
-    todo_wine ok(retval == ERROR_FILE_NOT_FOUND, "Unexpected retval %lu.\n", retval);
+    todo_wine ok(retval == ERROR_FILE_NOT_FOUND, "Unexpected retval %d.\n", retval);
     SysFreeString(str);
 
     GetSystemDirectoryW(path, ARRAY_SIZE(path));
@@ -280,7 +293,7 @@ static void test_wshshell(void)
     str = SysAllocString(buf);
     hr = IWshShell3_Run(sh3, str, &arg, &arg2, &retval);
     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
-    todo_wine ok(retval == ERROR_FILE_NOT_FOUND, "Unexpected retval %lu.\n", retval);
+    todo_wine ok(retval == ERROR_FILE_NOT_FOUND, "Unexpected retval %d.\n", retval);
     SysFreeString(str);
 
     DeleteFileW(path2);

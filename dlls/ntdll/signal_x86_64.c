@@ -36,6 +36,7 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(unwind);
 WINE_DECLARE_DEBUG_CHANNEL(seh);
+WINE_DECLARE_DEBUG_CHANNEL(threadname);
 
 typedef struct _SCOPE_TABLE
 {
@@ -279,8 +280,9 @@ static NTSTATUS virtual_unwind( ULONG type, DISPATCHER_CONTEXT *dispatch, CONTEX
 
     if (!module || (module->Flags & LDR_WINE_INTERNAL))
     {
-        status = unix_funcs->unwind_builtin_dll( type, dispatch, context );
+        struct unwind_builtin_dll_params params = { type, dispatch, context };
 
+        status = NTDLL_UNIX_CALL( unwind_builtin_dll, &params );
         if (!status && dispatch->LanguageHandler && !module)
         {
             FIXME( "calling personality routine in system library not supported yet\n" );
@@ -510,7 +512,7 @@ NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
                  rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress,
                  (void *)context->Rip, GetCurrentThreadId() );
     for (c = 0; c < min( EXCEPTION_MAXIMUM_PARAMETERS, rec->NumberParameters ); c++)
-        TRACE( " info[%d]=%016I64x\n", c, rec->ExceptionInformation[c] );
+        TRACE_(seh)( " info[%d]=%016I64x\n", c, rec->ExceptionInformation[c] );
 
     if (rec->ExceptionCode == EXCEPTION_WINE_STUB)
     {
@@ -525,8 +527,13 @@ NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
     }
     else if (rec->ExceptionCode == EXCEPTION_WINE_NAME_THREAD && rec->ExceptionInformation[0] == 0x1000)
     {
-        WARN_(seh)( "Thread %04x renamed to %s\n", (DWORD)rec->ExceptionInformation[2],
-                    debugstr_a((char *)rec->ExceptionInformation[1]) );
+        if ((DWORD)rec->ExceptionInformation[2] == -1)
+            WARN_(threadname)( "Thread renamed to %s\n", debugstr_a((char *)rec->ExceptionInformation[1]) );
+        else
+            WARN_(threadname)( "Thread ID %04x renamed to %s\n", (DWORD)rec->ExceptionInformation[2],
+                               debugstr_a((char *)rec->ExceptionInformation[1]) );
+
+        set_native_thread_name((DWORD)rec->ExceptionInformation[2], (char *)rec->ExceptionInformation[1]);
     }
     else if (rec->ExceptionCode == DBG_PRINTEXCEPTION_C)
     {
@@ -657,9 +664,21 @@ __ASM_GLOBAL_FUNC( KiUserApcDispatcher,
  */
 void WINAPI KiUserCallbackDispatcher( ULONG id, void *args, ULONG len )
 {
-    NTSTATUS (WINAPI *func)(void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+    NTSTATUS status;
 
-    RtlRaiseStatus( NtCallbackReturn( NULL, 0, func( args, len )));
+    __TRY
+    {
+        NTSTATUS (WINAPI *func)(void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+        status = NtCallbackReturn( NULL, 0, func( args, len ));
+    }
+    __EXCEPT_ALL
+    {
+        ERR_(seh)( "ignoring exception\n" );
+        status = NtCallbackReturn( 0, 0, 0 );
+    }
+    __ENDTRY
+
+    RtlRaiseStatus( status );
 }
 
 

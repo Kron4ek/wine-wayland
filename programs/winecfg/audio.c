@@ -40,8 +40,9 @@
 #include <mmddk.h>
 
 #include "ole2.h"
-#include "initguid.h"
 #include "propkey.h"
+#include "initguid.h"
+#include "propkeydef.h"
 #include "devpkey.h"
 #include "mmdeviceapi.h"
 #include "audioclient.h"
@@ -51,6 +52,8 @@
 #include "resource.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(winecfg);
+
+static void apply_speaker_configs(void);
 
 struct DeviceInfo {
     WCHAR *id;
@@ -367,6 +370,12 @@ static void initAudioDlg (HWND hDlg)
         swprintf(display_str, ARRAY_SIZE(display_str), format_str, disabled_str);
 
     SetDlgItemTextW(hDlg, IDC_AUDIO_DRIVER, display_str);
+
+    if(is_audio_exit_mode) {
+      apply_speaker_configs();
+      apply();
+      ExitProcess(1);
+    }
 }
 
 static void set_reg_device(HWND hDlg, int dlgitem, const WCHAR *key_name)
@@ -437,10 +446,15 @@ static void apply_speaker_configs(void)
 
         pv.ulVal = speaker_configs[render_devs[i].speaker_config].speaker_mask;
 
+//Causes no sound
+/*
+
         hr = IPropertyStore_SetValue(ps, &PKEY_AudioEndpoint_PhysicalSpeakers, &pv);
 
         if (FAILED(hr))
             WARN("IPropertyStore_SetValue failed for %s: 0x%08lx\n", wine_dbgstr_w(render_devs[i].id), hr);
+
+*/
 
         IPropertyStore_Release(ps);
         IMMDevice_Release(dev);

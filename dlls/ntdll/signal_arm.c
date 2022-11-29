@@ -36,6 +36,7 @@
 #include "winnt.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(seh);
+WINE_DECLARE_DEBUG_CHANNEL(threadname);
 
 typedef struct _SCOPE_TABLE
 {
@@ -69,7 +70,7 @@ struct MSVCRT_JUMP_BUFFER
 };
 
 
-static void dump_scope_table( ULONG64 base, const SCOPE_TABLE *table )
+static void dump_scope_table( ULONG base, const SCOPE_TABLE *table )
 {
     unsigned int i;
 
@@ -133,6 +134,7 @@ static NTSTATUS virtual_unwind( ULONG type, DISPATCHER_CONTEXT *dispatch, CONTEX
 {
     LDR_DATA_TABLE_ENTRY *module;
     NTSTATUS status;
+    DWORD pc;
 
     dispatch->ImageBase        = 0;
     dispatch->ScopeIndex       = 0;
@@ -143,14 +145,14 @@ static NTSTATUS virtual_unwind( ULONG type, DISPATCHER_CONTEXT *dispatch, CONTEX
      * signal frame.
      */
     dispatch->ControlPcIsUnwound = (context->ContextFlags & CONTEXT_UNWOUND_TO_CALL) != 0;
+    pc = context->Pc - (dispatch->ControlPcIsUnwound ? 2 : 0);
 
     /* first look for PE exception information */
 
-    if ((dispatch->FunctionEntry = lookup_function_info(
-             context->Pc - (dispatch->ControlPcIsUnwound ? 2 : 0),
+    if ((dispatch->FunctionEntry = lookup_function_info(pc,
              (ULONG_PTR*)&dispatch->ImageBase, &module )))
     {
-        dispatch->LanguageHandler = RtlVirtualUnwind( type, dispatch->ImageBase, context->Pc,
+        dispatch->LanguageHandler = RtlVirtualUnwind( type, dispatch->ImageBase, pc,
                                                       dispatch->FunctionEntry, context,
                                                       &dispatch->HandlerData, (ULONG_PTR *)&dispatch->EstablisherFrame,
                                                       NULL );
@@ -161,7 +163,9 @@ static NTSTATUS virtual_unwind( ULONG type, DISPATCHER_CONTEXT *dispatch, CONTEX
 
     if (!module || (module->Flags & LDR_WINE_INTERNAL))
     {
-        status = unix_funcs->unwind_builtin_dll( type, dispatch, context );
+        struct unwind_builtin_dll_params params = { type, dispatch, context };
+
+        status = NTDLL_UNIX_CALL( unwind_builtin_dll, &params );
         if (status != STATUS_SUCCESS) return status;
 
         if (dispatch->EstablisherFrame)
@@ -475,7 +479,13 @@ NTSTATUS WINAPI KiUserExceptionDispatcher( EXCEPTION_RECORD *rec, CONTEXT *conte
     }
     else if (rec->ExceptionCode == EXCEPTION_WINE_NAME_THREAD && rec->ExceptionInformation[0] == 0x1000)
     {
-        WARN( "Thread %04x renamed to %s\n", (DWORD)rec->ExceptionInformation[2], debugstr_a((char *)rec->ExceptionInformation[1]) );
+        if ((DWORD)rec->ExceptionInformation[2] == -1)
+            WARN_(threadname)( "Thread renamed to %s\n", debugstr_a((char *)rec->ExceptionInformation[1]) );
+        else
+            WARN_(threadname)( "Thread ID %04x renamed to %s\n", (DWORD)rec->ExceptionInformation[2],
+                               debugstr_a((char *)rec->ExceptionInformation[1]) );
+
+        set_native_thread_name((DWORD)rec->ExceptionInformation[2], (char *)rec->ExceptionInformation[1]);
     }
     else if (rec->ExceptionCode == DBG_PRINTEXCEPTION_C)
     {
@@ -527,9 +537,21 @@ void WINAPI KiUserApcDispatcher( CONTEXT *context, ULONG_PTR ctx, ULONG_PTR arg1
  */
 void WINAPI KiUserCallbackDispatcher( ULONG id, void *args, ULONG len )
 {
-    NTSTATUS (WINAPI *func)(void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+    NTSTATUS status;
 
-    RtlRaiseStatus( NtCallbackReturn( NULL, 0, func( args, len )));
+    __TRY
+    {
+        NTSTATUS (WINAPI *func)(void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+        status = NtCallbackReturn( NULL, 0, func( args, len ));
+    }
+    __EXCEPT_ALL
+    {
+        ERR_(seh)( "ignoring exception\n" );
+        status = NtCallbackReturn( 0, 0, 0 );
+    }
+    __ENDTRY
+
+    RtlRaiseStatus( status );
 }
 
 
@@ -731,6 +753,8 @@ static void process_unwind_codes( BYTE *ptr, BYTE *end, CONTEXT *context,
             WARN( "unsupported code %02x\n", *ptr );
         else if (*ptr <= 0xef && ((val & 0xff) <= 0x0f)) /* ldr lr, [sp], #x */
             pop_lr( 4 * (val & 0x0f), context, ptrs );
+        else if (*ptr == 0xf4) /* Custom private (unallocated) opcode, saved a full CONTEXT on the stack */
+            memcpy( context, (DWORD *)context->Sp, sizeof(CONTEXT) );
         else if (*ptr <= 0xf4) /* Available */
             WARN( "unsupported code %02x\n", *ptr );
         else if (*ptr <= 0xf5) /* vpop {dS-dE} */
@@ -972,7 +996,7 @@ static void *unwind_full_data( ULONG_PTR base, ULONG_PTR pc, RUNTIME_FUNCTION *f
     end = (BYTE *)data + codes * 4;
 
     TRACE( "function %lx-%lx: len=%#x ver=%u X=%u E=%u F=%u epilogs=%u codes=%u\n",
-           base + func->BeginAddress, base + func->BeginAddress + info->function_length * 4,
+           base + func->BeginAddress, base + func->BeginAddress + info->function_length * 2,
            info->function_length, info->version, info->x, info->e, info->f, epilogs, codes * 4 );
 
     /* check for prolog */
@@ -1075,11 +1099,18 @@ extern void * WINAPI call_consolidate_callback( CONTEXT *context,
                                                 EXCEPTION_RECORD *rec );
 __ASM_GLOBAL_FUNC( call_consolidate_callback,
                    "push {r0-r2,lr}\n\t"
+                   __ASM_SEH(".seh_nop\n\t")
                    "sub sp, sp, #0x1a0\n\t"
+                   __ASM_SEH(".seh_nop\n\t")
                    "mov r1, r0\n\t"
+                   __ASM_SEH(".seh_nop\n\t")
                    "mov r0, sp\n\t"
+                   __ASM_SEH(".seh_nop\n\t")
                    "mov r2, #0x1a0\n\t"
+                   __ASM_SEH(".seh_nop_w\n\t")
                    "bl " __ASM_NAME("memcpy") "\n\t"
+                   __ASM_SEH(".seh_custom 0xf4\n\t") /* A custom (unallocated) SEH opcode for CONTEXT on stack */
+                   __ASM_SEH(".seh_endprologue\n\t")
                    __ASM_CFI(".cfi_def_cfa 13, 0\n\t")
                    __ASM_CFI(".cfi_escape 0x0f,0x04,0x7d,0xb8,0x00,0x06\n\t") /* DW_CFA_def_cfa_expression: DW_OP_breg13 + 56, DW_OP_deref */
                    __ASM_CFI(".cfi_escape 0x10,0x04,0x02,0x7d,0x14\n\t") /* DW_CFA_expression: R4 DW_OP_breg13 + 20 */
@@ -1102,6 +1133,18 @@ __ASM_GLOBAL_FUNC( call_consolidate_callback,
                    __ASM_CFI(".cfi_escape 0x10,0x8e,0x02,0x03,0x7d,0xc0,0x01\n\t") /* DW_CFA_expression: D14 DW_OP_breg13 + 192 */
                    __ASM_CFI(".cfi_escape 0x10,0x8f,0x02,0x03,0x7d,0xc8,0x01\n\t") /* DW_CFA_expression: D15 DW_OP_breg13 + 200 */
 #endif
+                   /* These EHABI opcodes are to be read bottom up - they
+                    * restore relevant registers from the CONTEXT. */
+                   __ASM_EHABI(".save {sp}\n\t") /* Restore Sp last */
+                   __ASM_EHABI(".pad #-(0x80 + 0x0c + 0x0c)\n\t") /* Move back across D0-D15, Cpsr, Fpscr, Padding, Pc, Lr and Sp */
+                   __ASM_EHABI(".vsave {d8-d15}\n\t")
+                   __ASM_EHABI(".pad #0x40\n\t") /* Skip past D0-D7 */
+                   __ASM_EHABI(".pad #0x0c\n\t") /* Skip past Cpsr, Fpscr and Padding */
+                   __ASM_EHABI(".save {lr, pc}\n\t")
+                   __ASM_EHABI(".pad #0x08\n\t") /* Skip past R12 and Sp - Sp is restored last */
+                   __ASM_EHABI(".save {r4-r11}\n\t")
+                   __ASM_EHABI(".pad #0x14\n\t") /* Skip past ContextFlags and R0-R3 */
+
                    "ldrd r1, r2, [sp, #0x1a4]\n\t"
                    "mov r0, r2\n\t"
                    "blx r1\n\t"
@@ -1240,7 +1283,7 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
         }
         else  /* hack: call builtin handlers registered in the tib list */
         {
-            DWORD64 backup_frame = dispatch.EstablisherFrame;
+            DWORD backup_frame = dispatch.EstablisherFrame;
             while ((DWORD)teb_frame < new_context.Sp && (DWORD)teb_frame < (DWORD)end_frame)
             {
                 TRACE( "found builtin frame %p handler %p\n", teb_frame, teb_frame->Handler );
@@ -1300,6 +1343,9 @@ extern LONG __C_ExecuteExceptionFilter(PEXCEPTION_POINTERS ptrs, PVOID frame,
                                        PUCHAR nonvolatile);
 __ASM_GLOBAL_FUNC( __C_ExecuteExceptionFilter,
                    "push {r4-r11,lr}\n\t"
+                   __ASM_EHABI(".save {r4-r11,lr}\n\t")
+                   __ASM_SEH(".seh_save_regs_w {r4-r11,lr}\n\t")
+                   __ASM_SEH(".seh_endprologue\n\t")
 
                    __ASM_CFI(".cfi_def_cfa 13, 36\n\t")
                    __ASM_CFI(".cfi_offset r4, -36\n\t")
@@ -1333,7 +1379,7 @@ EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec,
 {
     SCOPE_TABLE *table = dispatch->HandlerData;
     ULONG i;
-    DWORD64 ControlPc = dispatch->ControlPc;
+    DWORD ControlPc = dispatch->ControlPc;
 
     TRACE( "%p %p %p %p\n", rec, frame, context, dispatch );
     if (TRACE_ON(seh)) dump_scope_table( dispatch->ImageBase, table );
@@ -1410,7 +1456,12 @@ EXCEPTION_DISPOSITION WINAPI __C_specific_handler( EXCEPTION_RECORD *rec,
  */
 __ASM_STDCALL_FUNC( RtlRaiseException, 4,
                     "push {r0, lr}\n\t"
+                    __ASM_EHABI(".save {r0, lr}\n\t")
+                    __ASM_SEH(".seh_save_regs {r0, lr}\n\t")
                     "sub sp, sp, #0x1a0\n\t"  /* sizeof(CONTEXT) */
+                    __ASM_EHABI(".pad #0x1a0\n\t")
+                    __ASM_SEH(".seh_stackalloc 0x1a0\n\t")
+                    __ASM_SEH(".seh_endprologue\n\t")
                     __ASM_CFI(".cfi_adjust_cfa_offset 424\n\t")
                     __ASM_CFI(".cfi_offset lr, -4\n\t")
                     "mov r0, sp\n\t"  /* context */

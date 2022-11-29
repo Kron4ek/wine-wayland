@@ -540,6 +540,7 @@ static void set_preferences(void)
     set_lang(pref);
     set_bool_pref(pref, "security.warn_entering_secure", FALSE);
     set_bool_pref(pref, "security.warn_submit_insecure", FALSE);
+    set_bool_pref(pref, "layout.css.grid.enabled", TRUE);
     set_int_pref(pref, "layout.spellcheckDefault", 0);
 
     nsIPrefBranch_Release(pref);
@@ -910,6 +911,8 @@ HRESULT map_nsresult(nsresult nsres)
         return E_UNEXPECTED;
     case NS_ERROR_DOM_NO_MODIFICATION_ALLOWED_ERR:
         return 0x80700007; /* according to tests */
+    case NS_BINDING_ABORTED:
+        return E_ABORT;
     }
     return E_FAIL;
 }
@@ -997,6 +1000,7 @@ HRESULT variant_to_nsstr(VARIANT *v, BOOL hex_int, nsAString *nsstr)
     WCHAR buf[32];
 
     switch(V_VT(v)) {
+    case VT_EMPTY:
     case VT_NULL:
         nsAString_InitDepend(nsstr, NULL);
         return S_OK;
@@ -1226,7 +1230,7 @@ void setup_editor_controller(GeckoBrowser *This)
     }
 
     nsres = nsIEditingSession_GetEditorForWindow(editing_session,
-            This->doc->basedoc.window->window_proxy, &This->editor);
+            This->doc->window->window_proxy, &This->editor);
     nsIEditingSession_Release(editing_session);
     if(NS_FAILED(nsres)) {
         ERR("Could not get editor: %08lx\n", nsres);
@@ -1679,7 +1683,12 @@ static nsresult NSAPI nsContextMenuListener_OnShowContextMenu(nsIContextMenuList
     case CONTEXT_TEXT: {
         nsISelection *selection;
 
-        nsres = nsIDOMHTMLDocument_GetSelection(This->doc->basedoc.doc_node->nsdoc, &selection);
+        if(!This->doc->doc_node->html_document) {
+            FIXME("Not implemented for XML document\n");
+            break;
+        }
+
+        nsres = nsIDOMHTMLDocument_GetSelection(This->doc->doc_node->html_document, &selection);
         if(NS_SUCCEEDED(nsres) && selection) {
             cpp_bool is_collapsed;
 

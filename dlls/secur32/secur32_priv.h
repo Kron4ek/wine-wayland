@@ -79,34 +79,14 @@ void load_auth_packages(void) DECLSPEC_HIDDEN;
 void SECUR32_deinitSchannelSP(void) DECLSPEC_HIDDEN;
 
 /* schannel internal interface */
-typedef struct schan_session_opaque *schan_session;
+typedef UINT64 schan_session;
 
 typedef struct schan_credentials
 {
     ULONG credential_use;
-    void *credentials;
     DWORD enabled_protocols;
+    UINT64 credentials;
 } schan_credentials;
-
-struct schan_transport;
-
-struct schan_buffers
-{
-    SIZE_T offset;
-    SIZE_T limit;
-    const SecBufferDesc *desc;
-    SecBuffer *alloc_buffer;
-    int current_buffer_idx;
-    int (*get_next_buffer)(const struct schan_transport *, struct schan_buffers *);
-};
-
-struct schan_transport
-{
-    struct schan_context *ctx;
-    schan_session session;
-    struct schan_buffers in;
-    struct schan_buffers out;
-};
 
 struct session_params
 {
@@ -116,14 +96,17 @@ struct session_params
 struct allocate_certificate_credentials_params
 {
     schan_credentials *c;
-    const CERT_CONTEXT *ctx;
-    const DATA_BLOB *key_blob;
+    ULONG cert_encoding;
+    ULONG cert_size;
+    BYTE *cert_blob;
+    ULONG key_size;
+    BYTE *key_blob;
 };
 
 struct create_session_params
 {
-    struct schan_transport *transport;
     schan_credentials *cred;
+    schan_session *session;
 };
 
 struct free_certificate_credentials_params
@@ -143,10 +126,16 @@ struct get_connection_info_params
     SecPkgContext_ConnectionInfo *info;
 };
 
+struct get_cipher_info_params
+{
+    schan_session session;
+    SecPkgContext_CipherInfo *info;
+};
+
 struct get_session_peer_certificate_params
 {
     schan_session session;
-    CERT_BLOB *certs;
+    BYTE *buffer;          /* Starts with array of ULONG sizes, followed by contiguous data blob. */
     ULONG *bufsize;
     ULONG *retcount;
 };
@@ -158,22 +147,31 @@ struct get_unique_channel_binding_params
     ULONG *bufsize;
 };
 
+enum control_token
+{
+    control_token_none,
+    control_token_shutdown,
+};
+
 struct handshake_params
 {
     schan_session session;
     SecBufferDesc *input;
-    SIZE_T input_size;
+    ULONG input_size;
     SecBufferDesc *output;
-    SecBuffer *alloc_buffer;
+    ULONG *input_offset;
+    int *output_buffer_idx;
+    ULONG *output_offset;
+    enum control_token control_token;
 };
 
 struct recv_params
 {
     schan_session session;
     SecBufferDesc *input;
-    SIZE_T input_size;
+    ULONG input_size;
     void *buffer;
-    SIZE_T *length;
+    ULONG *length;
 };
 
 struct send_params
@@ -181,7 +179,9 @@ struct send_params
     schan_session session;
     SecBufferDesc *output;
     const void *buffer;
-    SIZE_T *length;
+    ULONG length;
+    int *output_buffer_idx;
+    ULONG *output_offset;
 };
 
 struct set_application_protocols_params
@@ -219,6 +219,7 @@ enum schan_funcs
     unix_dispose_session,
     unix_free_certificate_credentials,
     unix_get_application_protocol,
+    unix_get_cipher_info,
     unix_get_connection_info,
     unix_get_enabled_protocols,
     unix_get_key_signature_algorithm,

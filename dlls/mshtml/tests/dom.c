@@ -3614,6 +3614,7 @@ static void test_dynamic_properties(IHTMLElement *elem)
 #define test_attr_node_name(a,b) _test_attr_node_name(__LINE__,a,b)
 static void _test_attr_node_name(unsigned line, IHTMLDOMAttribute *attr, const WCHAR *exname)
 {
+    IHTMLDOMAttribute2 *attr2 = _get_attr2_iface(line, (IUnknown*)attr);
     BSTR str;
     HRESULT hres;
 
@@ -3621,6 +3622,13 @@ static void _test_attr_node_name(unsigned line, IHTMLDOMAttribute *attr, const W
     ok_(__FILE__,line)(hres == S_OK, "get_nodeName failed: %08lx\n", hres);
     ok_(__FILE__,line)(!lstrcmpW(str, exname), "node name is %s, expected %s\n", wine_dbgstr_w(str), wine_dbgstr_w(exname));
     SysFreeString(str);
+
+    hres = IHTMLDOMAttribute2_get_name(attr2, &str);
+    ok_(__FILE__,line)(hres == S_OK, "get_name failed: %08lx\n", hres);
+    ok_(__FILE__,line)(!lstrcmpW(str, exname), "name is %s, expected %s\n", wine_dbgstr_w(str), wine_dbgstr_w(exname));
+    SysFreeString(str);
+
+    IHTMLDOMAttribute2_Release(attr2);
 }
 
 #define test_attr_parent(a) _test_attr_parent(__LINE__,a)
@@ -3937,6 +3945,7 @@ static void test_contenteditable(IUnknown *unk)
     IHTMLElement3 *elem3 = get_elem3_iface(unk);
     HRESULT hres;
     BSTR str, strDefault;
+    VARIANT_BOOL vbool;
 
     hres = IHTMLElement3_get_contentEditable(elem3, &strDefault);
     ok(hres == S_OK, "get_contentEditable failed: 0x%08lx\n", hres);
@@ -3949,6 +3958,21 @@ static void test_contenteditable(IUnknown *unk)
     ok(hres == S_OK, "get_contentEditable failed: 0x%08lx\n", hres);
     ok(!lstrcmpW(str, L"true"), "Got %s, expected %s\n", wine_dbgstr_w(str), "true");
     SysFreeString(str);
+    hres = IHTMLElement3_get_isContentEditable(elem3, &vbool);
+    ok(hres == S_OK, "get_isContentEditable failed: 0x%08lx\n", hres);
+    ok(vbool == VARIANT_TRUE, "Got %d, expected VARIANT_TRUE\n", vbool);
+
+    str = SysAllocString(L"inherit");
+    hres = IHTMLElement3_put_contentEditable(elem3, str);
+    ok(hres == S_OK, "put_contentEditable(%s) failed: 0x%08lx\n", wine_dbgstr_w(str), hres);
+    SysFreeString(str);
+    hres = IHTMLElement3_get_contentEditable(elem3, &str);
+    ok(hres == S_OK, "get_contentEditable failed: 0x%08lx\n", hres);
+    ok(!lstrcmpW(str, L"inherit"), "Got %s, expected %s\n", wine_dbgstr_w(str), "inherit");
+    SysFreeString(str);
+    hres = IHTMLElement3_get_isContentEditable(elem3, &vbool);
+    ok(hres == S_OK, "get_isContentEditable failed: 0x%08lx\n", hres);
+    ok(vbool == VARIANT_FALSE, "Got %d, expected VARIANT_FALSE\n", vbool);
 
     /* Restore origin contentEditable */
     hres = IHTMLElement3_put_contentEditable(elem3, strDefault);
@@ -7314,10 +7338,14 @@ static void test_dom_implementation(IHTMLDocument2 *doc)
     hres = IHTMLDOMImplementation_QueryInterface(dom_implementation, &IID_IHTMLDOMImplementation2,
                                                  (void**)&dom_implementation2);
     if(SUCCEEDED(hres)) {
+        IHTMLSelectionObject *selection;
+        IHTMLFramesCollection2 *frames;
         IHTMLDocument2 *new_document2;
+        IHTMLDocument3 *new_document3;
         IHTMLDocument7 *new_document;
         IHTMLLocation *location;
         IHTMLWindow2 *window;
+        IHTMLElement *elem;
         VARIANT v;
         IDispatch *disp;
 
@@ -7326,6 +7354,7 @@ static void test_dom_implementation(IHTMLDocument2 *doc)
         str = SysAllocString(L"test");
         hres = IHTMLDOMImplementation2_createHTMLDocument(dom_implementation2, str, &new_document);
         ok(hres == S_OK, "createHTMLDocument failed: %08lx\n", hres);
+        SysFreeString(str);
 
         test_disp((IUnknown*)new_document, &DIID_DispHTMLDocument, &CLSID_HTMLDocument, L"[object]");
         test_ifaces((IUnknown*)new_document, doc_node_iids);
@@ -7341,14 +7370,62 @@ static void test_dom_implementation(IHTMLDocument2 *doc)
         hres = IHTMLDocument7_QueryInterface(new_document, &IID_IHTMLDocument2, (void**)&new_document2);
         ok(hres == S_OK, "Could not get IHTMLDocument2 iface: %08lx\n", hres);
 
+        hres = IHTMLDocument7_QueryInterface(new_document, &IID_IHTMLDocument3, (void**)&new_document3);
+        ok(hres == S_OK, "Could not get IHTMLDocument3 iface: %08lx\n", hres);
+
         hres = IHTMLDocument2_get_parentWindow(new_document2, &window);
         ok(hres == E_FAIL, "get_parentWindow returned: %08lx\n", hres);
+
+        hres = IHTMLDocument2_get_readyState(new_document2, &str);
+        ok(hres == S_OK, "get_readyState returned: %08lx\n", hres);
+        ok(!lstrcmpW(str, L"uninitialized"), "readyState = %s\n", wine_dbgstr_w(str));
+        SysFreeString(str);
 
         hres = IHTMLDocument2_get_Script(new_document2, &disp);
         ok(hres == E_PENDING, "get_Script returned: %08lx\n", hres);
 
+        str = SysAllocString(L"test=testval");
+        hres = IHTMLDocument2_put_cookie(new_document2, str);
+        ok(hres == S_OK, "put_cookie returned: %08lx\n", hres);
+        SysFreeString(str);
+
+        hres = IHTMLDocument2_get_cookie(doc, &str);
+        ok(hres == S_OK, "get_cookie returned: %08lx\n", hres);
+        ok(str == NULL, "cookie = %s\n", wine_dbgstr_w(str));
+        SysFreeString(str);
+
+        hres = IHTMLDocument3_get_documentElement(new_document3, &elem);
+        ok(hres == S_OK, "get_documentElement returned: %08lx\n", hres);
+        ok(elem != NULL, "documentElement = NULL\n");
+        IHTMLElement_Release(elem);
+
+        hres = IHTMLDocument2_get_frames(new_document2, &frames);
+        ok(hres == E_NOTIMPL, "get_frames returned: %08lx\n", hres);
+
         hres = IHTMLDocument2_get_location(new_document2, &location);
         ok(hres == E_UNEXPECTED, "get_location returned: %08lx\n", hres);
+
+        hres = IHTMLDocument2_get_selection(new_document2, &selection);
+        ok(hres == S_OK, "get_selection returned: %08lx\n", hres);
+        ok(selection != NULL, "selection = NULL\n");
+        hres = IHTMLSelectionObject_get_type(selection, &str);
+        ok(hres == S_OK, "selection get_type returned: %08lx\n", hres);
+        ok(!lstrcmpW(str, L"None"), "selection type = %s\n", wine_dbgstr_w(str));
+        IHTMLSelectionObject_Release(selection);
+        SysFreeString(str);
+
+        hres = IHTMLDocument2_get_URL(new_document2, &str);
+        ok(hres == S_OK, "get_URL returned: %08lx\n", hres);
+        ok(!lstrcmpW(str, L"about:blank"), "URL = %s\n", wine_dbgstr_w(str));
+        SysFreeString(str);
+
+        str = SysAllocString(L"text/html");
+        V_VT(&v) = VT_ERROR;
+        disp = (IDispatch*)0xdeadbeef;
+        hres = IHTMLDocument2_open(new_document2, str, v, v, v, &disp);
+        ok(hres == E_FAIL, "open returned: %08lx\n", hres);
+        ok(disp == NULL, "disp = %p\n", disp);
+        SysFreeString(str);
 
         memset(&v, 0xcc, sizeof(v));
         hres = IHTMLDocument7_get_onmsthumbnailclick(new_document, &v);
@@ -7357,6 +7434,7 @@ static void test_dom_implementation(IHTMLDocument2 *doc)
         ok((DWORD)(DWORD_PTR)V_DISPATCH(&v) == 0xcccccccc, "got %p\n", V_DISPATCH(&v));
 
         IHTMLDocument2_Release(new_document2);
+        IHTMLDocument3_Release(new_document3);
         IHTMLDocument7_Release(new_document);
         IHTMLDOMImplementation2_Release(dom_implementation2);
     }else {
@@ -9417,6 +9495,12 @@ static void test_elems(IHTMLDocument2 *doc)
         test_anchor_hostname((IUnknown*)elem, L"test1");
         test_anchor_port((IUnknown*)elem, L"8080");
 
+        /* about:blank */
+        test_anchor_put_href((IUnknown*)elem, L"about:blank");
+        test_anchor_href((IUnknown*)elem, L"about:blank");
+        test_anchor_hostname((IUnknown*)elem, NULL);
+        test_anchor_port((IUnknown*)elem, NULL);
+
         /* Restore the href */
         test_anchor_put_href((IUnknown*)elem, L"http://test/");
         test_anchor_href((IUnknown*)elem, L"http://test/");
@@ -10829,6 +10913,37 @@ static void test_docfrag(IHTMLDocument2 *doc)
     IHTMLDocument2_Release(frag);
 }
 
+static void test_about_blank_storage(IHTMLDocument2 *doc)
+{
+    IHTMLStorage *storage;
+    IHTMLWindow6 *window6;
+    IHTMLWindow2 *window;
+    HRESULT hres;
+
+    hres = IHTMLDocument2_get_parentWindow(doc, &window);
+    ok(hres == S_OK, "get_parentWindow failed: %08lx\n", hres);
+    ok(window != NULL, "window == NULL\n");
+
+    hres = IHTMLWindow2_QueryInterface(window, &IID_IHTMLWindow6, (void**)&window6);
+    IHTMLWindow2_Release(window);
+    if(FAILED(hres)) {
+        win_skip("IHTMLWindow6 not supported\n");
+        return;
+    }
+
+    storage = (IHTMLStorage*)(INT_PTR)0xdeadbeef;
+    hres = IHTMLWindow6_get_sessionStorage(window6, &storage);
+    ok(hres == S_FALSE, "get_sessionStorage failed: %08lx\n", hres);
+    ok(storage == NULL, "session_storage != NULL\n");
+
+    storage = (IHTMLStorage*)(INT_PTR)0xdeadbeef;
+    hres = IHTMLWindow6_get_localStorage(window6, &storage);
+    ok(hres == S_FALSE, "get_localStorage failed: %08lx\n", hres);
+    ok(storage == NULL, "local_storage != NULL\n");
+
+    IHTMLWindow6_Release(window6);
+}
+
 static void check_quirks_mode(IHTMLDocument2 *doc)
 {
     test_compatmode(doc, L"BackCompat");
@@ -11433,6 +11548,26 @@ static void test_document_mode(IHTMLDocument2 *doc2)
 
 static void test_quirks_mode(void)
 {
+    static const struct {
+        const char *str;
+        unsigned expected_mode;
+    } tests[] = {
+        { "9",          9 },
+        { " \t9 ",      9 },
+        { " 5 , 8 , 7", 8 },
+        { " 8 , 7 , 5", 8 },
+        { " 5 , 5 , 7", 7 },
+        { " 5 , 9 , 7", 9 },
+        { " 5, 7,9",    9 },
+        { " 5, 7;9",    7 },
+        { " 5, edge,8", 11 },
+        { " 5, foo,8",  5 },
+        { " 5, 8,foo",  8 },
+        { " 5, ,,7",    5 },
+        { " 5, , ,7",   5 },
+    };
+    unsigned i;
+
     run_domtest("<html></html>", check_quirks_mode);
     run_domtest("<!DOCTYPE html>\n<html></html>", check_strict_mode);
     run_domtest("<!-- comment --><!DOCTYPE html>\n<html></html>", check_quirks_mode);
@@ -11441,18 +11576,20 @@ static void test_quirks_mode(void)
     expected_document_mode = 5;
     run_domtest("<html><body></body></html>", test_document_mode);
 
+    expected_document_mode = 7;
+    run_domtest("<!DOCTYPE html>\n<html></html>", test_document_mode);
+
     if(!is_ie9plus)
         return;
 
-    expected_document_mode = 9;
-    run_domtest("<!DOCTYPE html>\n"
-                "<html>"
-                " <head>"
-                "  <meta http-equiv=\"x-ua-compatible\" content=\"IE=9\" />"
-                " </head>"
-                " <body>"
-                " </body>"
-                "</html>", test_document_mode);
+    for(i = 0; i < ARRAY_SIZE(tests); i++) {
+        char buf[128];
+        expected_document_mode = tests[i].expected_mode;
+        sprintf(buf, "<!DOCTYPE html>\n<html><head>"
+                     " <meta http-equiv=\"x-ua-compatible\" content=\"IE=%s\" />"
+                     "</head><body></body></html>", tests[i].str);
+        run_domtest(buf, test_document_mode);
+    }
 
     expected_document_mode = 8;
     run_domtest("<!DOCTYPE html>\n"
@@ -11542,9 +11679,11 @@ START_TEST(dom)
         run_domtest(elem_test_str, test_elems);
         run_domtest(elem_test2_str, test_elems2);
         run_domtest(doc_blank, test_dom_elements);
+        run_domtest(doc_blank, test_about_blank_storage);
         if(is_ie9plus) {
             compat_mode = COMPAT_IE9;
             run_domtest(doc_blank_ie9, test_dom_elements);
+            run_domtest(doc_blank_ie9, test_about_blank_storage);
             compat_mode = COMPAT_NONE;
         }
         run_domtest(noscript_str, test_noscript);

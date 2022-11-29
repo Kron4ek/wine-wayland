@@ -903,6 +903,12 @@ static BOOL add_family_replacement( const WCHAR *new_name, const WCHAR *replace 
         return FALSE;
     }
 
+    if (family->replacement)
+    {
+        TRACE( "%s is replaced by another font, skipping.\n", debugstr_w(replace) );
+        return FALSE;
+    }
+
     if (!(new_family = create_family( new_name, NULL ))) return FALSE;
     new_family->replacement = family;
     family->refcount++;
@@ -1494,16 +1500,62 @@ static const WCHAR microsoft_sans_serifW[] =
     {'M','i','c','r','o','s','o','f','t',' ','S','a','n','s',' ','S','e','r','i','f',0};
 static const WCHAR tahomaW[] =
     {'T','a','h','o','m','a',0};
+static const WCHAR ms_gothicW[] =
+    {'M','S',' ','G','o','t','h','i','c',0};
+static const WCHAR ms_p_gothicW[] =
+    {'M','S',' ','P','G','o','t','h','i','c',0};
 static const WCHAR ms_ui_gothicW[] =
     {'M','S',' ','U','I',' ','G','o','t','h','i','c',0};
 static const WCHAR sim_sunW[] =
     {'S','i','m','S','u','n',0};
 static const WCHAR gulimW[] =
     {'G','u','l','i','m',0};
+static const WCHAR ming_li_uW[] =
+    {'M','i','n','g','L','i','U',0};
 static const WCHAR p_ming_li_uW[] =
     {'P','M','i','n','g','L','i','U',0};
+static const WCHAR ming_li_u_hkscsW[] =
+    {'M','i','n','g','L','i','U','_','H','K','S','C','S',0};
+static const WCHAR ming_li_u_ext_bW[] =
+    {'M','i','n','g','L','i','U','-','E','x','t','B',0};
+static const WCHAR p_ming_li_u_ext_bW[] =
+    {'P','M','i','n','g','L','i','U','-','E','x','t','B',0};
+static const WCHAR ming_li_u_hkscs_ext_bW[] =
+    {'M','i','n','g','L','i','U','_','H','K','S','C','S','-','E','x','t','B',0};
 static const WCHAR batangW[] =
     {'B','a','t','a','n','g',0};
+static const WCHAR microsoft_jheng_heiW[] =
+    {'M','i','c','r','o','s','o','f','t',' ','J','h','e','n','g','H','e','i',0};
+static const WCHAR microsoft_jheng_hei_boldW[] =
+    {'M','i','c','r','o','s','o','f','t',' ','J','h','e','n','g','H','e','i',' ','B','o','l','d',0};
+static const WCHAR microsoft_jheng_hei_uiW[] =
+    {'M','i','c','r','o','s','o','f','t',' ','J','h','e','n','g','H','e','i',' ','U','I',0};
+static const WCHAR microsoft_jheng_hei_ui_boldW[] =
+    {'M','i','c','r','o','s','o','f','t',' ','J','h','e','n','g','H','e','i',' ','U','I',' ','B','o','l','d',0};
+static const WCHAR microsoft_jheng_hei_ui_lightW[] =
+    {'M','i','c','r','o','s','o','f','t',' ','J','h','e','n','g','H','e','i',' ','U','I',' ','L','i','g','h','t',0};
+static const WCHAR yu_gothic_uiW[] =
+    {'Y','u',' ','G','o','t','h','i','c',' ','U','I',0};
+static const WCHAR yu_gothic_ui_boldW[] =
+    {'Y','u',' ','G','o','t','h','i','c',' ','U','I',' ','B','o','l','d',0};
+static const WCHAR yu_gothic_ui_lightW[] =
+    {'Y','u',' ','G','o','t','h','i','c',' ','U','I',' ','L','i','g','h','t',0};
+static const WCHAR yu_gothic_ui_semilightW[] =
+    {'Y','u',' ','G','o','t','h','i','c',' ','U','I',' ','S','e','m','i','l','i','g','h','t',0};
+static const WCHAR yu_gothic_ui_semiboldW[] =
+    {'Y','u',' ','G','o','t','h','i','c',' ','U','I',' ','S','e','m','i','b','o','l','d',0};
+static const WCHAR meiryoW[] =
+    {'M','e','i','r','y','o',0};
+static const WCHAR meiryo_boldW[] =
+    {'M','e','i','r','y','o',' ','B','o','l','d',0};
+static const WCHAR meiryo_uiW[] =
+    {'M','e','i','r','y','o',' ','U','I',0};
+static const WCHAR meiryo_ui_boldW[] =
+    {'M','e','i','r','y','o',' ','U','I',' ','B','o','l','d',0};
+static const WCHAR ms_minchoW[] =
+    {'M','S',' ','M','i','n','c','h','o',0};
+static const WCHAR ms_p_minchoW[] =
+    {'M','S',' ','P','M','i','n','c','h','o',0};
 
 static const WCHAR * const font_links_list[] =
 {
@@ -1543,6 +1595,367 @@ static const struct font_links_defaults_list
     { p_ming_li_uW,
       { p_ming_li_uW, sim_sunW, ms_ui_gothicW, batangW, NULL }
     }
+};
+
+static const char system_link_tahoma_sc[] =
+    "SIMSUN.TTC,SimSun\0"
+    "MINGLIU.TTC,PMingLiu\0"
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "BATANG.TTC,Batang\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_tahoma_tc[] =
+    "MINGLIU.TTC,PMingLiu\0"
+    "SIMSUN.TTC,SimSun\0"
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "BATANG.TTC,Batang\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_tahoma_jp[] =
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "MINGLIU.TTC,PMingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "GULIM.TTC,Gulim\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_tahoma_kr[] =
+    "GULIM.TTC,Gulim\0"
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "MINGLIU.TTC,PMingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_tahoma_non_cjk[] =
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "MINGLIU.TTC,PMingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "GULIM.TTC,Gulim\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ms_gothic[] =
+    "MINGLIU.TTC,MingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "GULIM.TTC,GulimChe\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ms_p_gothic[] =
+    "MINGLIU.TTC,PMingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "GULIM.TTC,Gulim\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ms_ui_gothic[] =
+    "MICROSS.TTF,Microsoft Sans Serif\0"
+    "MINGLIU.TTC,PMingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "GULIM.TTC,Gulim\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_microsoft_jheng_hei[] =
+    "SEGOEUI.TTF,Segoe UI\0"
+    "MINGLIU.TTC,MingLiU\0"
+    "MSYH.TTC,Microsoft YaHei\0"
+    "MEIRYO.TTC,Meiryo\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_microsoft_jheng_hei_bold[] =
+    "SEGOEUIB.TTF,Segoe UI Bold\0"
+    "MINGLIU.TTC,MingLiU\0"
+    "MSYHBD.TTC,Microsoft YaHei Bold\0"
+    "MEIRYOB.TTC,Meiryo Bold\0"
+    "MALGUNBD.TTF,Malgun Gothic Bold\0"
+    "YUGOTHB.TTC,Yu Gothic UI Bold\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_microsoft_jheng_hei_ui[] =
+    "SEGOEUI.TTF,Segoe UI\0"
+    "MINGLIU.TTC,MingLiU\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MEIRYO.TTC,Meiryo UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_microsoft_jheng_hei_ui_bold[] =
+    "SEGOEUIB.TTF,Segoe UI Bold\0"
+    "MINGLIU.TTC,MingLiU\0"
+    "MSYHBD.TTC,Microsoft YaHei UI Bold\0"
+    "MEIRYOB.TTC,Meiryo UI Bold\0"
+    "MALGUNBD.TTF,Malgun Gothic Bold\0"
+    "YUGOTHB.TTC,Yu Gothic UI Bold\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_microsoft_jheng_hei_ui_light[] =
+    "SEGOEUIL.TTF,Segoe UI Light\0"
+    "MINGLIU.TTC,MingLiU\0"
+    "MSYHL.TTC,Microsoft YaHei UI Light\0"
+    "MEIRYO.TTC,Meiryo UI\0"
+    "MALGUNSL.TTF,Malgun Gothic Semilight\0"
+    "YUGOTHL.TTC,Yu Gothic UI Light\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ming_li_u[] =
+    "MICROSS.TTF,Microsoft Sans Serif\0"
+    "SIMSUN.TTC,SimSun\0"
+    "MSMINCHO.TTC,MS Mincho\0"
+    "BATANG.TTC,BatangChe\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_p_ming_li_u[] =
+    "MICROSS.TTF,Microsoft Sans Serif\0"
+    "SIMSUN.TTC,SimSun\0"
+    "MSMINCHO.TTC,MS PMincho\0"
+    "BATANG.TTC,Batang\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ming_li_u_hkscs[] =
+    "MICROSS.TTF,Microsoft Sans Serif\0"
+    "MINGLIU.TTC,MingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "MSMINCHO.TTC,MS Mincho\0"
+    "BATANG.TTC,BatangChe\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ming_li_u_ext_b[] =
+    "MICROSS.TTF,Microsoft Sans Serif\0"
+    "MINGLIU.TTC,MingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "MSMINCHO.TTC,MS Mincho\0"
+    "BATANG.TTC,BatangChe\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_p_ming_li_u_ext_b[] =
+    "MICROSS.TTF,Microsoft Sans Serif\0"
+    "MINGLIU.TTC,PMingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "MSMINCHO.TTC,MS PMincho\0"
+    "BATANG.TTC,Batang\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ming_li_u_hkscs_ext_b[] =
+    "MICROSS.TTF,Microsoft Sans Serif\0"
+    "MINGLIU.TTC,MingLiU_HKSCS\0"
+    "MINGLIU.TTC,MingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "MSMINCHO.TTC,MS Mincho\0"
+    "BATANG.TTC,BatangChe\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_yu_gothic_ui[] =
+    "SEGOEUI.TTF,Segoe UI\0"
+    "MSJH.TTC,Microsoft JhengHei\0"
+    "MSYH.TTC,Microsoft YaHei\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_yu_gothic_ui_bold[] =
+    "SEGOEUIB.TTF,Segoe UI Bold\0"
+    "MSJHBD.TTC,Microsoft Jhenghei UI Bold\0"
+    "MSYHBD.TTC,Microsoft YaHei Bold\0"
+    "MALGUNBD.TTF,Malgun Gothic Bold\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_yu_gothic_ui_light[] =
+    "SEGOEUIL.TTF,Segoe UI Light\0"
+    "MSJHL.TTC,Microsoft Jhenghei UI Light\0"
+    "MSYHL.TTC,Microsoft YaHei Light\0"
+    "MALGUNSL.TTF,Malgun Gothic Semilight\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_yu_gothic_ui_semilight[] =
+    "SEGOEUISL.TTF,Segoe UI Semilight\0"
+    "MSJH.TTC,Microsoft Jhenghei UI\0"
+    "MSYH.TTC,Microsoft YaHei\0"
+    "MALGUNSL.TTF,Malgun Gothic Semilight\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_yu_gothic_ui_semibold[] =
+    "SEGUISB.TTF,Segoe UI Semibold\0"
+    "MSJH.TTC,Microsoft Jhenghei UI\0"
+    "MSYH.TTC,Microsoft YaHei\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_meiryo[] =
+    "SEGOEUI.TTF,Segoe UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "MSJH.TTC,Microsoft JhengHei\0"
+    "MSYH.TTC,Microsoft YaHei\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_meiryo_bold[] =
+    "SEGOEUIB.TTF,Segoe UI Bold\0"
+    "YUGOTHB.TTC,Yu Gothic UI Bold\0"
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "MSJHBD.TTC,Microsoft Jhenghei Bold\0"
+    "MSYHBD.TTC,Microsoft YaHei Bold\0"
+    "MALGUNBD.TTF,Malgun Gothic Bold\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_meiryo_ui[] =
+    "SEGOEUI.TTF,Segoe UI\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "MSJH.TTC,Microsoft Jhenghei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_meiryo_ui_bold[] =
+    "SEGOEUIB.TTF,Segoe UI Bold\0"
+    "YUGOTHB.TTC,Yu Gothic UI Bold\0"
+    "MSGOTHIC.TTC,MS UI Gothic\0"
+    "MSJHBD.TTC,Microsoft Jhenghei UI Bold\0"
+    "MSYHBD.TTC,Microsoft YaHei UI Bold\0"
+    "MALGUNBD.TTF,Malgun Gothic Bold\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ms_mincho[] =
+    "MINGLIU.TTC,MingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "BATANG.TTC,Batang\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const char system_link_ms_p_mincho[] =
+    "MINGLIU.TTC,PMingLiU\0"
+    "SIMSUN.TTC,SimSun\0"
+    "BATANG.TTC,Batang\0"
+    "YUGOTHM.TTC,Yu Gothic UI\0"
+    "MSJH.TTC,Microsoft JhengHei UI\0"
+    "MSYH.TTC,Microsoft YaHei UI\0"
+    "MALGUN.TTF,Malgun Gothic\0"
+    "SEGUISYM.TTF,Segoe UI Symbol\0";
+
+static const struct system_link_reg
+{
+    const WCHAR *font_name;
+    BOOL locale_dependent;
+    const char *link_non_cjk;
+    DWORD link_non_cjk_len;
+    const char *link_sc;
+    DWORD link_sc_len;
+    const char *link_tc;
+    DWORD link_tc_len;
+    const char *link_jp;
+    DWORD link_jp_len;
+    const char *link_kr;
+    DWORD link_kr_len;
+}
+default_system_link[] =
+{
+    {
+        tahomaW, TRUE,
+        system_link_tahoma_non_cjk, sizeof(system_link_tahoma_non_cjk),
+        system_link_tahoma_sc,      sizeof(system_link_tahoma_sc),
+        system_link_tahoma_tc,      sizeof(system_link_tahoma_tc),
+        system_link_tahoma_jp,      sizeof(system_link_tahoma_jp),
+        system_link_tahoma_kr,      sizeof(system_link_tahoma_kr),
+    },
+    {
+        microsoft_sans_serifW, TRUE,
+        system_link_tahoma_non_cjk, sizeof(system_link_tahoma_non_cjk),
+        system_link_tahoma_sc,      sizeof(system_link_tahoma_sc),
+        system_link_tahoma_tc,      sizeof(system_link_tahoma_tc),
+        system_link_tahoma_jp,      sizeof(system_link_tahoma_jp),
+        system_link_tahoma_kr,      sizeof(system_link_tahoma_kr),
+    },
+    {
+        lucida_sans_unicodeW, TRUE,
+        system_link_tahoma_non_cjk, sizeof(system_link_tahoma_non_cjk),
+        system_link_tahoma_sc,      sizeof(system_link_tahoma_sc),
+        system_link_tahoma_tc,      sizeof(system_link_tahoma_tc),
+        system_link_tahoma_jp,      sizeof(system_link_tahoma_jp),
+        system_link_tahoma_kr,      sizeof(system_link_tahoma_kr),
+    },
+    { ms_gothicW,                    FALSE, system_link_ms_gothic,                    sizeof(system_link_ms_gothic) },
+    { ms_p_gothicW,                  FALSE, system_link_ms_p_gothic,                  sizeof(system_link_ms_p_gothic) },
+    { ms_ui_gothicW,                 FALSE, system_link_ms_ui_gothic,                 sizeof(system_link_ms_ui_gothic) },
+    { microsoft_jheng_heiW,          FALSE, system_link_microsoft_jheng_hei,          sizeof(system_link_microsoft_jheng_hei) },
+    { microsoft_jheng_hei_boldW,     FALSE, system_link_microsoft_jheng_hei_bold,     sizeof(system_link_microsoft_jheng_hei_bold) },
+    { microsoft_jheng_hei_uiW,       FALSE, system_link_microsoft_jheng_hei_ui,       sizeof(system_link_microsoft_jheng_hei_ui) },
+    { microsoft_jheng_hei_ui_boldW,  FALSE, system_link_microsoft_jheng_hei_ui_bold,  sizeof(system_link_microsoft_jheng_hei_ui_bold) },
+    { microsoft_jheng_hei_ui_lightW, FALSE, system_link_microsoft_jheng_hei_ui_light, sizeof(system_link_microsoft_jheng_hei_ui_light) },
+    { ming_li_uW,                    FALSE, system_link_ming_li_u,                    sizeof(system_link_ming_li_u) },
+    { p_ming_li_uW,                  FALSE, system_link_p_ming_li_u,                  sizeof(system_link_p_ming_li_u) },
+    { ming_li_u_hkscsW,              FALSE, system_link_ming_li_u_hkscs,              sizeof(system_link_ming_li_u_hkscs) },
+    { ming_li_u_ext_bW,              FALSE, system_link_ming_li_u_ext_b,              sizeof(system_link_ming_li_u_ext_b) },
+    { p_ming_li_u_ext_bW,            FALSE, system_link_p_ming_li_u_ext_b,            sizeof(system_link_p_ming_li_u_ext_b) },
+    { ming_li_u_hkscs_ext_bW,        FALSE, system_link_ming_li_u_hkscs_ext_b,        sizeof(system_link_ming_li_u_hkscs_ext_b) },
+    { yu_gothic_uiW,                 FALSE, system_link_yu_gothic_ui,                 sizeof(system_link_yu_gothic_ui) },
+    { yu_gothic_ui_boldW,            FALSE, system_link_yu_gothic_ui_bold,            sizeof(system_link_yu_gothic_ui_bold) },
+    { yu_gothic_ui_lightW,           FALSE, system_link_yu_gothic_ui_light,           sizeof(system_link_yu_gothic_ui_light) },
+    { yu_gothic_ui_semiboldW,        FALSE, system_link_yu_gothic_ui_semibold,        sizeof(system_link_yu_gothic_ui_semibold) },
+    { yu_gothic_ui_semilightW,       FALSE, system_link_yu_gothic_ui_semilight,       sizeof(system_link_yu_gothic_ui_semilight) },
+    { meiryoW,                       FALSE, system_link_meiryo,                       sizeof(system_link_meiryo) },
+    { meiryo_boldW,                  FALSE, system_link_meiryo_bold,                  sizeof(system_link_meiryo_bold) },
+    { meiryo_uiW,                    FALSE, system_link_meiryo_ui,                    sizeof(system_link_meiryo_ui) },
+    { meiryo_ui_boldW,               FALSE, system_link_meiryo_ui_bold,               sizeof(system_link_meiryo_ui_bold) },
+    { ms_minchoW,                    FALSE, system_link_ms_mincho,                    sizeof(system_link_ms_mincho) },
+    { ms_p_minchoW,                  FALSE, system_link_ms_p_mincho,                  sizeof(system_link_ms_p_mincho) },
 };
 
 static void populate_system_links( const WCHAR *name, const WCHAR * const *values )
@@ -1914,7 +2327,7 @@ static struct gdi_font *get_font_from_handle( DWORD handle )
     struct font_handle_entry *entry = handle_entry( handle );
 
     if (entry) return entry->font;
-    SetLastError( ERROR_INVALID_PARAMETER );
+    RtlSetLastWin32Error( ERROR_INVALID_PARAMETER );
     return NULL;
 }
 
@@ -2630,73 +3043,61 @@ static void update_font_association_info(void)
 
 static void set_multi_value_key( HKEY hkey, const WCHAR *name, const char *value, DWORD len )
 {
-    WCHAR valueW[256];
+    WCHAR *valueW;
+
+    if (!(valueW = malloc( len * sizeof(WCHAR) )))
+    {
+        ERR( "malloc of %d * WCHAR failed\n", len );
+        return;
+    }
     ascii_to_unicode( valueW, value, len );
     if (value)
         set_reg_value( hkey, name, REG_MULTI_SZ, valueW, len * sizeof(WCHAR) );
     else if (name)
         reg_delete_value( hkey, name );
+    free( valueW );
 }
 
 static void update_font_system_link_info(void)
 {
-    static const char system_link_simplified_chinese[] =
-        "SIMSUN.TTC,SimSun\0"
-        "MINGLIU.TTC,PMingLiu\0"
-        "MSGOTHIC.TTC,MS UI Gothic\0"
-        "BATANG.TTC,Batang\0";
-    static const char system_link_traditional_chinese[] =
-        "MINGLIU.TTC,PMingLiu\0"
-        "SIMSUN.TTC,SimSun\0"
-        "MSGOTHIC.TTC,MS UI Gothic\0"
-        "BATANG.TTC,Batang\0";
-    static const char system_link_japanese[] =
-        "MSGOTHIC.TTC,MS UI Gothic\0"
-        "MINGLIU.TTC,PMingLiU\0"
-        "SIMSUN.TTC,SimSun\0"
-        "GULIM.TTC,Gulim\0";
-    static const char system_link_korean[] =
-        "GULIM.TTC,Gulim\0"
-        "MSGOTHIC.TTC,MS UI Gothic\0"
-        "MINGLIU.TTC,PMingLiU\0"
-        "SIMSUN.TTC,SimSun\0";
-    static const char system_link_non_cjk[] =
-        "MSGOTHIC.TTC,MS UI Gothic\0"
-        "MINGLIU.TTC,PMingLiU\0"
-        "SIMSUN.TTC,SimSun\0"
-        "GULIM.TTC,Gulim\0";
     HKEY hkey;
 
     if ((hkey = reg_create_key( NULL, system_link_keyW, sizeof(system_link_keyW), 0, NULL )))
     {
         const char *link;
-        DWORD len;
+        DWORD len, i;
 
-        switch (ansi_cp.CodePage)
+        for (i = 0; i < ARRAY_SIZE(default_system_link); ++i)
         {
-        case 932:
-            link = system_link_japanese;
-            len = sizeof(system_link_japanese);
-            break;
-        case 936:
-            link = system_link_simplified_chinese;
-            len = sizeof(system_link_simplified_chinese);
-            break;
-        case 949:
-            link = system_link_korean;
-            len = sizeof(system_link_korean);
-            break;
-        case 950:
-            link = system_link_traditional_chinese;
-            len = sizeof(system_link_traditional_chinese);
-            break;
-        default:
-            link = system_link_non_cjk;
-            len = sizeof(system_link_non_cjk);
+            const struct system_link_reg *link_reg = &default_system_link[i];
+
+            link = link_reg->link_non_cjk;
+            len = link_reg->link_non_cjk_len;
+
+            if (link_reg->locale_dependent)
+            {
+                switch (ansi_cp.CodePage)
+                {
+                case 932:
+                    link = link_reg->link_jp;
+                    len = link_reg->link_jp_len;
+                    break;
+                case 936:
+                    link = link_reg->link_sc;
+                    len = link_reg->link_sc_len;
+                    break;
+                case 949:
+                    link = link_reg->link_kr;
+                    len = link_reg->link_kr_len;
+                    break;
+                case 950:
+                    link = link_reg->link_tc;
+                    len = link_reg->link_tc_len;
+                    break;
+                }
+            }
+            set_multi_value_key(hkey, link_reg->font_name, link, len);
         }
-        set_multi_value_key(hkey, lucida_sans_unicodeW, link, len);
-        set_multi_value_key(hkey, microsoft_sans_serifW, link, len);
-        set_multi_value_key(hkey, tahomaW, link, len);
         NtClose( hkey );
     }
 }
@@ -3230,6 +3631,28 @@ DWORD win32u_wctomb( CPTABLEINFO *info, char *dst, DWORD dstlen, const WCHAR *sr
     return ret;
 }
 
+DWORD win32u_wctomb_size( CPTABLEINFO *info, const WCHAR *src, DWORD srclen )
+{
+    DWORD ret;
+
+    if (info->CodePage == CP_UTF8)
+    {
+        RtlUnicodeToUTF8N( NULL, 0, &ret, src, srclen * sizeof(WCHAR) );
+    }
+    else if(info->DBCSCodePage)
+    {
+        WCHAR *uni2cp = info->WideCharTable;
+        for (ret = srclen; srclen; srclen--, src++)
+            if (uni2cp[*src] & 0xff00) ret++;
+    }
+    else
+    {
+        ret = srclen;
+    }
+
+    return ret;
+}
+
 DWORD win32u_mbtowc( CPTABLEINFO *info, WCHAR *dst, DWORD dstlen, const char *src, DWORD srclen )
 {
     DWORD ret;
@@ -3365,7 +3788,7 @@ static DWORD get_glyph_outline( struct gdi_font *font, UINT glyph, UINT format,
     ret = font_funcs->get_glyph_outline( font, index, format, &gm, &abc, buflen, buf, mat, tategaki );
     if (ret == GDI_ERROR) return ret;
 
-    if ((format == GGO_METRICS || format == GGO_BITMAP || format ==  WINE_GGO_GRAY16_BITMAP) && !mat)
+    if (format == GGO_METRICS && !mat)
         set_gdi_font_glyph_metrics( font, index, &gm, &abc );
 
 done:
@@ -4268,6 +4691,9 @@ const struct gdi_dc_funcs font_driver =
     NULL,                           /* pStrokePath */
     NULL,                           /* pUnrealizePalette */
     NULL,                           /* pD3DKMTCheckVidPnExclusiveOwnership */
+    NULL,                           /* pD3DKMTCloseAdapter */
+    NULL,                           /* pD3DKMTOpenAdapterFromLuid */
+    NULL,                           /* pD3DKMTQueryVideoMemoryInfo */
     NULL,                           /* pD3DKMTSetVidPnSourceOwner */
     GDI_PRIORITY_FONT_DRV           /* priority */
 };
@@ -4475,26 +4901,35 @@ UINT WINAPI NtGdiGetTextCharsetInfo( HDC hdc, FONTSIGNATURE *fs, DWORD flags )
 /***********************************************************************
  *           NtGdiHfontCreate   (win32u.@)
  */
-HFONT WINAPI NtGdiHfontCreate( const ENUMLOGFONTEXDVW *penumex, ULONG size, ULONG type,
+HFONT WINAPI NtGdiHfontCreate( const void *logfont, ULONG size, ULONG type,
                                ULONG flags, void *data )
 {
     HFONT hFont;
     FONTOBJ *fontPtr;
     const LOGFONTW *plf;
 
-    if (!penumex) return 0;
+    if (!logfont) return 0;
 
-    if (penumex->elfEnumLogfontEx.elfFullName[0] ||
-        penumex->elfEnumLogfontEx.elfStyle[0] ||
-        penumex->elfEnumLogfontEx.elfScript[0])
+    if (size == sizeof(ENUMLOGFONTEXDVW) || size == sizeof(ENUMLOGFONTEXW))
     {
-        FIXME("some fields ignored. fullname=%s, style=%s, script=%s\n",
-            debugstr_w(penumex->elfEnumLogfontEx.elfFullName),
-            debugstr_w(penumex->elfEnumLogfontEx.elfStyle),
-            debugstr_w(penumex->elfEnumLogfontEx.elfScript));
-    }
+        const ENUMLOGFONTEXW *lfex = logfont;
 
-    plf = &penumex->elfEnumLogfontEx.elfLogFont;
+        if (lfex->elfFullName[0] || lfex->elfStyle[0] || lfex->elfScript[0])
+        {
+            FIXME( "some fields ignored. fullname=%s, style=%s, script=%s\n",
+                   debugstr_w( lfex->elfFullName ), debugstr_w( lfex->elfStyle ),
+                   debugstr_w( lfex->elfScript ));
+        }
+
+        plf = &lfex->elfLogFont;
+    }
+    else if (size != sizeof(LOGFONTW))
+    {
+        RtlSetLastWin32Error( ERROR_INVALID_PARAMETER );
+        return 0;
+    }
+    else plf = logfont;
+
     if (!(fontPtr = malloc( sizeof(*fontPtr) ))) return 0;
 
     fontPtr->logfont = *plf;
@@ -5634,7 +6069,7 @@ done:
         UINT size = NtGdiGetOutlineTextMetricsInternalW( hdc, 0, NULL, 0 );
         OUTLINETEXTMETRICW* otm = NULL;
         POINT pts[5];
-        HPEN hpen = NtGdiSelectPen( hdc, get_stock_object(NULL_PEN) );
+        HPEN hpen = NtGdiSelectPen( hdc, GetStockObject(NULL_PEN) );
         HBRUSH hbrush = NtGdiCreateSolidBrush( dc->attr->text_color, NULL );
 
         hbrush = NtGdiSelectBrush(hdc, hbrush);
@@ -5836,7 +6271,7 @@ BOOL CDECL __wine_get_file_outline_text_metric( const WCHAR *path, OUTLINETEXTME
 
 done:
     if (font) free_gdi_font( font );
-    SetLastError( ERROR_INVALID_PARAMETER );
+    RtlSetLastWin32Error( ERROR_INVALID_PARAMETER );
     return FALSE;
 }
 
@@ -5853,7 +6288,7 @@ DWORD WINAPI NtGdiGetKerningPairs( HDC hdc, DWORD count, KERNINGPAIR *kern_pair 
 
     if (!count && kern_pair)
     {
-        SetLastError( ERROR_INVALID_PARAMETER );
+        RtlSetLastWin32Error( ERROR_INVALID_PARAMETER );
         return 0;
     }
 
@@ -5878,7 +6313,7 @@ DWORD WINAPI NtGdiGetKerningPairs( HDC hdc, DWORD count, KERNINGPAIR *kern_pair 
  *
  * NOTES
  *
- * Calls SetLastError()
+ * Calls RtlSetLastWin32Error()
  *
  */
 DWORD WINAPI NtGdiGetFontData( HDC hdc, DWORD table, DWORD offset, void *buffer, DWORD length )
@@ -6348,7 +6783,7 @@ HANDLE WINAPI NtGdiAddFontMemResourceEx( void *ptr, DWORD size, void *dv, ULONG 
 
     if (!ptr || !size || !count)
     {
-        SetLastError(ERROR_INVALID_PARAMETER);
+        RtlSetLastWin32Error(ERROR_INVALID_PARAMETER);
         return NULL;
     }
     if (!font_funcs) return NULL;
@@ -6503,7 +6938,7 @@ BOOL WINAPI NtGdiGetFontFileData( DWORD instance_id, DWORD file_index, UINT64 *o
         if (size != GDI_ERROR && size >= buff_size && *offset <= size - buff_size)
             ret = font_funcs->get_font_data( font, tag, *offset, buff, buff_size ) != GDI_ERROR;
         else
-            SetLastError( ERROR_INVALID_PARAMETER );
+            RtlSetLastWin32Error( ERROR_INVALID_PARAMETER );
     }
     pthread_mutex_unlock( &font_lock );
     return ret;
@@ -6531,7 +6966,7 @@ BOOL WINAPI NtGdiGetFontFileInfo( DWORD instance_id, DWORD file_index, struct fo
             lstrcpyW( info->path, font->file );
             ret = TRUE;
         }
-        else SetLastError( ERROR_INSUFFICIENT_BUFFER );
+        else RtlSetLastWin32Error( ERROR_INSUFFICIENT_BUFFER );
     }
 
     pthread_mutex_unlock( &font_lock );
@@ -6559,5 +6994,29 @@ BOOL WINAPI NtGdiGetCharWidthInfo( HDC hdc, struct char_width_info *info )
         info->rsb = width_to_LP( dc, info->rsb );
     }
     release_dc_ptr(dc);
+    return ret;
+}
+
+/***********************************************************************
+ *           DrawTextW    (win32u.so)
+ */
+INT WINAPI DrawTextW( HDC hdc, const WCHAR *str, INT count, RECT *rect, UINT flags )
+{
+    struct draw_text_params *params;
+    ULONG ret_len, size;
+    void *ret_ptr;
+    int ret;
+
+    if (count == -1) count = wcslen( str );
+    size = FIELD_OFFSET( struct draw_text_params, str[count] );
+    if (!(params = malloc( size ))) return 0;
+    params->hdc = hdc;
+    params->rect = *rect;
+    params->ret_rect = rect;
+    params->flags = flags;
+    if (count) memcpy( params->str, str, count * sizeof(WCHAR) );
+    ret = KeUserModeCallback( NtUserDrawText, params, size, &ret_ptr, &ret_len );
+    if (ret_len == sizeof(*rect)) *rect = *(const RECT *)ret_ptr;
+    free( params );
     return ret;
 }

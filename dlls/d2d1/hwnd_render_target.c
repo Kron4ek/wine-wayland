@@ -83,7 +83,7 @@ static ULONG STDMETHODCALLTYPE d2d_hwnd_render_target_Release(ID2D1HwndRenderTar
     {
         IUnknown_Release(render_target->dxgi_inner);
         IDXGISwapChain_Release(render_target->swapchain);
-        heap_free(render_target);
+        free(render_target);
     }
 
     return refcount;
@@ -835,10 +835,10 @@ HRESULT d2d_hwnd_render_target_init(struct d2d_hwnd_render_target *render_target
         ID2D1Factory1_GetDesktopDpi(factory, &dxgi_rt_desc.dpiX, &dxgi_rt_desc.dpiY);
 
     if (dxgi_rt_desc.pixelFormat.format == DXGI_FORMAT_UNKNOWN)
-    {
         dxgi_rt_desc.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+
+    if (dxgi_rt_desc.pixelFormat.alphaMode == D2D1_ALPHA_MODE_UNKNOWN)
         dxgi_rt_desc.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
-    }
 
     swapchain_desc.BufferDesc.Width = hwnd_rt_desc->pixelSize.width;
     swapchain_desc.BufferDesc.Height = hwnd_rt_desc->pixelSize.height;

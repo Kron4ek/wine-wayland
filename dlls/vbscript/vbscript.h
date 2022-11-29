@@ -136,6 +136,8 @@ typedef struct {
 
     script_ctx_t *ctx;
     heap_pool_t heap;
+
+    unsigned int rnd;
 } ScriptDisp;
 
 typedef struct _builtin_prop_t builtin_prop_t;
@@ -399,7 +401,7 @@ static inline BOOL is_digit(WCHAR c)
 HRESULT create_regexp(IDispatch**) DECLSPEC_HIDDEN;
 BSTR string_replace(BSTR,BSTR,BSTR,int,int,int) DECLSPEC_HIDDEN;
 
-HRESULT map_hres(HRESULT) DECLSPEC_HIDDEN;
+void map_vbs_exception(EXCEPINFO *) DECLSPEC_HIDDEN;
 
 HRESULT create_safearray_iter(SAFEARRAY *sa, IEnumVARIANT **ev) DECLSPEC_HIDDEN;
 
@@ -410,7 +412,6 @@ HRESULT WINAPI VBScriptFactory_CreateInstance(IClassFactory*,IUnknown*,REFIID,vo
 HRESULT WINAPI VBScriptRegExpFactory_CreateInstance(IClassFactory*,IUnknown*,REFIID,void**) DECLSPEC_HIDDEN;
 
 BSTR get_vbscript_string(int) DECLSPEC_HIDDEN;
-BSTR get_vbscript_error_string(HRESULT) DECLSPEC_HIDDEN;
 
 static inline LPWSTR heap_strdupW(LPCWSTR str)
 {

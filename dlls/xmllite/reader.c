@@ -424,7 +424,7 @@ static HRESULT reader_add_attr(xmlreader *reader, strval *prefix, strval *localn
     {
         hr = reader_strvaldup(reader, value, &attr->value);
         if (hr != S_OK)
-            reader_free_strvalued(reader, &attr->value);
+            reader_free_strvalued(reader, &attr->localname);
     }
     if (hr != S_OK)
     {
@@ -1030,7 +1030,7 @@ static void readerinput_switchencoding(xmlreaderinput *readerinput, xml_encoding
     {
         readerinput_grow(readerinput, len);
         memcpy(dest->data, src->data + src->cur, len);
-        dest->written += len*sizeof(WCHAR);
+        dest->written += len;
     }
     else
     {
@@ -1084,7 +1084,7 @@ static HRESULT reader_more(xmlreader *reader)
     {
         readerinput_grow(readerinput, len);
         memcpy(dest->data + dest->written, src->data + src->cur, len);
-        dest->written += len*sizeof(WCHAR);
+        dest->written += len;
     }
     else
     {
@@ -1157,11 +1157,6 @@ static void reader_skipn(xmlreader *reader, int n)
         reader_update_position(reader, *ptr);
         buffer->cur++;
     }
-}
-
-static inline BOOL is_wchar_space(WCHAR ch)
-{
-    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
 }
 
 /* [3] S ::= (#x20 | #x9 | #xD | #xA)+ */
@@ -1296,13 +1291,13 @@ static HRESULT reader_parse_encname(xmlreader *reader, strval *val)
 }
 
 /* [80] EncodingDecl ::= S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" ) */
-static HRESULT reader_parse_encdecl(xmlreader *reader)
+static HRESULT reader_parse_encdecl(xmlreader *reader, BOOL *spaces)
 {
     struct reader_position position;
     strval name, val;
     HRESULT hr;
 
-    if (!reader_skipspaces(reader)) return S_FALSE;
+    if (!(*spaces = reader_skipspaces(reader))) return S_FALSE;
 
     position = reader->position;
     if (reader_cmp(reader, L"encoding")) return S_FALSE;
@@ -1328,19 +1323,20 @@ static HRESULT reader_parse_encdecl(xmlreader *reader)
 
     /* skip "'"|'"' */
     reader_skipn(reader, 1);
+    *spaces = FALSE;
 
     return reader_add_attr(reader, NULL, &name, NULL, &val, &position, 0);
 }
 
 /* [32] SDDecl ::= S 'standalone' Eq (("'" ('yes' | 'no') "'") | ('"' ('yes' | 'no') '"')) */
-static HRESULT reader_parse_sddecl(xmlreader *reader)
+static HRESULT reader_parse_sddecl(xmlreader *reader, BOOL spaces)
 {
     struct reader_position position;
     strval name, val;
     UINT start;
     HRESULT hr;
 
-    if (!reader_skipspaces(reader)) return S_FALSE;
+    if (!spaces && !reader_skipspaces(reader)) return S_FALSE;
 
     position = reader->position;
     if (reader_cmp(reader, L"standalone")) return S_FALSE;
@@ -1377,6 +1373,7 @@ static HRESULT reader_parse_sddecl(xmlreader *reader)
 static HRESULT reader_parse_xmldecl(xmlreader *reader)
 {
     struct reader_position position;
+    BOOL spaces;
     HRESULT hr;
 
     if (reader_cmp(reader, L"<?xml "))
@@ -1389,12 +1386,10 @@ static HRESULT reader_parse_xmldecl(xmlreader *reader)
     if (FAILED(hr))
         return hr;
 
-    hr = reader_parse_encdecl(reader);
-    if (FAILED(hr))
+    if (FAILED(hr = reader_parse_encdecl(reader, &spaces)))
         return hr;
 
-    hr = reader_parse_sddecl(reader);
-    if (FAILED(hr))
+    if (FAILED(hr = reader_parse_sddecl(reader, spaces)))
         return hr;
 
     reader_skipspaces(reader);
@@ -2931,6 +2926,8 @@ static HRESULT WINAPI xmlreader_GetNodeType(IXmlReader* iface, XmlNodeType *node
 
 static void reader_set_current_attribute(xmlreader *reader, struct attribute *attr)
 {
+    if (!reader->attr)
+        reader_inc_depth(reader);
     reader->attr = attr;
     reader->chunk_read_off = 0;
     reader_set_strvalue(reader, StringValue_Prefix, &attr->prefix);
@@ -2942,9 +2939,6 @@ static HRESULT reader_move_to_first_attribute(xmlreader *reader)
 {
     if (!reader->attr_count)
         return S_FALSE;
-
-    if (!reader->attr)
-        reader_inc_depth(reader);
 
     reader_set_current_attribute(reader, LIST_ENTRY(list_head(&reader->attrs), struct attribute, entry));
 
@@ -3663,18 +3657,11 @@ HRESULT WINAPI CreateXmlReader(REFIID riid, void **obj, IMalloc *imalloc)
     return hr;
 }
 
-HRESULT WINAPI CreateXmlReaderInputWithEncodingName(IUnknown *stream,
-                                                    IMalloc *imalloc,
-                                                    LPCWSTR encoding,
-                                                    BOOL hint,
-                                                    LPCWSTR base_uri,
-                                                    IXmlReaderInput **ppInput)
+static HRESULT create_reader_input(IUnknown *stream, IMalloc *imalloc, xml_encoding encoding,
+        BOOL hint, const WCHAR *base_uri, IXmlReaderInput **ppInput)
 {
     xmlreaderinput *readerinput;
     HRESULT hr;
-
-    TRACE("%p %p %s %d %s %p\n", stream, imalloc, wine_dbgstr_w(encoding),
-                                       hint, wine_dbgstr_w(base_uri), ppInput);
 
     if (!stream || !ppInput) return E_INVALIDARG;
 
@@ -3686,7 +3673,7 @@ HRESULT WINAPI CreateXmlReaderInputWithEncodingName(IUnknown *stream,
     readerinput->ref = 1;
     readerinput->imalloc = imalloc;
     if (imalloc) IMalloc_AddRef(imalloc);
-    readerinput->encoding = parse_encoding_name(encoding, -1);
+    readerinput->encoding = encoding;
     readerinput->hint = hint;
     readerinput->baseuri = readerinput_strdupW(readerinput, base_uri);
 
@@ -3705,4 +3692,27 @@ HRESULT WINAPI CreateXmlReaderInputWithEncodingName(IUnknown *stream,
     TRACE("returning iface %p\n", *ppInput);
 
     return S_OK;
+}
+
+/***********************************************************************
+ *      CreateXmlReaderInputWithEncodingName (xmllite.@)
+ */
+HRESULT WINAPI CreateXmlReaderInputWithEncodingName(IUnknown *stream, IMalloc *imalloc,
+        const WCHAR *encoding, BOOL hint, const WCHAR *base_uri, IXmlReaderInput **input)
+{
+    TRACE("%p, %p, %s, %d, %s, %p.\n", stream, imalloc, wine_dbgstr_w(encoding),
+            hint, wine_dbgstr_w(base_uri), input);
+
+    return create_reader_input(stream, imalloc, parse_encoding_name(encoding, -1), hint, base_uri, input);
+}
+
+/***********************************************************************
+ *      CreateXmlReaderInputWithEncodingCodePage (xmllite.@)
+ */
+HRESULT WINAPI CreateXmlReaderInputWithEncodingCodePage(IUnknown *stream, IMalloc *imalloc,
+        UINT codepage, BOOL hint, const WCHAR *base_uri, IXmlReaderInput **input)
+{
+    TRACE("%p, %p, %u, %d, %s, %p.\n", stream, imalloc, codepage, hint, wine_dbgstr_w(base_uri), input);
+
+    return create_reader_input(stream, imalloc, get_encoding_from_codepage(codepage), hint, base_uri, input);
 }

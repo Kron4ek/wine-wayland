@@ -1265,6 +1265,7 @@ static void test_create_surface(void)
     hr = IDXGIDevice_CreateSurface(device, &desc, 1, DXGI_USAGE_RENDER_TARGET_OUTPUT, NULL, &surface);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
+    check_interface(surface, &IID_IDXGIResource, TRUE, FALSE);
     check_interface(surface, &IID_ID3D10Texture2D, TRUE, FALSE);
     /* Not available on all Windows versions. */
     check_interface(surface, &IID_ID3D11Texture2D, TRUE, TRUE);
@@ -4490,19 +4491,13 @@ static void test_swapchain_parameters(void)
             continue;
 
         hr = IDXGISwapChain_GetBuffer(swapchain, 0, &IID_IDXGIResource, (void **)&resource);
-        todo_wine ok(hr == S_OK, "Got unexpected hr %#lx, test %u.\n", hr, i);
-        if (FAILED(hr))
-        {
-            hr = IDXGISwapChain_SetFullscreenState(swapchain, FALSE, NULL);
-            ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-
-            IDXGISwapChain_Release(swapchain);
-            continue;
-        }
+        ok(hr == S_OK, "Got unexpected hr %#lx, test %u.\n", hr, i);
 
         expected_usage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
         hr = IDXGIResource_GetUsage(resource, &usage);
+        todo_wine
         ok(hr == S_OK, "Got unexpected hr %#lx, test %u.\n", hr, i);
+        todo_wine
         ok((usage & expected_usage) == expected_usage, "Got usage %x, expected %x, test %u.\n",
                 usage, expected_usage, i);
 
@@ -4539,15 +4534,21 @@ static void test_swapchain_parameters(void)
                 broken_usage |= DXGI_USAGE_READ_ONLY;
 
             hr = IDXGIResource_GetUsage(resource, &usage);
+            todo_wine
             ok(hr == S_OK, "Got unexpected hr %#lx, test %u, buffer %u.\n", hr, i, j);
+            todo_wine
             ok(usage == expected_usage || broken(usage == broken_usage),
                     "Got usage %x, expected %x, test %u, buffer %u.\n",
                     usage, expected_usage, i, j);
 
             IDXGIResource_Release(resource);
         }
-        hr = IDXGISwapChain_GetBuffer(swapchain, j, &IID_IDXGIResource, (void **)&resource);
-        ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#lx, test %u.\n", hr, i);
+
+        if (strcmp(winetest_platform, "wine"))
+        {
+            hr = IDXGISwapChain_GetBuffer(swapchain, j, &IID_IDXGIResource, (void **)&resource);
+            ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#lx, test %u.\n", hr, i);
+        }
 
         hr = IDXGISwapChain_SetFullscreenState(swapchain, FALSE, NULL);
         ok(hr == S_OK, "Got unexpected hr %#lx, test %u.\n", hr, i);
@@ -4603,15 +4604,12 @@ static void test_swapchain_parameters(void)
         }
 
         hr = IDXGISwapChain_GetBuffer(swapchain, 0, &IID_IDXGIResource, (void **)&resource);
-        todo_wine ok(hr == S_OK, "Got unexpected hr %#lx, test %u.\n", hr, i);
-        if (FAILED(hr))
-        {
-            IDXGISwapChain_Release(swapchain);
-            continue;
-        }
+        ok(hr == S_OK, "Got unexpected hr %#lx, test %u.\n", hr, i);
         expected_usage = usage | DXGI_USAGE_BACK_BUFFER | DXGI_USAGE_DISCARD_ON_PRESENT;
         hr = IDXGIResource_GetUsage(resource, &usage);
+        todo_wine
         ok(hr == S_OK, "Got unexpected hr %#lx, test %u.\n", hr, i);
+        todo_wine_if(i != 7)
         ok(usage == expected_usage, "Got usage %x, expected %x, test %u.\n", usage, expected_usage, i);
         IDXGIResource_Release(resource);
 
@@ -5819,6 +5817,7 @@ static BOOL check_message(const struct message *expected,
 
 static LRESULT CALLBACK test_wndproc(HWND hwnd, unsigned int message, WPARAM wparam, LPARAM lparam)
 {
+    flaky
     ok(!expect_no_messages, "Got unexpected message %#x, hwnd %p, wparam %#Ix, lparam %#Ix.\n",
             message, hwnd, wparam, lparam);
 
@@ -6122,6 +6121,7 @@ static void test_swapchain_window_styles(void)
         exstyle = GetWindowLongA(swapchain_desc.OutputWindow, GWL_EXSTYLE);
         ok(style == tests[i].expected_style, "Got unexpected style %#lx, expected %#lx.\n",
                 style, tests[i].expected_style);
+        flaky_if(i == 4)
         ok(exstyle == tests[i].expected_exstyle, "Got unexpected exstyle %#lx, expected %#lx.\n",
                 exstyle, tests[i].expected_exstyle);
 
@@ -6138,6 +6138,7 @@ static void test_swapchain_window_styles(void)
         exstyle = GetWindowLongA(swapchain_desc.OutputWindow, GWL_EXSTYLE);
         ok(style == tests[i].expected_style, "Got unexpected style %#lx, expected %#lx.\n",
                 style, tests[i].expected_style);
+        flaky_if(i == 4)
         ok(exstyle == tests[i].expected_exstyle, "Got unexpected exstyle %#lx, expected %#lx.\n",
                 exstyle, tests[i].expected_exstyle);
 
@@ -6166,6 +6167,7 @@ static void test_swapchain_window_styles(void)
         exstyle = GetWindowLongA(swapchain_desc.OutputWindow, GWL_EXSTYLE);
         ok(style == tests[i].expected_style, "Got unexpected style %#lx, expected %#lx.\n",
                 style, tests[i].expected_style);
+        flaky_if(i == 4)
         ok(exstyle == tests[i].expected_exstyle, "Got unexpected exstyle %#lx, expected %#lx.\n",
                 exstyle, tests[i].expected_exstyle);
 
@@ -6192,7 +6194,7 @@ static void test_swapchain_window_styles(void)
             exstyle = GetWindowLongA(swapchain_desc.OutputWindow, GWL_EXSTYLE);
             todo_wine ok(style == tests[i].expected_style, "Got unexpected style %#lx, expected %#lx.\n",
                     style, tests[i].expected_style);
-            todo_wine
+            flaky_if(i == 4) todo_wine
             ok(exstyle == tests[i].expected_exstyle, "Got unexpected exstyle %#lx, expected %#lx.\n",
                     exstyle, tests[i].expected_exstyle);
         }
@@ -6208,7 +6210,7 @@ static void test_swapchain_window_styles(void)
         exstyle = GetWindowLongA(swapchain_desc.OutputWindow, GWL_EXSTYLE);
         todo_wine ok(style == tests[i].expected_style, "Got unexpected style %#lx, expected %#lx.\n",
                 style, tests[i].expected_style);
-        todo_wine
+        flaky_if(i == 4) todo_wine
         ok(exstyle == tests[i].expected_exstyle, "Got unexpected exstyle %#lx, expected %#lx.\n",
                 exstyle, tests[i].expected_exstyle);
 
@@ -7514,6 +7516,62 @@ static void test_swapchain_present_count(IUnknown *device, BOOL is_d3d12)
     DestroyWindow(window);
 }
 
+static void test_video_memory_budget_notification(void)
+{
+    DXGI_QUERY_VIDEO_MEMORY_INFO memory_info;
+    IDXGIAdapter3 *adapter3;
+    IDXGIAdapter *adapter;
+    IDXGIDevice *device;
+    DWORD cookie, ret;
+    ULONG refcount;
+    HANDLE event;
+    HRESULT hr;
+
+    if (!(device = create_device(0)))
+    {
+        skip("Failed to create device.\n");
+        return;
+    }
+
+    hr = IDXGIDevice_GetAdapter(device, &adapter);
+    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+    hr = IDXGIAdapter_QueryInterface(adapter, &IID_IDXGIAdapter3, (void **)&adapter3);
+    ok(hr == S_OK || hr == E_NOINTERFACE, "Got unexpected hr %#lx.\n", hr);
+    if (hr == E_NOINTERFACE)
+        goto done;
+
+    hr = IDXGIAdapter3_RegisterVideoMemoryBudgetChangeNotificationEvent(adapter3, NULL, &cookie);
+    ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#lx.\n", hr);
+
+    event = CreateEventW(NULL, FALSE, FALSE, NULL);
+    hr = IDXGIAdapter3_RegisterVideoMemoryBudgetChangeNotificationEvent(adapter3, event, NULL);
+    ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#lx.\n", hr);
+
+    hr = IDXGIAdapter3_RegisterVideoMemoryBudgetChangeNotificationEvent(adapter3, event, &cookie);
+    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+    hr = IDXGIAdapter3_QueryVideoMemoryInfo(adapter3, 0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memory_info);
+    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+    if (!memory_info.Budget)
+    {
+        hr = IDXGIAdapter3_QueryVideoMemoryInfo(adapter3, 0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &memory_info);
+        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+    }
+    if (memory_info.Budget)
+    {
+        ret = WaitForSingleObject(event, 1000);
+        ok(ret == WAIT_OBJECT_0, "Expected event fired.\n");
+    }
+
+    IDXGIAdapter3_UnregisterVideoMemoryBudgetChangeNotification(adapter3, cookie);
+    IDXGIAdapter3_Release(adapter3);
+    CloseHandle(event);
+
+done:
+    IDXGIAdapter_Release(adapter);
+    refcount = IDXGIDevice_Release(device);
+    ok(!refcount, "Device has %lu references left.\n", refcount);
+}
+
 static void run_on_d3d10(void (*test_func)(IUnknown *device, BOOL is_d3d12))
 {
     IDXGIDevice *device;
@@ -7613,6 +7671,7 @@ START_TEST(dxgi)
     queue_test(test_output_desc);
     queue_test(test_object_wrapping);
     queue_test(test_factory_check_feature_support);
+    queue_test(test_video_memory_budget_notification);
 
     run_queued_tests();
 

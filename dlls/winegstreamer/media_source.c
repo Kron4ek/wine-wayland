@@ -528,12 +528,13 @@ out:
 
 static void wait_on_sample(struct media_stream *stream, IUnknown *token)
 {
+    struct media_source *source = stream->parent_source;
     PROPVARIANT empty_var = {.vt = VT_EMPTY};
     struct wg_parser_buffer buffer;
 
     TRACE("%p, %p\n", stream, token);
 
-    if (wg_parser_stream_get_buffer(stream->wg_stream, &buffer))
+    if (wg_parser_stream_get_buffer(source->wg_parser, stream->wg_stream, &buffer))
     {
         send_buffer(stream, &buffer, token);
     }
@@ -879,6 +880,12 @@ static HRESULT media_stream_init_desc(struct media_stream *stream)
         IMFMediaType *base_type = mf_media_type_from_wg_format(&format);
         GUID base_subtype;
 
+        if (!base_type)
+        {
+            hr = MF_E_INVALIDMEDIATYPE;
+            goto done;
+        }
+
         IMFMediaType_GetGUID(base_type, &MF_MT_SUBTYPE, &base_subtype);
 
         stream_types[0] = base_type;
@@ -911,8 +918,8 @@ static HRESULT media_stream_init_desc(struct media_stream *stream)
             WG_AUDIO_FORMAT_F32LE,
         };
 
-        stream_types[0] = mf_media_type_from_wg_format(&format);
-        type_count = 1;
+        if ((stream_types[0] = mf_media_type_from_wg_format(&format)))
+            type_count = 1;
 
         for (i = 0; i < ARRAY_SIZE(audio_types); i++)
         {
@@ -921,7 +928,8 @@ static HRESULT media_stream_init_desc(struct media_stream *stream)
                 continue;
             new_format = format;
             new_format.u.audio.format = audio_types[i];
-            stream_types[type_count++] = mf_media_type_from_wg_format(&new_format);
+            if ((stream_types[type_count] = mf_media_type_from_wg_format(&new_format)))
+                type_count++;
         }
     }
     else

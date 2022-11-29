@@ -50,8 +50,6 @@ static GDI_HANDLE_ENTRY *next_unused;
 static LONG debug_count;
 SYSTEM_BASIC_INFORMATION system_info;
 
-const struct user_callbacks *user_callbacks = NULL;
-
 static inline HGDIOBJ entry_to_handle( GDI_HANDLE_ENTRY *entry )
 {
     unsigned int idx = entry - gdi_shared->Handles;
@@ -568,8 +566,8 @@ static void init_gdi_shared(void)
 {
     SIZE_T size = sizeof(*gdi_shared);
 
-    if (NtAllocateVirtualMemory( GetCurrentProcess(), (void **)&gdi_shared, 0, &size,
-                                 MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE ))
+    if (NtAllocateVirtualMemory( GetCurrentProcess(), (void **)&gdi_shared, zero_bits(),
+                                 &size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE ))
         return;
     next_unused = gdi_shared->Handles + FIRST_GDI_HANDLE;
 
@@ -586,7 +584,10 @@ static void init_gdi_shared(void)
     NtCurrentTeb()->Peb->GdiSharedHandleTable = gdi_shared;
 }
 
-HGDIOBJ get_stock_object( INT obj )
+/***********************************************************************
+ *           GetStockObject    (win32u.so)
+ */
+HGDIOBJ WINAPI GetStockObject( INT obj )
 {
     assert( obj >= 0 && obj <= STOCK_LAST + 1 && obj != 9 );
 
@@ -942,7 +943,7 @@ INT WINAPI NtGdiExtGetObjectW( HGDIOBJ handle, INT count, void *buffer )
     if (funcs && funcs->pGetObjectW)
     {
         if (buffer && ((ULONG_PTR)buffer >> 16) == 0) /* catch apps getting argument order wrong */
-            SetLastError( ERROR_NOACCESS );
+            RtlSetLastWin32Error( ERROR_NOACCESS );
         else
             result = funcs->pGetObjectW( handle, count, buffer );
     }
@@ -1043,10 +1044,14 @@ static struct unix_funcs unix_funcs =
     NtGdiCreateDIBitmapInternal,
     NtGdiCreateMetafileDC,
     NtGdiDdDDICheckVidPnExclusiveOwnership,
+    NtGdiDdDDICloseAdapter,
     NtGdiDdDDICreateDCFromMemory,
     NtGdiDdDDIDestroyDCFromMemory,
     NtGdiDdDDIDestroyDevice,
     NtGdiDdDDIEscape,
+    NtGdiDdDDIOpenAdapterFromDeviceName,
+    NtGdiDdDDIOpenAdapterFromLuid,
+    NtGdiDdDDIQueryVideoMemoryInfo,
     NtGdiDdDDISetVidPnSourceOwner,
     NtGdiDeleteObjectApp,
     NtGdiDoPalette,
@@ -1131,107 +1136,24 @@ static struct unix_funcs unix_funcs =
     NtGdiUnrealizeObject,
     NtGdiUpdateColors,
     NtGdiWidenPath,
-    NtUserActivateKeyboardLayout,
-    NtUserBeginPaint,
-    NtUserCallHwnd,
-    NtUserCallHwndParam,
-    NtUserCallNextHookEx,
-    NtUserCallNoParam,
-    NtUserCallOneParam,
-    NtUserCallTwoParam,
-    NtUserChangeClipboardChain,
-    NtUserChangeDisplaySettings,
-    NtUserClipCursor,
-    NtUserCloseClipboard,
-    NtUserCountClipboardFormats,
-    NtUserCreateWindowEx,
-    NtUserDeferWindowPosAndBand,
-    NtUserDestroyCursor,
-    NtUserDestroyMenu,
-    NtUserDestroyWindow,
-    NtUserDispatchMessage,
-    NtUserDrawIconEx,
-    NtUserEnableMenuItem,
-    NtUserEndDeferWindowPosEx,
+    NtUserDrawCaptionTemp,
+    NtUserDrawMenuBarTemp,
     NtUserEndPaint,
-    NtUserEnumDisplayDevices,
-    NtUserEnumDisplayMonitors,
-    NtUserEnumDisplaySettings,
     NtUserExcludeUpdateRgn,
-    NtUserFlashWindowEx,
-    NtUserGetAsyncKeyState,
-    NtUserGetClassInfoEx,
-    NtUserGetCursorInfo,
-    NtUserGetDCEx,
-    NtUserGetDisplayConfigBufferSizes,
-    NtUserGetIconInfo,
-    NtUserGetKeyNameText,
-    NtUserGetKeyboardLayoutList,
-    NtUserGetMessage,
-    NtUserGetPriorityClipboardFormat,
-    NtUserGetQueueStatus,
-    NtUserGetUpdateRect,
-    NtUserGetUpdateRgn,
-    NtUserGetUpdatedClipboardFormats,
-    NtUserIsClipboardFormatAvailable,
-    NtUserMapVirtualKeyEx,
-    NtUserMessageCall,
-    NtUserMoveWindow,
-    NtUserMsgWaitForMultipleObjectsEx,
-    NtUserPeekMessage,
-    NtUserPostMessage,
-    NtUserPostThreadMessage,
-    NtUserRedrawWindow,
-    NtUserRegisterClassExWOW,
-    NtUserRegisterHotKey,
     NtUserReleaseDC,
     NtUserScrollDC,
     NtUserSelectPalette,
-    NtUserSendInput,
-    NtUserSetActiveWindow,
-    NtUserSetCapture,
-    NtUserSetClassLong,
-    NtUserSetClassLongPtr,
-    NtUserSetClassWord,
-    NtUserSetClipboardViewer,
-    NtUserSetCursor,
-    NtUserSetCursorIconData,
-    NtUserSetCursorPos,
-    NtUserSetFocus,
-    NtUserSetLayeredWindowAttributes,
-    NtUserSetMenu,
-    NtUserSetParent,
-    NtUserSetSysColors,
-    NtUserSetWindowLong,
-    NtUserSetWindowLongPtr,
-    NtUserSetWindowPos,
-    NtUserSetWindowRgn,
-    NtUserSetWindowWord,
-    NtUserShowCursor,
-    NtUserShowWindow,
-    NtUserShowWindowAsync,
-    NtUserSystemParametersInfo,
-    NtUserSystemParametersInfoForDpi,
-    NtUserToUnicodeEx,
-    NtUserTranslateMessage,
-    NtUserUnregisterClass,
-    NtUserUnregisterHotKey,
     NtUserUpdateLayeredWindow,
-    NtUserVkKeyScanEx,
-    NtUserWaitForInputIdle,
-    NtUserWindowFromPoint,
 
     SetDIBits,
     __wine_get_brush_bitmap_info,
     __wine_get_file_outline_text_metric,
     __wine_get_icm_profile,
-    __wine_get_vulkan_driver,
     __wine_get_wgl_driver,
     __wine_send_input,
-    __wine_set_user_driver,
 };
 
-NTSTATUS gdi_init(void)
+void gdi_init(void)
 {
     pthread_mutexattr_t attr;
     unsigned int dpi;
@@ -1243,16 +1165,14 @@ NTSTATUS gdi_init(void)
 
     NtQuerySystemInformation( SystemBasicInformation, &system_info, sizeof(system_info), NULL );
     init_gdi_shared();
-    if (!gdi_shared) return STATUS_NO_MEMORY;
+    if (!gdi_shared) return;
 
     dpi = font_init();
     init_stock_objects( dpi );
-    return 0;
 }
 
 NTSTATUS callbacks_init( void *args )
 {
-    user_callbacks = *(const struct user_callbacks **)args;
     *(const struct unix_funcs **)args = &unix_funcs;
     return 0;
 }

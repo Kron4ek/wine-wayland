@@ -381,7 +381,7 @@ interface IShellItem : IUnknown
     typedef DWORD SICHINTF;
 
     HRESULT BindToHandler(
-        [in] IBindCtx *pbc,
+        [in, unique] IBindCtx *pbc,
         [in] REFGUID rbhid,
         [in] REFIID riid,
         [out, iid_is(riid)] void **ppvOut);
@@ -469,6 +469,61 @@ interface IShellItem2 : IShellItem
     HRESULT GetBool(
         [in] REFPROPERTYKEY key,
         [out] BOOL *pf);
+}
+
+/*****************************************************************************
+ * IShellItemImageFactory interface
+ */
+[
+    object,
+    uuid(bcc18b79-ba16-442f-80c4-8a59c30c463b),
+    pointer_default(unique)
+]
+interface IShellItemImageFactory : IUnknown
+{
+    [v1_enum] enum _SIIGBF {
+        SIIGBF_RESIZETOFIT     = 0x00000000,
+        SIIGBF_BIGGERSIZEOK    = 0x00000001,
+        SIIGBF_MEMORYONLY      = 0x00000002,
+        SIIGBF_ICONONLY        = 0x00000004,
+        SIIGBF_THUMBNAILONLY   = 0x00000008,
+        SIIGBF_INCACHEONLY     = 0x00000010,
+        SIIGBF_CROPTOSQUARE    = 0x00000020,
+        SIIGBF_WIDETHUMBNAILS  = 0x00000040,
+        SIIGBF_ICONBACKGROUND  = 0x00000080,
+        SIIGBF_SCALEUP         = 0x00000100,
+    };
+    typedef int SIIGBF;
+
+    HRESULT GetImage(
+        [in] SIZE size,
+        [in] SIIGBF flags,
+        [out] HBITMAP *phbm);
+}
+
+[
+    object,
+    uuid(b3a4b685-b685-4805-99d9-5dead2873236),
+    pointer_default(unique)
+]
+interface IParentAndItem : IUnknown
+{
+    HRESULT SetParentAndItem(
+        [in, unique] PCIDLIST_ABSOLUTE parent,
+        [in, unique] IShellFolder *folder,
+        [in] PCUITEMID_CHILD child);
+
+    [local]
+    HRESULT GetParentAndItem(
+        [out] PIDLIST_ABSOLUTE *parent,
+        [out] IShellFolder **folder,
+        [out] PITEMID_CHILD *child);
+
+    [call_as(GetParentAndItem)]
+    HRESULT RemoteGetParentAndItem(
+        [out] PIDLIST_ABSOLUTE *parent,
+        [out] IShellFolder **folder,
+        [out] PITEMID_CHILD *child);
 }
 
 typedef [v1_enum] enum tagNWMF {
@@ -1340,9 +1395,9 @@ interface IPersistFolder3 : IPersistFolder2
     } PERSIST_FOLDER_TARGET_INFO;
 
     HRESULT InitializeEx(
-        [in] IBindCtx *pbc,
+        [in, unique] IBindCtx *pbc,
         [in] LPCITEMIDLIST pidlRoot,
-        [in] const PERSIST_FOLDER_TARGET_INFO *ppfti);
+        [in, unique] const PERSIST_FOLDER_TARGET_INFO *ppfti);
 
     HRESULT GetFolderTargetInfo( [out] PERSIST_FOLDER_TARGET_INFO *ppfti );
 }

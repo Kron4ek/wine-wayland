@@ -751,7 +751,19 @@ static void test_Win32_ComputerSystem( IWbemServices *services )
         trace( "numlogicalprocessors %ld\n", V_I4( &value ) );
     }
 
+    type = 0xdeadbeef;
+    VariantInit( &value );
+    hr = IWbemClassObject_Get( obj, L"HypervisorPresent", 0, &value, &type, NULL );
+    ok( hr == S_OK || broken(hr == WBEM_E_NOT_FOUND) /* win7 testbot */, "got %#lx\n", hr );
+    if (hr == S_OK)
+    {
+        ok( V_VT( &value ) == VT_BOOL, "unexpected variant type %#x\n", V_VT( &value ) );
+        ok( type == CIM_BOOLEAN, "unexpected type %#lx\n", type );
+        trace( "HypervisorPresent %d\n", V_BOOL( &value ) );
+    }
+
     check_property( obj, L"NumberOfProcessors", VT_I4, CIM_UINT32 );
+    check_property( obj, L"SystemType", VT_BSTR, CIM_STRING );
 
     type = 0xdeadbeef;
     VariantInit( &value );
@@ -1388,7 +1400,9 @@ static void test_Win32_OperatingSystem( IWbemServices *services )
     hr = IWbemClassObject_EndEnumeration( obj );
     ok( hr == S_OK, "got %#lx\n", hr );
 
+    check_property( obj, L"BootDevice", VT_BSTR, CIM_STRING );
     check_property( obj, L"BuildNumber", VT_BSTR, CIM_STRING );
+    check_property( obj, L"BuildType", VT_BSTR, CIM_STRING );
     check_property( obj, L"Caption", VT_BSTR, CIM_STRING );
 
     type = 0xdeadbeef;
@@ -1401,6 +1415,7 @@ static void test_Win32_OperatingSystem( IWbemServices *services )
     VariantClear( &val );
 
     check_property( obj, L"FreePhysicalMemory", VT_BSTR, CIM_UINT64 );
+    check_property( obj, L"FreeVirtualMemory", VT_BSTR, CIM_UINT64 );
     check_property( obj, L"Name", VT_BSTR, CIM_STRING );
 
     type = 0xdeadbeef;
@@ -1427,8 +1442,10 @@ static void test_Win32_OperatingSystem( IWbemServices *services )
     check_property( obj, L"CSName", VT_BSTR, CIM_STRING );
     check_property( obj, L"CurrentTimeZone", VT_I2, CIM_SINT16 );
     check_property( obj, L"Manufacturer", VT_BSTR, CIM_STRING );
+    check_property( obj, L"Organization", VT_BSTR, CIM_STRING );
     check_property( obj, L"OSType", VT_I4, CIM_UINT16 );
     check_property( obj, L"ProductType", VT_I4, CIM_UINT32 );
+    check_property( obj, L"RegisteredUser", VT_BSTR, CIM_STRING );
     check_property( obj, L"ServicePackMajorVersion", VT_I4, CIM_UINT16 );
     check_property( obj, L"ServicePackMinorVersion", VT_I4, CIM_UINT16 );
     check_property( obj, L"SuiteMask", VT_I4, CIM_UINT32 );
@@ -1437,6 +1454,7 @@ static void test_Win32_OperatingSystem( IWbemServices *services )
     check_property( obj, L"TotalVirtualMemorySize", VT_BSTR, CIM_UINT64 );
     check_property( obj, L"Status", VT_BSTR, CIM_STRING );
     check_property( obj, L"SystemDrive", VT_BSTR, CIM_STRING );
+    check_property( obj, L"WindowsDirectory", VT_BSTR, CIM_STRING );
 
     IWbemClassObject_Release( obj );
     IEnumWbemClassObject_Release( result );
@@ -1470,6 +1488,31 @@ static void test_Win32_ComputerSystemProduct( IWbemServices *services )
     check_property( obj, L"Version", VT_BSTR, CIM_STRING );
 
     IWbemClassObject_Release( obj );
+    IEnumWbemClassObject_Release( result );
+    SysFreeString( query );
+    SysFreeString( wql );
+}
+
+static void test_Win32_PageFileUsage( IWbemServices *services )
+{
+    BSTR wql = SysAllocString( L"wql" ), query = SysAllocString( L"SELECT * FROM Win32_PageFileUsage" );
+    IEnumWbemClassObject *result;
+    IWbemClassObject *obj;
+    HRESULT hr;
+    DWORD count;
+
+    hr = IWbemServices_ExecQuery( services, wql, query, 0, NULL, &result );
+    ok( hr == S_OK , "got %#lx\n", hr );
+
+    for (;;)
+    {
+        hr = IEnumWbemClassObject_Next( result, 10000, 1, &obj, &count );
+        if (hr != S_OK) break;
+
+        check_property( obj, L"Name", VT_BSTR, CIM_STRING );
+        IWbemClassObject_Release( obj );
+    }
+
     IEnumWbemClassObject_Release( result );
     SysFreeString( query );
     SysFreeString( wql );
@@ -1966,7 +2009,11 @@ static void test_Win32_QuickFixEngineering( IWbemServices *services )
             "unexpected variant type %#x\n", V_VT( &caption ) );
         ok( type == CIM_STRING, "unexpected type %#lx\n", type );
 
+        check_property( obj, L"Description", VT_BSTR, CIM_STRING );
         check_property( obj, L"HotFixID", VT_BSTR, CIM_STRING );
+        check_property( obj, L"InstalledBy", VT_BSTR, CIM_STRING );
+        check_property( obj, L"InstalledOn", VT_BSTR, CIM_STRING );
+
         IWbemClassObject_Release( obj );
         if (total++ >= 10) break;
     }
@@ -2094,6 +2141,27 @@ static void test_Win32_LogicalDisk( IWbemServices *services )
         IWbemClassObject_Release( obj );
     }
 
+    IEnumWbemClassObject_Release( result );
+    SysFreeString( query );
+
+    query = SysAllocString( L"SELECT * FROM Win32_LogicalDisk WHERE DeviceID > 'b:' AND DeviceID < 'd:'" );
+    hr = IWbemServices_ExecQuery( services, wql, query, 0, NULL, &result );
+    ok( hr == S_OK, "got %#lx\n", hr );
+    count = 0;
+    hr = IEnumWbemClassObject_Next( result, 10000, 1, &obj, &count );
+    ok( hr == S_OK, "got %#lx\n", hr );
+    ok( count == 1, "got %lu\n", count );
+    IWbemClassObject_Release( obj );
+    SysFreeString( query );
+
+    query = SysAllocString( L"SELECT * FROM Win32_LogicalDisk WHERE DeviceID = 'C:'" );
+    hr = IWbemServices_ExecQuery( services, wql, query, 0, NULL, &result );
+    ok( hr == S_OK, "got %#lx\n", hr );
+    count = 0;
+    hr = IEnumWbemClassObject_Next( result, 10000, 1, &obj, &count );
+    ok( hr == S_OK, "got %#lx\n", hr );
+    ok( count == 1, "got %lu\n", count );
+    IWbemClassObject_Release( obj );
     IEnumWbemClassObject_Release( result );
     SysFreeString( query );
     SysFreeString( wql );
@@ -2226,6 +2294,7 @@ START_TEST(query)
     test_Win32_NetworkAdapter( services );
     test_Win32_NetworkAdapterConfiguration( services );
     test_Win32_OperatingSystem( services );
+    test_Win32_PageFileUsage( services );
     test_Win32_PhysicalMemory( services );
     test_Win32_PnPEntity( services );
     test_Win32_Printer( services );

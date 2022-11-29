@@ -1150,15 +1150,15 @@ static void test_char_from_pos(void)
     SendMessageA(hwEdit, WM_SETTEXT, 0, (LPARAM) "aa");
     lo = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 0, 0));
     hi = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 1, 0));
-    mid = lo + (hi - lo) / 2;
+    mid = lo + (hi - lo + 1) / 2;
 
     for (i = lo; i < mid; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(0 == ret, "expected 0 got %d\n", ret);
+       ok(0 == ret, "%d/%d/%d: expected 0 got %d\n", lo, i, mid, ret);
     }
     for (i = mid; i <= hi; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(1 == ret, "expected 1 got %d\n", ret);
+       ok(1 == ret, "%d/%d/%d: expected 1 got %d\n", mid, i, hi, ret);
     }
     ret = SendMessageA(hwEdit, EM_POSFROMCHAR, 2, 0);
     ok(-1 == ret, "expected -1 got %d\n", ret);
@@ -1168,15 +1168,15 @@ static void test_char_from_pos(void)
     SendMessageA(hwEdit, WM_SETTEXT, 0, (LPARAM) "aa");
     lo = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 0, 0));
     hi = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 1, 0));
-    mid = lo + (hi - lo) / 2;
+    mid = lo + (hi - lo + 1) / 2;
 
     for (i = lo; i < mid; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(0 == ret, "expected 0 got %d\n", ret);
+       ok(0 == ret, "%d/%d/%d: expected 0 got %d\n", lo, i, mid, ret);
     }
     for (i = mid; i <= hi; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(1 == ret, "expected 1 got %d\n", ret);
+       ok(1 == ret, "%d/%d/%d: expected 1 got %d\n", mid, i, hi, ret);
     }
     ret = SendMessageA(hwEdit, EM_POSFROMCHAR, 2, 0);
     ok(-1 == ret, "expected -1 got %d\n", ret);
@@ -1186,15 +1186,15 @@ static void test_char_from_pos(void)
     SendMessageA(hwEdit, WM_SETTEXT, 0, (LPARAM) "aa");
     lo = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 0, 0));
     hi = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 1, 0));
-    mid = lo + (hi - lo) / 2;
+    mid = lo + (hi - lo + 1) / 2;
 
     for (i = lo; i < mid; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(0 == ret, "expected 0 got %d\n", ret);
+       ok(0 == ret, "%d/%d/%d: expected 0 got %d\n", lo, i, mid, ret);
     }
     for (i = mid; i <= hi; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(1 == ret, "expected 1 got %d\n", ret);
+       ok(1 == ret, "%d/%d/%d: expected 1 got %d\n", mid, i, hi, ret);
     }
     ret = SendMessageA(hwEdit, EM_POSFROMCHAR, 2, 0);
     ok(-1 == ret, "expected -1 got %d\n", ret);
@@ -1204,15 +1204,16 @@ static void test_char_from_pos(void)
     SendMessageA(hwEdit, WM_SETTEXT, 0, (LPARAM) "aa");
     lo = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 0, 0));
     hi = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 1, 0));
-    mid = lo + (hi - lo) / 2 +1;
+    mid = lo + (hi - lo + 1) / 2;
 
     for (i = lo; i < mid; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok((0 == ret || 1 == ret /* Vista */), "expected 0 or 1 got %d\n", ret);
+       ok(0 == ret || 1 == ret /* Vista */,
+          "%d/%d/%d: expected 0 or 1 got %d\n", lo, i, mid, ret);
     }
     for (i = mid; i <= hi; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(1 == ret, "expected 1 got %d\n", ret);
+       ok(1 == ret, "%d/%d/%d: expected 1 got %d\n", mid, i, hi, ret);
     }
     ret = SendMessageA(hwEdit, EM_POSFROMCHAR, 2, 0);
     ok(-1 == ret, "expected -1 got %d\n", ret);
@@ -1222,15 +1223,16 @@ static void test_char_from_pos(void)
     SendMessageA(hwEdit, WM_SETTEXT, 0, (LPARAM) "aa");
     lo = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 0, 0));
     hi = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 1, 0));
-    mid = lo + (hi - lo) / 2 +1;
+    mid = lo + (hi - lo + 1) / 2;
 
     for (i = lo; i < mid; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok((0 == ret || 1 == ret /* Vista */), "expected 0 or 1 got %d\n", ret);
+       ok(0 == ret || 1 == ret /* Vista */,
+          "%d/%d/%d: expected 0 or 1 got %d\n", lo, i, mid, ret);
     }
     for (i = mid; i <= hi; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(1 == ret, "expected 1 got %d\n", ret);
+       ok(1 == ret, "%d/%d/%d: expected 1 got %d\n", mid, i, hi, ret);
     }
     ret = SendMessageA(hwEdit, EM_POSFROMCHAR, 2, 0);
     ok(-1 == ret, "expected -1 got %d\n", ret);
@@ -1240,15 +1242,16 @@ static void test_char_from_pos(void)
     SendMessageA(hwEdit, WM_SETTEXT, 0, (LPARAM) "aa");
     lo = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 0, 0));
     hi = LOWORD(SendMessageA(hwEdit, EM_POSFROMCHAR, 1, 0));
-    mid = lo + (hi - lo) / 2 +1;
+    mid = lo + (hi - lo + 2) / 2;
 
     for (i = lo; i < mid; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok((0 == ret || 1 == ret /* Vista */), "expected 0 or 1 got %d\n", ret);
+       ok(0 == ret || 1 == ret /* Vista */,
+          "%d/%d/%d: expected 0 or 1 got %d\n", lo, i, mid, ret);
     }
     for (i = mid; i <= hi; i++) {
        ret = LOWORD(SendMessageA(hwEdit, EM_CHARFROMPOS, 0, i));
-       ok(1 == ret, "expected 1 got %d\n", ret);
+       ok(1 == ret, "%d/%d/%d: expected 1 got %d\n", mid, i, hi, ret);
     }
     ret = SendMessageA(hwEdit, EM_POSFROMCHAR, 2, 0);
     ok(-1 == ret, "expected -1 got %d\n", ret);

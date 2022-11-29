@@ -34,6 +34,8 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(winecfg);
 
+int is_audio_exit_mode = 0;
+
 static INT CALLBACK
 PropSheetCallback (HWND hWnd, UINT uMsg, LPARAM lParam)
 {
@@ -74,10 +76,10 @@ doPropertySheet (HINSTANCE hInstance, HWND hOwner)
     psp[pg].dwSize = sizeof (PROPSHEETPAGEW);
     psp[pg].dwFlags = PSP_USETITLE;
     psp[pg].hInstance = hInstance;
-    psp[pg].u.pszTemplate = MAKEINTRESOURCEW (IDD_APPCFG);
+    psp[pg].u.pszTemplate = MAKEINTRESOURCEW (IDD_AUDIOCFG);
     psp[pg].u2.pszIcon = NULL;
-    psp[pg].pfnDlgProc = AppDlgProc;
-    psp[pg].pszTitle = load_string (IDS_TAB_APPLICATIONS);
+    psp[pg].pfnDlgProc = AudioDlgProc;
+    psp[pg].pszTitle = load_string (IDS_TAB_AUDIO);
     psp[pg].lParam = 0;
     pg++;
 
@@ -132,10 +134,10 @@ doPropertySheet (HINSTANCE hInstance, HWND hOwner)
     psp[pg].dwSize = sizeof (PROPSHEETPAGEW);
     psp[pg].dwFlags = PSP_USETITLE;
     psp[pg].hInstance = hInstance;
-    psp[pg].u.pszTemplate = MAKEINTRESOURCEW (IDD_AUDIOCFG);
+    psp[pg].u.pszTemplate = MAKEINTRESOURCEW (IDD_APPCFG);
     psp[pg].u2.pszIcon = NULL;
-    psp[pg].pfnDlgProc = AudioDlgProc;
-    psp[pg].pszTitle =  load_string (IDS_TAB_AUDIO);
+    psp[pg].pfnDlgProc = AppDlgProc;
+    psp[pg].pszTitle =  load_string (IDS_TAB_APPLICATIONS);
     psp[pg].lParam = 0;
     pg++;
 
@@ -195,6 +197,13 @@ ProcessCmdLine(LPWSTR lpCmdLine)
         print_current_winver();
         return 0;
     }
+    if (lpCmdLine[1] == 'a' || lpCmdLine[1] == 'A')
+    {
+
+
+        print_current_winver();
+        return -2;
+    }
 
     if (lpCmdLine[1] == '?')
     {
@@ -202,6 +211,7 @@ ProcessCmdLine(LPWSTR lpCmdLine)
         printf("Options:\n");
         printf("  [no option] Launch the graphical version of this program.\n");
         printf("  /v          Display the current global Windows version.\n");
+        printf("  /a          Switch to audio tab and quit.\n");
         printf("  /v version  Set global Windows version to 'version'.\n");
         printf("  /?          Display this information and exit.\n\n");
         printf("Valid versions for 'version':\n\n");
@@ -259,7 +269,10 @@ wWinMain (HINSTANCE hInstance, HINSTANCE hPrev, LPWSTR cmdline, int nShow)
     cmd_ret = ProcessCmdLine(cmdline);
     if (cmd_ret >= 0) return cmd_ret;
 
-    /*
+    if (cmd_ret == -2) {
+      is_audio_exit_mode = 1;
+    }
+     /*
      * The next 9 lines should be all that is needed
      * for the Wine Configuration property sheet
      */

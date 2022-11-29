@@ -386,11 +386,11 @@ BOOL memory_get_string(struct dbg_process* pcs, void* addr, BOOL in_debuggee,
         if (!unicode) ret = pcs->process_io->read(pcs->handle, addr, buffer, size, &sz);
         else
         {
-            buffW = HeapAlloc(GetProcessHeap(), 0, size * sizeof(WCHAR));
+            buffW = malloc(size * sizeof(WCHAR));
             ret = pcs->process_io->read(pcs->handle, addr, buffW, size * sizeof(WCHAR), &sz);
             WideCharToMultiByte(CP_ACP, 0, buffW, sz / sizeof(WCHAR), buffer, size,
                                 NULL, NULL);
-            HeapFree(GetProcessHeap(), 0, buffW);
+            free(buffW);
         }
         if (size) buffer[size-1] = 0;
         return ret;
@@ -418,11 +418,11 @@ BOOL memory_get_string_indirect(struct dbg_process* pcs, void* addr, BOOL unicod
             ret = pcs->process_io->read(pcs->handle, ad, buffer, size * sizeof(WCHAR), &sz) && sz != 0;
         else
         {
-            if ((buff = HeapAlloc(GetProcessHeap(), 0, size)))
+            if ((buff = malloc(size)))
             {
                 ret = pcs->process_io->read(pcs->handle, ad, buff, size, &sz) && sz != 0;
                 MultiByteToWideChar(CP_ACP, 0, buff, sz, buffer, size);
-                HeapFree(GetProcessHeap(), 0, buff);
+                free(buff);
             }
             else ret = FALSE;
         }
@@ -500,7 +500,6 @@ static void print_typed_basic(const struct dbg_lvalue* lvalue)
         case btInt:
         case btLong:
             if (!memory_fetch_integer(lvalue, size, TRUE, &val_int)) return;
-            if (size == 1) goto print_char;
             dbg_print_hex(size, val_int);
             break;
         case btUInt:
@@ -513,17 +512,18 @@ static void print_typed_basic(const struct dbg_lvalue* lvalue)
             dbg_printf("%f", val_real);
             break;
         case btChar:
-        case btWChar:
-            /* sometimes WCHAR is defined as btChar with size = 2, so discrimate
-             * Ansi/Unicode based on size, not on basetype
-             */
             if (!memory_fetch_integer(lvalue, size, TRUE, &val_int)) return;
-        print_char:
-            if ((size == 1 && isprint((char)val_int)) ||
-                 (size == 2 && val_int < 127 && isprint((char)val_int)))
+            if (size == 1 && isprint((char)val_int))
                 dbg_printf("'%c'", (char)val_int);
             else
-                dbg_printf("%d", (int)val_int);
+                dbg_print_hex(size, val_int);
+            break;
+        case btWChar:
+            if (!memory_fetch_integer(lvalue, size, TRUE, &val_int)) return;
+            if (size == 2 && iswprint((WCHAR)val_int))
+                dbg_printf("L'%lc'", (WCHAR)val_int);
+            else
+                dbg_print_hex(size, val_int);
             break;
         case btBool:
             if (!memory_fetch_integer(lvalue, size, TRUE, &val_int)) return;
@@ -549,11 +549,11 @@ static void print_typed_basic(const struct dbg_lvalue* lvalue)
             char    buffer[1024];
 
             if (!val_ptr) dbg_printf("0x0");
-            else if (((bt == btChar || bt == btInt) && size64 == 1) || (bt == btUInt && size64 == 2))
+            else if ((bt == btChar && size64 == 1) || (bt == btWChar && size64 == 2))
             {
                 if (memory_get_string(dbg_curr_process, val_ptr, sub_lvalue.in_debuggee,
-                                      size64 == 2, buffer, sizeof(buffer)))
-                    dbg_printf("\"%s\"", buffer);
+                                      bt == btWChar, buffer, sizeof(buffer)))
+                    dbg_printf("%s\"%s\"", bt == btWChar ? "L" : "", buffer);
                 else
                     dbg_printf("*** invalid address %p ***", val_ptr);
                 break;
@@ -783,7 +783,7 @@ void memory_disassemble(const struct dbg_lvalue* xstart,
         memory_disasm_one_insn(&last);
 }
 
-BOOL memory_get_register(DWORD regno, DWORD_PTR** value, char* buffer, int len)
+BOOL memory_get_register(DWORD regno, struct dbg_lvalue* lvalue, char* buffer, int len)
 {
     const struct dbg_internal_var*  div;
 
@@ -813,7 +813,7 @@ BOOL memory_get_register(DWORD regno, DWORD_PTR** value, char* buffer, int len)
     {
         if (div->val == regno)
         {
-            if (!stack_get_register_frame(div, value))
+            if (!stack_get_register_frame(div, lvalue))
             {
                 if (buffer) snprintf(buffer, len, "<register %s not accessible in this frame>", div->name);
                 return FALSE;

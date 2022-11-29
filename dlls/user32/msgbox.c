@@ -109,6 +109,12 @@ static void MSGBOX_OnInit(HWND hwnd, LPMSGBOXPARAMSW lpmb)
        lpszText = lpmb->lpszText;
     }
 
+    /* handle modal message boxes */
+    if (((lpmb->dwStyle & MB_TASKMODAL) && (lpmb->hwndOwner==NULL)))
+        NtUserSetWindowPos( hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE );
+    else if (lpmb->dwStyle & MB_SYSTEMMODAL)
+        NtUserSetWindowPos( hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED );
+
     TRACE_(msgbox)("%s\n", debugstr_w(lpszText));
     SetWindowTextW(GetDlgItem(hwnd, MSGBOX_IDTEXT), lpszText);
 
@@ -309,10 +315,6 @@ static void MSGBOX_OnInit(HWND hwnd, LPMSGBOXPARAMSW lpmb)
 	}
     }
 
-    /*handle modal message boxes*/
-    if (((lpmb->dwStyle & MB_TASKMODAL) && (lpmb->hwndOwner==NULL)) || (lpmb->dwStyle & MB_SYSTEMMODAL))
-        NtUserSetWindowPos( hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE );
-
     HeapFree( GetProcessHeap(), 0, buffer );
 }
 
@@ -447,7 +449,7 @@ INT WINAPI MessageBoxExW( HWND hWnd, LPCWSTR text, LPCWSTR title,
 INT WINAPI MessageBoxTimeoutA( HWND hWnd, LPCSTR text, LPCSTR title,
                                UINT type, WORD langid, DWORD timeout )
 {
-    FIXME("timeout not supported (%u)\n", timeout);
+    FIXME("timeout not supported (%lu)\n", timeout);
     return MessageBoxExA( hWnd, text, title, type, langid );
 }
 
@@ -457,7 +459,7 @@ INT WINAPI MessageBoxTimeoutA( HWND hWnd, LPCSTR text, LPCSTR title,
 INT WINAPI MessageBoxTimeoutW( HWND hWnd, LPCWSTR text, LPCWSTR title,
                                UINT type, WORD langid, DWORD timeout )
 {
-    FIXME("timeout not supported (%u)\n", timeout);
+    FIXME("timeout not supported (%lu)\n", timeout);
     return MessageBoxExW( hWnd, text, title, type, langid );
 }
 

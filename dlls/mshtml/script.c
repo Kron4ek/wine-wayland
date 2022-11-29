@@ -674,7 +674,7 @@ static HRESULT WINAPI ASServiceProvider_QueryService(IServiceProvider *iface, RE
         if(!This->window || !This->window->doc)
             return E_NOINTERFACE;
 
-        return IHTMLDocument2_QueryInterface(&This->window->doc->basedoc.IHTMLDocument2_iface, riid, ppv);
+        return IHTMLDocument2_QueryInterface(&This->window->doc->IHTMLDocument2_iface, riid, ppv);
     }
 
     FIXME("(%p)->(%s %s %p)\n", This, debugstr_guid(guidService), debugstr_guid(riid), ppv);
@@ -1053,7 +1053,7 @@ static HRESULT ScriptBSC_read_data(BSCallback *bsc, IStream *stream)
     return S_OK;
 }
 
-static HRESULT ScriptBSC_on_progress(BSCallback *bsc, ULONG status_code, LPCWSTR status_text)
+static HRESULT ScriptBSC_on_progress(BSCallback *bsc, ULONG progress, ULONG total, ULONG status_code, LPCWSTR status_text)
 {
     return S_OK;
 }
@@ -1123,7 +1123,7 @@ HRESULT load_script(HTMLScriptElement *script_elem, const WCHAR *src, BOOL async
 
     hres = IUri_GetScheme(uri, &bsc->scheme);
     IUri_Release(uri);
-    if(FAILED(hres))
+    if(hres != S_OK)
         bsc->scheme = URL_SCHEME_UNKNOWN;
 
     IHTMLScriptElement_AddRef(&script_elem->IHTMLScriptElement_iface);
@@ -1473,7 +1473,7 @@ static EventTarget *find_event_target(HTMLDocumentNode *doc, HTMLScriptElement *
         FIXME("Empty for attribute\n");
     }else if(!wcscmp(target_id, L"document")) {
         event_target = &doc->node.event_target;
-        htmldoc_addref(&doc->basedoc);
+        IHTMLDOMNode_AddRef(&doc->node.IHTMLDOMNode_iface);
     }else if(!wcscmp(target_id, L"window")) {
         if(doc->window) {
             event_target = &doc->window->event_target;
@@ -1596,11 +1596,11 @@ void bind_event_scripts(HTMLDocumentNode *doc)
 
     TRACE("%p\n", doc);
 
-    if(!doc->nsdoc)
+    if(!doc->dom_document)
         return;
 
     nsAString_InitDepend(&selector_str, L"script[event]");
-    nsres = nsIDOMHTMLDocument_QuerySelectorAll(doc->nsdoc, &selector_str, &node_list);
+    nsres = nsIDOMDocument_QuerySelectorAll(doc->dom_document, &selector_str, &node_list);
     nsAString_Finish(&selector_str);
     if(NS_FAILED(nsres)) {
         ERR("QuerySelectorAll failed: %08lx\n", nsres);

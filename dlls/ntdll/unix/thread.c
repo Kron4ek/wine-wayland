@@ -26,6 +26,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -70,6 +71,9 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(thread);
 WINE_DECLARE_DEBUG_CHANNEL(seh);
+WINE_DECLARE_DEBUG_CHANNEL(threadname);
+
+pthread_key_t teb_key = 0;
 
 static int nb_threads = 1;
 
@@ -1065,7 +1069,7 @@ static void start_thread( TEB *teb )
 
     thread_data->pthread_id = pthread_self();
     thread_data->fsync_apc_futex = NULL;
-    signal_init_thread( teb );
+    pthread_setspecific( teb_key, teb );
     server_init_thread( thread_data->start, &suspend );
     signal_start_thread( thread_data->start, thread_data->param, suspend, teb );
 }
@@ -1107,12 +1111,12 @@ void *get_cpu_area( USHORT machine )
     switch (cpu->Machine)
     {
     case IMAGE_FILE_MACHINE_I386: align = TYPE_ALIGNMENT(I386_CONTEXT); break;
-    case IMAGE_FILE_MACHINE_AMD64: align = TYPE_ALIGNMENT(ARM_CONTEXT); break;
-    case IMAGE_FILE_MACHINE_ARMNT: align = TYPE_ALIGNMENT(AMD64_CONTEXT); break;
+    case IMAGE_FILE_MACHINE_AMD64: align = TYPE_ALIGNMENT(AMD64_CONTEXT); break;
+    case IMAGE_FILE_MACHINE_ARMNT: align = TYPE_ALIGNMENT(ARM_CONTEXT); break;
     case IMAGE_FILE_MACHINE_ARM64: align = TYPE_ALIGNMENT(ARM64_NT_CONTEXT); break;
     default: return NULL;
     }
-    return (void *)(((ULONG_PTR)(cpu + 1) + align - 1) & ~(align - 1));
+    return (void *)(((ULONG_PTR)(cpu + 1) + align - 1) & ~((ULONG_PTR)align - 1));
 }
 
 
@@ -1523,6 +1527,15 @@ NTSTATUS WINAPI NtRaiseException( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL 
 }
 
 
+/**********************************************************************
+ *           NtCurrentTeb   (NTDLL.@)
+ */
+TEB * WINAPI NtCurrentTeb(void)
+{
+    return pthread_getspecific( teb_key );
+}
+
+
 /***********************************************************************
  *              NtOpenThread   (NTDLL.@)
  */
@@ -1612,20 +1625,22 @@ NTSTATUS WINAPI NtAlertThread( HANDLE handle )
 NTSTATUS WINAPI NtTerminateThread( HANDLE handle, LONG exit_code )
 {
     NTSTATUS ret;
-    BOOL self = (handle == GetCurrentThread());
+    BOOL self;
 
-    if (!self || exit_code)
+    SERVER_START_REQ( terminate_thread )
     {
-        SERVER_START_REQ( terminate_thread )
-        {
-            req->handle    = wine_server_obj_handle( handle );
-            req->exit_code = exit_code;
-            ret = wine_server_call( req );
-            self = !ret && reply->self;
-        }
-        SERVER_END_REQ;
+        req->handle    = wine_server_obj_handle( handle );
+        req->exit_code = exit_code;
+        ret = wine_server_call( req );
+        self = !ret && reply->self;
     }
-    if (self) exit_thread( exit_code );
+    SERVER_END_REQ;
+
+    if (self)
+    {
+        server_select( NULL, 0, SELECT_INTERRUPTIBLE, 0, NULL, NULL );
+        exit_thread( exit_code );
+    }
     return ret;
 }
 
@@ -1824,6 +1839,48 @@ BOOL get_thread_times(int unix_pid, int unix_tid, LARGE_INTEGER *kernel_time, LA
     static int once;
     if (!once++) FIXME("not implemented on this platform\n");
     return FALSE;
+#endif
+}
+
+static void set_native_thread_name( HANDLE handle, const UNICODE_STRING *name )
+{
+#ifdef linux
+    NTSTATUS status;
+    char path[64], nameA[64];
+    int unix_pid, unix_tid, len, fd;
+
+    SERVER_START_REQ( get_thread_times )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        status = wine_server_call( req );
+        if (status == STATUS_SUCCESS)
+        {
+            unix_pid = reply->unix_pid;
+            unix_tid = reply->unix_tid;
+        }
+    }
+    SERVER_END_REQ;
+
+    if (status != STATUS_SUCCESS || unix_pid == -1 || unix_tid == -1)
+        return;
+
+    if (unix_pid != getpid())
+    {
+        static int once;
+        if (!once++) FIXME("cross-process native thread naming not supported\n");
+        return;
+    }
+
+    len = ntdll_wcstoumbs( name->Buffer, name->Length / sizeof(WCHAR), nameA, sizeof(nameA), FALSE );
+    sprintf(path, "/proc/%u/task/%u/comm", unix_pid, unix_tid);
+    if ((fd = open( path, O_WRONLY )) != -1)
+    {
+        write( fd, nameA, len );
+        close( fd );
+    }
+#else
+    static int once;
+    if (!once++) FIXME("not implemented on this platform\n");
 #endif
 }
 
@@ -2232,10 +2289,19 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
     case ThreadNameInformation:
     {
         const THREAD_NAME_INFORMATION *info = data;
+        THREAD_BASIC_INFORMATION tbi;
 
         if (length != sizeof(*info)) return STATUS_INFO_LENGTH_MISMATCH;
         if (!info) return STATUS_ACCESS_VIOLATION;
         if (info->ThreadName.Length && !info->ThreadName.Buffer) return STATUS_ACCESS_VIOLATION;
+
+        status = NtQueryInformationThread( handle, ThreadBasicInformation, &tbi, sizeof(tbi), NULL );
+        if (handle == GetCurrentThread() || (!status && (HandleToULong(tbi.ClientId.UniqueThread) == GetCurrentThreadId())))
+            WARN_(threadname)( "Thread renamed to %s\n", debugstr_us(&info->ThreadName) );
+        else if (!status)
+            WARN_(threadname)( "Thread ID %04x renamed to %s\n", HandleToULong( tbi.ClientId.UniqueThread ), debugstr_us(&info->ThreadName) );
+        else
+            WARN_(threadname)( "Thread handle %p renamed to %s\n", handle, debugstr_us(&info->ThreadName) );
 
         SERVER_START_REQ( set_thread_info )
         {
@@ -2245,7 +2311,20 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
             status = wine_server_call( req );
         }
         SERVER_END_REQ;
+
+        set_native_thread_name( handle, &info->ThreadName );
+
         return status;
+    }
+
+    case ThreadWineNativeThreadName:
+    {
+        const THREAD_NAME_INFORMATION *info = data;
+
+        if (length != sizeof(*info)) return STATUS_INFO_LENGTH_MISMATCH;
+
+        set_native_thread_name( handle, &info->ThreadName );
+        return STATUS_SUCCESS;
     }
 
     case ThreadWow64Context:
@@ -2255,6 +2334,12 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
         if (length != sizeof(BOOLEAN)) return STATUS_INFO_LENGTH_MISMATCH;
         if (!data) return STATUS_ACCESS_VIOLATION;
         FIXME( "ThreadEnableAlignmentFaultFixup stub!\n" );
+        return STATUS_SUCCESS;
+
+    case ThreadPowerThrottlingState:
+        if (length != sizeof(THREAD_POWER_THROTTLING_STATE)) return STATUS_INFO_LENGTH_MISMATCH;
+        if (!data) return STATUS_ACCESS_VIOLATION;
+        FIXME( "ThreadPowerThrottling stub!\n" );
         return STATUS_SUCCESS;
 
     case ThreadBasicInformation:

@@ -22,10 +22,15 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#define VKD3D_NO_VULKAN_H
+#define VKD3D_NO_WIN32_TYPES
 #include "initguid.h"
 #include "wined3d_private.h"
+#include "d3d12.h"
+#include <vkd3d.h>
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
+WINE_DECLARE_DEBUG_CHANNEL(vkd3d);
 WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 struct wined3d_wndproc
@@ -247,6 +252,14 @@ BOOL wined3d_get_app_name(char *app_name, unsigned int app_name_size)
     return TRUE;
 }
 
+static void vkd3d_log_callback(const char *fmt, va_list args)
+{
+    char buffer[1024];
+
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    __wine_dbg_output(buffer);
+}
+
 static BOOL wined3d_dll_init(HINSTANCE hInstDLL)
 {
     DWORD wined3d_context_tls_idx;
@@ -459,6 +472,25 @@ static BOOL wined3d_dll_init(HINSTANCE hInstDLL)
     if (appkey) RegCloseKey( appkey );
     if (hkey) RegCloseKey( hkey );
 
+    if (!getenv( "VKD3D_DEBUG" ))
+    {
+        if (TRACE_ON(vkd3d)) putenv( "VKD3D_DEBUG=trace" );
+        else if (WARN_ON(vkd3d)) putenv( "VKD3D_DEBUG=warn" );
+        else if (FIXME_ON(vkd3d)) putenv( "VKD3D_DEBUG=fixme" );
+        else if (ERR_ON(vkd3d)) putenv( "VKD3D_DEBUG=err" );
+        else putenv( "VKD3D_DEBUG=none" );
+    }
+    if (!getenv( "VKD3D_SHADER_DEBUG" ))
+    {
+        if (TRACE_ON(vkd3d)) putenv( "VKD3D_SHADER_DEBUG=trace" );
+        else if (WARN_ON(vkd3d)) putenv( "VKD3D_SHADER_DEBUG=warn" );
+        else if (FIXME_ON(vkd3d)) putenv( "VKD3D_SHADER_DEBUG=fixme" );
+        else if (ERR_ON(vkd3d)) putenv( "VKD3D_SHADER_DEBUG=err" );
+        else putenv( "VKD3D_SHADER_DEBUG=none" );
+    }
+
+    vkd3d_set_log_callback(vkd3d_log_callback);
+
     return TRUE;
 }
 
@@ -616,7 +648,7 @@ static LRESULT CALLBACK wined3d_wndproc(HWND window, UINT message, WPARAM wparam
     {
         if (filter && message != WM_DISPLAYCHANGE)
         {
-            TRACE("Filtering message: window %p, message %#x, wparam %#lx, lparam %#lx.\n",
+            TRACE("Filtering message: window %p, message %#x, wparam %#Ix, lparam %#Ix.\n",
                     window, message, wparam, lparam);
 
             if (unicode)

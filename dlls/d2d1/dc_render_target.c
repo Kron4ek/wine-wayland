@@ -99,7 +99,7 @@ static ULONG STDMETHODCALLTYPE d2d_dc_render_target_Release(ID2D1DCRenderTarget 
         if (render_target->dxgi_surface)
             IDXGISurface1_Release(render_target->dxgi_surface);
         ID3D10Device1_Release(render_target->d3d_device);
-        heap_free(render_target);
+        free(render_target);
     }
 
     return refcount;
@@ -689,11 +689,13 @@ static HRESULT STDMETHODCALLTYPE d2d_dc_render_target_BindDC(ID2D1DCRenderTarget
     ID2D1DeviceContext *context;
     D2D1_SIZE_U bitmap_size;
     ID2D1Bitmap *bitmap;
+    DWORD obj_type;
     HRESULT hr;
 
     TRACE("iface %p, hdc %p, rect %s.\n", iface, hdc, wine_dbgstr_rect(rect));
 
-    if (!hdc)
+    obj_type = GetObjectType(hdc);
+    if (obj_type != OBJ_DC && obj_type != OBJ_ENHMETADC && obj_type != OBJ_MEMDC)
         return E_INVALIDARG;
 
     /* Switch dxgi target to new surface. */

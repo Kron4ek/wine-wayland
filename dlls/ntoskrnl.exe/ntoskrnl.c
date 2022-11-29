@@ -2251,6 +2251,14 @@ void WINAPI ExUnregisterCallback(void *callback_registration)
 }
 
 /***********************************************************************
+ *           ExNotifyCallback   (NTOSKRNL.EXE.@)
+ */
+void WINAPI ExNotifyCallback(void *obj, void *arg1, void *arg2)
+{
+    FIXME("(%p, %p, %p): stub\n", obj, arg1, arg2);
+}
+
+/***********************************************************************
  *           ExFreePool   (NTOSKRNL.EXE.@)
  */
 void WINAPI ExFreePool( void *ptr )
@@ -2561,6 +2569,15 @@ LONG WINAPI KeInsertQueue(PRKQUEUE Queue, PLIST_ENTRY Entry)
     return 0;
 }
 
+/***********************************************************************
+ *           KeInsertQueueDpc   (NTOSKRNL.EXE.@)
+ */
+BOOLEAN WINAPI KeInsertQueueDpc(PRKDPC Dpc, PVOID SystemArgument1, PVOID SystemArgument2)
+{
+    FIXME( "stub: (%p %p %p)\n", Dpc, SystemArgument1, SystemArgument2 );
+    return TRUE;
+}
+
 /**********************************************************************
  *           KeQueryActiveProcessors   (NTOSKRNL.EXE.@)
  *
@@ -2599,6 +2616,15 @@ ULONGLONG WINAPI KeQueryInterruptTime( void )
     return totaltime.QuadPart;
 }
 
+/***********************************************************************
+ *           KeQueryPriorityThread   (NTOSKRNL.EXE.@)
+ */
+KPRIORITY WINAPI KeQueryPriorityThread( PKTHREAD Thread )
+{
+    FIXME("(%p): stub.\n", Thread);
+    /* priority must be a value between 0 and 31 */
+    return 15;
+}
 
 /***********************************************************************
  *           KeQuerySystemTime   (NTOSKRNL.EXE.@)
@@ -3293,8 +3319,7 @@ PVOID WINAPI MmGetSystemRoutineAddress(PUNICODE_STRING SystemRoutineName)
         pFunc = GetProcAddress( hMod, routineNameA.Buffer );
         if (!pFunc)
         {
-           hMod = GetModuleHandleW( halW );
-
+           hMod = LoadLibraryW( halW );
            if (hMod) pFunc = GetProcAddress( hMod, routineNameA.Buffer );
         }
         RtlFreeAnsiString( &routineNameA );
@@ -3355,11 +3380,38 @@ VOID WINAPI KeSetImportanceDpc(PRKDPC dpc, KDPC_IMPORTANCE importance)
 }
 
 /***********************************************************************
+ *          KeSetTargetProcessorDpcEx   (NTOSKRNL.EXE.@)
+ */
+VOID WINAPI KeSetTargetProcessorDpcEx(PRKDPC dpc, PPROCESSOR_NUMBER process_number)
+{
+    FIXME("%p, %p stub\n", dpc, process_number);
+}
+
+/***********************************************************************
  *          KeSetTargetProcessorDpc   (NTOSKRNL.EXE.@)
  */
 VOID WINAPI KeSetTargetProcessorDpc(PRKDPC dpc, CCHAR number)
 {
     FIXME("%p, %d stub\n", dpc, number);
+}
+
+/***********************************************************************
+ *          KeGetCurrentProcessorNumberEx   (NTOSKRNL.EXE.@)
+ */
+ULONG WINAPI KeGetCurrentProcessorNumberEx(PPROCESSOR_NUMBER process_number)
+{
+    ULONG cur_number = NtGetCurrentProcessorNumber();
+
+    FIXME("%p semi-stub\n", process_number);
+
+    if (process_number)
+    {
+        process_number->Group = 0;
+        process_number->Reserved = 0;
+        process_number->Number = cur_number;
+    }
+
+    return cur_number;
 }
 
 /***********************************************************************
@@ -3514,6 +3566,14 @@ BOOLEAN WINAPI KeAreApcsDisabled(void)
     unsigned int critical_region = KeGetCurrentThread()->critical_region;
     TRACE( "%u\n", critical_region );
     return !!critical_region;
+}
+
+/***********************************************************************
+ *           KeAreAllApcsDisabled    (NTOSKRNL.@)
+ */
+BOOLEAN WINAPI KeAreAllApcsDisabled(void)
+{
+    return KeAreApcsDisabled();
 }
 
 /***********************************************************************
@@ -3989,6 +4049,19 @@ NTSTATUS WINAPI ZwUnloadDriver( const UNICODE_STRING *service_name )
 }
 
 /***********************************************************************
+ *           IoCreateFileEx (NTOSKRNL.EXE.@)
+ */
+NTSTATUS WINAPI IoCreateFileEx(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
+                              IO_STATUS_BLOCK *io, LARGE_INTEGER *alloc_size, ULONG attributes, ULONG sharing,
+                              ULONG disposition, ULONG create_options, VOID *ea_buffer, ULONG ea_length,
+                              CREATE_FILE_TYPE file_type, VOID *parameters, ULONG options, void *driverctx)
+{
+    FIXME(": semi-stub\n");
+    return NtCreateFile(handle, access, attr, io, alloc_size, attributes, sharing, disposition,
+                        create_options, ea_buffer, ea_length);
+}
+
+/***********************************************************************
  *           IoCreateFile (NTOSKRNL.EXE.@)
  */
 NTSTATUS WINAPI IoCreateFile(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
@@ -3996,19 +4069,10 @@ NTSTATUS WINAPI IoCreateFile(HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUT
                               ULONG disposition, ULONG create_options, VOID *ea_buffer, ULONG ea_length,
                               CREATE_FILE_TYPE file_type, VOID *parameters, ULONG options )
 {
-    FIXME(": stub\n");
-    return STATUS_NOT_IMPLEMENTED;
+    FIXME(": semi-stub\n");
+    return IoCreateFileEx(handle, access, attr, io, alloc_size, attributes, sharing, disposition,
+                          create_options, ea_buffer, ea_length, file_type, parameters, options, NULL);
 }
-
-/***********************************************************************
- *           IoCreateNotificationEvent (NTOSKRNL.EXE.@)
- */
-PKEVENT WINAPI IoCreateNotificationEvent(UNICODE_STRING *name, HANDLE *handle)
-{
-    FIXME( "stub: %s %p\n", debugstr_us(name), handle );
-    return NULL;
-}
-
 
 /**************************************************************************
  *		__chkstk (NTOSKRNL.@)
@@ -4446,6 +4510,20 @@ NTSTATUS WINAPI KdEnableDebugger(void)
     FIXME(": stub.\n");
     return STATUS_DEBUGGER_INACTIVE;
 }
+
+#ifdef __x86_64__
+
+void WINAPI KfRaiseIrql(KIRQL new, KIRQL *old)
+{
+    FIXME("new %u old %p: stub.\n", new, old);
+}
+
+void WINAPI KeLowerIrql(KIRQL new)
+{
+    FIXME("new %u: stub.\n", new);
+}
+
+#endif
 
 /*****************************************************
  *           DllMain

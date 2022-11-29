@@ -342,6 +342,55 @@ static void test_choosepixelformat(void)
     pfd.cDepthBits = 0;
     pfd.cStencilBits = 0;
     pfd.dwFlags &= ~PFD_DEPTH_DONTCARE;
+
+    pfd.cDepthBits = 16;
+    ok( test_pfd(&pfd, &ret_fmt), "depth 16 failed.\n" );
+    ok( ret_fmt.cDepthBits >= 16, "Got unexpected cDepthBits %u.\n", ret_fmt.cDepthBits );
+    pfd.cDepthBits = 0;
+
+    pfd.cDepthBits = 16;
+    pfd.cStencilBits = 8;
+    ok( test_pfd(&pfd, &ret_fmt), "depth 16, stencil 8 failed.\n" );
+    ok( ret_fmt.cDepthBits >= 16, "Got unexpected cDepthBits %u.\n", ret_fmt.cDepthBits );
+    ok( ret_fmt.cStencilBits == 8, "Got unexpected cStencilBits %u.\n", ret_fmt.cStencilBits );
+    pfd.cDepthBits = 0;
+    pfd.cStencilBits = 0;
+
+    pfd.cDepthBits = 8;
+    pfd.cStencilBits = 8;
+    ok( test_pfd(&pfd, &ret_fmt), "depth 8, stencil 8 failed.\n" );
+    ok( ret_fmt.cDepthBits >= 8, "Got unexpected cDepthBits %u.\n", ret_fmt.cDepthBits );
+    ok( ret_fmt.cStencilBits == 8, "Got unexpected cStencilBits %u.\n", ret_fmt.cStencilBits );
+    pfd.cDepthBits = 0;
+    pfd.cStencilBits = 0;
+
+    pfd.cDepthBits = 24;
+    pfd.cStencilBits = 8;
+    ok( test_pfd(&pfd, &ret_fmt), "depth 24, stencil 8 failed.\n" );
+    ok( ret_fmt.cDepthBits >= 24, "Got unexpected cDepthBits %u.\n", ret_fmt.cDepthBits );
+    ok( ret_fmt.cStencilBits == 8, "Got unexpected cStencilBits %u.\n", ret_fmt.cStencilBits );
+    pfd.cDepthBits = 0;
+    pfd.cStencilBits = 0;
+
+    pfd.cDepthBits = 32;
+    pfd.cStencilBits = 8;
+    ok( test_pfd(&pfd, &ret_fmt), "depth 32, stencil 8 failed.\n" );
+    ok( ret_fmt.cDepthBits >= 24, "Got unexpected cDepthBits %u.\n", ret_fmt.cDepthBits );
+    ok( ret_fmt.cStencilBits == 8, "Got unexpected cStencilBits %u.\n", ret_fmt.cStencilBits );
+    pfd.cDepthBits = 0;
+    pfd.cStencilBits = 0;
+
+    pfd.cStencilBits = 8;
+    ok( test_pfd(&pfd, &ret_fmt), "depth 32, stencil 8 failed.\n" );
+    ok( ret_fmt.cStencilBits == 8, "Got unexpected cStencilBits %u.\n", ret_fmt.cStencilBits );
+    pfd.cStencilBits = 0;
+
+    pfd.cDepthBits = 1;
+    pfd.cStencilBits = 8;
+    ok( test_pfd(&pfd, &ret_fmt), "depth 32, stencil 8 failed.\n" );
+    ok( ret_fmt.cStencilBits == 8, "Got unexpected cStencilBits %u.\n", ret_fmt.cStencilBits );
+    pfd.cStencilBits = 0;
+    pfd.cDepthBits = 0;
 }
 
 static void WINAPI gl_debug_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
@@ -1820,6 +1869,26 @@ static void test_wglChoosePixelFormatARB(HDC hdc)
     }
 }
 
+static void test_copy_context(HDC hdc)
+{
+    HGLRC ctx, ctx2;
+    BOOL ret;
+
+    ctx = wglCreateContext(hdc);
+    ok(!!ctx, "Failed to create GL context, last error %#lx.\n", GetLastError());
+    ctx2 = wglCreateContext(hdc);
+    ok(!!ctx2, "Failed to create GL context, last error %#lx.\n", GetLastError());
+
+    ret = wglCopyContext(ctx, ctx2, GL_ALL_ATTRIB_BITS);
+    todo_wine
+    ok(ret, "Failed to copy GL context, last error %#lx.\n", GetLastError());
+
+    ret = wglDeleteContext(ctx2);
+    ok(ret, "Failed to delete GL context, last error %#lx.\n", GetLastError());
+    ret = wglDeleteContext(ctx);
+    ok(ret, "Failed to delete GL context, last error %#lx.\n", GetLastError());
+}
+
 START_TEST(opengl)
 {
     HWND hwnd;
@@ -1905,6 +1974,7 @@ START_TEST(opengl)
         test_getprocaddress(hdc);
         test_deletecontext(hwnd, hdc);
         test_makecurrent(hdc);
+        test_copy_context(hdc);
 
         /* The lack of wglGetExtensionsStringARB in general means broken software rendering or the lack of decent OpenGL support, skip tests in such cases */
         if (!pwglGetExtensionsStringARB)

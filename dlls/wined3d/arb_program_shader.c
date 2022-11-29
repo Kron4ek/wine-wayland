@@ -5080,6 +5080,7 @@ static const SHADER_HANDLER shader_arb_instruction_handler_table[WINED3DSIH_TABL
     /* WINED3DSIH_ENDREP                           */ shader_hw_endrep,
     /* WINED3DSIH_ENDSWITCH                        */ NULL,
     /* WINED3DSIH_EQ                               */ NULL,
+    /* WINED3DSIH_EVAL_CENTROID                    */ NULL,
     /* WINED3DSIH_EVAL_SAMPLE_INDEX                */ NULL,
     /* WINED3DSIH_EXP                              */ shader_hw_scalar_op,
     /* WINED3DSIH_EXPP                             */ shader_hw_scalar_op,
@@ -7744,8 +7745,8 @@ static BOOL arbfp_blit_supported(enum wined3d_blit_op blit_op, const struct wine
             return FALSE;
     }
 
-    decompress = (src_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED)
-            && !(dst_format->flags[WINED3D_GL_RES_TYPE_TEX_2D] & WINED3DFMT_FLAG_COMPRESSED);
+    decompress = (src_format->attrs & WINED3D_FORMAT_ATTR_COMPRESSED)
+            && !(dst_format->attrs & WINED3D_FORMAT_ATTR_COMPRESSED);
     if (!decompress && !(src_resource->access & dst_resource->access & WINED3D_RESOURCE_ACCESS_GPU))
         return FALSE;
 

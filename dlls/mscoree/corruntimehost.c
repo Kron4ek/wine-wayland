@@ -1093,7 +1093,7 @@ static void get_utf8_args(int *argc, char ***argv)
 
     (*argv)[*argc] = NULL;
 
-    HeapFree(GetProcessHeap(), 0, argvw);
+    LocalFree(argvw);
 }
 
 #if __i386__
@@ -1917,7 +1917,7 @@ HRESULT create_monodata(REFCLSID clsid, LPVOID *ppObj)
             HeapFree(GetProcessHeap(), 0, filenameA);
             if (!assembly)
             {
-                ERR("Cannot open assembly %s, status=%i\n", filenameA, status);
+                ERR("Cannot open assembly %s, status=%i\n", debugstr_w(filename), status);
                 domain_restore(prev_domain);
                 goto cleanup;
             }

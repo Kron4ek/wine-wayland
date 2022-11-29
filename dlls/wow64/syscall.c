@@ -36,6 +36,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(wow);
 USHORT native_machine = 0;
 USHORT current_machine = 0;
 ULONG_PTR args_alignment = 0;
+ULONG_PTR highest_user_address = 0x7ffeffff;
+ULONG_PTR default_zero_bits = 0x7fffffff;
 
 typedef NTSTATUS (WINAPI *syscall_thunk)( UINT *args );
 
@@ -389,7 +391,7 @@ static DWORD get_syscall_num( const BYTE *syscall )
             id = *(DWORD *)(syscall + 1);
         break;
 
-    case IMAGE_FILE_MACHINE_ARM:
+    case IMAGE_FILE_MACHINE_ARMNT:
         if (*(WORD *)syscall == 0xb40f)
         {
             DWORD inst = *(DWORD *)((WORD *)syscall + 1);
@@ -490,7 +492,7 @@ static HMODULE load_64bit_module( const WCHAR *name )
 
     swprintf( path, MAX_PATH, L"%s\\%s", dir, name );
     RtlInitUnicodeString( &str, path );
-    if ((status = LdrLoadDll( NULL, 0, &str, &module )))
+    if ((status = LdrLoadDll( dir, 0, &str, &module )))
     {
         ERR( "failed to load dll %lx\n", status );
         NtTerminateProcess( GetCurrentProcess(), status );
@@ -550,7 +552,7 @@ static const WCHAR *get_cpu_dll_name(void)
     {
     case IMAGE_FILE_MACHINE_I386:
         return (native_machine == IMAGE_FILE_MACHINE_ARM64 ? L"xtajit.dll" : L"wow64cpu.dll");
-    case IMAGE_FILE_MACHINE_ARM:
+    case IMAGE_FILE_MACHINE_ARMNT:
         return L"wowarmhw.dll";
     default:
         ERR( "unsupported machine %04x\n", current_machine );
@@ -566,10 +568,14 @@ static DWORD WINAPI process_init( RTL_RUN_ONCE *once, void *param, void **contex
 {
     HMODULE module;
     UNICODE_STRING str;
+    SYSTEM_BASIC_INFORMATION info;
 
     RtlWow64GetProcessMachines( GetCurrentProcess(), &current_machine, &native_machine );
     if (!current_machine) current_machine = native_machine;
     args_alignment = (current_machine == IMAGE_FILE_MACHINE_I386) ? sizeof(ULONG) : sizeof(ULONG64);
+    NtQuerySystemInformation( SystemEmulationBasicInformation, &info, sizeof(info), NULL );
+    highest_user_address = (ULONG_PTR)info.HighestUserAddress;
+    default_zero_bits = (ULONG_PTR)info.HighestUserAddress | 0x7fffffff;
 
 #define GET_PTR(name) p ## name = RtlFindExportedRoutineByName( module, #name )
 
@@ -715,15 +721,12 @@ NTSTATUS WINAPI Wow64SystemServiceEx( UINT num, UINT *args )
 }
 
 
-static void cpu_simulate(void);
-
 /**********************************************************************
  *           simulate_filter
  */
 static LONG CALLBACK simulate_filter( EXCEPTION_POINTERS *ptrs )
 {
     Wow64PassExceptionToGuest( ptrs );
-    cpu_simulate();  /* re-enter simulation to run the exception dispatcher */
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -844,6 +847,8 @@ void WINAPI Wow64ApcRoutine( ULONG_PTR arg1, ULONG_PTR arg2, ULONG_PTR arg3, CON
 NTSTATUS WINAPI Wow64KiUserCallbackDispatcher( ULONG id, void *args, ULONG len,
                                                void **ret_ptr, ULONG *ret_len )
 {
+    TEB32 *teb32 = (TEB32 *)((char *)NtCurrentTeb() + NtCurrentTeb()->WowTebOffset);
+    ULONG teb_frame = teb32->Tib.ExceptionList;
     struct user_callback_frame frame;
 
     frame.prev_frame = NtCurrentTeb()->TlsSlots[WOW64_TLS_USERCALLBACKDATA];
@@ -859,13 +864,14 @@ NTSTATUS WINAPI Wow64KiUserCallbackDispatcher( ULONG id, void *args, ULONG len,
     {
     case IMAGE_FILE_MACHINE_I386:
         {
-            I386_CONTEXT orig_ctx, ctx = { CONTEXT_I386_FULL };
+            I386_CONTEXT orig_ctx, *ctx;
             void *args_data;
             ULONG *stack;
 
-            NtQueryInformationThread( GetCurrentThread(), ThreadWow64Context, &ctx, sizeof(ctx), NULL );
+            RtlWow64GetCurrentCpuArea( NULL, (void **)&ctx, NULL );
+            orig_ctx = *ctx;
 
-            stack = args_data = ULongToPtr( (ctx.Esp - len) & ~15 );
+            stack = args_data = ULongToPtr( (ctx->Esp - len) & ~15 );
             memcpy( args_data, args, len );
             *(--stack) = 0;
             *(--stack) = len;
@@ -873,16 +879,13 @@ NTSTATUS WINAPI Wow64KiUserCallbackDispatcher( ULONG id, void *args, ULONG len,
             *(--stack) = id;
             *(--stack) = 0xdeadbabe;
 
-            orig_ctx = ctx;
-            ctx.Esp = PtrToUlong( stack );
-            ctx.Eip = pLdrSystemDllInitBlock->pKiUserCallbackDispatcher;
-            NtSetInformationThread( GetCurrentThread(), ThreadWow64Context, &ctx, sizeof(ctx) );
+            ctx->Esp = PtrToUlong( stack );
+            ctx->Eip = pLdrSystemDllInitBlock->pKiUserCallbackDispatcher;
 
             if (!__wine_setjmpex( &frame.jmpbuf, NULL ))
                 cpu_simulate();
             else
-                NtSetInformationThread( GetCurrentThread(), ThreadWow64Context,
-                                        &orig_ctx, sizeof(orig_ctx) );
+                *ctx = orig_ctx;
         }
         break;
 
@@ -912,6 +915,7 @@ NTSTATUS WINAPI Wow64KiUserCallbackDispatcher( ULONG id, void *args, ULONG len,
         break;
     }
 
+    teb32->Tib.ExceptionList = teb_frame;
     NtCurrentTeb()->TlsSlots[WOW64_TLS_USERCALLBACKDATA] = frame.prev_frame;
     NtCurrentTeb()->TlsSlots[WOW64_TLS_TEMPLIST] = frame.temp_list;
     return frame.status;

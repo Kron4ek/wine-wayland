@@ -76,6 +76,8 @@ static DWORD (WINAPI *pCtrlRoutine)(void *);
 
 SYSTEM_DLL_INIT_BLOCK LdrSystemDllInitBlock = { 0xf0 };
 
+unixlib_handle_t ntdll_unix_handle = 0;
+
 /* windows directory */
 const WCHAR windows_dir[] = L"C:\\windows";
 /* system directory with trailing backslash */
@@ -264,7 +266,7 @@ void WINAPI RtlGetUnloadEventTraceEx(ULONG **size, ULONG **count, void **trace)
  * that only modifying esi leads to a crash, so use this one to backup
  * ebp while running the dll entry proc.
  */
-#ifdef __i386__
+#if defined(__i386__)
 extern BOOL call_dll_entry_point( DLLENTRYPROC proc, void *module, UINT reason, void *reserved );
 __ASM_GLOBAL_FUNC(call_dll_entry_point,
                   "pushl %ebp\n\t"
@@ -298,13 +300,36 @@ __ASM_GLOBAL_FUNC(call_dll_entry_point,
                   __ASM_CFI(".cfi_def_cfa %esp,4\n\t")
                   __ASM_CFI(".cfi_same_value %ebp\n\t")
                   "ret" )
-#else /* __i386__ */
+#elif defined(__x86_64__)
+extern BOOL CDECL call_dll_entry_point( DLLENTRYPROC proc, void *module, UINT reason, void *reserved );
+/* Some apps modify rbx in TLS entry point. */
+__ASM_GLOBAL_FUNC(call_dll_entry_point,
+                  "pushq %rbx\n\t"
+                  __ASM_SEH(".seh_pushreg %rbx\n\t")
+                  __ASM_CFI(".cfi_adjust_cfa_offset 8\n\t")
+                  __ASM_CFI(".cfi_rel_offset %rbx,0\n\t")
+                  "subq $48,%rsp\n\t"
+                  __ASM_SEH(".seh_stackalloc 48\n\t")
+                  __ASM_SEH(".seh_endprologue\n\t")
+                  __ASM_CFI(".cfi_adjust_cfa_offset 48\n\t")
+                  "mov %rcx,%r10\n\t"
+                  "mov %rdx,%rcx\n\t"
+                  "mov %r8d,%edx\n\t"
+                  "mov %r9,%r8\n\t"
+                  "call *%r10\n\t"
+                  "addq $48,%rsp\n\t"
+                  __ASM_CFI(".cfi_adjust_cfa_offset -48\n\t")
+                  "popq %rbx\n\t"
+                   __ASM_CFI(".cfi_adjust_cfa_offset -8\n\t")
+                   __ASM_CFI(".cfi_same_value %rbx\n\t")
+                  "ret" )
+#else
 static inline BOOL call_dll_entry_point( DLLENTRYPROC proc, void *module,
                                          UINT reason, void *reserved )
 {
     return proc( module, reason, reserved );
 }
-#endif /* __i386__ */
+#endif
 
 
 #if defined(__i386__) || defined(__x86_64__) || defined(__arm__) || defined(__aarch64__)
@@ -1549,7 +1574,7 @@ static NTSTATUS MODULE_InitDLL( WINE_MODREF *wm, UINT reason, LPVOID lpReserved 
     if (wm->ldr.Flags & LDR_DONT_RESOLVE_REFS) return STATUS_SUCCESS;
     if (wm->ldr.TlsIndex != -1) call_tls_callbacks( wm->ldr.DllBase, reason );
     if (wm->ldr.Flags & LDR_WINE_INTERNAL && reason == DLL_PROCESS_ATTACH)
-        unix_funcs->init_builtin_dll( wm->ldr.DllBase );
+        NTDLL_UNIX_CALL( init_builtin_dll, wm->ldr.DllBase );
     if (!entry) return STATUS_SUCCESS;
 
     if (TRACE_ON(relay))
@@ -2178,6 +2203,8 @@ static void build_ntdll_module(void)
     wm->ldr.Flags &= ~LDR_DONT_RESOLVE_REFS;
     node_ntdll = wm->ldr.DdagNode;
     if (TRACE_ON(relay)) RELAY_SetupDLL( meminfo.AllocationBase );
+    NtQueryVirtualMemory( GetCurrentProcess(), meminfo.AllocationBase, MemoryWineUnixFuncs,
+                          &ntdll_unix_handle, sizeof(ntdll_unix_handle), NULL );
 }
 
 
@@ -2600,10 +2627,10 @@ static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
     void *module;
     NTSTATUS status;
     WINE_MODREF *wm;
-    UNICODE_STRING win_name = *nt_name;
+    struct load_so_dll_params params = { *nt_name, &module };
 
-    TRACE( "trying %s as so lib\n", debugstr_us(&win_name) );
-    if ((status = unix_funcs->load_so_dll( &win_name, &module )))
+    TRACE( "trying %s as so lib\n", debugstr_us(nt_name) );
+    if ((status = NTDLL_UNIX_CALL( load_so_dll, &params )))
     {
         WARN( "failed to load .so lib %s\n", debugstr_us(nt_name) );
         if (status == STATUS_INVALID_IMAGE_FORMAT) status = STATUS_INVALID_IMAGE_NOT_MZ;
@@ -2620,7 +2647,7 @@ static NTSTATUS load_so_dll( LPCWSTR load_path, const UNICODE_STRING *nt_name,
     {
         SECTION_IMAGE_INFORMATION image_info = { 0 };
 
-        if ((status = build_module( load_path, &win_name, &module, &image_info, NULL, flags, FALSE, &wm )))
+        if ((status = build_module( load_path, &params.nt_name, &module, &image_info, NULL, flags, FALSE, &wm )))
         {
             if (module) NtUnmapViewOfSection( NtCurrentProcess(), module );
             return status;
@@ -2907,12 +2934,13 @@ static NTSTATUS find_builtin_without_file( const WCHAR *name, UNICODE_STRING *ne
         if (!name[1] || wcscmp( name + wcslen(name) - 2, L"16" )) return status;
     }
 
-    if (!get_env_var( L"WINEBUILDDIR", 20 + 2 * wcslen(name), new_name ))
+    if (!get_env_var( L"WINEBUILDDIR", 20 + 2 * wcslen(name) + wcslen(pe_dir), new_name ))
     {
         len = new_name->Length;
         RtlAppendUnicodeToString( new_name, L"\\dlls\\" );
         RtlAppendUnicodeToString( new_name, name );
         if ((ext = wcsrchr( name, '.' )) && !wcscmp( ext, L".dll" )) new_name->Length -= 4 * sizeof(WCHAR);
+        RtlAppendUnicodeToString( new_name, pe_dir );
         RtlAppendUnicodeToString( new_name, L"\\" );
         RtlAppendUnicodeToString( new_name, name );
         status = open_dll_file( new_name, pwm, mapping, image_info, id );
@@ -2921,6 +2949,7 @@ static NTSTATUS find_builtin_without_file( const WCHAR *name, UNICODE_STRING *ne
         new_name->Length = len;
         RtlAppendUnicodeToString( new_name, L"\\programs\\" );
         RtlAppendUnicodeToString( new_name, name );
+        RtlAppendUnicodeToString( new_name, pe_dir );
         RtlAppendUnicodeToString( new_name, L"\\" );
         RtlAppendUnicodeToString( new_name, name );
         status = open_dll_file( new_name, pwm, mapping, image_info, id );
@@ -3127,7 +3156,7 @@ static NTSTATUS load_dll( const WCHAR *load_path, const WCHAR *libname, DWORD fl
     switch (nts)
     {
     case STATUS_INVALID_IMAGE_NOT_MZ:  /* not in PE format, maybe it's a .so file */
-        nts = load_so_dll( load_path, &nt_name, flags, pwm );
+        if (ntdll_unix_handle) nts = load_so_dll( load_path, &nt_name, flags, pwm );
         break;
 
     case STATUS_SUCCESS:  /* valid PE file */
@@ -3488,13 +3517,7 @@ static NTSTATUS query_string_option( HANDLE hkey, LPCWSTR name, ULONG type,
 NTSTATUS WINAPI LdrQueryImageFileExecutionOptions( const UNICODE_STRING *key, LPCWSTR value, ULONG type,
                                                    void *data, ULONG in_size, ULONG *out_size )
 {
-    static const WCHAR optionsW[] = {'M','a','c','h','i','n','e','\\',
-                                     'S','o','f','t','w','a','r','e','\\',
-                                     'M','i','c','r','o','s','o','f','t','\\',
-                                     'W','i','n','d','o','w','s',' ','N','T','\\',
-                                     'C','u','r','r','e','n','t','V','e','r','s','i','o','n','\\',
-                                     'I','m','a','g','e',' ','F','i','l','e',' ',
-                                     'E','x','e','c','u','t','i','o','n',' ','O','p','t','i','o','n','s','\\'};
+    static const WCHAR optionsW[] = L"\\Registry\\Machine\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options";
     WCHAR path[MAX_PATH + ARRAY_SIZE( optionsW )];
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING name_str;
@@ -3932,7 +3955,7 @@ static void load_global_options(void)
     attr.Attributes = OBJ_CASE_INSENSITIVE;
     attr.SecurityDescriptor = NULL;
     attr.SecurityQualityOfService = NULL;
-    RtlInitUnicodeString( &name_str, L"Machine\\System\\CurrentControlSet\\Control\\Session Manager" );
+    RtlInitUnicodeString( &name_str, L"\\Registry\\Machine\\System\\CurrentControlSet\\Control\\Session Manager" );
 
     if (!NtOpenKey( &hkey, KEY_QUERY_VALUE, &attr ))
     {
@@ -4185,7 +4208,7 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR 
         }
         release_address_space();
         if (wm->ldr.TlsIndex != -1) call_tls_callbacks( wm->ldr.DllBase, DLL_PROCESS_ATTACH );
-        if (wm->ldr.Flags & LDR_WINE_INTERNAL) unix_funcs->init_builtin_dll( wm->ldr.DllBase );
+        if (wm->ldr.Flags & LDR_WINE_INTERNAL) NTDLL_UNIX_CALL( init_builtin_dll, wm->ldr.DllBase );
         if (wm->ldr.ActivationContext) RtlDeactivateActivationContext( 0, cookie );
         process_breakpoint();
     }
@@ -4576,47 +4599,4 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
 {
     if (reason == DLL_PROCESS_ATTACH) LdrDisableThreadCalloutsForDll( inst );
     return TRUE;
-}
-
-
-static NTSTATUS CDECL load_so_dll_fallback( UNICODE_STRING *nt_name, void **module )
-{
-    return STATUS_INVALID_IMAGE_FORMAT;
-}
-
-static void CDECL init_builtin_dll_fallback( void *module )
-{
-}
-
-static NTSTATUS CDECL unwind_builtin_dll_fallback( ULONG type, struct _DISPATCHER_CONTEXT *dispatch,
-                                                   CONTEXT *context )
-{
-    return STATUS_UNSUCCESSFUL;
-}
-
-static LONGLONG WINAPI RtlGetSystemTimePrecise_fallback(void)
-{
-    LARGE_INTEGER now;
-    NtQuerySystemTime( &now );
-    return now.QuadPart;
-}
-
-static const struct unix_funcs unix_fallbacks =
-{
-    load_so_dll_fallback,
-    init_builtin_dll_fallback,
-    unwind_builtin_dll_fallback,
-    RtlGetSystemTimePrecise_fallback,
-};
-
-const struct unix_funcs *unix_funcs = &unix_fallbacks;
-
-/***********************************************************************
- *           __wine_set_unix_funcs
- */
-NTSTATUS CDECL __wine_set_unix_funcs( int version, const struct unix_funcs *funcs )
-{
-    if (version != NTDLL_UNIXLIB_VERSION) return STATUS_REVISION_MISMATCH;
-    unix_funcs = funcs;
-    return STATUS_SUCCESS;
 }

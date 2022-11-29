@@ -782,6 +782,7 @@ typedef struct _OVERLAPPED* LPWSAOVERLAPPED;
 #define WSATRY_AGAIN               (WSABASEERR + 1002)
 #define WSANO_RECOVERY             (WSABASEERR + 1003)
 #define WSANO_DATA                 (WSABASEERR + 1004)
+#define WSANO_ADDRESS              WSANO_DATA
 
 #define WSA_IO_PENDING             (ERROR_IO_PENDING)
 #define WSA_IO_INCOMPLETE          (ERROR_IO_INCOMPLETE)
@@ -1157,6 +1158,9 @@ int WINAPI WSACancelBlockingCall(void);
 int WINAPI WSACleanup(void);
 BOOL WINAPI WSACloseEvent(WSAEVENT);
 int WINAPI WSAConnect(SOCKET,const struct WS(sockaddr)*,int,LPWSABUF,LPWSABUF,LPQOS,LPQOS);
+BOOL WINAPI WSAConnectByNameA(SOCKET,const char *,const char *,DWORD *,struct WS(sockaddr) *,DWORD *,struct WS(sockaddr) *,const struct WS(timeval) *,WSAOVERLAPPED *);
+BOOL WINAPI WSAConnectByNameW(SOCKET,const WCHAR *,const WCHAR *,DWORD *,struct WS(sockaddr) *,DWORD *,struct WS(sockaddr) *,const struct WS(timeval) *,WSAOVERLAPPED *);
+#define WSAConnectByName           WINELIB_NAME_AW(WSAConnectByName)
 WSAEVENT WINAPI WSACreateEvent(void);
 INT WINAPI WSADuplicateSocketA(SOCKET,DWORD,LPWSAPROTOCOL_INFOA);
 INT WINAPI WSADuplicateSocketW(SOCKET,DWORD,LPWSAPROTOCOL_INFOW);

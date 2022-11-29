@@ -243,28 +243,33 @@ static void write_sm1_type(struct vkd3d_bytecode_buffer *buffer, struct hlsl_typ
 {
     const struct hlsl_type *array_type = get_array_type(type);
     unsigned int array_size = get_array_size(type);
-    struct hlsl_struct_field *field;
     unsigned int field_count = 0;
     size_t fields_offset = 0;
+    size_t i;
 
     if (type->bytecode_offset)
         return;
 
     if (array_type->type == HLSL_CLASS_STRUCT)
     {
-        LIST_FOR_EACH_ENTRY(field, array_type->e.elements, struct hlsl_struct_field, entry)
+        field_count = array_type->e.record.field_count;
+
+        for (i = 0; i < field_count; ++i)
         {
+            struct hlsl_struct_field *field = &array_type->e.record.fields[i];
+
             field->name_bytecode_offset = put_string(buffer, field->name);
             write_sm1_type(buffer, field->type, ctab_start);
         }
 
         fields_offset = bytecode_get_size(buffer) - ctab_start;
 
-        LIST_FOR_EACH_ENTRY(field, array_type->e.elements, struct hlsl_struct_field, entry)
+        for (i = 0; i < field_count; ++i)
         {
+            struct hlsl_struct_field *field = &array_type->e.record.fields[i];
+
             put_u32(buffer, field->name_bytecode_offset - ctab_start);
             put_u32(buffer, field->type->bytecode_offset - ctab_start);
-            ++field_count;
         }
     }
 
@@ -663,7 +668,7 @@ static void write_sm1_expr(struct hlsl_ctx *ctx, struct vkd3d_bytecode_buffer *b
 static void write_sm1_load(struct hlsl_ctx *ctx, struct vkd3d_bytecode_buffer *buffer, const struct hlsl_ir_node *instr)
 {
     const struct hlsl_ir_load *load = hlsl_ir_load(instr);
-    const struct hlsl_reg reg = hlsl_reg_from_deref(ctx, &load->src, instr->data_type);
+    const struct hlsl_reg reg = hlsl_reg_from_deref(ctx, &load->src);
     struct sm1_instruction sm1_instr =
     {
         .opcode = D3DSIO_MOV,
@@ -707,7 +712,7 @@ static void write_sm1_store(struct hlsl_ctx *ctx, struct vkd3d_bytecode_buffer *
 {
     const struct hlsl_ir_store *store = hlsl_ir_store(instr);
     const struct hlsl_ir_node *rhs = store->rhs.node;
-    const struct hlsl_reg reg = hlsl_reg_from_deref(ctx, &store->lhs, rhs->data_type);
+    const struct hlsl_reg reg = hlsl_reg_from_deref(ctx, &store->lhs);
     struct sm1_instruction sm1_instr =
     {
         .opcode = D3DSIO_MOV,
@@ -790,7 +795,7 @@ static void write_sm1_instructions(struct hlsl_ctx *ctx, struct vkd3d_bytecode_b
             }
             else if (instr->data_type->type == HLSL_CLASS_OBJECT)
             {
-                hlsl_fixme(ctx, &instr->loc, "Object copy.\n");
+                hlsl_fixme(ctx, &instr->loc, "Object copy.");
                 break;
             }
 

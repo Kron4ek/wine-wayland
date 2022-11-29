@@ -100,11 +100,13 @@ static const struct column col_compsys[] =
     { L"Description",               CIM_STRING },
     { L"Domain",                    CIM_STRING },
     { L"DomainRole",                CIM_UINT16 },
+    { L"HypervisorPresent",         CIM_BOOLEAN },
     { L"Manufacturer",              CIM_STRING },
     { L"Model",                     CIM_STRING },
     { L"Name",                      CIM_STRING|COL_FLAG_DYNAMIC },
     { L"NumberOfLogicalProcessors", CIM_UINT32 },
     { L"NumberOfProcessors",        CIM_UINT32 },
+    { L"SystemType",                CIM_STRING },
     { L"TotalPhysicalMemory",       CIM_UINT64 },
     { L"UserName",                  CIM_STRING|COL_FLAG_DYNAMIC },
 };
@@ -228,7 +230,9 @@ static const struct column col_networkadapterconfig[] =
 };
 static const struct column col_operatingsystem[] =
 {
+    { L"BootDevice",              CIM_STRING },
     { L"BuildNumber",             CIM_STRING|COL_FLAG_DYNAMIC },
+    { L"BuildType",               CIM_STRING },
     { L"Caption",                 CIM_STRING|COL_FLAG_DYNAMIC },
     { L"CodeSet",                 CIM_STRING|COL_FLAG_DYNAMIC },
     { L"CountryCode",             CIM_STRING|COL_FLAG_DYNAMIC },
@@ -236,6 +240,7 @@ static const struct column col_operatingsystem[] =
     { L"CSName",                  CIM_STRING|COL_FLAG_DYNAMIC },
     { L"CurrentTimeZone",         CIM_SINT16 },
     { L"FreePhysicalMemory",      CIM_UINT64 },
+    { L"FreeVirtualMemory",       CIM_UINT64 },
     { L"InstallDate",             CIM_DATETIME },
     { L"LastBootUpTime",          CIM_DATETIME|COL_FLAG_DYNAMIC },
     { L"LocalDateTime",           CIM_DATETIME|COL_FLAG_DYNAMIC },
@@ -243,12 +248,14 @@ static const struct column col_operatingsystem[] =
     { L"Manufacturer",            CIM_STRING },
     { L"Name",                    CIM_STRING|COL_FLAG_DYNAMIC },
     { L"OperatingSystemSKU",      CIM_UINT32 },
+    { L"Organization",            CIM_STRING|COL_FLAG_DYNAMIC },
     { L"OSArchitecture",          CIM_STRING },
     { L"OSLanguage",              CIM_UINT32 },
     { L"OSProductSuite",          CIM_UINT32 },
     { L"OSType",                  CIM_UINT16 },
     { L"Primary",                 CIM_BOOLEAN },
     { L"ProductType",             CIM_UINT32 },
+    { L"RegisteredUser",          CIM_STRING|COL_FLAG_DYNAMIC },
     { L"SerialNumber",            CIM_STRING|COL_FLAG_DYNAMIC },
     { L"ServicePackMajorVersion", CIM_UINT16 },
     { L"ServicePackMinorVersion", CIM_UINT16 },
@@ -259,6 +266,11 @@ static const struct column col_operatingsystem[] =
     { L"TotalVirtualMemorySize",  CIM_UINT64 },
     { L"TotalVisibleMemorySize",  CIM_UINT64 },
     { L"Version",                 CIM_STRING|COL_FLAG_DYNAMIC },
+    { L"WindowsDirectory",        CIM_STRING|COL_FLAG_DYNAMIC },
+};
+static const struct column col_pagefileusage[] =
+{
+    { L"Name", CIM_STRING },
 };
 static const struct column col_param[] =
 {
@@ -356,7 +368,10 @@ static const struct column col_qualifier[] =
 static const struct column col_quickfixengineering[] =
 {
     { L"Caption",  CIM_STRING },
+    { L"Description",  CIM_STRING },
     { L"HotFixID", CIM_STRING|COL_FLAG_KEY },
+    { L"InstalledBy",  CIM_STRING },
+    { L"InstalledOn",  CIM_STRING },
 };
 static const struct column col_rawsmbiostables[] =
 {
@@ -527,11 +542,13 @@ struct record_computersystem
     const WCHAR *description;
     const WCHAR *domain;
     UINT16       domainrole;
+    int          hypervisorpresent;
     const WCHAR *manufacturer;
     const WCHAR *model;
     const WCHAR *name;
     UINT32       num_logical_processors;
     UINT32       num_processors;
+    const WCHAR *systemtype;
     UINT64       total_physical_memory;
     const WCHAR *username;
 };
@@ -655,7 +672,9 @@ struct record_networkadapterconfig
 };
 struct record_operatingsystem
 {
+    const WCHAR *bootdevice;
     const WCHAR *buildnumber;
+    const WCHAR *buildtype;
     const WCHAR *caption;
     const WCHAR *codeset;
     const WCHAR *countrycode;
@@ -663,6 +682,7 @@ struct record_operatingsystem
     const WCHAR *csname;
     INT16        currenttimezone;
     UINT64       freephysicalmemory;
+    UINT64       freevirtualmemory;
     const WCHAR *installdate;
     const WCHAR *lastbootuptime;
     const WCHAR *localdatetime;
@@ -670,12 +690,14 @@ struct record_operatingsystem
     const WCHAR *manufacturer;
     const WCHAR *name;
     UINT32       operatingsystemsku;
+    const WCHAR *organization;
     const WCHAR *osarchitecture;
     UINT32       oslanguage;
     UINT32       osproductsuite;
     UINT16       ostype;
     int          primary;
     UINT32       producttype;
+    const WCHAR *registereduser;
     const WCHAR *serialnumber;
     UINT16       servicepackmajor;
     UINT16       servicepackminor;
@@ -686,6 +708,11 @@ struct record_operatingsystem
     UINT64       totalvirtualmemorysize;
     UINT64       totalvisiblememorysize;
     const WCHAR *version;
+    const WCHAR *windowsdirectory;
+};
+struct record_pagefileusage
+{
+    const WCHAR *name;
 };
 struct record_param
 {
@@ -783,7 +810,10 @@ struct record_qualifier
 struct record_quickfixengineering
 {
     const WCHAR *caption;
+    const WCHAR *description;
     const WCHAR *hotfixid;
+    const WCHAR *installedby;
+    const WCHAR *installedon;
 };
 struct record_rawsmbiostables
 {
@@ -911,6 +941,10 @@ static const struct record_associator data_associator[] =
     { L"Win32_DiskDriveToDiskPartition", L"Win32_DiskPartition", L"Win32_DiskDrive" },
     { L"Win32_LogicalDiskToPartition", L"Win32_LogicalDisk", L"Win32_DiskPartition" },
 };
+static const struct record_pagefileusage data_pagefileusage[] =
+{
+    { L"c:\\pagefile.sys", },
+};
 static const struct record_param data_param[] =
 {
     { L"__SystemSecurity", L"GetSD", -1, L"ReturnValue", CIM_UINT32 },
@@ -985,7 +1019,7 @@ static const struct record_qualifier data_qualifier[] =
 
 static const struct record_quickfixengineering data_quickfixengineering[] =
 {
-    { L"http://winehq.org", L"KB1234567" },
+    { L"http://winehq.org", L"Update", L"KB1234567", L"", L"22/2/2022" },
 };
 
 static const struct record_softwarelicensingproduct data_softwarelicensingproduct[] =
@@ -1501,7 +1535,7 @@ static UINT get_logical_processor_count( UINT *num_physical, UINT *num_packages 
     if (status != STATUS_INFO_LENGTH_MISMATCH) return get_processor_count();
 
     if (!(buf = malloc( len ))) return get_processor_count();
-    status = NtQuerySystemInformationEx( SystemLogicalProcessorInformationEx, &all, sizeof(all), buf, len, NULL );
+    status = NtQuerySystemInformationEx( SystemLogicalProcessorInformationEx, &all, sizeof(all), buf, len, &len );
     if (status != STATUS_SUCCESS)
     {
         free( buf );
@@ -1548,6 +1582,15 @@ static UINT64 get_available_physical_memory(void)
     return status.ullAvailPhys;
 }
 
+static UINT64 get_available_virtual_memory(void)
+{
+    MEMORYSTATUSEX status;
+
+    status.dwLength = sizeof(status);
+    if (!GlobalMemoryStatusEx( &status )) return 1024 * 1024 * 1024;
+    return status.ullAvailVirtual;
+}
+
 static WCHAR *get_computername(void)
 {
     WCHAR *ret;
@@ -1556,6 +1599,14 @@ static WCHAR *get_computername(void)
     if (!(ret = malloc( size * sizeof(WCHAR) ))) return NULL;
     GetComputerNameW( ret, &size );
     return ret;
+}
+
+static const WCHAR *get_systemtype(void)
+{
+    SYSTEM_INFO info;
+    GetNativeSystemInfo( &info );
+    if (info.u.s.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64) return L"x64 based PC";
+    return L"x86 based PC";
 }
 
 static WCHAR *get_username(void)
@@ -1576,32 +1627,6 @@ static WCHAR *get_username(void)
     return ret;
 }
 
-static enum fill_status fill_compsys( struct table *table, const struct expr *cond )
-{
-    struct record_computersystem *rec;
-    enum fill_status status = FILL_STATUS_UNFILTERED;
-    UINT row = 0;
-
-    if (!resize_table( table, 1, sizeof(*rec) )) return FILL_STATUS_FAILED;
-
-    rec = (struct record_computersystem *)table->data;
-    rec->description            = L"AT/AT COMPATIBLE";
-    rec->domain                 = L"WORKGROUP";
-    rec->domainrole             = 0; /* standalone workstation */
-    rec->manufacturer           = L"The Wine Project";
-    rec->model                  = L"Wine";
-    rec->name                   = get_computername();
-    rec->num_logical_processors = get_logical_processor_count( NULL, &rec->num_processors );
-    rec->total_physical_memory  = get_total_physical_memory();
-    rec->username               = get_username();
-    if (!match_row( table, row, cond, &status )) free_row_values( table, row );
-    else row++;
-
-    TRACE("created %u rows\n", row);
-    table->num_rows = row;
-    return status;
-}
-
 static WCHAR *get_compsysproduct_string( BYTE id, const char *buf, UINT len )
 {
     const struct smbios_header *hdr;
@@ -1615,17 +1640,59 @@ static WCHAR *get_compsysproduct_string( BYTE id, const char *buf, UINT len )
     return get_smbios_string( id, buf, offset, len );
 }
 
-static WCHAR *get_compsysproduct_identifyingnumber( const char *buf, UINT len )
-{
-    WCHAR *ret = get_compsysproduct_string( 4, buf, len );
-    if (!ret) return wcsdup( L"0" );
-    return ret;
-}
-
 static WCHAR *get_compsysproduct_name( const char *buf, UINT len )
 {
     WCHAR *ret = get_compsysproduct_string( 2, buf, len );
     if (!ret) return wcsdup( L"Wine" );
+    return ret;
+}
+
+static WCHAR *get_compsysproduct_vendor( const char *buf, UINT len )
+{
+    WCHAR *ret = get_compsysproduct_string( 1, buf, len );
+    if (!ret) return wcsdup( L"The Wine Project" );
+    return ret;
+}
+
+static enum fill_status fill_compsys( struct table *table, const struct expr *cond )
+{
+    struct record_computersystem *rec;
+    enum fill_status status = FILL_STATUS_UNFILTERED;
+    UINT row = 0, len;
+    char *buf;
+
+    if (!resize_table( table, 1, sizeof(*rec) )) return FILL_STATUS_FAILED;
+
+    len = GetSystemFirmwareTable( RSMB, 0, NULL, 0 );
+    if (!(buf = malloc( len ))) return FILL_STATUS_FAILED;
+    GetSystemFirmwareTable( RSMB, 0, buf, len );
+
+    rec = (struct record_computersystem *)table->data;
+    rec->description            = L"AT/AT COMPATIBLE";
+    rec->domain                 = L"WORKGROUP";
+    rec->domainrole             = 0; /* standalone workstation */
+    rec->hypervisorpresent      = 0;
+    rec->manufacturer           = get_compsysproduct_vendor( buf, len );
+    rec->model                  = get_compsysproduct_name( buf, len );
+    rec->name                   = get_computername();
+    rec->num_logical_processors = get_logical_processor_count( NULL, &rec->num_processors );
+    rec->systemtype             = get_systemtype();
+    rec->total_physical_memory  = get_total_physical_memory();
+    rec->username               = get_username();
+    if (!match_row( table, row, cond, &status )) free_row_values( table, row );
+    else row++;
+
+    free( buf );
+
+    TRACE("created %u rows\n", row);
+    table->num_rows = row;
+    return status;
+}
+
+static WCHAR *get_compsysproduct_identifyingnumber( const char *buf, UINT len )
+{
+    WCHAR *ret = get_compsysproduct_string( 4, buf, len );
+    if (!ret) return wcsdup( L"0" );
     return ret;
 }
 
@@ -1647,13 +1714,6 @@ static WCHAR *get_compsysproduct_uuid( const char *buf, UINT len )
               ptr[14], ptr[15] );
 done:
     if (!ret) ret = wcsdup( L"deaddead-dead-dead-dead-deaddeaddead" );
-    return ret;
-}
-
-static WCHAR *get_compsysproduct_vendor( const char *buf, UINT len )
-{
-    WCHAR *ret = get_compsysproduct_string( 1, buf, len );
-    if (!ret) return wcsdup( L"The Wine Project" );
     return ret;
 }
 
@@ -3426,6 +3486,15 @@ static enum fill_status fill_processor( struct table *table, const struct expr *
     return status;
 }
 
+static INT16 get_currenttimezone(void)
+{
+    TIME_ZONE_INFORMATION info;
+    DWORD status = GetTimeZoneInformation( &info );
+    if (status == TIME_ZONE_ID_INVALID) return 0;
+    if (status == TIME_ZONE_ID_DAYLIGHT) return -(info.Bias + info.DaylightBias);
+    return -(info.Bias + info.StandardBias);
+}
+
 static WCHAR *get_lastbootuptime(void)
 {
     SYSTEM_TIMEOFDAY_INFORMATION ti;
@@ -3499,6 +3568,34 @@ static WCHAR *get_locale(void)
     if (ret) GetLocaleInfoW( LOCALE_SYSTEM_DEFAULT, LOCALE_ILANGUAGE, ret, 5 );
     return ret;
 }
+
+static WCHAR *get_reg_str( HKEY root, const WCHAR *path, const WCHAR *value )
+{
+    HKEY hkey = 0;
+    DWORD size, type;
+    WCHAR *ret = NULL;
+
+    if (!RegOpenKeyExW( root, path, 0, KEY_READ, &hkey ) &&
+        !RegQueryValueExW( hkey, value, NULL, &type, NULL, &size ) && type == REG_SZ &&
+        (ret = malloc( size + sizeof(WCHAR) )))
+    {
+        size += sizeof(WCHAR);
+        if (RegQueryValueExW( hkey, value, NULL, NULL, (BYTE *)ret, &size ))
+        {
+            free( ret );
+            ret = NULL;
+        }
+    }
+    if (hkey) RegCloseKey( hkey );
+    return ret;
+}
+
+static WCHAR *get_organization(void)
+{
+    return get_reg_str( HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion",
+                        L"RegisteredOrganization" );
+}
+
 static WCHAR *get_osbuildnumber( OSVERSIONINFOEXW *ver )
 {
     WCHAR *ret = malloc( 11 * sizeof(WCHAR) );
@@ -3557,27 +3654,14 @@ static WCHAR *get_osname( const WCHAR *caption )
     memcpy( ret + len, partitionW, sizeof(partitionW) );
     return ret;
 }
+
 static WCHAR *get_osserialnumber(void)
 {
-    HKEY hkey = 0;
-    DWORD size, type;
-    WCHAR *ret = NULL;
-
-    if (!RegOpenKeyExW( HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion", 0, KEY_READ, &hkey ) &&
-        !RegQueryValueExW( hkey, L"ProductId", NULL, &type, NULL, &size ) && type == REG_SZ &&
-        (ret = malloc( size + sizeof(WCHAR) )))
-    {
-        size += sizeof(WCHAR);
-        if (RegQueryValueExW( hkey, L"ProductId", NULL, NULL, (BYTE *)ret, &size ))
-        {
-            free( ret );
-            ret = NULL;
-        }
-    }
-    if (hkey) RegCloseKey( hkey );
-    if (!ret) return wcsdup( L"12345-OEM-1234567-12345" );
+    WCHAR *ret = get_reg_str( HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion", L"ProductId" );
+    if (!ret) ret = wcsdup( L"12345-OEM-1234567-12345" );
     return ret;
 }
+
 static WCHAR *get_osversion( OSVERSIONINFOEXW *ver )
 {
     WCHAR *ret = malloc( 33 * sizeof(WCHAR) );
@@ -3590,13 +3674,17 @@ static DWORD get_operatingsystemsku(void)
     GetProductInfo( 6, 0, 0, 0, &ret );
     return ret;
 }
-static INT16 get_currenttimezone(void)
+
+static WCHAR *get_registereduser(void)
 {
-    TIME_ZONE_INFORMATION info;
-    DWORD status = GetTimeZoneInformation( &info );
-    if (status == TIME_ZONE_ID_INVALID) return 0;
-    if (status == TIME_ZONE_ID_DAYLIGHT) return -(info.Bias + info.DaylightBias);
-    return -(info.Bias + info.StandardBias);
+    return get_reg_str( HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion", L"RegisteredOwner" );
+}
+
+static WCHAR *get_windowsdirectory(void)
+{
+    WCHAR dir[MAX_PATH];
+    if (!GetWindowsDirectoryW( dir, ARRAY_SIZE(dir) )) return NULL;
+    return wcsdup( dir );
 }
 
 static enum fill_status fill_operatingsystem( struct table *table, const struct expr *cond )
@@ -3612,7 +3700,9 @@ static enum fill_status fill_operatingsystem( struct table *table, const struct 
     RtlGetVersion( &ver );
 
     rec = (struct record_operatingsystem *)table->data;
+    rec->bootdevice             = L"\\Device\\HarddiskVolume1";
     rec->buildnumber            = get_osbuildnumber( &ver );
+    rec->buildtype              = L"Wine build";
     rec->caption                = get_oscaption( &ver );
     rec->codeset                = get_codeset();
     rec->countrycode            = get_countrycode();
@@ -3620,6 +3710,7 @@ static enum fill_status fill_operatingsystem( struct table *table, const struct 
     rec->csname                 = get_computername();
     rec->currenttimezone        = get_currenttimezone();
     rec->freephysicalmemory     = get_available_physical_memory() / 1024;
+    rec->freevirtualmemory      = get_available_virtual_memory() / 1024;
     rec->installdate            = L"20140101000000.000000+000";
     rec->lastbootuptime         = get_lastbootuptime();
     rec->localdatetime          = get_localdatetime();
@@ -3627,12 +3718,14 @@ static enum fill_status fill_operatingsystem( struct table *table, const struct 
     rec->manufacturer           = L"The Wine Project";
     rec->name                   = get_osname( rec->caption );
     rec->operatingsystemsku     = get_operatingsystemsku();
+    rec->organization           = get_organization();
     rec->osarchitecture         = get_osarchitecture();
     rec->oslanguage             = GetSystemDefaultLangID();
     rec->osproductsuite         = 2461140; /* Windows XP Professional  */
     rec->ostype                 = 18;      /* WINNT */
     rec->primary                = -1;
     rec->producttype            = 1;
+    rec->registereduser         = get_registereduser();
     rec->serialnumber           = get_osserialnumber();
     rec->servicepackmajor       = ver.wServicePackMajor;
     rec->servicepackminor       = ver.wServicePackMinor;
@@ -3643,6 +3736,7 @@ static enum fill_status fill_operatingsystem( struct table *table, const struct 
     rec->totalvirtualmemorysize = get_total_physical_memory() / 1024;
     rec->totalvisiblememorysize = rec->totalvirtualmemorysize;
     rec->version                = get_osversion( &ver );
+    rec->windowsdirectory       = get_windowsdirectory();
     if (!match_row( table, row, cond, &status )) free_row_values( table, row );
     else row++;
 
@@ -4148,6 +4242,7 @@ static struct table cimv2_builtin_classes[] =
     { L"Win32_NetworkAdapter", C(col_networkadapter), 0, 0, NULL, fill_networkadapter },
     { L"Win32_NetworkAdapterConfiguration", C(col_networkadapterconfig), 0, 0, NULL, fill_networkadapterconfig },
     { L"Win32_OperatingSystem", C(col_operatingsystem), 0, 0, NULL, fill_operatingsystem },
+    { L"Win32_PageFileUsage", C(col_pagefileusage), D(data_pagefileusage) },
     { L"Win32_PhysicalMedia", C(col_physicalmedia), D(data_physicalmedia) },
     { L"Win32_PhysicalMemory", C(col_physicalmemory), 0, 0, NULL, fill_physicalmemory },
     { L"Win32_PnPEntity", C(col_pnpentity), 0, 0, NULL, fill_pnpentity },

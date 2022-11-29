@@ -522,16 +522,21 @@ static void test_responseXML(const WCHAR *expect_text)
     IDispatch_Release(disp);
 }
 
-#define xhr_open(a,b) _xhr_open(__LINE__,a,b)
-static HRESULT _xhr_open(unsigned line, const WCHAR *url_w, const WCHAR *method_w)
+#define xhr_open(a,b,c) _xhr_open(__LINE__,a,b,c)
+static HRESULT _xhr_open(unsigned line, const WCHAR *url_w, const WCHAR *method_w, BOOL use_bool)
 {
     BSTR method = SysAllocString(method_w);
     BSTR url = SysAllocString(url_w);
     VARIANT async, empty;
     HRESULT hres;
 
-    V_VT(&async) = VT_BOOL;
-    V_BOOL(&async) = VARIANT_TRUE;
+    if(use_bool) {
+        V_VT(&async) = VT_BOOL;
+        V_BOOL(&async) = VARIANT_TRUE;
+    }else {
+        V_VT(&async) = VT_I4;
+        V_I4(&async) = 1;
+    }
     V_VT(&empty) = VT_EMPTY;
 
     hres = IHTMLXMLHttpRequest_open(xhr, method, url, async, empty, empty);
@@ -787,7 +792,7 @@ static void test_async_xhr(IHTMLDocument2 *doc, const WCHAR *xml_url, const WCHA
     ok(val == 0, "Expect UNSENT, got %ld\n", val);
 
     SET_EXPECT(xmlhttprequest_onreadystatechange_opened);
-    hres = xhr_open(xml_url, L"GET");
+    hres = xhr_open(xml_url, L"GET", TRUE);
     CHECK_CALLED(xmlhttprequest_onreadystatechange_opened);
 
     if(FAILED(hres)) {
@@ -898,7 +903,7 @@ static void test_async_xhr_abort(IHTMLDocument2 *doc, const WCHAR *xml_url)
     hres = IHTMLXMLHttpRequest_put_onreadystatechange(xhr, var);
 
     SET_EXPECT(xmlhttprequest_onreadystatechange_opened);
-    xhr_open(xml_url, L"GET");
+    xhr_open(xml_url, L"GET", TRUE);
     CHECK_CALLED(xmlhttprequest_onreadystatechange_opened);
 
     hres = IHTMLXMLHttpRequest_abort(xhr);
@@ -922,7 +927,7 @@ static void test_async_xhr_abort(IHTMLDocument2 *doc, const WCHAR *xml_url)
     hres = IHTMLXMLHttpRequest_put_onreadystatechange(xhr, var);
 
     SET_EXPECT(xmlhttprequest_onreadystatechange_opened);
-    xhr_open(xml_url, L"GET");
+    xhr_open(xml_url, L"GET", FALSE);
     CHECK_CALLED(xmlhttprequest_onreadystatechange_opened);
 
     loading_cnt = 0;
@@ -969,7 +974,7 @@ static void test_xhr_post(IHTMLDocument2 *doc)
     ok(hres == S_OK, "put_onreadystatechange failed: %08lx\n", hres);
 
     SET_EXPECT(xmlhttprequest_onreadystatechange_opened);
-    xhr_open(L"http://test.winehq.org/tests/post.php", L"POST");
+    xhr_open(L"http://test.winehq.org/tests/post.php", L"POST", FALSE);
     CHECK_CALLED(xmlhttprequest_onreadystatechange_opened);
 
     set_request_header(xhr, L"Content-Type", L"application/x-www-form-urlencoded");
@@ -1000,6 +1005,41 @@ static void test_xhr_post(IHTMLDocument2 *doc)
 
     IHTMLXMLHttpRequest_Release(xhr);
     xhr = NULL;
+}
+
+static void test_timeout(IHTMLDocument2 *doc)
+{
+    IHTMLXMLHttpRequest2 *xhr2;
+    LONG timeout;
+    HRESULT hres;
+
+    create_xmlhttprequest(doc);
+    if(!xhr)
+        return;
+
+    hres = IHTMLXMLHttpRequest_QueryInterface(xhr, &IID_IHTMLXMLHttpRequest2, (void**)&xhr2);
+    ok(hres == S_OK, "QueryInterface(IHTMLXMLHttpRequest2) failed: %08lx\n", hres);
+
+    hres = IHTMLXMLHttpRequest2_get_timeout(xhr2, NULL);
+    ok(hres == E_POINTER, "get_timeout returned %08lx\n", hres);
+    hres = IHTMLXMLHttpRequest2_get_timeout(xhr2, &timeout);
+    ok(hres == S_OK, "get_timeout returned %08lx\n", hres);
+    ok(timeout == 0, "timeout = %ld\n", timeout);
+
+    /* Some Windows versions only allow setting timeout after open() */
+    xhr_open(L"http://test.winehq.org/tests/post.php", L"POST", TRUE);
+    IHTMLXMLHttpRequest_Release(xhr);
+    xhr = NULL;
+
+    hres = IHTMLXMLHttpRequest2_put_timeout(xhr2, -1);
+    ok(hres == E_INVALIDARG || broken(hres == E_FAIL), "put_timeout returned %08lx\n", hres);
+    hres = IHTMLXMLHttpRequest2_put_timeout(xhr2, 1337);
+    ok(hres == S_OK, "put_timeout returned %08lx\n", hres);
+    hres = IHTMLXMLHttpRequest2_get_timeout(xhr2, &timeout);
+    ok(hres == S_OK, "get_timeout returned %08lx\n", hres);
+    ok(timeout == 1337, "timeout = %ld\n", timeout);
+
+    IHTMLXMLHttpRequest2_Release(xhr2);
 }
 
 static IHTMLDocument2 *create_doc_from_url(const WCHAR *start_url)
@@ -1066,6 +1106,7 @@ START_TEST(xmlhttprequest)
         test_async_xhr(doc, large_page_url, NULL);
         test_async_xhr_abort(doc, large_page_url);
         test_xhr_post(doc);
+        test_timeout(doc);
         IHTMLDocument2_Release(doc);
     }
     SysFreeString(content_type);

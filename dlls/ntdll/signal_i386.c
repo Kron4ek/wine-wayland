@@ -35,6 +35,7 @@
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(seh);
+WINE_DECLARE_DEBUG_CHANNEL(threadname);
 
 struct x86_thread_data
 {
@@ -57,8 +58,6 @@ static inline struct x86_thread_data *x86_thread_data(void)
 {
     return (struct x86_thread_data *)&NtCurrentTeb()->GdiTebBatch;
 }
-
-struct ldt_copy *__wine_ldt_copy = NULL;
 
 /* Exception record for handling exceptions happening inside exception handlers */
 typedef struct
@@ -194,7 +193,13 @@ NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
     }
     else if (rec->ExceptionCode == EXCEPTION_WINE_NAME_THREAD && rec->ExceptionInformation[0] == 0x1000)
     {
-        WARN( "Thread %04x renamed to %s\n", (DWORD)rec->ExceptionInformation[2], debugstr_a((char *)rec->ExceptionInformation[1]) );
+        if ((DWORD)rec->ExceptionInformation[2] == -1)
+            WARN_(threadname)( "Thread renamed to %s\n", debugstr_a((char *)rec->ExceptionInformation[1]) );
+        else
+            WARN_(threadname)( "Thread ID %04x renamed to %s\n", (DWORD)rec->ExceptionInformation[2],
+                               debugstr_a((char *)rec->ExceptionInformation[1]) );
+
+        set_native_thread_name((DWORD)rec->ExceptionInformation[2], (char *)rec->ExceptionInformation[1]);
     }
     else if (rec->ExceptionCode == DBG_PRINTEXCEPTION_C)
     {
@@ -252,9 +257,21 @@ void WINAPI KiUserApcDispatcher( CONTEXT *context, ULONG_PTR ctx, ULONG_PTR arg1
  */
 void WINAPI KiUserCallbackDispatcher( ULONG id, void *args, ULONG len )
 {
-    NTSTATUS (WINAPI *func)(void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+    NTSTATUS status;
 
-    RtlRaiseStatus( NtCallbackReturn( NULL, 0, func( args, len )));
+    __TRY
+    {
+        NTSTATUS (WINAPI *func)(void *, ULONG) = ((void **)NtCurrentTeb()->Peb->KernelCallbackTable)[id];
+        status = NtCallbackReturn( NULL, 0, func( args, len ));
+    }
+    __EXCEPT_ALL
+    {
+        ERR_(seh)( "ignoring exception\n" );
+        status = NtCallbackReturn( 0, 0, 0 );
+    }
+    __ENDTRY
+
+    RtlRaiseStatus( status );
 }
 
 
@@ -342,6 +359,14 @@ __ASM_STDCALL_FUNC( RtlCaptureContext, 4,
                     __ASM_CFI(".cfi_adjust_cfa_offset -4\n\t")
                     "ret $4" )
 
+/*******************************************************************
+ *              RtlRestoreContext (NTDLL.@)
+ */
+void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
+{
+    TRACE( "returning to %p stack %p\n", (void *)context->Eip, (void *)context->Esp );
+    NtContinue( context, FALSE );
+}
 
 /*******************************************************************
  *		RtlUnwind (NTDLL.@)

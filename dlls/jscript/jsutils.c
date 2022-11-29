@@ -422,6 +422,9 @@ HRESULT to_primitive(script_ctx_t *ctx, jsval_t val, jsval_t *ret, hint_t hint)
             }else {
                 IDispatch_Release(get_object(prim));
             }
+        }else if(hres != DISP_E_UNKNOWNNAME) {
+            jsdisp_release(jsdisp);
+            return hres;
         }
 
         hres = jsdisp_get_id(jsdisp, hint == HINT_STRING ? L"valueOf" : L"toString", 0, &id);
@@ -438,6 +441,9 @@ HRESULT to_primitive(script_ctx_t *ctx, jsval_t val, jsval_t *ret, hint_t hint)
             }else {
                 IDispatch_Release(get_object(prim));
             }
+        }else if(hres != DISP_E_UNKNOWNNAME) {
+            jsdisp_release(jsdisp);
+            return hres;
         }
 
         jsdisp_release(jsdisp);
@@ -948,6 +954,16 @@ HRESULT variant_change_type(script_ctx_t *ctx, VARIANT *dst, VARIANT *src, VARTY
         break;
     case VT_NULL:
         hres = V_VT(src) == VT_NULL ? S_OK : E_NOTIMPL;
+        break;
+    case VT_UNKNOWN:
+    case VT_DISPATCH:
+        if(V_VT(src) != vt)
+            hres = E_NOTIMPL;
+        else {
+            IUnknown_AddRef(V_UNKNOWN(src));
+            V_UNKNOWN(dst) = V_UNKNOWN(src);
+            hres = S_OK;
+        }
         break;
     default:
         FIXME("vt %d not implemented\n", vt);

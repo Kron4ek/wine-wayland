@@ -34,6 +34,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <limits.h>
 #include <unistd.h>
@@ -97,6 +98,9 @@
 #endif
 #ifdef HAVE_SYS_STATFS_H
 #include <sys/statfs.h>
+#endif
+#ifdef HAVE_SYS_XATTR_H
+#include <sys/xattr.h>
 #endif
 #include <time.h>
 #include <unistd.h>
@@ -166,6 +170,9 @@ typedef struct
 #define MAX_DIR_ENTRY_LEN 255  /* max length of a directory entry in chars */
 
 #define MAX_IGNORED_FILES 4
+
+#define SAMBA_XATTR_DOS_ATTRIB  "user.DOSATTRIB"
+#define XATTR_ATTRIBS_MASK      (FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM)
 
 struct file_identity
 {
@@ -354,6 +361,67 @@ NTSTATUS errno_to_status( int err )
         return STATUS_UNSUCCESSFUL;
     }
 }
+
+
+static int xattr_fremove( int filedes, const char *name )
+{
+#ifdef HAVE_SYS_XATTR_H
+# ifdef XATTR_ADDITIONAL_OPTIONS
+    return fremovexattr( filedes, name, 0 );
+# else
+    return fremovexattr( filedes, name );
+# endif
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+
+static int xattr_fset( int filedes, const char *name, const void *value, size_t size )
+{
+#ifdef HAVE_SYS_XATTR_H
+# ifdef XATTR_ADDITIONAL_OPTIONS
+    return fsetxattr( filedes, name, value, size, 0, 0 );
+# else
+    return fsetxattr( filedes, name, value, size, 0 );
+# endif
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+
+static int xattr_get( const char *path, const char *name, void *value, size_t size )
+{
+#ifdef HAVE_SYS_XATTR_H
+# ifdef XATTR_ADDITIONAL_OPTIONS
+    return getxattr( path, name, value, size, 0, 0 );
+# else
+    return getxattr( path, name, value, size );
+# endif
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
+
+static int xattr_fget( int filedes, const char *name, void *value, size_t size )
+{
+#ifdef HAVE_SYS_XATTR_H
+# ifdef XATTR_ADDITIONAL_OPTIONS
+    return fgetxattr( filedes, name, value, size, 0, 0 );
+# else
+    return fgetxattr( filedes, name, value, size );
+# endif
+#else
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+
 
 /* get space from the current directory data buffer, allocating a new one if necessary */
 static void *get_dir_data_space( struct dir_data *data, unsigned int size )
@@ -1451,6 +1519,27 @@ static inline ULONG get_file_attributes( const struct stat *st )
 }
 
 
+/* decode the xattr-stored DOS attributes */
+static int parse_samba_dos_attrib_data( char *data, int len )
+{
+    char *end;
+    int val;
+
+    if (len > 2 && data[0] == '0' && data[1] == 'x')
+    {
+        data[len] = 0;
+        val = strtol( data, &end, 16 );
+        if (!*end) return val & XATTR_ATTRIBS_MASK;
+    }
+    else
+    {
+        static BOOL once;
+        if (!once++) FIXME( "Unhandled " SAMBA_XATTR_DOS_ATTRIB " extended attribute value.\n" );
+    }
+    return 0;
+}
+
+
 static BOOL fd_is_mount_point( int fd, const struct stat *st )
 {
     struct stat parent;
@@ -1462,7 +1551,8 @@ static BOOL fd_is_mount_point( int fd, const struct stat *st )
 /* get the stat info and file attributes for a file (by file descriptor) */
 static int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULONG *attr )
 {
-    int ret;
+    char attr_data[65];
+    int attr_len, ret;
 
     *attr = 0;
     ret = fstat( fd, st );
@@ -1471,7 +1561,65 @@ static int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULON
     /* consider mount points to be reparse points (IO_REPARSE_TAG_MOUNT_POINT) */
     if ((options & FILE_OPEN_REPARSE_POINT) && fd_is_mount_point( fd, st ))
         *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+
+    attr_len = xattr_fget( fd, SAMBA_XATTR_DOS_ATTRIB, attr_data, sizeof(attr_data)-1 );
+    if (attr_len != -1)
+        *attr |= parse_samba_dos_attrib_data( attr_data, attr_len );
+    else
+    {
+        if (errno == ENOTSUP) return ret;
+#ifdef ENODATA
+        if (errno == ENODATA) return ret;
+#endif
+        WARN( "Failed to get extended attribute " SAMBA_XATTR_DOS_ATTRIB ". errno %d (%s)\n",
+              errno, strerror( errno ) );
+    }
     return ret;
+}
+
+
+static int fd_set_dos_attrib( int fd, ULONG attr )
+{
+    /* we only store the HIDDEN and SYSTEM attributes */
+    attr &= XATTR_ATTRIBS_MASK;
+    if (attr != 0)
+    {
+        /* encode the attributes in Samba 3 ASCII format. Samba 4 has extended
+         * this format with more features, but retains compatibility with the
+         * earlier format. */
+        char data[11];
+        int len = sprintf( data, "0x%x", attr );
+        return xattr_fset( fd, SAMBA_XATTR_DOS_ATTRIB, data, len );
+    }
+    else return xattr_fremove( fd, SAMBA_XATTR_DOS_ATTRIB );
+}
+
+
+/* set the stat info and file attributes for a file (by file descriptor) */
+NTSTATUS fd_set_file_info( int fd, ULONG attr )
+{
+    struct stat st;
+
+    if (fstat( fd, &st ) == -1) return errno_to_status( errno );
+    if (attr & FILE_ATTRIBUTE_READONLY)
+    {
+        if (S_ISDIR( st.st_mode))
+            WARN("FILE_ATTRIBUTE_READONLY ignored for directory.\n");
+        else
+            st.st_mode &= ~0222; /* clear write permission bits */
+    }
+    else
+    {
+        /* add write permission only where we already have read permission */
+        st.st_mode |= (0600 | ((st.st_mode & 044) >> 1)) & (~start_umask);
+    }
+    if (fchmod( fd, st.st_mode ) == -1) return errno_to_status( errno );
+
+    if (fd_set_dos_attrib( fd, attr ) == -1 && errno != ENOTSUP)
+        WARN( "Failed to set extended attribute " SAMBA_XATTR_DOS_ATTRIB ". errno %d (%s)\n",
+              errno, strerror( errno ) );
+
+    return STATUS_SUCCESS;
 }
 
 
@@ -1479,7 +1627,8 @@ static int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULON
 static int get_file_info( const char *path, struct stat *st, ULONG *attr )
 {
     char *parent_path;
-    int ret;
+    char attr_data[65];
+    int attr_len, ret;
 
     *attr = 0;
     ret = lstat( path, st );
@@ -1505,6 +1654,19 @@ static int get_file_info( const char *path, struct stat *st, ULONG *attr )
         free( parent_path );
     }
     *attr |= get_file_attributes( st );
+
+    attr_len = xattr_get( path, SAMBA_XATTR_DOS_ATTRIB, attr_data, sizeof(attr_data)-1 );
+    if (attr_len != -1)
+        *attr |= parse_samba_dos_attrib_data( attr_data, attr_len );
+    else
+    {
+        if (errno == ENOTSUP) return ret;
+#ifdef ENODATA
+        if (errno == ENODATA) return ret;
+#endif
+        WARN( "Failed to get extended attribute " SAMBA_XATTR_DOS_ATTRIB " from \"%s\". errno %d (%s)\n",
+              path, errno, strerror( errno ) );
+    }
     return ret;
 }
 
@@ -1807,6 +1969,44 @@ static NTSTATUS fill_name_info( const char *unix_name, FILE_NAME_INFORMATION *in
     }
 
     return status;
+}
+
+
+static NTSTATUS get_full_size_info(int fd, FILE_FS_FULL_SIZE_INFORMATION *info) {
+    struct stat st;
+    ULONGLONG bsize;
+
+#if !defined(linux) || !defined(HAVE_FSTATFS)
+    struct statvfs stfs;
+#else
+    struct statfs stfs;
+#endif
+
+    if (fstat( fd, &st ) < 0) return errno_to_status( errno );
+    if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode)) return STATUS_INVALID_DEVICE_REQUEST;
+
+    /* Linux's fstatvfs is buggy */
+#if !defined(linux) || !defined(HAVE_FSTATFS)
+    if (fstatvfs( fd, &stfs ) < 0) return errno_to_status( errno );
+    bsize = stfs.f_frsize;
+#else
+    if (fstatfs( fd, &stfs ) < 0) return errno_to_status( errno );
+    bsize = stfs.f_bsize;
+#endif
+    if (bsize == 2048)  /* assume CD-ROM */
+    {
+        info->BytesPerSector = 2048;
+        info->SectorsPerAllocationUnit = 1;
+    }
+    else
+    {
+        info->BytesPerSector = 512;
+        info->SectorsPerAllocationUnit = 8;
+    }
+    info->TotalAllocationUnits.QuadPart = bsize * stfs.f_blocks / (info->BytesPerSector * info->SectorsPerAllocationUnit);
+    info->CallerAvailableAllocationUnits.QuadPart = bsize * stfs.f_bavail / (info->BytesPerSector * info->SectorsPerAllocationUnit);
+    info->ActualAvailableAllocationUnits.QuadPart = bsize * stfs.f_bfree / (info->BytesPerSector * info->SectorsPerAllocationUnit);
+    return STATUS_SUCCESS;
 }
 
 
@@ -2594,7 +2794,7 @@ static NTSTATUS find_file_in_dir( char *unix_name, int pos, const WCHAR *name, i
 
 not_found:
     unix_name[pos - 1] = 0;
-    return STATUS_OBJECT_PATH_NOT_FOUND;
+    return STATUS_OBJECT_NAME_NOT_FOUND;
 }
 
 
@@ -3187,7 +3387,7 @@ static NTSTATUS lookup_unix_name( const WCHAR *name, int name_len, char **buffer
 
         /* grow the buffer if needed */
 
-        if (unix_len - pos < MAX_DIR_ENTRY_LEN + 2)
+        if (unix_len - pos < MAX_DIR_ENTRY_LEN + 3)
         {
             char *new_name;
             unix_len += 2 * MAX_DIR_ENTRY_LEN;
@@ -3200,16 +3400,17 @@ static NTSTATUS lookup_unix_name( const WCHAR *name, int name_len, char **buffer
         /* if this is the last element, not finding it is not necessarily fatal */
         if (!name_len)
         {
-            if (status == STATUS_OBJECT_PATH_NOT_FOUND)
+            if (status == STATUS_OBJECT_NAME_NOT_FOUND)
             {
-                status = STATUS_OBJECT_NAME_NOT_FOUND;
                 if (disposition != FILE_OPEN && disposition != FILE_OVERWRITE)
                 {
                     ret = ntdll_wcstoumbs( name, end - name, unix_name + pos + 1, MAX_DIR_ENTRY_LEN + 1, TRUE );
                     if (ret > 0 && ret <= MAX_DIR_ENTRY_LEN)
                     {
                         unix_name[pos] = '/';
-                        unix_name[pos + 1 + ret] = 0;
+                        pos += ret + 1;
+                        if (end < next) unix_name[pos++] = '/';
+                        unix_name[pos] = 0;
                         status = STATUS_NO_SUCH_FILE;
                         break;
                     }
@@ -3219,7 +3420,9 @@ static NTSTATUS lookup_unix_name( const WCHAR *name, int name_len, char **buffer
             {
                 status = STATUS_OBJECT_NAME_COLLISION;
             }
+            if (end < next) strcat( unix_name, "/" );
         }
+        else if (status == STATUS_OBJECT_NAME_NOT_FOUND) status = STATUS_OBJECT_PATH_NOT_FOUND;
 
         if (status != STATUS_SUCCESS) break;
 
@@ -3809,6 +4012,20 @@ NTSTATUS WINAPI NtCreateFile( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBU
             io->Information = FILE_OVERWRITTEN;
             break;
         }
+
+        if (io->Information == FILE_CREATED && (attributes & XATTR_ATTRIBS_MASK))
+        {
+            int fd, needs_close;
+
+            /* set any DOS extended attributes */
+            if (!server_get_unix_fd( *handle, 0, &fd, &needs_close, NULL, NULL ))
+            {
+                if (fd_set_dos_attrib( fd, attributes ) == -1 && errno != ENOTSUP)
+                    WARN( "Failed to set extended attribute " SAMBA_XATTR_DOS_ATTRIB ". errno %d (%s)",
+                          errno, strerror( errno ) );
+                if (needs_close) close( fd );
+            }
+        }
     }
     else if (status == STATUS_TOO_MANY_OPENED_FILES)
     {
@@ -4210,12 +4427,12 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                 if (size > 0x10000) size = 0x10000;
                 if ((tmpbuf = malloc( size )))
                 {
+                    if (needs_close) close( fd );
                     if (!server_get_unix_fd( handle, FILE_READ_DATA, &fd, &needs_close, NULL, NULL ))
                     {
                         int res = recv( fd, tmpbuf, size, MSG_PEEK );
                         info->MessagesAvailable = (res > 0);
                         info->NextMessageSize = (res >= 0) ? res : MAILSLOT_NO_MESSAGE;
-                        if (needs_close) close( fd );
                     }
                     free( tmpbuf );
                 }
@@ -4322,7 +4539,6 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
     case FileBasicInformation:
         if (len >= sizeof(FILE_BASIC_INFORMATION))
         {
-            struct stat st;
             const FILE_BASIC_INFORMATION *info = ptr;
             LARGE_INTEGER mtime, atime;
 
@@ -4336,25 +4552,7 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                 status = set_file_times( fd, &mtime, &atime );
 
             if (status == STATUS_SUCCESS && info->FileAttributes)
-            {
-                if (fstat( fd, &st ) == -1) status = errno_to_status( errno );
-                else
-                {
-                    if (info->FileAttributes & FILE_ATTRIBUTE_READONLY)
-                    {
-                        if (S_ISDIR( st.st_mode))
-                            WARN("FILE_ATTRIBUTE_READONLY ignored for directory.\n");
-                        else
-                            st.st_mode &= ~0222; /* clear write permission bits */
-                    }
-                    else
-                    {
-                        /* add write permission only where we already have read permission */
-                        st.st_mode |= (0600 | ((st.st_mode & 044) >> 1)) & (~start_umask);
-                    }
-                    if (fchmod( fd, st.st_mode ) == -1) status = errno_to_status( errno );
-                }
-            }
+                status = fd_set_file_info( fd, info->FileAttributes );
 
             if (needs_close) close( fd );
         }
@@ -4765,7 +4963,7 @@ static BOOL async_write_proc( void *user, ULONG_PTR *info, NTSTATUS *status )
                                           &needs_close, &type, NULL )))
             break;
 
-        if (!fileio->count && (type == FD_TYPE_MAILSLOT || type == FD_TYPE_SOCKET))
+        if (!fileio->count && type == FD_TYPE_MAILSLOT)
             result = send( fd, fileio->buffer, 0, 0 );
         else
             result = write( fd, &fileio->buffer[fileio->already], fileio->count - fileio->already );
@@ -5174,6 +5372,12 @@ NTSTATUS WINAPI NtReadFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, vo
             goto done;
         }
     }
+    else if (type == FD_TYPE_SOCKET)
+    {
+        status = sock_read( handle, unix_handle, event, apc, apc_user, io, buffer, length );
+        if (needs_close) close( unix_handle );
+        return status;
+    }
 
     if (type == FD_TYPE_SERIAL && async_read && length)
     {
@@ -5489,11 +5693,17 @@ NTSTATUS WINAPI NtWriteFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, v
             goto done;
         }
     }
+    else if (type == FD_TYPE_SOCKET)
+    {
+        status = sock_write( handle, unix_handle, event, apc, apc_user, io, buffer, length );
+        if (needs_close) close( unix_handle );
+        return status;
+    }
 
     for (;;)
     {
         /* zero-length writes on sockets may not work with plain write(2) */
-        if (!length && (type == FD_TYPE_MAILSLOT || type == FD_TYPE_SOCKET))
+        if (!length && type == FD_TYPE_MAILSLOT)
             result = send( unix_handle, buffer, 0, 0 );
         else
             result = write( unix_handle, (const char *)buffer + total, length - total );
@@ -5707,6 +5917,11 @@ NTSTATUS WINAPI NtDeviceIoControlFile( HANDLE handle, HANDLE event, PIO_APC_ROUT
     TRACE( "(%p,%p,%p,%p,%p,0x%08x,%p,0x%08x,%p,0x%08x)\n",
            handle, event, apc, apc_context, io, code, in_buffer, in_size, out_buffer, out_size );
 
+    /* some broken applications call this frequently with INVALID_HANDLE_VALUE,
+     * and run slowly if we make a server call every time */
+    if (HandleToLong( handle ) == ~0)
+        return STATUS_INVALID_HANDLE;
+
     switch (device)
     {
     case FILE_DEVICE_BEEP:
@@ -5824,6 +6039,16 @@ NTSTATUS WINAPI NtFsControlFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE ap
         }
         break;
     }
+
+    case FSCTL_GET_REPARSE_POINT:
+        io->Information = 0;
+        if (out_buffer && out_size)
+        {
+            FIXME("FSCTL_GET_REPARSE_POINT semi-stub\n");
+            status = STATUS_NOT_A_REPARSE_POINT;
+        }
+        else status = STATUS_INVALID_USER_BUFFER;
+        break;
 
     case FSCTL_GET_OBJECT_ID:
     {
@@ -5969,6 +6194,28 @@ NTSTATUS WINAPI NtCancelIoFileEx( HANDLE handle, IO_STATUS_BLOCK *io, IO_STATUS_
     return status;
 }
 
+
+/**************************************************************************
+ *           NtCancelSynchronousIoFile (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCancelSynchronousIoFile( HANDLE handle, IO_STATUS_BLOCK *io, IO_STATUS_BLOCK *io_status )
+{
+    NTSTATUS status;
+
+    TRACE( "(%p %p %p)\n", handle, io, io_status );
+
+    SERVER_START_REQ( cancel_sync )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        req->iosb   = wine_server_client_ptr( io );
+        status = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+
+    io_status->u.Status = status;
+    io_status->Information = 0;
+    return status;
+}
 
 /******************************************************************
  *           NtLockFile   (NTDLL.@)
@@ -6391,7 +6638,6 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
                                               FS_INFORMATION_CLASS info_class )
 {
     int fd, needs_close;
-    struct stat st;
     NTSTATUS status;
 
     status = server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL );
@@ -6441,52 +6687,15 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
         else
         {
             FILE_FS_SIZE_INFORMATION *info = buffer;
+            FILE_FS_FULL_SIZE_INFORMATION full_info;
 
-            if (fstat( fd, &st ) < 0)
+            if ((status = get_full_size_info(fd, &full_info)) == STATUS_SUCCESS)
             {
-                status = errno_to_status( errno );
-                break;
-            }
-            if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))
-            {
-                status = STATUS_INVALID_DEVICE_REQUEST;
-            }
-            else
-            {
-                ULONGLONG bsize;
-                /* Linux's fstatvfs is buggy */
-#if !defined(linux) || !defined(HAVE_FSTATFS)
-                struct statvfs stfs;
-
-                if (fstatvfs( fd, &stfs ) < 0)
-                {
-                    status = errno_to_status( errno );
-                    break;
-                }
-                bsize = stfs.f_frsize;
-#else
-                struct statfs stfs;
-                if (fstatfs( fd, &stfs ) < 0)
-                {
-                    status = errno_to_status( errno );
-                    break;
-                }
-                bsize = stfs.f_bsize;
-#endif
-                if (bsize == 2048)  /* assume CD-ROM */
-                {
-                    info->BytesPerSector = 2048;
-                    info->SectorsPerAllocationUnit = 1;
-                }
-                else
-                {
-                    info->BytesPerSector = 512;
-                    info->SectorsPerAllocationUnit = 8;
-                }
-                info->TotalAllocationUnits.QuadPart = bsize * stfs.f_blocks / (info->BytesPerSector * info->SectorsPerAllocationUnit);
-                info->AvailableAllocationUnits.QuadPart = bsize * stfs.f_bavail / (info->BytesPerSector * info->SectorsPerAllocationUnit);
+                info->TotalAllocationUnits = full_info.TotalAllocationUnits;
+                info->AvailableAllocationUnits = full_info.CallerAvailableAllocationUnits;
+                info->SectorsPerAllocationUnit = full_info.SectorsPerAllocationUnit;
+                info->BytesPerSector = full_info.BytesPerSector;
                 io->Information = sizeof(*info);
-                status = STATUS_SUCCESS;
             }
         }
         break;
@@ -6630,8 +6839,14 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
         break;
 
     case FileFsFullSizeInformation:
-        FIXME( "%p: full size info not supported\n", handle );
-        status = STATUS_NOT_IMPLEMENTED;
+        if (length < sizeof(FILE_FS_FULL_SIZE_INFORMATION))
+            status = STATUS_BUFFER_TOO_SMALL;
+        else
+        {
+            FILE_FS_FULL_SIZE_INFORMATION *info = buffer;
+            if ((status = get_full_size_info(fd, info)) == STATUS_SUCCESS)
+                io->Information = sizeof(*info);
+        }
         break;
 
     case FileFsObjectIdInformation:
@@ -6671,9 +6886,20 @@ NTSTATUS WINAPI NtQueryEaFile( HANDLE handle, IO_STATUS_BLOCK *io, void *buffer,
                                BOOLEAN single_entry, void *list, ULONG list_len,
                                ULONG *index, BOOLEAN restart )
 {
-    FIXME( "(%p,%p,%p,%d,%d,%p,%d,%p,%d) stub\n",
+    int fd, needs_close;
+    NTSTATUS status;
+
+    FIXME( "(%p,%p,%p,%d,%d,%p,%d,%p,%d) semi-stub\n",
            handle, io, buffer, length, single_entry, list, list_len, index, restart );
-    return STATUS_ACCESS_DENIED;
+
+    if ((status = server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL )))
+        return status;
+
+    if (buffer && length)
+        memset( buffer, 0, length );
+
+    if (needs_close) close( fd );
+    return STATUS_NO_EAS_ON_FILE;
 }
 
 

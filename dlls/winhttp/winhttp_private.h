@@ -30,6 +30,7 @@
 struct object_header;
 struct object_vtbl
 {
+    void (*handle_closing) ( struct object_header * );
     void (*destroy)( struct object_header * );
     BOOL (*query_option)( struct object_header *, DWORD, void *, DWORD * );
     BOOL (*set_option)( struct object_header *, DWORD, void *, DWORD );
@@ -84,6 +85,8 @@ struct session
     HANDLE unload_event;
     DWORD secure_protocols;
     DWORD passport_flags;
+    unsigned int websocket_receive_buffer_size;
+    unsigned int websocket_send_buffer_size;
 };
 
 struct connect
@@ -116,6 +119,7 @@ struct netconn
     char *peek_msg;
     char *peek_msg_mem;
     size_t peek_len;
+    HANDLE port;
 };
 
 struct header
@@ -213,6 +217,8 @@ struct request
         WCHAR *username;
         WCHAR *password;
     } creds[TARGET_MAX][SCHEME_MAX];
+    unsigned int websocket_receive_buffer_size;
+    unsigned int websocket_send_buffer_size, websocket_set_send_buffer_size;
 };
 
 enum socket_state
@@ -250,6 +256,8 @@ struct socket
 {
     struct object_header hdr;
     struct request *request;
+    int keepalive_interval;
+    unsigned int send_buffer_size;
     enum socket_state state;
     struct queue send_q;
     struct queue recv_q;
@@ -274,13 +282,15 @@ struct socket
     BOOL last_receive_final;
 };
 
-typedef void (*TASK_CALLBACK)( void *ctx );
+typedef void (*TASK_CALLBACK)( void *ctx, BOOL abort );
 
 struct task_header
 {
     struct list entry;
     TASK_CALLBACK callback;
     struct object_header *obj;
+    volatile LONG refs;
+    volatile LONG completion_sent;
 };
 
 struct send_request
@@ -368,6 +378,8 @@ DWORD netconn_recv( struct netconn *, void *, size_t, int, int * ) DECLSPEC_HIDD
 DWORD netconn_resolve( WCHAR *, INTERNET_PORT, struct sockaddr_storage *, int ) DECLSPEC_HIDDEN;
 DWORD netconn_secure_connect( struct netconn *, WCHAR *, DWORD, CredHandle *, BOOL ) DECLSPEC_HIDDEN;
 DWORD netconn_send( struct netconn *, const void *, size_t, int *, WSAOVERLAPPED * ) DECLSPEC_HIDDEN;
+BOOL netconn_wait_overlapped_result( struct netconn *conn, WSAOVERLAPPED *ovr, DWORD *len ) DECLSPEC_HIDDEN;
+void netconn_cancel_io( struct netconn *conn ) DECLSPEC_HIDDEN;
 DWORD netconn_set_timeout( struct netconn *, BOOL, int ) DECLSPEC_HIDDEN;
 BOOL netconn_is_alive( struct netconn * ) DECLSPEC_HIDDEN;
 const void *netconn_get_certificate( struct netconn * ) DECLSPEC_HIDDEN;
@@ -437,6 +449,6 @@ static inline char *strdupWA_sized( const WCHAR *src, DWORD size )
 
 extern HINSTANCE winhttp_instance DECLSPEC_HIDDEN;
 
-#define MAX_FRAME_BUFFER_SIZE 65536
+#define MIN_WEBSOCKET_SEND_BUFFER_SIZE 16
 
 #endif /* _WINE_WINHTTP_PRIVATE_H_ */

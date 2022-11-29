@@ -128,9 +128,9 @@ enum directions
 
 /* HELPER FUNCTIONS */
 
-static inline unsigned short get_table_entry(const unsigned short *table, WCHAR ch)
+static inline unsigned short get_table_entry_32( const unsigned short *table, UINT ch )
 {
-    return table[table[table[ch >> 8] + ((ch >> 4) & 0x0f)] + (ch & 0xf)];
+    return table[table[table[table[ch >> 12] + ((ch >> 8) & 0x0f)] + ((ch >> 4) & 0x0f)] + (ch & 0xf)];
 }
 
 /* Convert the libwine information to the direction enum */
@@ -139,7 +139,7 @@ static void classify(LPCWSTR lpString, WORD *chartype, DWORD uCount)
     unsigned i;
 
     for (i = 0; i < uCount; ++i)
-        chartype[i] = get_table_entry( bidi_direction_table, lpString[i] );
+        chartype[i] = get_table_entry_32( bidi_direction_table, lpString[i] );
 }
 
 /* Set a run of cval values at locations all prior to, but not including */
@@ -471,7 +471,7 @@ static BOOL BIDI_Reorder( HDC hDC,               /* [in] Display DC */
             WARN("Out of memory\n");
             goto cleanup;
         }
-        psva = HeapAlloc(GetProcessHeap(),0,sizeof(SCRIPT_VISATTR) * uCount);
+        psva = HeapAlloc(GetProcessHeap(),0,sizeof(SCRIPT_VISATTR) * cMaxGlyphs);
         if (!psva)
         {
             WARN("Out of memory\n");
@@ -604,16 +604,22 @@ static BOOL BIDI_Reorder( HDC hDC,               /* [in] Display DC */
                 while (res == E_OUTOFMEMORY)
                 {
                     WORD *new_run_glyphs = HeapReAlloc(GetProcessHeap(), 0, run_glyphs, sizeof(*run_glyphs) * cMaxGlyphs * 2);
-                    if (!new_run_glyphs)
+                    SCRIPT_VISATTR *new_psva = HeapReAlloc(GetProcessHeap(), 0, psva, sizeof(*psva) * cMaxGlyphs * 2);
+                    if (!new_run_glyphs || !new_psva)
                     {
                         WARN("Out of memory\n");
                         HeapFree(GetProcessHeap(), 0, runOrder);
                         HeapFree(GetProcessHeap(), 0, visOrder);
                         HeapFree(GetProcessHeap(), 0, *lpGlyphs);
                         *lpGlyphs = NULL;
+                        if (new_run_glyphs)
+                            run_glyphs = new_run_glyphs;
+                        if (new_psva)
+                            psva = new_psva;
                         goto cleanup;
                     }
                     run_glyphs = new_run_glyphs;
+                    psva = new_psva;
                     cMaxGlyphs *= 2;
                     res = ScriptShape(hDC, &psc, lpString + done + curItem->iCharPos, cChars, cMaxGlyphs, &curItem->a, run_glyphs, pwLogClust, psva, &cOutGlyphs);
                 }

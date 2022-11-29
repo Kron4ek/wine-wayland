@@ -46,22 +46,22 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(appwizcpl);
 
-#define GECKO_VERSION "2.47.2"
+#define GECKO_VERSION "2.47.3"
 #ifdef __i386__
 #define GECKO_ARCH "x86"
-#define GECKO_SHA "e520ce7336cd420cd09c91337d87e74bb420300fd5cbc6f724c1802766b6a61d"
+#define GECKO_SHA "e5b9b06d3ce355646a8d2e72e044e37e1e0c8d18464eb1985adcd187a7f48e01"
 #elif defined(__x86_64__)
 #define GECKO_ARCH "x86_64"
-#define GECKO_SHA "0596761024823ff3c21f13e1cd5cd3e89dccc698294d62974d8930aeda86ce45"
+#define GECKO_SHA "a53ee954392b6d1fe3d68545f6e4e2a97afbc8dc8b03a8b443349545ce139675"
 #else
 #define GECKO_ARCH ""
 #define GECKO_SHA "???"
 #endif
 
-#define MONO_VERSION "7.2.0"
+#define MONO_VERSION "7.4.0"
 #if defined(__i386__) || defined(__x86_64__)
 #define MONO_ARCH "x86"
-#define MONO_SHA "5f06eafbae3a49ecc31dfcea777075bd44f0cc126e4fb4e28ecefa06eb436323"
+#define MONO_SHA "6413ff328ebbf7ec7689c648feb3546d8102ded865079d1fbf0331b14b3ab0ec"
 #else
 #define MONO_ARCH ""
 #define MONO_SHA "???"
@@ -119,8 +119,6 @@ static BOOL sha_check(const WCHAR *file_name)
     const unsigned char *file_map;
     HANDLE file, map;
     DWORD size, i;
-    BCRYPT_HASH_HANDLE hash = NULL;
-    BCRYPT_ALG_HANDLE alg = NULL;
     UCHAR sha[32];
     char buf[1024];
     BOOL ret = FALSE;
@@ -143,26 +141,16 @@ static BOOL sha_check(const WCHAR *file_name)
     if(!file_map)
         return FALSE;
 
-    if(BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0))
-        goto end;
-    if(BCryptCreateHash(alg, &hash, NULL, 0, NULL, 0, 0))
-        goto end;
-    if(BCryptHashData(hash, (UCHAR *)file_map, size, 0))
-        goto end;
-    if(BCryptFinishHash(hash, sha, sizeof(sha), 0))
-        goto end;
+    if(!BCryptHash(BCRYPT_SHA256_ALG_HANDLE, NULL, 0, (UCHAR *)file_map, size, sha, sizeof(sha))) {
+        for(i=0; i < sizeof(sha); i++)
+            sprintf(buf + i * 2, "%02x", sha[i]);
 
-    for(i=0; i < sizeof(sha); i++)
-        sprintf(buf + i * 2, "%02x", sha[i]);
+        ret = !strcmp(buf, addon->sha);
+        if(!ret)
+            WARN("Got %s, expected %s\n", buf, addon->sha);
+    }
 
-    ret = !strcmp(buf, addon->sha);
-    if(!ret)
-        WARN("Got %s, expected %s\n", buf, addon->sha);
-
-end:
     UnmapViewOfFile(file_map);
-    if(hash) BCryptDestroyHash(hash);
-    if(alg) BCryptCloseAlgorithmProvider(alg, 0);
     return ret;
 }
 

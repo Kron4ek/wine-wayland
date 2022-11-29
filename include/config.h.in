@@ -257,6 +257,12 @@
 /* Define to 1 if you have the <netdb.h> header file. */
 #undef HAVE_NETDB_H
 
+/* Define to 1 if you have the <netinet6/ip6_var.h> header file. */
+#undef HAVE_NETINET6_IP6_VAR_H
+
+/* Define to 1 if you have the <netinet/icmp6.h> header file. */
+#undef HAVE_NETINET_ICMP6_H
+
 /* Define to 1 if you have the <netinet/icmp_var.h> header file. */
 #undef HAVE_NETINET_ICMP_VAR_H
 
@@ -313,12 +319,6 @@
 
 /* Define to 1 if you have the <net/route.h> header file. */
 #undef HAVE_NET_ROUTE_H
-
-/* Define to 1 if OpenAL is available */
-#undef HAVE_OPENAL
-
-/* Define to 1 if you have the <OpenAL/al.h> header file. */
-#undef HAVE_OPENAL_AL_H
 
 /* Define to 1 if you have the <OpenCL/opencl.h> header file. */
 #undef HAVE_OPENCL_OPENCL_H
@@ -443,11 +443,20 @@
 /* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
 
+/* Define to 1 if `icp6s_error' is a member of `struct icmp6stat'. */
+#undef HAVE_STRUCT_ICMP6STAT_ICP6S_ERROR
+
+/* Define to 1 if `icps_error' is a member of `struct icmpstat'. */
+#undef HAVE_STRUCT_ICMPSTAT_ICPS_ERROR
+
 /* Define to 1 if `ifr_hwaddr' is a member of `struct ifreq'. */
 #undef HAVE_STRUCT_IFREQ_IFR_HWADDR
 
 /* Define to 1 if `ipi6_addr' is a member of `struct in6_pktinfo'. */
 #undef HAVE_STRUCT_IN6_PKTINFO_IPI6_ADDR
+
+/* Define to 1 if `ip6s_total' is a member of `struct ip6stat'. */
+#undef HAVE_STRUCT_IP6STAT_IP6S_TOTAL
 
 /* Define to 1 if `ips_total' is a member of `struct ipstat'. */
 #undef HAVE_STRUCT_IPSTAT_IPS_TOTAL
@@ -664,6 +673,9 @@
 /* Define to 1 if you have the <sys/vnode.h> header file. */
 #undef HAVE_SYS_VNODE_H
 
+/* Define to 1 if you have the <sys/xattr.h> header file. */
+#undef HAVE_SYS_XATTR_H
+
 /* Define to 1 if you have the `tcdrain' function. */
 #undef HAVE_TCDRAIN
 
@@ -820,9 +832,6 @@
 /* Define to the soname of the libodbc library. */
 #undef SONAME_LIBODBC
 
-/* Define to the soname of the libopenal library. */
-#undef SONAME_LIBOPENAL
-
 /* Define to the soname of the libOSMesa library. */
 #undef SONAME_LIBOSMESA
 
@@ -872,6 +881,9 @@
    required in a freestanding environment). This macro is provided for
    backward compatibility; new code need not use it. */
 #undef STDC_HEADERS
+
+/* Define if xattr functions take additional arguments (macOS) */
+#undef XATTR_ADDITIONAL_OPTIONS
 
 /* Define to 1 if the X Window System is missing or not being used. */
 #undef X_DISPLAY_MISSING

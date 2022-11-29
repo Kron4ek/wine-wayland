@@ -1833,7 +1833,7 @@ static void BUTTON_DrawThemedLabel(const BUTTON_INFO *info, HDC hdc, UINT text_f
 static void PB_Paint( const BUTTON_INFO *infoPtr, HDC hDC, UINT action )
 {
     RECT     rc, labelRect, imageRect, textRect;
-    UINT     dtFlags, uState;
+    UINT     dtFlags = (UINT)-1, uState;
     HPEN     hOldPen, hpen;
     HBRUSH   hOldBrush;
     INT      oldBkMode;
@@ -2830,7 +2830,7 @@ static void CB_ThemedPaint(HTHEME theme, const BUTTON_INFO *infoPtr, HDC hDC, in
     GetThemeBackgroundContentRect(theme, hDC, part, state, &client_rect, &content_rect);
     region = set_control_clipping(hDC, &client_rect);
 
-    if (FAILED(GetThemePartSize(theme, hDC, part, state, NULL, TS_DRAW, &box_size)))
+    if (FAILED(GetThemePartSize(theme, hDC, part, state, &content_rect, TS_DRAW, &box_size)))
     {
         box_size.cx = 12 * GetDpiForWindow(infoPtr->hwnd) / 96 + 1;
         box_size.cy = box_size.cx;

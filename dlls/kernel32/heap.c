@@ -41,54 +41,8 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(globalmem);
 
-/* address where we try to map the system heap */
-#define SYSTEM_HEAP_BASE  ((void*)0x80000000)
-#define SYSTEM_HEAP_SIZE  0x1000000   /* Default heap size = 16Mb */
-
-static HANDLE systemHeap;   /* globally shared heap */
-
-
-/***********************************************************************
- *           HEAP_CreateSystemHeap
- *
- * Create the system heap.
- */
-static inline HANDLE HEAP_CreateSystemHeap(void)
-{
-    int created;
-    void *base;
-    HANDLE map, event;
-
-    /* create the system heap event first */
-    event = CreateEventA( NULL, TRUE, FALSE, "__wine_system_heap_event" );
-
-    if (!(map = CreateFileMappingA( INVALID_HANDLE_VALUE, NULL, SEC_COMMIT | PAGE_READWRITE,
-                                    0, SYSTEM_HEAP_SIZE, "__wine_system_heap" ))) return 0;
-    created = (GetLastError() != ERROR_ALREADY_EXISTS);
-
-    if (!(base = MapViewOfFileEx( map, FILE_MAP_ALL_ACCESS, 0, 0, 0, SYSTEM_HEAP_BASE )))
-    {
-        /* pre-defined address not available */
-        ERR( "system heap base address %p not available\n", SYSTEM_HEAP_BASE );
-        return 0;
-    }
-
-    if (created)  /* newly created heap */
-    {
-        systemHeap = RtlCreateHeap( HEAP_SHARED, base, SYSTEM_HEAP_SIZE,
-                                    SYSTEM_HEAP_SIZE, NULL, NULL );
-        SetEvent( event );
-    }
-    else
-    {
-        /* wait for the heap to be initialized */
-        WaitForSingleObject( event, INFINITE );
-        systemHeap = base;
-    }
-    CloseHandle( map );
-    return systemHeap;
-}
-
+BOOLEAN WINAPI RtlGetUserInfoHeap( HANDLE handle, ULONG flags, void *ptr, void **user_value, ULONG *user_flags );
+BOOLEAN WINAPI RtlSetUserValueHeap( HANDLE handle, ULONG flags, void *ptr, void *user_value );
 
 /***********************************************************************
  *           HeapCreate   (KERNEL32.@)
@@ -106,17 +60,8 @@ HANDLE WINAPI HeapCreate(
 ) {
     HANDLE ret;
 
-    if ( flags & HEAP_SHARED )
-    {
-        if (!systemHeap) HEAP_CreateSystemHeap();
-        else WARN( "Shared Heap requested, returning system heap.\n" );
-        ret = systemHeap;
-    }
-    else
-    {
-        ret = RtlCreateHeap( flags, NULL, maxSize, initialSize, NULL, NULL );
-        if (!ret) SetLastError( ERROR_NOT_ENOUGH_MEMORY );
-    }
+    ret = RtlCreateHeap( flags, NULL, maxSize, initialSize, NULL, NULL );
+    if (!ret) SetLastError( ERROR_NOT_ENOUGH_MEMORY );
     return ret;
 }
 
@@ -132,11 +77,6 @@ HANDLE WINAPI HeapCreate(
  */
 BOOL WINAPI HeapDestroy( HANDLE heap /* [in] Handle of heap */ )
 {
-    if (heap == systemHeap)
-    {
-        WARN( "attempt to destroy system heap, returning TRUE!\n" );
-        return TRUE;
-    }
     if (!RtlDestroyHeap( heap )) return TRUE;
     SetLastError( ERROR_INVALID_HANDLE );
     return FALSE;
@@ -171,17 +111,9 @@ C_ASSERT(sizeof(struct mem_entry) == 2 * sizeof(void *));
 
 struct kernelbase_global_data *kernelbase_global_data;
 
-#define POINTER_TO_HANDLE( p ) (*(((const HGLOBAL *)( p )) - 2))
-/* align the storage needed for the HLOCAL on an 8-byte boundary thus
- * LocalAlloc/LocalReAlloc'ing with LMEM_MOVEABLE of memory with
- * size = 8*k, where k=1,2,3,... allocs exactly the given size.
- * The Minolta DiMAGE Image Viewer heavily relies on this, corrupting
- * the output jpeg's > 1 MB if not */
-#define HLOCAL_STORAGE      (sizeof(HLOCAL) * 2)
-
 static inline struct mem_entry *unsafe_mem_from_HLOCAL( HLOCAL handle )
 {
-    struct mem_entry *mem = CONTAINING_RECORD( handle, struct mem_entry, ptr );
+    struct mem_entry *mem = CONTAINING_RECORD( *(volatile HANDLE *)&handle, struct mem_entry, ptr );
     struct kernelbase_global_data *data = kernelbase_global_data;
     if (((UINT_PTR)handle & ((sizeof(void *) << 1) - 1)) != sizeof(void *)) return NULL;
     if (mem < data->mem_entries || mem >= data->mem_entries_end) return NULL;
@@ -243,65 +175,10 @@ BOOL WINAPI GlobalUnlock( HGLOBAL handle )
 
 /***********************************************************************
  *           GlobalHandle   (KERNEL32.@)
- *
- * Get the handle associated with the pointer to a global memory block.
- *
- * RETURNS
- *      Handle: Success
- *      NULL: Failure
  */
 HGLOBAL WINAPI GlobalHandle( const void *ptr )
 {
-    struct mem_entry *mem;
-    HGLOBAL handle;
-    LPCVOID test;
-
-    TRACE_(globalmem)( "ptr %p\n", ptr );
-
-    if (!ptr)
-    {
-        SetLastError( ERROR_INVALID_PARAMETER );
-        return 0;
-    }
-
-    RtlLockHeap( GetProcessHeap() );
-    __TRY
-    {
-        handle = 0;
-
-        /* note that if ptr is a pointer to a block allocated by           */
-        /* GlobalAlloc with GMEM_MOVEABLE then magic test in HeapValidate  */
-        /* will fail.                                                      */
-        if ((ptr = unsafe_ptr_from_HLOCAL( (HLOCAL)ptr )))
-        {
-            if (HeapValidate( GetProcessHeap(), HEAP_NO_SERIALIZE, ptr ))
-            {
-                handle = (HGLOBAL)ptr; /* valid fixed block */
-                break;
-            }
-            handle = POINTER_TO_HANDLE( ptr );
-        }
-        else handle = (HGLOBAL)ptr;
-
-        /* Now test handle either passed in or retrieved from pointer */
-        if ((mem = unsafe_mem_from_HLOCAL( handle )))
-        {
-            test = mem->ptr;
-            if (HeapValidate( GetProcessHeap(), HEAP_NO_SERIALIZE, (const char *)test - HLOCAL_STORAGE )) /* obj(-handle) valid arena? */
-                break; /* valid moveable block */
-        }
-        handle = 0;
-        SetLastError( ERROR_INVALID_HANDLE );
-    }
-    __EXCEPT_PAGE_FAULT
-    {
-        SetLastError( ERROR_INVALID_HANDLE );
-        handle = 0;
-    }
-    __ENDTRY
-    RtlUnlockHeap( GetProcessHeap() );
-
-    return handle;
+    return LocalHandle( ptr );
 }
 
 /***********************************************************************
@@ -315,72 +192,33 @@ HGLOBAL WINAPI GlobalHandle( const void *ptr )
  */
 HGLOBAL WINAPI GlobalReAlloc( HGLOBAL handle, SIZE_T size, UINT flags )
 {
-    return LocalReAlloc( handle, size, flags );
+    struct mem_entry *mem;
+    void *ptr;
+
+    if ((mem = unsafe_mem_from_HLOCAL( handle )) && mem->lock) return 0;
+    if (!(handle = LocalReAlloc( handle, size, flags ))) return 0;
+
+    /* GlobalReAlloc allows changing GMEM_FIXED to GMEM_MOVEABLE with GMEM_MODIFY */
+    if ((flags & (GMEM_MOVEABLE | GMEM_MODIFY)) == (GMEM_MOVEABLE | GMEM_MODIFY) &&
+        (ptr = unsafe_ptr_from_HLOCAL( handle )))
+    {
+        if (!(handle = LocalAlloc( flags, 0 ))) return 0;
+        RtlSetUserValueHeap( GetProcessHeap(), 0, ptr, handle );
+        mem = unsafe_mem_from_HLOCAL( handle );
+        mem->flags &= ~MEM_FLAG_DISCARDED;
+        mem->ptr = ptr;
+    }
+
+    return handle;
 }
 
 
 /***********************************************************************
  *           GlobalSize   (KERNEL32.@)
- *
- * Get the size of a global memory object.
- *
- * PARAMS
- *  handle [I] Handle of the global memory object
- *
- * RETURNS
- *  Failure: 0
- *  Success: Size in Bytes of the global memory object
- *
- * NOTES
- *   When the handle is invalid, last error is set to ERROR_INVALID_HANDLE
- *
  */
 SIZE_T WINAPI GlobalSize( HGLOBAL handle )
 {
-    struct mem_entry *mem;
-    SIZE_T retval;
-    void *ptr;
-
-    TRACE_(globalmem)( "handle %p\n", handle );
-
-    if (!((ULONG_PTR)handle >> 16))
-    {
-        SetLastError( ERROR_INVALID_HANDLE );
-        return 0;
-    }
-
-    if ((ptr = unsafe_ptr_from_HLOCAL( handle )))
-    {
-        retval = HeapSize( GetProcessHeap(), 0, ptr );
-        if (retval == ~(SIZE_T)0) /* It might be a GMEM_MOVEABLE data pointer */
-        {
-            retval = HeapSize( GetProcessHeap(), 0, (char *)ptr - HLOCAL_STORAGE );
-            if (retval != ~(SIZE_T)0) retval -= HLOCAL_STORAGE;
-        }
-    }
-    else
-    {
-        RtlLockHeap( GetProcessHeap() );
-        if ((mem = unsafe_mem_from_HLOCAL( handle )))
-        {
-            if (!mem->ptr) /* handle case of GlobalAlloc( ??,0) */
-                retval = 0;
-            else
-            {
-                retval = HeapSize( GetProcessHeap(), 0, (char *)mem->ptr - HLOCAL_STORAGE );
-                if (retval != ~(SIZE_T)0) retval -= HLOCAL_STORAGE;
-            }
-        }
-        else
-        {
-            WARN_(globalmem)( "invalid handle %p\n", handle );
-            SetLastError( ERROR_INVALID_HANDLE );
-            retval = 0;
-        }
-        RtlUnlockHeap( GetProcessHeap() );
-    }
-    if (retval == ~(SIZE_T)0) retval = 0;
-    return retval;
+    return LocalSize( handle );
 }
 
 
@@ -502,23 +340,28 @@ UINT WINAPI LocalFlags( HLOCAL handle )
 
 /***********************************************************************
  *           LocalHandle   (KERNEL32.@)
- *
- * Get the handle associated with the pointer to a local memory block.
- *
- * RETURNS
- *	Handle: Success
- *	NULL: Failure
- *
- * NOTES
- *  Windows memory management does not provide a separate local heap
- *  and global heap.
  */
-HLOCAL WINAPI LocalHandle(
-                LPCVOID ptr /* [in] Address of local memory block */
-) {
-    return GlobalHandle( ptr );
-}
+HLOCAL WINAPI LocalHandle( const void *ptr )
+{
+    HLOCAL handle = (HANDLE)ptr;
+    ULONG flags;
 
+    TRACE_(globalmem)( "ptr %p\n", ptr );
+
+    if (!ptr)
+    {
+        SetLastError( ERROR_INVALID_PARAMETER );
+        return 0;
+    }
+
+    if (!RtlGetUserInfoHeap( GetProcessHeap(), 0, (void *)ptr, &handle, &flags ))
+    {
+        SetLastError( ERROR_INVALID_HANDLE );
+        return 0;
+    }
+
+    return handle;
+}
 
 /***********************************************************************
  *           LocalShrink   (KERNEL32.@)
@@ -531,21 +374,33 @@ SIZE_T WINAPI LocalShrink( HGLOBAL handle, UINT newsize )
 
 /***********************************************************************
  *           LocalSize   (KERNEL32.@)
- *
- * Get the size of a local memory object.
- *
- * RETURNS
- *	Size: Success
- *	0: Failure
- *
- * NOTES
- *  Windows memory management does not provide a separate local heap
- *  and global heap.
  */
-SIZE_T WINAPI LocalSize(
-              HLOCAL handle /* [in] Handle of memory object */
-) {
-    return GlobalSize( handle );
+SIZE_T WINAPI LocalSize( HLOCAL handle )
+{
+    HANDLE heap = GetProcessHeap();
+    struct mem_entry *mem;
+    SIZE_T ret = 0;
+    void *ptr;
+
+    TRACE_(globalmem)( "handle %p\n", handle );
+
+    RtlLockHeap( heap );
+    if ((ptr = unsafe_ptr_from_HLOCAL( handle )))
+        ret = HeapSize( heap, HEAP_NO_SERIALIZE, ptr );
+    else if ((mem = unsafe_mem_from_HLOCAL( handle )))
+    {
+        if (!mem->ptr) ret = 0;
+        else ret = HeapSize( heap, HEAP_NO_SERIALIZE, mem->ptr );
+    }
+    else
+    {
+        WARN_(globalmem)( "invalid handle %p\n", handle );
+        SetLastError( ERROR_INVALID_HANDLE );
+    }
+    RtlUnlockHeap( heap );
+
+    if (ret == ~(SIZE_T)0) return 0;
+    return ret;
 }
 
 

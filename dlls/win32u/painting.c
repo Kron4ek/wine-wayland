@@ -112,7 +112,7 @@ BOOL CDECL nulldrv_InvertRgn( PHYSDEV dev, HRGN rgn )
     INT prev_rop = dc->attr->rop_mode;
     BOOL ret;
     dc->attr->rop_mode = R2_NOT;
-    ret = NtGdiFillRgn( dev->hdc, rgn, get_stock_object(BLACK_BRUSH) );
+    ret = NtGdiFillRgn( dev->hdc, rgn, GetStockObject(BLACK_BRUSH) );
     dc->attr->rop_mode = prev_rop;
     return ret;
 }
@@ -891,7 +891,7 @@ BOOL WINAPI NtGdiGradientFill( HDC hdc, TRIVERTEX *vert_array, ULONG nvert,
 
     if (!vert_array || !nvert || !grad_array || !ngrad || mode > GRADIENT_FILL_TRIANGLE)
     {
-        SetLastError( ERROR_INVALID_PARAMETER );
+        RtlSetLastWin32Error( ERROR_INVALID_PARAMETER );
         return FALSE;
     }
     for (i = 0; i < ngrad * (mode == GRADIENT_FILL_TRIANGLE ? 3 : 2); i++)

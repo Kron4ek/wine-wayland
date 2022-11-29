@@ -133,6 +133,7 @@ static BOOL test_input_lost( DWORD version )
             END_COLLECTION,
         END_COLLECTION,
     };
+    C_ASSERT(sizeof(report_desc) < MAX_HID_DESCRIPTOR_LEN);
 #include "pop_hid_macros.h"
 
     struct hid_device_desc desc =
@@ -166,7 +167,7 @@ static BOOL test_input_lost( DWORD version )
 
     desc.report_descriptor_len = sizeof(report_desc);
     memcpy( desc.report_descriptor_buf, report_desc, sizeof(report_desc) );
-    fill_context( __LINE__, desc.context, ARRAY_SIZE(desc.context) );
+    fill_context( desc.context, ARRAY_SIZE(desc.context) );
 
     if (!hid_device_start( &desc )) goto done;
     if (FAILED(hr = dinput_test_create_device( version, &devinst, &device ))) goto done;
@@ -208,7 +209,7 @@ static BOOL test_input_lost( DWORD version )
     hr = IDirectInputDevice8_Unacquire( device );
     ok( hr == DI_NOEFFECT, "Unacquire returned: %#lx\n", hr );
 
-    fill_context( __LINE__, desc.context, ARRAY_SIZE(desc.context) );
+    fill_context( desc.context, ARRAY_SIZE(desc.context) );
     hid_device_start( &desc );
 
     hr = IDirectInputDevice8_Acquire( device );
@@ -526,8 +527,8 @@ static HRESULT WINAPI controller_handler_Invoke( IEventHandler_RawGameController
     trace( "iface %p, sender %p, controller %p\n", iface, sender, controller );
 
     ok( sender == NULL, "got sender %p\n", sender );
-    SetEvent( impl->event );
     impl->invoked = TRUE;
+    SetEvent( impl->event );
 
     return S_OK;
 }
@@ -923,7 +924,6 @@ static LRESULT CALLBACK windows_gaming_input_wndproc( HWND hwnd, UINT msg, WPARA
         {
             ok( wparam == DBT_DEVICEREMOVECOMPLETE, "got wparam %#Ix\n", wparam );
             ok( controller_added.invoked, "controller added handler not invoked\n" );
-            ok( controller_removed.invoked, "controller removed handler not invoked\n" );
         }
         else
         {
@@ -1218,10 +1218,9 @@ next:
 
 START_TEST( hotplug )
 {
-    if (!dinput_test_init()) return;
+    dinput_test_init();
     if (!bus_device_start()) goto done;
 
-    CoInitialize( NULL );
     if (test_input_lost( 0x500 ))
     {
         test_input_lost( 0x700 );
@@ -1230,7 +1229,6 @@ START_TEST( hotplug )
         test_RegisterDeviceNotification();
         test_windows_gaming_input();
     }
-    CoUninitialize();
 
 done:
     bus_device_stop();

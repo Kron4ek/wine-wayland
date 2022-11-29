@@ -34,6 +34,7 @@ static unixlib_handle_t unix_handle;
 WINE_DEFAULT_DEBUG_CHANNEL(quartz);
 
 DEFINE_GUID(GUID_NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+DEFINE_GUID(MEDIASUBTYPE_VC1S,MAKEFOURCC('V','C','1','S'),0x0000,0x0010,0x80,0x00,0x00,0xaa,0x00,0x38,0x9b,0x71);
 
 bool array_reserve(void **elements, size_t *capacity, size_t count, size_t size)
 {
@@ -68,6 +69,8 @@ struct wg_parser *wg_parser_create(enum wg_parser_type type, bool unlimited_buff
     {
         .type = type,
         .unlimited_buffering = unlimited_buffering,
+        .err_on = ERR_ON(quartz),
+        .warn_on = WARN_ON(quartz),
     };
 
     TRACE("type %#x, unlimited_buffering %d.\n", type, unlimited_buffering);
@@ -199,15 +202,17 @@ void wg_parser_stream_disable(struct wg_parser_stream *stream)
     __wine_unix_call(unix_handle, unix_wg_parser_stream_disable, stream);
 }
 
-bool wg_parser_stream_get_buffer(struct wg_parser_stream *stream, struct wg_parser_buffer *buffer)
+bool wg_parser_stream_get_buffer(struct wg_parser *parser, struct wg_parser_stream *stream,
+        struct wg_parser_buffer *buffer)
 {
     struct wg_parser_stream_get_buffer_params params =
     {
+        .parser = parser,
         .stream = stream,
         .buffer = buffer,
     };
 
-    TRACE("stream %p, buffer %p.\n", stream, buffer);
+    TRACE("parser %p, stream %p, buffer %p.\n", parser, stream, buffer);
 
     return !__wine_unix_call(unix_handle, unix_wg_parser_stream_get_buffer, &params);
 }
@@ -329,21 +334,36 @@ HRESULT wg_transform_push_data(struct wg_transform *transform, struct wg_sample 
     return params.result;
 }
 
-HRESULT wg_transform_read_data(struct wg_transform *transform, struct wg_sample *sample)
+HRESULT wg_transform_read_data(struct wg_transform *transform, struct wg_sample *sample,
+        struct wg_format *format)
 {
     struct wg_transform_read_data_params params =
     {
         .transform = transform,
         .sample = sample,
+        .format = format,
     };
     NTSTATUS status;
 
-    TRACE("transform %p, sample %p.\n", transform, sample);
+    TRACE("transform %p, sample %p, format %p.\n", transform, sample, format);
 
     if ((status = __wine_unix_call(unix_handle, unix_wg_transform_read_data, &params)))
         return HRESULT_FROM_NT(status);
 
     return params.result;
+}
+
+bool wg_transform_set_output_format(struct wg_transform *transform, struct wg_format *format)
+{
+    struct wg_transform_set_output_format_params params =
+    {
+        .transform = transform,
+        .format = format,
+    };
+
+    TRACE("transform %p, format %p.\n", transform, format);
+
+    return !__wine_unix_call(unix_handle, unix_wg_transform_set_output_format, &params);
 }
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void *reserved)
@@ -431,9 +451,14 @@ static const IClassFactoryVtbl class_factory_vtbl =
 
 static struct class_factory avi_splitter_cf = {{&class_factory_vtbl}, avi_splitter_create};
 static struct class_factory decodebin_parser_cf = {{&class_factory_vtbl}, decodebin_parser_create};
+static struct class_factory mpeg_audio_codec_cf = {{&class_factory_vtbl}, mpeg_audio_codec_create};
+static struct class_factory mpeg_layer3_decoder_cf = {{&class_factory_vtbl}, mpeg_layer3_decoder_create};
 static struct class_factory mpeg_splitter_cf = {{&class_factory_vtbl}, mpeg_splitter_create};
 static struct class_factory wave_parser_cf = {{&class_factory_vtbl}, wave_parser_create};
 static struct class_factory wma_decoder_cf = {{&class_factory_vtbl}, wma_decoder_create};
+static struct class_factory wmv_decoder_cf = {{&class_factory_vtbl}, wmv_decoder_create};
+static struct class_factory resampler_cf = {{&class_factory_vtbl}, resampler_create};
+static struct class_factory color_convert_cf = {{&class_factory_vtbl}, color_convert_create};
 
 HRESULT WINAPI DllGetClassObject(REFCLSID clsid, REFIID iid, void **out)
 {
@@ -452,12 +477,22 @@ HRESULT WINAPI DllGetClassObject(REFCLSID clsid, REFIID iid, void **out)
         factory = &avi_splitter_cf;
     else if (IsEqualGUID(clsid, &CLSID_decodebin_parser))
         factory = &decodebin_parser_cf;
+    else if (IsEqualGUID(clsid, &CLSID_CMpegAudioCodec))
+        factory = &mpeg_audio_codec_cf;
+    else if (IsEqualGUID(clsid, &CLSID_mpeg_layer3_decoder))
+        factory = &mpeg_layer3_decoder_cf;
     else if (IsEqualGUID(clsid, &CLSID_MPEG1Splitter))
         factory = &mpeg_splitter_cf;
     else if (IsEqualGUID(clsid, &CLSID_WAVEParser))
         factory = &wave_parser_cf;
     else if (IsEqualGUID(clsid, &CLSID_WMADecMediaObject))
         factory = &wma_decoder_cf;
+    else if (IsEqualGUID(clsid, &CLSID_WMVDecoderMFT))
+        factory = &wmv_decoder_cf;
+    else if (IsEqualGUID(clsid, &CLSID_CResamplerMediaObject))
+        factory = &resampler_cf;
+    else if (IsEqualGUID(clsid, &CLSID_CColorConvertDMO))
+        factory = &color_convert_cf;
     else
     {
         FIXME("%s not implemented, returning CLASS_E_CLASSNOTAVAILABLE.\n", debugstr_guid(clsid));
@@ -515,6 +550,39 @@ static const REGFILTER2 reg_avi_splitter =
     .dwMerit = MERIT_NORMAL,
     .u.s2.cPins2 = 2,
     .u.s2.rgPins2 = reg_avi_splitter_pins,
+};
+
+static const REGPINTYPES reg_mpeg_audio_codec_sink_mts[3] =
+{
+    {&MEDIATYPE_Audio, &MEDIASUBTYPE_MPEG1Packet},
+    {&MEDIATYPE_Audio, &MEDIASUBTYPE_MPEG1Payload},
+    {&MEDIATYPE_Audio, &MEDIASUBTYPE_MPEG1AudioPayload},
+};
+
+static const REGPINTYPES reg_mpeg_audio_codec_source_mts[1] =
+{
+    {&MEDIATYPE_Audio, &MEDIASUBTYPE_PCM},
+};
+
+static const REGFILTERPINS2 reg_mpeg_audio_codec_pins[2] =
+{
+    {
+        .nMediaTypes = 3,
+        .lpMediaType = reg_mpeg_audio_codec_sink_mts,
+    },
+    {
+        .dwFlags = REG_PINFLAG_B_OUTPUT,
+        .nMediaTypes = 1,
+        .lpMediaType = reg_mpeg_audio_codec_source_mts,
+    },
+};
+
+static const REGFILTER2 reg_mpeg_audio_codec =
+{
+    .dwVersion = 2,
+    .dwMerit = 0x03680001,
+    .u.s2.cPins2 = 2,
+    .u.s2.rgPins2 = reg_mpeg_audio_codec_pins,
 };
 
 static const REGPINTYPES reg_mpeg_splitter_sink_mts[4] =
@@ -619,6 +687,11 @@ static const REGFILTER2 reg_decodebin_parser =
 
 HRESULT WINAPI DllRegisterServer(void)
 {
+    DMO_PARTIAL_MEDIATYPE audio_convert_types[2] =
+    {
+        {.type = MEDIATYPE_Audio, .subtype = MEDIASUBTYPE_PCM},
+        {.type = MEDIATYPE_Audio, .subtype = MEDIASUBTYPE_IEEE_FLOAT},
+    };
     DMO_PARTIAL_MEDIATYPE wma_decoder_output[2] =
     {
         {.type = MEDIATYPE_Audio, .subtype = MEDIASUBTYPE_PCM},
@@ -630,6 +703,73 @@ HRESULT WINAPI DllRegisterServer(void)
         {.type = MEDIATYPE_Audio, .subtype = MEDIASUBTYPE_WMAUDIO2},
         {.type = MEDIATYPE_Audio, .subtype = MEDIASUBTYPE_WMAUDIO3},
         {.type = MEDIATYPE_Audio, .subtype = MEDIASUBTYPE_WMAUDIO_LOSSLESS},
+    };
+    DMO_PARTIAL_MEDIATYPE wmv_decoder_output[11] =
+    {
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YV12},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YUY2},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_UYVY},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YVYU},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_NV11},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_NV12},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB32},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB24},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB565},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB555},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB8},
+    };
+    DMO_PARTIAL_MEDIATYPE wmv_decoder_input[8] =
+    {
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_WMV1},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_WMV2},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_WMV3},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_WMVA},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_WVC1},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_WMVP},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_WVP2},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_VC1S},
+    };
+    DMO_PARTIAL_MEDIATYPE color_convert_input[20] =
+    {
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YV12},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YUY2},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_UYVY},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_AYUV},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_NV12},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB32},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB565},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_I420},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_IYUV},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YVYU},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB24},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB555},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB8},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_V216},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_V410},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_NV11},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_Y41P},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_Y41T},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_Y42T},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YVU9},
+    };
+    DMO_PARTIAL_MEDIATYPE color_convert_output[16] =
+    {
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YV12},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YUY2},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_UYVY},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_AYUV},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_NV12},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB32},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB565},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_I420},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_IYUV},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_YVYU},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB24},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB555},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_RGB8},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_V216},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_V410},
+        {.type = MEDIATYPE_Video, .subtype = MEDIASUBTYPE_NV11},
     };
 
     IFilterMapper2 *mapper;
@@ -647,14 +787,25 @@ HRESULT WINAPI DllRegisterServer(void)
     IFilterMapper2_RegisterFilter(mapper, &CLSID_AviSplitter, L"AVI Splitter", NULL, NULL, NULL, &reg_avi_splitter);
     IFilterMapper2_RegisterFilter(mapper, &CLSID_decodebin_parser,
             L"GStreamer splitter filter", NULL, NULL, NULL, &reg_decodebin_parser);
+    IFilterMapper2_RegisterFilter(mapper, &CLSID_CMpegAudioCodec,
+            L"MPEG Audio Decoder", NULL, NULL, NULL, &reg_mpeg_audio_codec);
     IFilterMapper2_RegisterFilter(mapper, &CLSID_MPEG1Splitter,
             L"MPEG-I Stream Splitter", NULL, NULL, NULL, &reg_mpeg_splitter);
     IFilterMapper2_RegisterFilter(mapper, &CLSID_WAVEParser, L"Wave Parser", NULL, NULL, NULL, &reg_wave_parser);
 
     IFilterMapper2_Release(mapper);
 
-    if (FAILED(hr = DMORegister(L"WMA Decoder DMO", &CLSID_WMADecMediaObject, &DMOCATEGORY_AUDIO_DECODER,
+    if (FAILED(hr = DMORegister(L"WMAudio Decoder DMO", &CLSID_WMADecMediaObject, &DMOCATEGORY_AUDIO_DECODER,
             0, ARRAY_SIZE(wma_decoder_input), wma_decoder_input, ARRAY_SIZE(wma_decoder_output), wma_decoder_output)))
+        return hr;
+    if (FAILED(hr = DMORegister(L"WMVideo Decoder DMO", &CLSID_WMVDecoderMFT, &DMOCATEGORY_VIDEO_DECODER,
+            0, ARRAY_SIZE(wmv_decoder_input), wmv_decoder_input, ARRAY_SIZE(wmv_decoder_output), wmv_decoder_output)))
+        return hr;
+    if (FAILED(hr = DMORegister(L"Resampler DMO", &CLSID_CResamplerMediaObject, &DMOCATEGORY_AUDIO_EFFECT,
+            0, ARRAY_SIZE(audio_convert_types), audio_convert_types, ARRAY_SIZE(audio_convert_types), audio_convert_types)))
+        return hr;
+    if (FAILED(hr = DMORegister(L"Color Converter DMO", &CLSID_CColorConvertDMO, &DMOCATEGORY_VIDEO_EFFECT,
+            0, ARRAY_SIZE(color_convert_input), color_convert_input, ARRAY_SIZE(color_convert_output), color_convert_output)))
         return hr;
 
     return mfplat_DllRegisterServer();
@@ -676,12 +827,19 @@ HRESULT WINAPI DllUnregisterServer(void)
 
     IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_AviSplitter);
     IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_decodebin_parser);
+    IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_CMpegAudioCodec);
     IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_MPEG1Splitter);
     IFilterMapper2_UnregisterFilter(mapper, NULL, NULL, &CLSID_WAVEParser);
 
     IFilterMapper2_Release(mapper);
 
+    if (FAILED(hr = DMOUnregister(&CLSID_CColorConvertDMO, &DMOCATEGORY_VIDEO_EFFECT)))
+        return hr;
+    if (FAILED(hr = DMOUnregister(&CLSID_CResamplerMediaObject, &DMOCATEGORY_AUDIO_EFFECT)))
+        return hr;
     if (FAILED(hr = DMOUnregister(&CLSID_WMADecMediaObject, &DMOCATEGORY_AUDIO_DECODER)))
+        return hr;
+    if (FAILED(hr = DMOUnregister(&CLSID_WMVDecoderMFT, &DMOCATEGORY_VIDEO_DECODER)))
         return hr;
 
     return S_OK;

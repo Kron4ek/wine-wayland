@@ -610,8 +610,8 @@
 @ stdcall GetConsoleKeyboardLayoutNameW(ptr)
 @ stdcall -import GetConsoleMode(long ptr)
 @ stub GetConsoleNlsMode
-# @ stub GetConsoleOriginalTitleA
-# @ stub GetConsoleOriginalTitleW
+@ stdcall -import GetConsoleOriginalTitleA(ptr long)
+@ stdcall -import GetConsoleOriginalTitleW(ptr long)
 @ stdcall -import GetConsoleOutputCP()
 @ stdcall -import GetConsoleProcessList(ptr long)
 @ stdcall -import GetConsoleScreenBufferInfo(long ptr)
@@ -621,8 +621,8 @@
 @ stdcall -import GetConsoleTitleW(ptr long)
 @ stdcall -import GetConsoleWindow()
 @ stdcall GetCurrencyFormatA(long long str ptr ptr long)
-@ stdcall GetCurrencyFormatEx(wstr long wstr ptr ptr long)
-@ stdcall GetCurrencyFormatW(long long wstr ptr ptr long)
+@ stdcall -import GetCurrencyFormatEx(wstr long wstr ptr ptr long)
+@ stdcall -import GetCurrencyFormatW(long long wstr ptr ptr long)
 @ stdcall -import GetCurrentActCtx(ptr)
 @ stdcall -import GetCurrentConsoleFont(long long ptr)
 @ stdcall -import GetCurrentConsoleFontEx(long long ptr)
@@ -640,9 +640,9 @@
 @ stdcall -norelay GetCurrentThreadId() KERNEL32_GetCurrentThreadId
 @ stdcall -import GetCurrentThreadStackLimits(ptr ptr)
 @ stdcall -arch=x86_64 GetCurrentUmsThread()
-@ stdcall GetDateFormatA(long long ptr str ptr long)
-@ stdcall GetDateFormatEx(wstr long ptr wstr ptr long wstr)
-@ stdcall GetDateFormatW(long long ptr wstr ptr long)
+@ stdcall -import GetDateFormatA(long long ptr str ptr long)
+@ stdcall -import GetDateFormatEx(wstr long ptr wstr ptr long wstr)
+@ stdcall -import GetDateFormatW(long long ptr wstr ptr long)
 @ stdcall GetDaylightFlag()
 @ stdcall GetDefaultCommConfigA(str ptr ptr)
 @ stdcall GetDefaultCommConfigW(wstr ptr ptr)
@@ -756,8 +756,8 @@
 @ stdcall GetNumaProximityNode(long ptr)
 @ stdcall -import GetNumaProximityNodeEx(long ptr)
 @ stdcall GetNumberFormatA(long long str ptr ptr long)
-@ stdcall GetNumberFormatEx(wstr long wstr ptr ptr long)
-@ stdcall GetNumberFormatW(long long wstr ptr ptr long)
+@ stdcall -import GetNumberFormatEx(wstr long wstr ptr ptr long)
+@ stdcall -import GetNumberFormatW(long long wstr ptr ptr long)
 @ stdcall GetNumberOfConsoleFonts()
 @ stdcall -import GetNumberOfConsoleInputEvents(long ptr)
 @ stdcall -import GetNumberOfConsoleMouseButtons(ptr)
@@ -869,9 +869,9 @@
 @ stdcall -import GetThreadUILanguage()
 @ stdcall GetTickCount()
 @ stdcall -ret64 GetTickCount64()
-@ stdcall GetTimeFormatA(long long ptr str ptr long)
-@ stdcall GetTimeFormatEx(wstr long ptr wstr ptr long)
-@ stdcall GetTimeFormatW(long long ptr wstr ptr long)
+@ stdcall -import GetTimeFormatA(long long ptr str ptr long)
+@ stdcall -import GetTimeFormatEx(wstr long ptr wstr ptr long)
+@ stdcall -import GetTimeFormatW(long long ptr wstr ptr long)
 @ stdcall -import GetTimeZoneInformation(ptr)
 @ stdcall -import GetTimeZoneInformationForYear(long ptr ptr)
 # @ stub GetUILanguageInfo
@@ -989,7 +989,7 @@
 @ stdcall -import IsDBCSLeadByteEx(long long)
 @ stdcall -import IsDebuggerPresent()
 @ stub -i386 IsLSCallback
-# @ stub IsNLSDefinedString
+@ stdcall -import IsNLSDefinedString(long long ptr wstr long)
 @ stdcall -import IsNormalizedString(long wstr long)
 @ stdcall -import IsProcessInJob(long long ptr)
 @ stdcall -import IsProcessorFeaturePresent(long)
@@ -1197,7 +1197,7 @@
 @ stdcall -import QueueUserAPC(ptr long long)
 @ stdcall -import QueueUserWorkItem(ptr ptr long)
 @ stdcall -import RaiseException(long long long ptr)
-# @ stub RaiseFailFastException
+@ stdcall -import RaiseFailFastException(ptr ptr long)
 @ stdcall -import ReadConsoleA(long ptr long ptr ptr)
 @ stdcall -import ReadConsoleInputA(long ptr long ptr)
 @ stub ReadConsoleInputExA
@@ -1313,7 +1313,7 @@
 @ stdcall RtlMoveMemory(ptr ptr long) NTDLL.RtlMoveMemory
 @ stdcall RtlPcToFileHeader(ptr ptr) NTDLL.RtlPcToFileHeader
 @ stdcall -arch=arm,arm64,x86_64 -norelay RtlRaiseException(ptr) NTDLL.RtlRaiseException
-@ cdecl -arch=arm,arm64,x86_64 -import RtlRestoreContext(ptr ptr)
+@ cdecl -import RtlRestoreContext(ptr ptr)
 @ stdcall RtlUnwind(ptr ptr ptr long) NTDLL.RtlUnwind
 @ stdcall -arch=arm,arm64,x86_64 RtlUnwindEx(long long ptr long ptr) NTDLL.RtlUnwindEx
 @ stdcall -arch=arm,arm64,x86_64 RtlVirtualUnwind(long long long ptr ptr ptr ptr ptr) NTDLL.RtlVirtualUnwind
@@ -1444,6 +1444,7 @@
 @ stdcall -import SetPriorityClass(long long)
 @ stdcall SetProcessAffinityMask(long long)
 @ stdcall -import SetProcessAffinityUpdateMode(long long)
+@ stdcall -import SetProcessDefaultCpuSets(ptr ptr long)
 @ stdcall SetProcessDEPPolicy(long)
 @ stdcall -import SetProcessMitigationPolicy(long ptr long)
 @ stdcall -import SetProcessPreferredUILanguages(long ptr ptr)
@@ -1470,6 +1471,7 @@
 @ stdcall -import SetThreadGroupAffinity(long ptr ptr)
 @ stdcall -import SetThreadIdealProcessor(long long)
 @ stdcall -import SetThreadIdealProcessorEx(long ptr ptr)
+@ stdcall -import SetThreadInformation(long long ptr long)
 @ stdcall -import SetThreadLocale(long)
 @ stdcall -import SetThreadPreferredUILanguages(long ptr ptr)
 @ stdcall -import SetThreadPriority(long long)
@@ -1557,6 +1559,7 @@
 @ stdcall -import UnlockFile(long long long long long)
 @ stdcall -import UnlockFileEx(long long long long ptr)
 @ stdcall -import UnmapViewOfFile(ptr)
+@ stdcall -import UnmapViewOfFileEx(ptr long)
 # @ stub UnregisterApplicationRecoveryCallback
 @ stdcall UnregisterApplicationRestart()
 # @ stub UnregisterConsoleIME

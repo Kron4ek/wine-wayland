@@ -45,6 +45,10 @@ enum vkd3d_shader_api_version
     VKD3D_SHADER_API_VERSION_1_1,
     VKD3D_SHADER_API_VERSION_1_2,
     VKD3D_SHADER_API_VERSION_1_3,
+    VKD3D_SHADER_API_VERSION_1_4,
+    VKD3D_SHADER_API_VERSION_1_5,
+
+    VKD3D_FORCE_32_BIT_ENUM(VKD3D_SHADER_API_VERSION),
 };
 
 /** The type of a chained structure. */
@@ -98,6 +102,23 @@ enum vkd3d_shader_compile_option_buffer_uav
     VKD3D_FORCE_32_BIT_ENUM(VKD3D_SHADER_COMPILE_OPTION_BUFFER_UAV),
 };
 
+/**
+ * Determines how typed UAVs are declared.
+ * \since 1.5
+ */
+enum vkd3d_shader_compile_option_typed_uav
+{
+    /** Use R32(u)i/R32f format for UAVs which are read from. This is the default value. */
+    VKD3D_SHADER_COMPILE_OPTION_TYPED_UAV_READ_FORMAT_R32     = 0x00000000,
+    /**
+     * Use Unknown format for UAVs which are read from. This should only be set if
+     * shaderStorageImageReadWithoutFormat is enabled in the target environment.
+     */
+    VKD3D_SHADER_COMPILE_OPTION_TYPED_UAV_READ_FORMAT_UNKNOWN = 0x00000001,
+
+    VKD3D_FORCE_32_BIT_ENUM(VKD3D_SHADER_COMPILE_OPTION_TYPED_UAV),
+};
+
 enum vkd3d_shader_compile_option_formatting_flags
 {
     VKD3D_SHADER_COMPILE_OPTION_FORMATTING_NONE    = 0x00000000,
@@ -126,6 +147,8 @@ enum vkd3d_shader_compile_option_name
     VKD3D_SHADER_COMPILE_OPTION_FORMATTING  = 0x00000003,
     /** \a value is a member of enum vkd3d_shader_api_version. \since 1.3 */
     VKD3D_SHADER_COMPILE_OPTION_API_VERSION = 0x00000004,
+    /** \a value is a member of enum vkd3d_shader_compile_option_typed_uav. \since 1.5 */
+    VKD3D_SHADER_COMPILE_OPTION_TYPED_UAV   = 0x00000005,
 
     VKD3D_FORCE_32_BIT_ENUM(VKD3D_SHADER_COMPILE_OPTION_NAME),
 };
@@ -1806,6 +1829,18 @@ VKD3D_SHADER_API void vkd3d_shader_free_shader_signature(struct vkd3d_shader_sig
 VKD3D_SHADER_API int vkd3d_shader_preprocess(const struct vkd3d_shader_compile_info *compile_info,
         struct vkd3d_shader_code *out, char **messages);
 
+/**
+ * Set a callback to be called when vkd3d-shader outputs debug logging.
+ *
+ * If NULL, or if this function has not been called, libvkd3d-shader will print
+ * all enabled log output to stderr.
+ *
+ * \param callback Callback function to set.
+ *
+ * \since 1.4
+ */
+VKD3D_SHADER_API void vkd3d_shader_set_log_callback(PFN_vkd3d_log callback);
+
 #endif  /* VKD3D_SHADER_NO_PROTOTYPES */
 
 /** Type of vkd3d_shader_get_version(). */
@@ -1858,6 +1893,9 @@ typedef void (*PFN_vkd3d_shader_free_shader_signature)(struct vkd3d_shader_signa
 /** Type of vkd3d_shader_preprocess(). \since 1.3 */
 typedef void (*PFN_vkd3d_shader_preprocess)(struct vkd3d_shader_compile_info *compile_info,
         struct vkd3d_shader_code *out, char **messages);
+
+/** Type of vkd3d_shader_set_log_callback(). \since 1.4 */
+typedef void (*PFN_vkd3d_shader_set_log_callback)(PFN_vkd3d_log callback);
 
 #ifdef __cplusplus
 }

@@ -40,6 +40,7 @@
     SYSCALL_ENTRY( NtCallbackReturn ) \
     SYSCALL_ENTRY( NtCancelIoFile ) \
     SYSCALL_ENTRY( NtCancelIoFileEx ) \
+    SYSCALL_ENTRY( NtCancelSynchronousIoFile ) \
     SYSCALL_ENTRY( NtCancelTimer ) \
     SYSCALL_ENTRY( NtClearEvent ) \
     SYSCALL_ENTRY( NtClose ) \
@@ -104,10 +105,12 @@
     SYSCALL_ENTRY( NtLoadDriver ) \
     SYSCALL_ENTRY( NtLoadKey ) \
     SYSCALL_ENTRY( NtLoadKey2 ) \
+    SYSCALL_ENTRY( NtLoadKeyEx ) \
     SYSCALL_ENTRY( NtLockFile ) \
     SYSCALL_ENTRY( NtLockVirtualMemory ) \
     SYSCALL_ENTRY( NtMakeTemporaryObject ) \
     SYSCALL_ENTRY( NtMapViewOfSection ) \
+    SYSCALL_ENTRY( NtMapViewOfSectionEx ) \
     SYSCALL_ENTRY( NtNotifyChangeDirectoryFile ) \
     SYSCALL_ENTRY( NtNotifyChangeKey ) \
     SYSCALL_ENTRY( NtNotifyChangeMultipleKeys ) \
@@ -210,6 +213,7 @@
     SYSCALL_ENTRY( NtSetInformationProcess ) \
     SYSCALL_ENTRY( NtSetInformationThread ) \
     SYSCALL_ENTRY( NtSetInformationToken ) \
+    SYSCALL_ENTRY( NtSetInformationVirtualMemory ) \
     SYSCALL_ENTRY( NtSetIntervalProfile ) \
     SYSCALL_ENTRY( NtSetIoCompletion ) \
     SYSCALL_ENTRY( NtSetLdtEntries ) \
@@ -236,6 +240,7 @@
     SYSCALL_ENTRY( NtUnlockFile ) \
     SYSCALL_ENTRY( NtUnlockVirtualMemory ) \
     SYSCALL_ENTRY( NtUnmapViewOfSection ) \
+    SYSCALL_ENTRY( NtUnmapViewOfSectionEx ) \
     SYSCALL_ENTRY( NtWaitForAlertByThreadId ) \
     SYSCALL_ENTRY( NtWaitForDebugEvent ) \
     SYSCALL_ENTRY( NtWaitForKeyedEvent ) \

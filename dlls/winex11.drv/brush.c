@@ -18,6 +18,10 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#if 0
+#pragma makedep unix
+#endif
+
 #include "config.h"
 
 #include <stdlib.h>
@@ -122,8 +126,7 @@ static Pixmap BRUSH_DitherColor( COLORREF color, int depth)
             XUnlockDisplay( gdi_display );
             return 0;
         }
-        ditherImage->data = HeapAlloc( GetProcessHeap(), 0,
-                                       ditherImage->height * ditherImage->bytes_per_line );
+        ditherImage->data = malloc( ditherImage->height * ditherImage->bytes_per_line );
     }
 
     if (color != prevColor)

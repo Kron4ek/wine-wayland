@@ -18,6 +18,7 @@
 #ifndef __WINE_SCHANNEL_H__
 #define __WINE_SCHANNEL_H__
 
+#include <minschannel.h>
 #include <wincrypt.h>
 
 /* Package names */
@@ -80,6 +81,7 @@ static const WCHAR SCHANNEL_NAME_W[] = { 'S','c','h','a','n','n','e','l',0 };
 #define SCH_CRED_VERSION      2
 #define SCH_CRED_V3           3
 #define SCHANNEL_CRED_VERSION 4
+#define SCH_CREDENTIALS_VERSION 5
 
 #define SCHANNEL_RENEGOTIATE 0
 #define SCHANNEL_SHUTDOWN    1
@@ -178,22 +180,6 @@ static const WCHAR SCHANNEL_NAME_W[] = { 'S','c','h','a','n','n','e','l',0 };
 #define SCH_CRED_IGNORE_NO_REVOCATION_CHECK          2048
 #define SCH_CRED_IGNORE_REVOCATION_OFFLINE           4096
 
-#define SECPKG_ATTR_ISSUER_LIST         0x50
-#define SECPKG_ATTR_REMOTE_CRED         0x51
-#define SECPKG_ATTR_LOCAL_CRED          0x52
-#define SECPKG_ATTR_REMOTE_CERT_CONTEXT 0x53
-#define SECPKG_ATTR_LOCAL_CERT_CONTEXT  0x54
-#define SECPKG_ATTR_ROOT_STORE          0x55
-#define SECPKG_ATTR_SUPPORTED_ALGS      0x56
-#define SECPKG_ATTR_CIPHER_STRENGTHS    0x57
-#define SECPKG_ATTR_SUPPORTED_PROTOCOLS 0x58
-#define SECPKG_ATTR_ISSUER_LIST_EX      0x59
-#define SECPKG_ATTR_CONNECTION_INFO     0x5a
-#define SECPKG_ATTR_EAP_KEY_BLOCK       0x5b
-#define SECPKG_ATTR_MAPPED_CRED_ATTR    0x5c
-#define SECPKG_ATTR_SESSION_INFO        0x5d
-#define SECPKG_ATTR_APP_DATA            0x5e
-
 #define UNISP_RPC_ID 14
 
 struct _HMAPPER;
@@ -215,6 +201,54 @@ typedef struct _SCHANNEL_CRED
     DWORD dwFlags;
     DWORD dwCredFormat;
 } SCHANNEL_CRED, *PSCHANNEL_CRED;
+
+#ifdef SCHANNEL_USE_BLACKLISTS
+
+typedef enum _eTlsAlgorithmUsage
+{
+    TlsParametersCngAlgUsageKeyExchange,
+    TlsParametersCngAlgUsageSignature,
+    TlsParametersCngAlgUsageCipher,
+    TlsParametersCngAlgUsageDigest,
+    TlsParametersCngAlgUsageCertSig,
+} eTlsAlgorithmUsage;
+
+typedef struct _CRYPTO_SETTINGS
+{
+    eTlsAlgorithmUsage eAlgorithmUsage;
+    UNICODE_STRING     strCngAlgId;
+    DWORD              cChainingModes;
+    PUNICODE_STRING    rgstrChainingModes;
+    DWORD              dwMinBitLength;
+    DWORD              dwMaxBitLength;
+} CRYPTO_SETTINGS, *PCRYPTO_SETTINGS;
+
+typedef struct _TLS_PARAMETERS
+{
+    DWORD            cAlpnIds;
+    PUNICODE_STRING  rgstrAlpnIds;
+    DWORD            grbitDisabledProtocols;
+    DWORD            cDisabledCrypto;
+    PCRYPTO_SETTINGS pDisabledCrypto;
+    DWORD            dwFlags;
+} TLS_PARAMETERS, *PTLS_PARAMETERS;
+
+typedef struct _SCH_CREDENTIALS
+{
+    DWORD             dwVersion;
+    DWORD             dwCredFormat;
+    DWORD             cCreds;
+    PCCERT_CONTEXT   *paCred;
+    HCERTSTORE        hRootStore;
+    DWORD             cMappers;
+    struct _HMAPPER **aphMappers;
+    DWORD             dwSessionLifespan;
+    DWORD             dwFlags;
+    DWORD             cTlsParameters;
+    PTLS_PARAMETERS   pTlsParameters;
+} SCH_CREDENTIALS, *PSCH_CREDENTIALS;
+
+#endif
 
 typedef struct _SecPkgCred_SupportedAlgs
 {
@@ -249,5 +283,27 @@ typedef struct _SecPkgContext_ConnectionInfo
     ALG_ID aiExch;
     DWORD dwExchStrength;
 } SecPkgContext_ConnectionInfo, *PSecPkgContext_ConnectionInfo;
+
+#define SECPKGCONTEXT_CIPHERINFO_V1 1
+#define SZ_ALG_MAX_SIZE 64
+
+typedef struct _SecPkgContext_CipherInfo
+{
+    DWORD dwVersion;
+    DWORD dwProtocol;
+    DWORD dwCipherSuite;
+    DWORD dwBaseCipherSuite;
+    WCHAR szCipherSuite[SZ_ALG_MAX_SIZE];
+    WCHAR szCipher[SZ_ALG_MAX_SIZE];
+    DWORD dwCipherLen;
+    DWORD dwCipherBlockLen;
+    WCHAR szHash[SZ_ALG_MAX_SIZE];
+    DWORD dwHashLen;
+    WCHAR szExchange[SZ_ALG_MAX_SIZE];
+    DWORD dwMinExchangeLen;
+    DWORD dwMaxExchangeLen;
+    WCHAR szCertificate[SZ_ALG_MAX_SIZE];
+    DWORD dwKeyType;
+} SecPkgContext_CipherInfo, *PSecPkgContext_CipherInfo;
 
 #endif /* __WINE_SCHANNEL_H__ */

@@ -76,6 +76,7 @@ struct wg_parser
 
     pthread_cond_t init_cond;
     bool no_more_pads, has_duration, error;
+    bool err_on, warn_on;
 
     pthread_cond_t read_cond, read_done_cond;
     struct
@@ -95,6 +96,7 @@ struct wg_parser
 struct wg_parser_stream
 {
     struct wg_parser *parser;
+    uint32_t number;
 
     GstPad *their_src, *post_sink, *post_src, *my_sink;
     GstElement *flip;
@@ -236,7 +238,6 @@ static NTSTATUS wg_parser_stream_enable(void *args)
             case WG_VIDEO_FORMAT_YV12:
             case WG_VIDEO_FORMAT_YVYU:
             case WG_VIDEO_FORMAT_UNKNOWN:
-            case WG_VIDEO_FORMAT_CINEPAK:
                 break;
         }
 
@@ -260,43 +261,89 @@ static NTSTATUS wg_parser_stream_disable(void *args)
     return S_OK;
 }
 
+static GstBuffer *wait_parser_stream_buffer(struct wg_parser *parser, struct wg_parser_stream *stream)
+{
+    GstBuffer *buffer = NULL;
+
+    /* Note that we can both have a buffer and stream->eos, in which case we
+     * must return the buffer. */
+
+    while (stream->enabled && !(buffer = stream->buffer) && !stream->eos)
+        pthread_cond_wait(&stream->event_cond, &parser->mutex);
+
+    return buffer;
+}
+
 static NTSTATUS wg_parser_stream_get_buffer(void *args)
 {
     const struct wg_parser_stream_get_buffer_params *params = args;
     struct wg_parser_buffer *wg_buffer = params->buffer;
     struct wg_parser_stream *stream = params->stream;
-    struct wg_parser *parser = stream->parser;
+    struct wg_parser *parser = params->parser;
     GstBuffer *buffer;
+    unsigned int i;
 
     pthread_mutex_lock(&parser->mutex);
 
-    while (!stream->eos && !stream->buffer)
-        pthread_cond_wait(&stream->event_cond, &parser->mutex);
-
-    /* Note that we can both have a buffer and stream->eos, in which case we
-     * must return the buffer. */
-    if ((buffer = stream->buffer))
+    if (stream)
+        buffer = wait_parser_stream_buffer(parser, stream);
+    else
     {
-        /* FIXME: Should we use gst_segment_to_stream_time_full()? Under what
-         * circumstances is the stream time not equal to the buffer PTS? Note
-         * that this will need modification to wg_parser_stream_notify_qos() as
-         * well. */
+        /* Find the earliest buffer by PTS.
+         *
+         * Native seems to behave similarly to this with the wm async reader, although our
+         * unit tests show that it's not entirely consistent—some frames are received
+         * slightly out of order. It's possible that one stream is being manually offset
+         * to account for decoding latency.
+         *
+         * The behaviour with the wm sync reader, when stream 0 is requested, seems
+         * consistent with this hypothesis, but with a much larger offset—the video
+         * stream seems to be "behind" by about 150 ms.
+         *
+         * The main reason for doing this is that the video and audio stream probably
+         * don't have quite the same "frame rate", and we don't want to force one stream
+         * to decode faster just to keep up with the other. Delivering samples in PTS
+         * order should avoid that problem. */
+        GstBuffer *earliest = NULL;
 
-        if ((wg_buffer->has_pts = GST_BUFFER_PTS_IS_VALID(buffer)))
-            wg_buffer->pts = GST_BUFFER_PTS(buffer) / 100;
-        if ((wg_buffer->has_duration = GST_BUFFER_DURATION_IS_VALID(buffer)))
-            wg_buffer->duration = GST_BUFFER_DURATION(buffer) / 100;
-        wg_buffer->discontinuity = GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DISCONT);
-        wg_buffer->preroll = GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_LIVE);
-        wg_buffer->delta = GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT);
-        wg_buffer->size = gst_buffer_get_size(buffer);
+        for (i = 0; i < parser->stream_count; ++i)
+        {
+            if (!(buffer = wait_parser_stream_buffer(parser, parser->streams[i])))
+                continue;
+            /* invalid PTS is GST_CLOCK_TIME_NONE == (guint64)-1, so this will prefer valid timestamps. */
+            if (!earliest || GST_BUFFER_PTS(buffer) < GST_BUFFER_PTS(earliest))
+            {
+                stream = parser->streams[i];
+                earliest = buffer;
+            }
+        }
 
-        pthread_mutex_unlock(&parser->mutex);
-        return S_OK;
+        buffer = earliest;
     }
 
+    if (!buffer)
+    {
+        pthread_mutex_unlock(&parser->mutex);
+        return S_FALSE;
+    }
+
+    /* FIXME: Should we use gst_segment_to_stream_time_full()? Under what
+     * circumstances is the stream time not equal to the buffer PTS? Note
+     * that this will need modification to wg_parser_stream_notify_qos() as
+     * well. */
+
+    if ((wg_buffer->has_pts = GST_BUFFER_PTS_IS_VALID(buffer)))
+        wg_buffer->pts = GST_BUFFER_PTS(buffer) / 100;
+    if ((wg_buffer->has_duration = GST_BUFFER_DURATION_IS_VALID(buffer)))
+        wg_buffer->duration = GST_BUFFER_DURATION(buffer) / 100;
+    wg_buffer->discontinuity = GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DISCONT);
+    wg_buffer->preroll = GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_LIVE);
+    wg_buffer->delta = GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT);
+    wg_buffer->size = gst_buffer_get_size(buffer);
+    wg_buffer->stream = stream->number;
+
     pthread_mutex_unlock(&parser->mutex);
-    return S_FALSE;
+    return S_OK;
 }
 
 static NTSTATUS wg_parser_stream_copy_buffer(void *args)
@@ -598,6 +645,7 @@ static gboolean sink_query_cb(GstPad *pad, GstObject *parent, GstQuery *query)
         {
             GstCaps *caps, *filter, *temp;
             gchar *str;
+            gsize i;
 
             gst_query_parse_caps(query, &filter);
 
@@ -607,6 +655,11 @@ static gboolean sink_query_cb(GstPad *pad, GstObject *parent, GstQuery *query)
 
             if (!caps)
                 return FALSE;
+
+            /* Clear some fields that shouldn't prevent us from connecting. */
+            for (i = 0; i < gst_caps_get_size(caps); ++i)
+                gst_structure_remove_fields(gst_caps_get_structure(caps, i),
+                        "framerate", "pixel-aspect-ratio", "colorimetry", "chroma-site", NULL);
 
             str = gst_caps_to_string(caps);
             GST_LOG("Stream caps are \"%s\".", str);
@@ -685,6 +738,7 @@ static struct wg_parser_stream *create_stream(struct wg_parser *parser)
     gst_segment_init(&stream->segment, GST_FORMAT_UNDEFINED);
 
     stream->parser = parser;
+    stream->number = parser->stream_count;
     stream->current_format.major_type = WG_MAJOR_TYPE_UNKNOWN;
     pthread_cond_init(&stream->event_cond, NULL);
     pthread_cond_init(&stream->event_empty_cond, NULL);
@@ -1065,8 +1119,11 @@ static GstBusSyncReply bus_handler_cb(GstBus *bus, GstMessage *msg, gpointer use
     {
     case GST_MESSAGE_ERROR:
         gst_message_parse_error(msg, &err, &dbg_info);
-        fprintf(stderr, "winegstreamer error: %s: %s\n", GST_OBJECT_NAME(msg->src), err->message);
-        fprintf(stderr, "winegstreamer error: %s: %s\n", GST_OBJECT_NAME(msg->src), dbg_info);
+        if (parser->err_on)
+        {
+            fprintf(stderr, "winegstreamer error: %s: %s\n", GST_OBJECT_NAME(msg->src), err->message);
+            fprintf(stderr, "winegstreamer error: %s: %s\n", GST_OBJECT_NAME(msg->src), dbg_info);
+        }
         g_error_free(err);
         g_free(dbg_info);
         pthread_mutex_lock(&parser->mutex);
@@ -1077,8 +1134,11 @@ static GstBusSyncReply bus_handler_cb(GstBus *bus, GstMessage *msg, gpointer use
 
     case GST_MESSAGE_WARNING:
         gst_message_parse_warning(msg, &err, &dbg_info);
-        fprintf(stderr, "winegstreamer warning: %s: %s\n", GST_OBJECT_NAME(msg->src), err->message);
-        fprintf(stderr, "winegstreamer warning: %s: %s\n", GST_OBJECT_NAME(msg->src), dbg_info);
+        if (parser->warn_on)
+        {
+            fprintf(stderr, "winegstreamer warning: %s: %s\n", GST_OBJECT_NAME(msg->src), err->message);
+            fprintf(stderr, "winegstreamer warning: %s: %s\n", GST_OBJECT_NAME(msg->src), dbg_info);
+        }
         g_error_free(err);
         g_free(dbg_info);
         break;
@@ -1565,7 +1625,8 @@ static NTSTATUS wg_parser_create(void *args)
     pthread_cond_init(&parser->read_done_cond, NULL);
     parser->init_gst = init_funcs[params->type];
     parser->unlimited_buffering = params->unlimited_buffering;
-
+    parser->err_on = params->err_on;
+    parser->warn_on = params->warn_on;
     GST_DEBUG("Created winegstreamer parser %p.", parser);
     params->parser = parser;
     return S_OK;
@@ -1619,6 +1680,7 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
 
     X(wg_transform_create),
     X(wg_transform_destroy),
+    X(wg_transform_set_output_format),
 
     X(wg_transform_push_data),
     X(wg_transform_read_data),

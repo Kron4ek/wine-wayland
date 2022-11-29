@@ -193,7 +193,8 @@ static BOOL WCMD_ask_confirm (const WCHAR *message, BOOL showSureText,
       if (showSureText)
         WCMD_output_asis (confirm);
       WCMD_output_asis (options);
-      WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), answer, ARRAY_SIZE(answer), &count);
+      if (!WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), answer, ARRAY_SIZE(answer), &count))
+          return FALSE;
       answer[0] = towupper(answer[0]);
       if (answer[0] == Ybuffer[0])
         return TRUE;
@@ -383,7 +384,12 @@ void WCMD_choice (const WCHAR * args) {
 
         /* FIXME: Add support for option /T */
         answer[1] = 0; /* terminate single character string */
-        WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), answer, 1, &count);
+        if (!WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), answer, 1, &count))
+        {
+            heap_free(my_command);
+            errorlevel = 0;
+            return;
+        }
 
         if (!opt_s)
             answer[0] = towupper(answer[0]);
@@ -1349,6 +1355,13 @@ static BOOL WCMD_delete_one (const WCHAR *thisArg) {
             DIRECTORY_STACK *nextDir;
             WCHAR subParm[MAX_PATH];
 
+            if (wcslen(thisDir) + wcslen(fd.cFileName) + 1 + wcslen(fname) + wcslen(ext) >= MAX_PATH)
+            {
+                WINE_TRACE("Skipping path too long %s%s\\%s%s\n",
+                           debugstr_w(thisDir), debugstr_w(fd.cFileName),
+                           debugstr_w(fname), debugstr_w(ext));
+                continue;
+            }
             /* Work out search parameter in sub dir */
             lstrcpyW (subParm, thisDir);
             lstrcatW (subParm, fd.cFileName);
@@ -1755,7 +1768,14 @@ static void WCMD_add_dirstowalk(DIRECTORY_STACK *dirsToWalk) {
           (lstrcmpW(fd.cFileName, L"..") != 0) && (lstrcmpW(fd.cFileName, L".") != 0))
       {
         /* Allocate memory, add to list */
-        DIRECTORY_STACK *toWalk = heap_xalloc(sizeof(DIRECTORY_STACK));
+        DIRECTORY_STACK *toWalk;
+        if (wcslen(dirsToWalk->dirName) + 1 + wcslen(fd.cFileName) >= MAX_PATH)
+        {
+            WINE_TRACE("Skipping too long path %s\\%s\n",
+                       debugstr_w(dirsToWalk->dirName), debugstr_w(fd.cFileName));
+            continue;
+        }
+        toWalk = heap_xalloc(sizeof(DIRECTORY_STACK));
         WINE_TRACE("(%p->%p)\n", remainingDirs, remainingDirs->next);
         toWalk->next = remainingDirs->next;
         remainingDirs->next = toWalk;
@@ -2028,9 +2048,9 @@ static void WCMD_parse_line(CMD_LIST    *cmdStart,
 }
 
 /**************************************************************************
- * WCMD_forf_getinputhandle
+ * WCMD_forf_getinput
  *
- * Return a file handle which can be used for reading the input lines,
+ * Return a FILE* which can be used for reading the input lines,
  * either to a specific file (which may be quote delimited as we have to
  * read the parameters in raw mode) or to a command which we need to
  * execute. The command being executed runs in its own shell and stores
@@ -2044,12 +2064,12 @@ static void WCMD_parse_line(CMD_LIST    *cmdStart,
  *
  * Returns a file handle which can be used to read the input lines from.
  */
-static HANDLE WCMD_forf_getinputhandle(BOOL usebackq, WCHAR *itemstr, BOOL iscmd) {
+static FILE* WCMD_forf_getinput(BOOL usebackq, WCHAR *itemstr, BOOL iscmd) {
   WCHAR  temp_str[MAX_PATH];
   WCHAR  temp_file[MAX_PATH];
   WCHAR  temp_cmd[MAXSTRING];
   WCHAR *trimmed = NULL;
-  HANDLE hinput = INVALID_HANDLE_VALUE;
+  FILE*  ret;
 
   /* Remove leading and trailing character (but there may be trailing whitespace too) */
   if ((iscmd && (itemstr[0] == '`' && usebackq)) ||
@@ -2077,17 +2097,14 @@ static HANDLE WCMD_forf_getinputhandle(BOOL usebackq, WCHAR *itemstr, BOOL iscmd
     WCMD_execute (temp_cmd, temp_str, NULL, FALSE);
 
     /* Open the file, read line by line and process */
-    hinput = CreateFileW(temp_file, GENERIC_READ, FILE_SHARE_READ,
-                        NULL, OPEN_EXISTING, FILE_FLAG_DELETE_ON_CLOSE, NULL);
-
+    ret = _wfopen(temp_file, L"rt,ccs=unicode");
   } else {
     /* Open the file, read line by line and process */
     WINE_TRACE("Reading input to parse from '%s'\n", wine_dbgstr_w(itemstr));
-    hinput = CreateFileW(itemstr, GENERIC_READ, FILE_SHARE_READ,
-                        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    ret = _wfopen(itemstr, L"rt,ccs=unicode");
   }
   heap_free(trimmed);
-  return hinput;
+  return ret;
 }
 
 /**************************************************************************
@@ -2315,6 +2332,12 @@ void WCMD_for (WCHAR *p, CMD_LIST **cmdList) {
                       WINE_TRACE("Processing FOR filename %s\n", wine_dbgstr_w(fd.cFileName));
 
                       if (doRecurse) {
+                          if (wcslen(dirsToWalk->dirName) + 1 + wcslen(fd.cFileName) >= MAX_PATH)
+                          {
+                              WINE_TRACE("Skipping too long path %s\\%s\n",
+                                         debugstr_w(dirsToWalk->dirName), debugstr_w(fd.cFileName));
+                              continue;
+                          }
                           lstrcpyW(fullitem, dirsToWalk->dirName);
                           lstrcatW(fullitem, L"\\");
                           lstrcatW(fullitem, fd.cFileName);
@@ -2363,7 +2386,7 @@ void WCMD_for (WCHAR *p, CMD_LIST **cmdList) {
         } else if (doFileset && ((!forf_usebackq && *itemStart != '"') ||
                                  (forf_usebackq && *itemStart != '\''))) {
 
-            HANDLE input;
+            FILE *input;
             WCHAR *itemparm;
 
             WINE_TRACE("Processing for filespec from item %d '%s'\n", itemNum,
@@ -2381,10 +2404,10 @@ void WCMD_for (WCHAR *p, CMD_LIST **cmdList) {
               /* Use item because the file to process is just the first item in the set */
               itemparm = item;
             }
-            input = WCMD_forf_getinputhandle(forf_usebackq, itemparm, (itemparm==itemStart));
+            input = WCMD_forf_getinput(forf_usebackq, itemparm, (itemparm==itemStart));
 
             /* Process the input file */
-            if (input == INVALID_HANDLE_VALUE) {
+            if (!input) {
               WCMD_print_error ();
               WCMD_output_stderr(WCMD_LoadMessage(WCMD_READFAIL), item);
               errorlevel = 1;
@@ -2393,12 +2416,20 @@ void WCMD_for (WCHAR *p, CMD_LIST **cmdList) {
             } else {
 
               /* Read line by line until end of file */
-              while (WCMD_fgets(buffer, ARRAY_SIZE(buffer), input)) {
+              while (fgetws(buffer, ARRAY_SIZE(buffer), input)) {
+                size_t len = wcslen(buffer);
+                /* Either our buffer isn't large enough to fit a full line, or there's a stray
+                 * '\0' in the buffer.
+                 */
+                if (!feof(input) && (len == 0 || (buffer[len - 1] != '\n' && buffer[len - 1] != '\r')))
+                    break;
+                while (len && (buffer[len - 1] == '\n' || buffer[len - 1] == '\r'))
+                    buffer[--len] = L'\0';
                 WCMD_parse_line(cmdStart, firstCmd, &cmdEnd, variable[1], buffer, &doExecuted,
                                 &forf_skip, forf_eol, forf_delims, forf_tokens);
                 buffer[0] = 0;
               }
-              CloseHandle (input);
+              fclose (input);
             }
 
             /* When we have processed the item as a whole command, abort future set processing */
@@ -3506,8 +3537,8 @@ void WCMD_setshow_date (void) {
       WCMD_output (WCMD_LoadMessage(WCMD_CURRENTDATE), curdate);
       if (wcsstr(quals, L"/T") == NULL) {
         WCMD_output (WCMD_LoadMessage(WCMD_NEWDATE));
-        WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), buffer, ARRAY_SIZE(buffer), &count);
-        if (count > 2) {
+        if (WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), buffer, ARRAY_SIZE(buffer), &count) &&
+            count > 2) {
           WCMD_output_stderr (WCMD_LoadMessage(WCMD_NYI));
         }
       }
@@ -4142,8 +4173,7 @@ void WCMD_setshow_env (WCHAR *s) {
     if (*p) WCMD_output_asis(p);
 
     /* Read the reply */
-    WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), string, ARRAY_SIZE(string), &count);
-    if (count > 1) {
+    if (WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), string, ARRAY_SIZE(string), &count) && count > 1) {
       string[count-1] = '\0'; /* ReadFile output is not null-terminated! */
       if (string[count-2] == '\r') string[count-2] = '\0'; /* Under Windoze we get CRLF! */
       WINE_TRACE("set /p: Setting var '%s' to '%s'\n", wine_dbgstr_w(s),
@@ -4295,8 +4325,8 @@ void WCMD_setshow_time (void) {
       WCMD_output (WCMD_LoadMessage(WCMD_CURRENTTIME), curtime);
       if (wcsstr(quals, L"/T") == NULL) {
         WCMD_output (WCMD_LoadMessage(WCMD_NEWTIME));
-        WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), buffer, ARRAY_SIZE(buffer), &count);
-        if (count > 2) {
+        if (WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), buffer, ARRAY_SIZE(buffer), &count) &&
+            count > 2) {
           WCMD_output_stderr (WCMD_LoadMessage(WCMD_NYI));
         }
       }
@@ -4717,8 +4747,8 @@ int WCMD_volume(BOOL set_label, const WCHAR *path)
     	HIWORD(serial), LOWORD(serial));
   if (set_label) {
     WCMD_output (WCMD_LoadMessage(WCMD_VOLUMEPROMPT));
-    WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), string, ARRAY_SIZE(string), &count);
-    if (count > 1) {
+    if (WCMD_ReadFile(GetStdHandle(STD_INPUT_HANDLE), string, ARRAY_SIZE(string), &count) &&
+        count > 1) {
       string[count-1] = '\0';		/* ReadFile output is not null-terminated! */
       if (string[count-2] == '\r') string[count-2] = '\0'; /* Under Windoze we get CRLF! */
     }

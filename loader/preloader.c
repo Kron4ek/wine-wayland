@@ -542,6 +542,7 @@ void *thread_data[256];
 void _start(void);
 extern char _end[];
 __ASM_GLOBAL_FUNC(_start,
+                  __ASM_EHABI(".cantunwind\n\t")
                   "mov r0, sp\n\t"
                   "sub sp, sp, #144\n\t" /* allocate some space for extra aux values */
                   "str r0, [sp]\n\t"     /* orig stack pointer */
@@ -564,6 +565,7 @@ __ASM_GLOBAL_FUNC(_start,
 
 #define SYSCALL_FUNC( name, nr ) \
     __ASM_GLOBAL_FUNC( name, \
+                       __ASM_EHABI(".cantunwind\n\t") \
                        "push {r4-r5,r7,lr}\n\t" \
                        "ldr r4, [sp, #16]\n\t" \
                        "ldr r5, [sp, #20]\n\t" \
@@ -576,6 +578,7 @@ __ASM_GLOBAL_FUNC(_start,
 
 #define SYSCALL_NOERR( name, nr ) \
     __ASM_GLOBAL_FUNC( name, \
+                       __ASM_EHABI(".cantunwind\n\t") \
                        "push {r7,lr}\n\t" \
                        "mov r7, #" #nr "\n\t" \
                        "svc #0\n\t" \
@@ -868,7 +871,7 @@ static void set_auxiliary_values( struct wld_auxv *av, const struct wld_auxv *ne
  *
  * Get a field of the auxiliary structure
  */
-static int get_auxiliary( struct wld_auxv *av, int type, int def_val )
+static ElfW(Addr) get_auxiliary( struct wld_auxv *av, int type, ElfW(Addr) def_val )
 {
   for ( ; av->a_type != AT_NULL; av++)
       if( av->a_type == type ) return av->a_un.a_val;

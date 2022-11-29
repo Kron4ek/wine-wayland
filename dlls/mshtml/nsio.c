@@ -115,7 +115,7 @@ IUri *get_uri_nofrag(IUri *uri)
     return ret;
 }
 
-static BOOL compare_ignoring_frag(IUri *uri1, IUri *uri2)
+BOOL compare_uri_ignoring_frag(IUri *uri1, IUri *uri2)
 {
     IUri *uri_nofrag1, *uri_nofrag2;
     BOOL ret = FALSE;
@@ -167,6 +167,11 @@ static nsresult return_wstr_nsacstr(nsACString *ret_str, const WCHAR *str, int l
     int lena;
 
     TRACE("returning %s\n", debugstr_wn(str, len));
+
+    if(!str) {
+        nsACString_SetData(ret_str, NULL);
+        return NS_OK;
+    }
 
     if(!*str) {
         nsACString_SetData(ret_str, "");
@@ -268,7 +273,7 @@ static nsresult before_async_open(nsChannel *channel, GeckoBrowser *container, B
         return NS_OK;
     }
 
-    hres = hlink_frame_navigate(&doc->basedoc, display_uri, channel, 0, cancel);
+    hres = hlink_frame_navigate(doc, display_uri, channel, 0, cancel);
     SysFreeString(display_uri);
     if(FAILED(hres))
         *cancel = TRUE;
@@ -599,9 +604,9 @@ static nsresult NSAPI nsChannel_GetStatus(nsIHttpChannel *iface, nsresult *aStat
 {
     nsChannel *This = impl_from_nsIHttpChannel(iface);
 
-    WARN("(%p)->(%p) returning NS_OK\n", This, aStatus);
+    TRACE("(%p)->(%p) returning %#lx\n", This, aStatus, This->status);
 
-    return *aStatus = NS_OK;
+    return *aStatus = This->status;
 }
 
 static nsresult NSAPI nsChannel_Cancel(nsIHttpChannel *iface, nsresult aStatus)
@@ -609,6 +614,9 @@ static nsresult NSAPI nsChannel_Cancel(nsIHttpChannel *iface, nsresult aStatus)
     nsChannel *This = impl_from_nsIHttpChannel(iface);
 
     TRACE("(%p)->(%08lx)\n", This, aStatus);
+
+    if(NS_FAILED(aStatus))
+        This->status = aStatus;
 
     if(This->binding && This->binding->bsc.binding)
         IBinding_Abort(This->binding->bsc.binding);
@@ -1252,10 +1260,10 @@ static nsresult NSAPI nsChannel_SetReferrerWithPolicy(nsIHttpChannel *iface, nsI
         return NS_ERROR_UNEXPECTED;
     }
 
-    if(!ensure_uri(This->uri) || FAILED(IUri_GetScheme(This->uri->uri, &channel_scheme)))
+    if(!ensure_uri(This->uri) || IUri_GetScheme(This->uri->uri, &channel_scheme) != S_OK)
         channel_scheme = INTERNET_SCHEME_UNKNOWN;
 
-    if(FAILED(IUri_GetScheme(referrer->uri, &referrer_scheme)))
+    if(IUri_GetScheme(referrer->uri, &referrer_scheme) != S_OK)
         referrer_scheme = INTERNET_SCHEME_UNKNOWN;
 
     if(referrer_scheme == INTERNET_SCHEME_HTTPS && channel_scheme != INTERNET_SCHEME_HTTPS) {
@@ -2288,9 +2296,9 @@ static nsresult get_uri_string(nsWineURI *This, Uri_PROPERTY prop, nsACString *r
         return NS_ERROR_UNEXPECTED;
     }
 
-    vala = heap_strdupWtoU(val);
+    vala = heap_strdupWtoU(hres == S_OK ? val : NULL);
     SysFreeString(val);
-    if(!vala)
+    if(hres == S_OK && !vala)
         return NS_ERROR_OUT_OF_MEMORY;
 
     TRACE("ret %s\n", debugstr_a(vala));
@@ -2649,7 +2657,7 @@ static nsresult NSAPI nsURI_SetPassword(nsIFileURL *iface, const nsACString *aPa
 static nsresult NSAPI nsURI_GetHostPort(nsIFileURL *iface, nsACString *aHostPort)
 {
     nsWineURI *This = impl_from_nsIFileURL(iface);
-    const WCHAR *ptr;
+    const WCHAR *ptr = NULL;
     char *vala;
     BSTR val;
     HRESULT hres;
@@ -2665,13 +2673,14 @@ static nsresult NSAPI nsURI_GetHostPort(nsIFileURL *iface, nsACString *aHostPort
         return NS_ERROR_UNEXPECTED;
     }
 
-    ptr = wcschr(val, '@');
-    if(!ptr)
-        ptr = val;
-
+    if(hres == S_OK) {
+        ptr = wcschr(val, '@');
+        if(!ptr)
+            ptr = val;
+    }
     vala = heap_strdupWtoU(ptr);
     SysFreeString(val);
-    if(!vala)
+    if(hres == S_OK && !vala)
         return NS_ERROR_OUT_OF_MEMORY;
 
     TRACE("ret %s\n", debugstr_a(vala));
@@ -2843,8 +2852,12 @@ static nsresult NSAPI nsURI_SchemeIs(nsIFileURL *iface, const char *scheme, cpp_
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
-    MultiByteToWideChar(CP_UTF8, 0, scheme, -1, buf, ARRAY_SIZE(buf));
-    *_retval = !wcscmp(scheme_name, buf);
+    if(hres != S_OK)
+        *_retval = FALSE;
+    else {
+        MultiByteToWideChar(CP_UTF8, 0, scheme, -1, buf, ARRAY_SIZE(buf));
+        *_retval = !wcscmp(scheme_name, buf);
+    }
     SysFreeString(scheme_name);
     return NS_OK;
 }
@@ -3016,7 +3029,7 @@ static nsresult NSAPI nsURI_EqualsExceptRef(nsIFileURL *iface, nsIURI *other, cp
     }
 
     if(ensure_uri(This) && ensure_uri(other_obj)) {
-        *_retval = compare_ignoring_frag(This->uri, other_obj->uri);
+        *_retval = compare_uri_ignoring_frag(This->uri, other_obj->uri);
         nsres = NS_OK;
     }else {
         nsres = NS_ERROR_UNEXPECTED;
@@ -3164,6 +3177,11 @@ static nsresult get_uri_path(nsWineURI *This, BSTR *path, const WCHAR **file, co
     hres = IUri_GetPath(This->uri, path);
     if(FAILED(hres))
         return NS_ERROR_FAILURE;
+    if(hres != S_OK) {
+        SysFreeString(*path);
+        *ext = *file = *path = NULL;
+        return NS_OK;
+    }
 
     for(ptr = *path + SysStringLen(*path)-1; ptr > *path && *ptr != '/' && *ptr != '\\'; ptr--);
     if(*ptr == '/' || *ptr == '\\')
@@ -3455,7 +3473,7 @@ static nsresult create_nsuri(IUri *iuri, nsWineURI **_retval)
     ret->uri = iuri;
 
     hres = IUri_GetScheme(iuri, &ret->scheme);
-    if(FAILED(hres))
+    if(hres != S_OK)
         ret->scheme = URL_SCHEME_UNKNOWN;
 
     TRACE("retval=%p\n", ret);

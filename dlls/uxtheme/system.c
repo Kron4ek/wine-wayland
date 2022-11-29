@@ -127,7 +127,6 @@ static DWORD query_reg_path (HKEY hKey, LPCWSTR lpszValue,
     }
   }
 
-  RegCloseKey(hKey);
   return dwRet;
 }
 
@@ -664,7 +663,7 @@ HTHEME WINAPI OpenThemeDataEx(HWND hwnd, LPCWSTR pszClassList, DWORD flags)
 
     dpi = GetDpiForWindow(hwnd);
     if (!dpi)
-        dpi = 96;
+        dpi = GetDpiForSystem();
 
     return open_theme_data(hwnd, pszClassList, flags, dpi);
 }
@@ -1246,6 +1245,7 @@ BOOL WINAPI ThemeHooksInstall(void)
     struct user_api_hook hooks;
 
     hooks.pDefDlgProc = UXTHEME_DefDlgProc;
+    hooks.pNonClientButtonDraw = UXTHEME_NonClientButtonDraw;
     hooks.pScrollBarDraw = UXTHEME_ScrollBarDraw;
     hooks.pScrollBarWndProc = UXTHEME_ScrollbarWndProc;
     return RegisterUserApiHook(&hooks, &user_api);

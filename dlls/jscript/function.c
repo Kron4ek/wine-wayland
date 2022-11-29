@@ -57,7 +57,7 @@ typedef struct {
 typedef struct {
     FunctionInstance function;
     FunctionInstance *target;
-    IDispatch *this;
+    jsval_t this;
     unsigned argc;
     jsval_t args[1];
 } BindFunction;
@@ -70,7 +70,7 @@ typedef struct {
     unsigned argc;
 } ArgumentsInstance;
 
-static HRESULT create_bind_function(script_ctx_t*,FunctionInstance*,IDispatch*,unsigned,jsval_t*,jsdisp_t**r);
+static HRESULT create_bind_function(script_ctx_t*,FunctionInstance*,jsval_t,unsigned,jsval_t*,jsdisp_t**r);
 
 static inline FunctionInstance *function_from_jsdisp(jsdisp_t *jsdisp)
 {
@@ -250,13 +250,23 @@ void detach_arguments_object(jsdisp_t *args_disp)
 HRESULT Function_invoke(jsdisp_t *func_this, IDispatch *jsthis, WORD flags, unsigned argc, jsval_t *argv, jsval_t *r)
 {
     FunctionInstance *function;
+    jsval_t vthis;
 
     TRACE("func %p this %p\n", func_this, jsthis);
 
     assert(is_class(func_this, JSCLASS_FUNCTION));
     function = function_from_jsdisp(func_this);
 
-    return function->vtbl->call(function->dispex.ctx, function, jsthis ? jsval_disp(jsthis) : jsval_null(), flags, argc, argv, r);
+    if(function->dispex.ctx->state == SCRIPTSTATE_UNINITIALIZED || function->dispex.ctx->state == SCRIPTSTATE_CLOSED) {
+        WARN("Script engine state does not allow running code.\n");
+        return E_UNEXPECTED;
+    }
+
+    if(jsthis)
+        vthis = jsval_disp(jsthis);
+    else
+        vthis = function->dispex.ctx->version < SCRIPTLANGUAGEVERSION_ES5 ? jsval_null() : jsval_undefined();
+    return function->vtbl->call(function->dispex.ctx, function, vthis, flags, argc, argv, r);
 }
 
 static HRESULT Function_get_length(script_ctx_t *ctx, jsdisp_t *jsthis, jsval_t *r)
@@ -438,7 +448,7 @@ static HRESULT Function_call(script_ctx_t *ctx, jsval_t vthis, WORD flags, unsig
 static HRESULT Function_bind(script_ctx_t *ctx, jsval_t vthis, WORD flags, unsigned argc, jsval_t *argv,
         jsval_t *r)
 {
-    IDispatch *bound_this = NULL;
+    jsval_t bound_this = jsval_undefined();
     FunctionInstance *function;
     jsdisp_t *new_function;
     HRESULT hres;
@@ -449,18 +459,19 @@ static HRESULT Function_bind(script_ctx_t *ctx, jsval_t vthis, WORD flags, unsig
         return JS_E_FUNCTION_EXPECTED;
 
     if(argc < 1) {
-        FIXME("no this argument\n");
-        return E_NOTIMPL;
-    }
-
-    if(is_object_instance(argv[0])) {
-        bound_this = get_object(argv[0]);
-    }else if(!is_null(argv[0])) {
-        FIXME("%s is not an object instance\n", debugstr_jsval(argv[0]));
-        return E_NOTIMPL;
+        argc = 1;
+    }else if(is_null(argv[0])) {
+        bound_this = argv[0];
+    }else if(!is_undefined(argv[0])) {
+        IDispatch *obj;
+        hres = to_object(ctx, argv[0], &obj);
+        if(FAILED(hres))
+            return hres;
+        bound_this = jsval_disp(obj);
     }
 
     hres = create_bind_function(ctx, function, bound_this, argc - 1, argv + 1, &new_function);
+    jsval_release(bound_this);
     if(FAILED(hres))
         return hres;
 
@@ -609,6 +620,8 @@ static HRESULT NativeFunction_call(script_ctx_t *ctx, FunctionInstance *func, js
 {
     NativeFunction *function = (NativeFunction*)func;
 
+    if((flags & DISPATCH_CONSTRUCT) && !(function->function.flags & PROPF_CONSTR))
+        return JS_E_INVALID_ACTION;
     return function->proc(ctx, vthis, flags & ~DISPATCH_JSCRIPT_INTERNAL_MASK, argc, argv, r);
 }
 
@@ -658,6 +671,9 @@ HRESULT create_builtin_function(script_ctx_t *ctx, builtin_invoke_t value_proc, 
 {
     NativeFunction *function;
     HRESULT hres;
+
+    if(!ctx->function_constr)
+        return E_UNEXPECTED;
 
     hres = create_function(ctx, builtin_info, &NativeFunctionVtbl, sizeof(NativeFunction), flags, FALSE, NULL, (void**)&function);
     if(FAILED(hres))
@@ -716,11 +732,6 @@ static HRESULT InterpretedFunction_call(script_ctx_t *ctx, FunctionInstance *fun
     HRESULT hres;
 
     TRACE("%p\n", function);
-
-    if(ctx->state == SCRIPTSTATE_UNINITIALIZED || ctx->state == SCRIPTSTATE_CLOSED) {
-        WARN("Script engine state does not allow running code.\n");
-        return E_UNEXPECTED;
-    }
 
     if(flags & DISPATCH_CONSTRUCT) {
         hres = create_object(ctx, &function->function.dispex, &new_obj);
@@ -839,8 +850,7 @@ static HRESULT BindFunction_call(script_ctx_t *ctx, FunctionInstance *func, jsva
             memcpy(call_args + function->argc, argv, argc * sizeof(*call_args));
     }
 
-    hres = function->target->vtbl->call(ctx, function->target, function->this ? jsval_disp(function->this) : jsval_null(),
-                                        flags, call_argc, call_args, r);
+    hres = function->target->vtbl->call(ctx, function->target, function->this, flags, call_argc, call_args, r);
 
     heap_free(call_args);
     return hres;
@@ -867,8 +877,7 @@ static void BindFunction_destructor(FunctionInstance *func)
     for(i = 0; i < function->argc; i++)
         jsval_release(function->args[i]);
     jsdisp_release(&function->target->dispex);
-    if(function->this)
-        IDispatch_Release(function->this);
+    jsval_release(function->this);
 }
 
 static const function_vtbl_t BindFunctionVtbl = {
@@ -878,7 +887,7 @@ static const function_vtbl_t BindFunctionVtbl = {
     BindFunction_destructor
 };
 
-static HRESULT create_bind_function(script_ctx_t *ctx, FunctionInstance *target, IDispatch *bound_this, unsigned argc,
+static HRESULT create_bind_function(script_ctx_t *ctx, FunctionInstance *target, jsval_t bound_this, unsigned argc,
                                     jsval_t *argv, jsdisp_t **ret)
 {
     BindFunction *function;
@@ -892,8 +901,11 @@ static HRESULT create_bind_function(script_ctx_t *ctx, FunctionInstance *target,
     jsdisp_addref(&target->dispex);
     function->target = target;
 
-    if(bound_this)
-        IDispatch_AddRef(function->this = bound_this);
+    hres = jsval_copy(bound_this, &function->this);
+    if(FAILED(hres)) {
+        jsdisp_release(&function->function.dispex);
+        return hres;
+    }
 
     for(function->argc = 0; function->argc < argc; function->argc++) {
         hres = jsval_copy(argv[function->argc], function->args + function->argc);

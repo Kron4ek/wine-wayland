@@ -57,6 +57,18 @@ static void test_BCryptGenRandom(void)
     ret = BCryptGenRandom(NULL, buffer, 8, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     ok(ret == STATUS_SUCCESS, "Expected success, got %#lx\n", ret);
     ok(memcmp(buffer, buffer + 8, 8), "Expected a random number, got 0\n");
+
+    /* Test pseudo handle, which was introduced at the same time as BCryptHash */
+    if (pBCryptHash)
+    {
+        ret = BCryptGenRandom(BCRYPT_RNG_ALG_HANDLE, buffer, sizeof(buffer), 0);
+        ok(ret == STATUS_SUCCESS, "Expected success, got %#lx\n", ret);
+
+        ret = BCryptCloseAlgorithmProvider(BCRYPT_RNG_ALG_HANDLE, 0);
+        ok(ret == STATUS_INVALID_HANDLE, "got %#lx\n", ret);
+    }
+    else win_skip("BCryptGenRandom pseudo handles are not available\n");
+
 }
 
 static void test_BCryptGetFipsAlgorithmMode(void)
@@ -315,6 +327,29 @@ static void test_hash(const struct hash_test *test)
 
     ret = BCryptCloseAlgorithmProvider(alg, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+    if (pBCryptHash)
+    {
+        ret = pBCryptHash(BCRYPT_SHA1_ALG_HANDLE, NULL, 0, NULL, 0, hash_buf, 20);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+        ret = pBCryptHash(BCRYPT_SHA1_ALG_HANDLE, NULL, 0, (UCHAR *)"test", sizeof("test"), NULL, 20);
+        ok(ret == STATUS_INVALID_PARAMETER, "got %#lx\n", ret);
+        ret = pBCryptHash(BCRYPT_SHA1_ALG_HANDLE, NULL, 0, (UCHAR *)"test", sizeof("test"), hash_buf, 21);
+        ok(ret == STATUS_INVALID_PARAMETER, "got %#lx\n", ret);
+        ret = pBCryptHash(BCRYPT_SHA1_ALG_HANDLE, NULL, 0, (UCHAR *)"test", sizeof("test"), hash_buf, 20);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+        ret = BCryptCreateHash(BCRYPT_SHA1_ALG_HANDLE, &hash, NULL, 0, NULL, 0, 0);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+        ret = BCryptHashData(hash, (UCHAR *)"test", sizeof("test"), 0);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+        ret = BCryptFinishHash(hash, hash_buf, 21, 0);
+        ok(ret == STATUS_INVALID_PARAMETER, "got %#lx\n", ret);
+        ret = BCryptFinishHash(hash, hash_buf, 20, 0);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+        ret = BCryptDestroyHash(hash);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    }
 }
 
 static void test_hashes(void)
@@ -425,6 +460,15 @@ static void test_BcryptHash(void)
 
     ret = BCryptCloseAlgorithmProvider(alg, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+    if (pBCryptHash)
+    {
+        memset(md5, 0, sizeof(md5));
+        ret = pBCryptHash(BCRYPT_MD5_ALG_HANDLE, NULL, 0, (UCHAR *)"test", sizeof("test"), md5, sizeof(md5));
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+        format_hash( md5, sizeof(md5), str );
+        ok(!strcmp(str, expected), "got %s\n", str);
+    }
 }
 
 /* test vectors from RFC 6070 */
@@ -494,6 +538,13 @@ static void test_BcryptDeriveKeyPBKDF2(void)
 
     ret = BCryptCloseAlgorithmProvider(alg, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+    if (pBCryptHash)
+    {
+        ret = BCryptDeriveKeyPBKDF2(BCRYPT_HMAC_SHA1_ALG_HANDLE, rfc6070[0].pwd, rfc6070[0].pwd_len, rfc6070[0].salt,
+                                    rfc6070[0].salt_len, 1, buf, rfc6070[0].dk_len, 0);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    }
 }
 
 static void test_rng(void)
@@ -578,8 +629,7 @@ static void test_aes(void)
     ok(key_lengths.dwMaxLength == 256, "Expected 256, got %lu\n", key_lengths.dwMaxLength);
     ok(key_lengths.dwIncrement == 64, "Expected 64, got %lu\n", key_lengths.dwIncrement);
 
-    memcpy(mode, BCRYPT_CHAIN_MODE_GCM, sizeof(BCRYPT_CHAIN_MODE_GCM));
-    ret = BCryptSetProperty(alg, BCRYPT_CHAINING_MODE, mode, 0, 0);
+    ret = BCryptSetProperty(alg, BCRYPT_CHAINING_MODE, (UCHAR *)BCRYPT_CHAIN_MODE_GCM, 0, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
     size = 0;
@@ -589,10 +639,33 @@ static void test_aes(void)
     ok(!lstrcmpW((const WCHAR *)mode, BCRYPT_CHAIN_MODE_GCM), "got %s\n", wine_dbgstr_w((const WCHAR *)mode));
     ok(size == 64, "got %lu\n", size);
 
+    ret = BCryptSetProperty(alg, BCRYPT_CHAINING_MODE, (UCHAR *)BCRYPT_CHAIN_MODE_CFB, 0, 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+    size = 0;
+    memset(mode, 0, sizeof(mode));
+    ret = BCryptGetProperty(alg, BCRYPT_CHAINING_MODE, mode, sizeof(mode), &size, 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(!lstrcmpW((const WCHAR *)mode, BCRYPT_CHAIN_MODE_CFB), "got %s\n", wine_dbgstr_w((const WCHAR *)mode));
+    ok(size == 64, "got %lu\n", size);
+
     test_alg_name(alg, L"AES");
 
     ret = BCryptCloseAlgorithmProvider(alg, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+    if (pBCryptHash)
+    {
+        ret = BCryptSetProperty(BCRYPT_AES_CBC_ALG_HANDLE, BCRYPT_CHAINING_MODE, (UCHAR *)BCRYPT_CHAIN_MODE_GCM, 0, 0);
+        ok(ret == STATUS_ACCESS_DENIED, "got %#lx\n", ret);
+
+        size = 0;
+        memset(mode, 0, sizeof(mode));
+        ret = BCryptGetProperty(BCRYPT_AES_CBC_ALG_HANDLE, BCRYPT_CHAINING_MODE, mode, sizeof(mode), &size, 0);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+        ok(!lstrcmpW((const WCHAR *)mode, BCRYPT_CHAIN_MODE_CBC), "got %s\n", wine_dbgstr_w((const WCHAR *)mode));
+        ok(size == 64, "got %lu\n", size);
+    }
 }
 
 static void test_3des(void)
@@ -670,7 +743,7 @@ static void test_BCryptGenerateSymmetricKey(void)
     BCRYPT_KEY_HANDLE key, key2;
     UCHAR *buf, ciphertext[16], plaintext[16], ivbuf[16], mode[64];
     BCRYPT_KEY_LENGTHS_STRUCT key_lengths;
-    ULONG size, len, i;
+    ULONG size, len, len2, i;
     NTSTATUS ret;
     DWORD keylen;
 
@@ -680,6 +753,7 @@ static void test_BCryptGenerateSymmetricKey(void)
     len = size = 0xdeadbeef;
     ret = BCryptGetProperty(aes, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    len2 = len;
 
     key = (void *)0xdeadbeef;
     ret = BCryptGenerateSymmetricKey(NULL, &key, NULL, 0, secret, sizeof(secret), 0);
@@ -687,7 +761,7 @@ static void test_BCryptGenerateSymmetricKey(void)
     ok(key == (void *)0xdeadbeef, "got %p\n", key);
 
     key = NULL;
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    buf = calloc(1, len);
 
     key = (BCRYPT_KEY_HANDLE)0xdeadbeef;
     ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret, 1, 0);
@@ -831,8 +905,16 @@ static void test_BCryptGenerateSymmetricKey(void)
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
 
+    if (pBCryptHash)
+    {
+        ret = BCryptGenerateSymmetricKey(BCRYPT_AES_CBC_ALG_HANDLE, &key, buf, len2, secret, sizeof(secret), 0);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+        ret = BCryptDestroyKey(key);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    }
+
+    free(buf);
     ret = BCryptCloseAlgorithmProvider(aes, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 }
@@ -942,6 +1024,23 @@ static void test_BCryptEncrypt(void)
         {0x66,0xb8,0xbd,0xe5,0x90,0x6c,0xec,0xdf,0xfa,0x8a,0xb2,0xfd,0x92,0x84,0xeb,0xf0,
          0x95,0xc4,0xdf,0xa7,0x7a,0x62,0xe4,0xab,0xd4,0x0e,0x94,0x4e,0xd7,0x6e,0xa1,0x47,
          0x29,0x4b,0x37,0xfe,0x28,0x6d,0x5f,0x69,0x46,0x30,0x73,0xc0,0xaa,0x42,0xe4,0x46};
+    static UCHAR expected11[] =
+        {0x0a,0x22,0xf7,0x96,0xe1,0xb9,0x3e,0x90,0x32,0xcf,0xf8,0x04,0x83,0x8a,0xdf,0xc3};
+    static UCHAR expected12[] =
+        {0xb5,0x9d,0xe7,0x8e,0x0f,0x80,0x16,0xc3,0xf6,0x80,0xad,0xf8,0xac,0xef,0xf9,0x9f};
+    static UCHAR expected13[] =
+        {0xc6,0x41,0x37,0xd8,0x6f,0x65,0x64,0x1d,0x2b,0xa0,0xad,0xee,0x67,0xba,0x9b,0x5f};
+    static UCHAR expected14[] =
+        {0x0a,0x22,0xf7,0x96,0xe1,0xb9,0x3e,0x90,0x32,0xcf,0xf8,0x04,0x83,0x8a,0xdf,0xc3,
+         0xa5,0xfa,0x54,0xd7,0x62,0x9d,0x8b,0x11,0x3d,0xd8,0xe2,0x95,0xc2,0x23,0x3f,0x29};
+    static UCHAR expected15[] =
+        {0x0a,0x22,0xf7,0x96,0xe1,0xb9,0x3e,0x90,0x32,0xcf,0xf8,0x04,0x83,0x8a,0xdf,0xc3,
+         0xa5,0xe5,0xcd,0x29,0x48,0x37,0x3f,0x92,0x6f,0x09,0x84,0x5a,0xb8,0x88,0xda,0xfd,
+         0x65,0x00,0x20,0x9a,0xc6,0xdb,0xfa,0x82,0xdb,0xbc,0xf4,0x70,0x7d,0x88,0x86,0xb5};
+    static UCHAR expected16[] =
+        {0x64,0xff,0xc6,0x97,0x14,0x5e,0x21,0xfa,0xe8,0x6e,0xba,0xc1,0x0c,0xb1,0x72,0x64,
+         0x5d,0xf0,0x22,0x72,0xef,0x39,0xe3,0x2f,0x80,0x3e,0x53,0x00,0xc1,0xcf,0x3f,0xbb,
+         0xea,0x30,0x01,0x78,0x3b,0xba,0x4d,0xca,0xa0,0x2e,0x83,0x5e,0x0e,0xe2,0x65,0xcb};
     static UCHAR expected_tag[] =
         {0x89,0xb3,0x92,0x00,0x39,0x20,0x09,0xb4,0x6a,0xd6,0xaf,0xca,0x4b,0x5b,0xfd,0xd0};
     static UCHAR expected_tag2[] =
@@ -973,7 +1072,7 @@ static void test_BCryptEncrypt(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
     key = NULL;
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    buf = calloc(1, len);
     ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret, sizeof(secret), 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(key != NULL, "key not set\n");
@@ -1072,10 +1171,10 @@ static void test_BCryptEncrypt(void)
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     /* 256 bit key */
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    buf = calloc(1, len);
 
     ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret256, sizeof(secret256), 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
@@ -1105,7 +1204,7 @@ static void test_BCryptEncrypt(void)
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     /******************
      * AES - GCM mode *
@@ -1138,7 +1237,7 @@ static void test_BCryptEncrypt(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
     key = NULL;
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    buf = calloc(1, len);
     ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret, sizeof(secret), 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(key != NULL, "key not set\n");
@@ -1285,7 +1384,7 @@ static void test_BCryptEncrypt(void)
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     /******************
      * AES - ECB mode *
@@ -1299,7 +1398,7 @@ static void test_BCryptEncrypt(void)
     ret = BCryptGetProperty(aes, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    buf = calloc(1, len);
     ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret, sizeof(secret), 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
@@ -1376,7 +1475,145 @@ static void test_BCryptEncrypt(void)
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
+
+    /******************
+     * AES - CFB mode *
+     ******************/
+
+    ret = BCryptSetProperty(aes, BCRYPT_CHAINING_MODE, (UCHAR *)BCRYPT_CHAIN_MODE_CFB, sizeof(BCRYPT_CHAIN_MODE_CFB), 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+    key = NULL;
+    buf = calloc(1, len);
+    ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret, sizeof(secret), 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(key != NULL, "key not set\n");
+
+    /* input size is a multiple of block size */
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    ret = BCryptEncrypt(key, data, 16, NULL, ivbuf, 16, NULL, 0, &size, 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 16, "got %lu\n", size);
+
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    memset(ciphertext, 0, sizeof(ciphertext));
+    ret = BCryptEncrypt(key, data, 16, NULL, ivbuf, 16, ciphertext, 16, &size, 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 16, "got %lu\n", size);
+    ok(!memcmp(ciphertext, expected11, sizeof(expected11)), "wrong data\n");
+    for (i = 0; i < 16; i++)
+        ok(ciphertext[i] == expected11[i], "%lu: %02x != %02x\n", i, ciphertext[i], expected11[i]);
+
+    /* NULL initialization vector */
+    size = 0;
+    memset(ciphertext, 0, sizeof(ciphertext));
+    ret = BCryptEncrypt(key, data, 16, NULL, NULL, 0, ciphertext, 16, &size, 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 16, "got %lu\n", size);
+    todo_wine ok(!memcmp(ciphertext, expected12, sizeof(expected12)), "wrong data\n");
+
+    /* all zero initialization vector */
+    size = 0;
+    memset(ciphertext, 0, sizeof(ciphertext));
+    memset(ivbuf, 0, sizeof(ivbuf));
+    ret = BCryptEncrypt(key, data, 16, NULL, ivbuf, 16, ciphertext, 16, &size, 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 16, "got %lu\n", size);
+    ok(!memcmp(ciphertext, expected13, sizeof(expected13)), "wrong data\n");
+    for (i = 0; i < 16; i++)
+        ok(ciphertext[i] == expected13[i], "%lu: %02x != %02x\n", i, ciphertext[i], expected13[i]);
+
+    /* input size is not a multiple of block size */
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    ret = BCryptEncrypt(key, data, 17, NULL, ivbuf, 16, NULL, 0, &size, 0);
+    todo_wine ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 17, "got %lu\n", size);
+
+    /* input size is not a multiple of block size, block padding set */
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    ret = BCryptEncrypt(key, data, 17, NULL, ivbuf, 16, NULL, 0, &size, BCRYPT_BLOCK_PADDING);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 32, "got %lu\n", size);
+
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    memset(ciphertext, 0, sizeof(ciphertext));
+    ret = BCryptEncrypt(key, data, 17, NULL, ivbuf, 16, ciphertext, 32, &size, BCRYPT_BLOCK_PADDING);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 32, "got %lu\n", size);
+    ok(!memcmp(ciphertext, expected14, sizeof(expected14)), "wrong data\n");
+    for (i = 0; i < 32; i++)
+        ok(ciphertext[i] == expected14[i], "%lu: %02x != %02x\n", i, ciphertext[i], expected14[i]);
+
+    /* input size is a multiple of block size, block padding set */
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    ret = BCryptEncrypt(key, data2, 32, NULL, ivbuf, 16, NULL, 0, &size, BCRYPT_BLOCK_PADDING);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 48, "got %lu\n", size);
+
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    memset(ciphertext, 0, sizeof(ciphertext));
+    ret = BCryptEncrypt(key, data2, 32, NULL, ivbuf, 16, ciphertext, 48, &size, BCRYPT_BLOCK_PADDING);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 48, "got %lu\n", size);
+    ok(!memcmp(ciphertext, expected15, sizeof(expected15)), "wrong data\n");
+    for (i = 0; i < 48; i++)
+        ok(ciphertext[i] == expected15[i], "%lu: %02x != %02x\n", i, ciphertext[i], expected15[i]);
+
+    /* output size too small */
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    memset(ciphertext, 0, sizeof(ciphertext));
+    ret = BCryptEncrypt(key, data, 17, NULL, ivbuf, 16, ciphertext, 31, &size, BCRYPT_BLOCK_PADDING);
+    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %#lx\n", ret);
+    ok(size == 32, "got %lu\n", size);
+
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    memset(ciphertext, 0, sizeof(ciphertext));
+    ret = BCryptEncrypt(key, data2, 32, NULL, ivbuf, 16, ciphertext, 32, &size, BCRYPT_BLOCK_PADDING);
+    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %#lx\n", ret);
+    ok(size == 48, "got %lu\n", size);
+
+    ret = BCryptDestroyKey(key);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    free(buf);
+
+    /* 256 bit key */
+    buf = calloc(1, len);
+
+    ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret256, sizeof(secret256), 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ret = BCryptDestroyKey(key);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+    /* Key generations succeeds if the key size exceeds maximum and uses maximum key length
+     * from secret. */
+    ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret256, sizeof(secret256) + 1, 0);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    ret = BCryptEncrypt(key, data2, 32, NULL, ivbuf, 16, NULL, 0, &size, BCRYPT_BLOCK_PADDING);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 48, "got %lu\n", size);
+
+    size = 0;
+    memcpy(ivbuf, iv, sizeof(iv));
+    memset(ciphertext, 0, sizeof(ciphertext));
+    ret = BCryptEncrypt(key, data2, 32, NULL, ivbuf, 16, ciphertext, 48, &size, BCRYPT_BLOCK_PADDING);
+    ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+    ok(size == 48, "got %lu\n", size);
+    ok(!memcmp(ciphertext, expected16, sizeof(expected16)), "wrong data\n");
+    for (i = 0; i < 48; i++)
+        ok(ciphertext[i] == expected16[i], "%lu: %02x != %02x\n", i, ciphertext[i], expected16[i]);
 
     ret = BCryptCloseAlgorithmProvider(aes, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
@@ -1454,7 +1691,7 @@ static void test_BCryptDecrypt(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
     key = NULL;
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    buf = calloc(1, len);
     ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret, sizeof(secret), 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(key != NULL, "key not set\n");
@@ -1545,7 +1782,7 @@ static void test_BCryptDecrypt(void)
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     /******************
      * AES - GCM mode *
@@ -1555,7 +1792,7 @@ static void test_BCryptDecrypt(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
     key = NULL;
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    buf = calloc(1, len);
     ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret, sizeof(secret), 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(key != NULL, "key not set\n");
@@ -1603,7 +1840,7 @@ static void test_BCryptDecrypt(void)
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     /******************
      * AES - ECB mode *
@@ -1617,7 +1854,7 @@ static void test_BCryptDecrypt(void)
     ret = BCryptGetProperty(aes, BCRYPT_OBJECT_LENGTH, (UCHAR *)&len, sizeof(len), &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
+    buf = calloc(1, len);
     ret = BCryptGenerateSymmetricKey(aes, &key, buf, len, secret, sizeof(secret), 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
@@ -1705,7 +1942,7 @@ static void test_BCryptDecrypt(void)
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_INVALID_HANDLE, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     ret = BCryptDestroyKey(NULL);
     ok(ret == STATUS_INVALID_HANDLE, "got %#lx\n", ret);
@@ -1766,7 +2003,7 @@ static void test_key_import_export(void)
     ok(ret == STATUS_BUFFER_TOO_SMALL, "got %#lx\n", ret);
     ok(size > 0, "got zero\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     ret = BCryptExportKey(key, NULL, BCRYPT_OPAQUE_KEY_BLOB, buf, size, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
@@ -1777,11 +2014,18 @@ static void test_key_import_export(void)
     ret = BCryptImportKey(aes, NULL, BCRYPT_OPAQUE_KEY_BLOB, &key, NULL, 0, buf, size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(key != NULL, "key not set\n");
-    HeapFree(GetProcessHeap(), 0, buf);
 
     ret = BCryptDestroyKey(key);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
+    if (pBCryptHash)
+    {
+        ret = BCryptImportKey(BCRYPT_AES_CBC_ALG_HANDLE, NULL, BCRYPT_OPAQUE_KEY_BLOB, &key, NULL, 0, buf, size, 0);
+        ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
+        BCryptDestroyKey(key);
+    }
+
+    free(buf);
     ret = BCryptCloseAlgorithmProvider(aes, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 }
@@ -1856,6 +2100,14 @@ static void test_ECDSA(void)
     status = BCryptImportKeyPair(alg, NULL, BCRYPT_PUBLIC_KEY_BLOB, &key, buffer, size, 0);
     ok(!status, "BCryptImportKeyPair failed: %#lx\n", status);
     BCryptDestroyKey(key);
+
+    if (pBCryptHash)
+    {
+        status = BCryptImportKeyPair(BCRYPT_ECDSA_P256_ALG_HANDLE, NULL, BCRYPT_PUBLIC_KEY_BLOB, &key, buffer,
+                                     size, 0);
+        ok(!status, "BCryptImportKeyPair failed: %#lx\n", status);
+        BCryptDestroyKey(key);
+    }
 
     status = BCryptImportKeyPair(alg, NULL, BCRYPT_ECCPUBLIC_BLOB, &key, buffer, size, 0);
     ok(!status, "BCryptImportKeyPair failed: %#lx\n", status);
@@ -2019,6 +2271,126 @@ static UCHAR rsaPublicBlobWithInvalidPublicExpSize[] =
     0x87, 0x75, 0x33, 0x15, 0xb8, 0xde, 0x32, 0x30, 0xb4, 0x5e, 0xfd
 };
 
+static void test_rsa_encrypt(void)
+{
+    static UCHAR input[] = "Hello World!";
+    static UCHAR input_no_padding[64] = { 0 };
+    BCRYPT_ALG_HANDLE rsa = 0;
+    BCRYPT_KEY_HANDLE key = 0;
+    NTSTATUS ret = 0;
+    DWORD encrypted_size = 60;
+    UCHAR *encrypted_a = NULL;
+    UCHAR *encrypted_b = NULL;
+    DWORD decrypted_size = 0;
+    UCHAR *decrypted = NULL;
+    BCRYPT_OAEP_PADDING_INFO oaep_pad;
+    oaep_pad.pszAlgId = BCRYPT_MD5_ALGORITHM;
+    oaep_pad.pbLabel = (PUCHAR)"test";
+    oaep_pad.cbLabel = 5;
+
+    ret = BCryptOpenAlgorithmProvider(&rsa, BCRYPT_RSA_ALGORITHM, NULL, 0);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ret = BCryptGenerateKeyPair(rsa, &key, 512, 0);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+
+    todo_wine {
+    /* Not finalized key */
+    ret = BCryptEncrypt(key, input, sizeof(input), NULL, NULL, 0, NULL, 0, &encrypted_size, 0);
+    ok(ret == STATUS_INVALID_HANDLE, "got %lx\n", ret);
+    BCryptFinalizeKeyPair(key, 0);
+
+    /*   No padding    */
+    memset(input_no_padding, 0, sizeof(input_no_padding));
+    strcpy((char *)input_no_padding, "Hello World");
+    ret = BCryptEncrypt(key, input_no_padding, sizeof(input_no_padding), NULL, NULL, 0, NULL, 0, &encrypted_size, BCRYPT_PAD_NONE);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ok(encrypted_size == 64, "got size of %ld\n", encrypted_size);
+
+    encrypted_a = malloc(encrypted_size);
+    memset(encrypted_a, 0, encrypted_size);
+    encrypted_b = malloc(encrypted_size);
+    memset(encrypted_b, 0xff, encrypted_size);
+
+    ret = BCryptEncrypt(key, input, sizeof(input), NULL, NULL, 0, encrypted_a, encrypted_size, &encrypted_size, BCRYPT_PAD_NONE);
+    ok(ret == STATUS_INVALID_PARAMETER, "got %lx\n", ret);
+
+    ret = BCryptEncrypt(key, input_no_padding, sizeof(input_no_padding), NULL, NULL, 0, encrypted_a, 12, &encrypted_size, BCRYPT_PAD_NONE);
+    ok(ret == STATUS_BUFFER_TOO_SMALL, "got %lx\n", ret);
+
+    ret = BCryptEncrypt(key, input_no_padding, sizeof(input_no_padding), NULL, NULL, 0, encrypted_a, encrypted_size, &encrypted_size, BCRYPT_PAD_NONE);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ret = BCryptEncrypt(key, input_no_padding, sizeof(input_no_padding), NULL, NULL, 0, encrypted_b, encrypted_size, &encrypted_size, BCRYPT_PAD_NONE);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ok(!memcmp(encrypted_a, encrypted_b, encrypted_size), "Both outputs should be the same\n");
+
+    BCryptDecrypt(key, encrypted_a, encrypted_size, NULL, NULL, 0, NULL, 0, &decrypted_size, BCRYPT_PAD_NONE);
+    decrypted = malloc(decrypted_size);
+    BCryptDecrypt(key, encrypted_a, encrypted_size, NULL, NULL, 0, decrypted, decrypted_size, &decrypted_size, BCRYPT_PAD_NONE);
+    ok(!memcmp(decrypted, input_no_padding, sizeof(input_no_padding)), "Decrypted output it's not what expected\n");
+    free(decrypted);
+    }
+
+    encrypted_size = 60;
+    /*  PKCS1 Padding  */
+    ret = BCryptEncrypt(key, input, sizeof(input), NULL, NULL, 0, NULL, 0, &encrypted_size, BCRYPT_PAD_PKCS1);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ok(encrypted_size == 64, "got size of %ld\n", encrypted_size);
+
+    encrypted_a = realloc(encrypted_a, encrypted_size);
+    memset(encrypted_a, 0, encrypted_size);
+    encrypted_b = realloc(encrypted_b, encrypted_size);
+    memset(encrypted_b, 0, encrypted_size);
+
+    ret = BCryptEncrypt(key, input, sizeof(input), NULL, NULL, 0, encrypted_a, encrypted_size, &encrypted_size, BCRYPT_PAD_PKCS1);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ret = BCryptEncrypt(key, input, sizeof(input), NULL, NULL, 0, encrypted_b, encrypted_size, &encrypted_size, BCRYPT_PAD_PKCS1);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ok(memcmp(encrypted_a, encrypted_b, encrypted_size), "Both outputs are the same\n");
+
+    BCryptDecrypt(key, encrypted_a, encrypted_size, NULL, NULL, 0, NULL, 0, &decrypted_size, BCRYPT_PAD_PKCS1);
+    ok(decrypted_size == sizeof(input), "got size of %ld\n", decrypted_size);
+    decrypted = malloc(decrypted_size);
+    BCryptDecrypt(key, encrypted_a, encrypted_size, NULL, NULL, 0, decrypted, decrypted_size, &decrypted_size, BCRYPT_PAD_PKCS1);
+    ok(!memcmp(decrypted, input, sizeof(input)), "Decrypted output it's not what expected\n");
+    free(decrypted);
+
+    todo_wine {
+    encrypted_size = 60;
+    /*  OAEP Padding  */
+    ret = BCryptEncrypt(key, input, sizeof(input), &oaep_pad, NULL, 0, NULL, 0, &encrypted_size, BCRYPT_PAD_OAEP);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ok(encrypted_size == 64, "got size of %ld\n", encrypted_size);
+
+    encrypted_a = realloc(encrypted_a, encrypted_size);
+    memset(encrypted_a, 0, encrypted_size);
+    encrypted_b = realloc(encrypted_b, encrypted_size);
+    memset(encrypted_b, 0, encrypted_size);
+
+    ret = BCryptEncrypt(key, input, sizeof(input), &oaep_pad, NULL, 0, encrypted_a, encrypted_size, &encrypted_size, BCRYPT_PAD_OAEP);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ret = BCryptEncrypt(key, input, sizeof(input), &oaep_pad, NULL, 0, encrypted_b, encrypted_size, &encrypted_size, BCRYPT_PAD_OAEP);
+    ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+    ok(memcmp(encrypted_a, encrypted_b, encrypted_size), "Both outputs are the same\n");
+
+    BCryptDecrypt(key, encrypted_a, encrypted_size, &oaep_pad, NULL, 0, NULL, 0, &decrypted_size, BCRYPT_PAD_OAEP);
+    decrypted = malloc(decrypted_size);
+    BCryptDecrypt(key, encrypted_a, encrypted_size, &oaep_pad, NULL, 0, decrypted, decrypted_size, &decrypted_size, BCRYPT_PAD_OAEP);
+    ok(!memcmp(decrypted, input, sizeof(input)), "Decrypted output it's not what expected\n");
+    }
+    free(decrypted);
+
+    free(encrypted_a);
+    free(encrypted_b);
+    BCryptDestroyKey(key);
+
+    if (pBCryptHash)
+    {
+        ret = BCryptGenerateKeyPair(BCRYPT_RSA_ALG_HANDLE, &key, 512, 0);
+        ok(ret == STATUS_SUCCESS, "got %lx\n", ret);
+        BCryptDestroyKey(key);
+    }
+}
+
 static void test_RSA(void)
 {
     static UCHAR hash[] =
@@ -2105,7 +2477,7 @@ static void test_RSA(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAPRIVATE_BLOB, buf, size, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     rsablob = (BCRYPT_RSAKEY_BLOB *)buf;
@@ -2117,14 +2489,14 @@ static void test_RSA(void)
     ok(rsablob->cbPrime2 == 32, "got %lu\n", rsablob->cbPrime2);
     size2 = sizeof(*rsablob) + rsablob->cbPublicExp + rsablob->cbModulus + rsablob->cbPrime1 + rsablob->cbPrime2;
     ok(size == size2, "got %lu expected %lu\n", size2, size);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     size = 0;
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAFULLPRIVATE_BLOB, NULL, 0, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAFULLPRIVATE_BLOB, buf, size, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     rsablob = (BCRYPT_RSAKEY_BLOB *)buf;
@@ -2136,7 +2508,7 @@ static void test_RSA(void)
     ok(rsablob->cbPrime2 == 32, "got %lu\n", rsablob->cbPrime2);
     size2 = sizeof(*rsablob) + rsablob->cbPublicExp + rsablob->cbModulus * 2 + rsablob->cbPrime1 * 3 + rsablob->cbPrime2 * 2;
     ok(size == size2, "got %lu expected %lu\n", size2, size);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     /* import/export public key */
     size = 0;
@@ -2144,7 +2516,7 @@ static void test_RSA(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAPUBLIC_BLOB, buf, size, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     rsablob = (BCRYPT_RSAKEY_BLOB *)buf;
@@ -2164,7 +2536,7 @@ static void test_RSA(void)
 
     ret = BCryptImportKeyPair(alg, NULL, BCRYPT_RSAPUBLIC_BLOB, &key, buf, size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     ret = BCryptVerifySignature(key, &pad, hash, sizeof(hash), sig, len, BCRYPT_PAD_PKCS1);
     ok(!ret, "got %#lx\n", ret);
@@ -2179,12 +2551,12 @@ static void test_RSA(void)
     ok(ret == STATUS_INVALID_HANDLE, "got %#lx\n", ret);
 
     size = 0;
-    buf = HeapAlloc(GetProcessHeap(), 0, sizeof(rsaPrivateBlob));
+    buf = malloc(sizeof(rsaPrivateBlob));
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAPRIVATE_BLOB, buf, sizeof(rsaPrivateBlob), &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size == sizeof(rsaPrivateBlob), "got %lu\n", size);
     ok(!memcmp(buf, rsaPrivateBlob, size), "wrong data\n");
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
     BCryptDestroyKey(key);
 
     /* import/export full private key */
@@ -2192,16 +2564,19 @@ static void test_RSA(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
 
     size = 0;
-    buf = HeapAlloc(GetProcessHeap(), 0, sizeof(rsaFullPrivateBlob));
+    buf = malloc(sizeof(rsaFullPrivateBlob));
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAFULLPRIVATE_BLOB, buf, sizeof(rsaFullPrivateBlob), &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size == sizeof(rsaFullPrivateBlob), "got %lu\n", size);
     ok(!memcmp(buf, rsaFullPrivateBlob, size), "wrong data\n");
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
     BCryptDestroyKey(key);
 
     ret = BCryptCloseAlgorithmProvider(alg, 0);
     ok(!ret, "got %#lx\n", ret);
+
+    /* RSA encryption */
+    test_rsa_encrypt();
 }
 
 static void test_RSA_SIGN(void)
@@ -2277,7 +2652,7 @@ static void test_RSA_SIGN(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAPRIVATE_BLOB, buf, size, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     rsablob = (BCRYPT_RSAKEY_BLOB *)buf;
@@ -2289,14 +2664,14 @@ static void test_RSA_SIGN(void)
     ok(rsablob->cbPrime2 == 32, "got %lu\n", rsablob->cbPrime2);
     size2 = sizeof(*rsablob) + rsablob->cbPublicExp + rsablob->cbModulus + rsablob->cbPrime1 + rsablob->cbPrime2;
     ok(size == size2, "got %lu expected %lu\n", size2, size);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     size = 0;
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAFULLPRIVATE_BLOB, NULL, 0, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     ret = BCryptExportKey(key, NULL, BCRYPT_RSAFULLPRIVATE_BLOB, buf, size, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     rsablob = (BCRYPT_RSAKEY_BLOB *)buf;
@@ -2308,7 +2683,7 @@ static void test_RSA_SIGN(void)
     ok(rsablob->cbPrime2 == 32, "got %lu\n", rsablob->cbPrime2);
     size2 = sizeof(*rsablob) + rsablob->cbPublicExp + rsablob->cbModulus * 2 + rsablob->cbPrime1 * 3 + rsablob->cbPrime2 * 2;
     ok(size == size2, "got %lu expected %lu\n", size2, size);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
     BCryptDestroyKey(key);
 
     ret = BCryptCloseAlgorithmProvider(alg, 0);
@@ -2394,7 +2769,7 @@ static void test_ECDH(void)
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     status = BCryptExportKey(key, NULL, BCRYPT_ECCPUBLIC_BLOB, buf, size, &size, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
     ecckey = (BCRYPT_ECCKEY_BLOB *)buf;
@@ -2408,14 +2783,14 @@ static void test_ECDH(void)
 
     status = BCryptImportKeyPair(alg, NULL, BCRYPT_ECCPUBLIC_BLOB, &pubkey, buf, size, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     size = 0;
     status = BCryptExportKey(key, NULL, BCRYPT_ECCPRIVATE_BLOB, NULL, 0, &size, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     status = BCryptExportKey(key, NULL, BCRYPT_ECCPRIVATE_BLOB, buf, size, &size, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
     ecckey = (BCRYPT_ECCKEY_BLOB *)buf;
@@ -2425,7 +2800,7 @@ static void test_ECDH(void)
 
     status = BCryptImportKeyPair(alg, NULL, BCRYPT_ECCPRIVATE_BLOB, &privkey, buf, size, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
     BCryptDestroyKey(pubkey);
     BCryptDestroyKey(privkey);
     BCryptDestroyKey(key);
@@ -2438,23 +2813,19 @@ static void test_ECDH(void)
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     status = BCryptExportKey(privkey, NULL, BCRYPT_ECCPRIVATE_BLOB, buf, size, &size, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
     ok(size == sizeof(eccprivkey), "got %lu\n", size);
     ok(!memcmp(buf, eccprivkey, size), "wrong data\n");
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     status = BCryptImportKeyPair(alg, NULL, BCRYPT_ECCPUBLIC_BLOB, &pubkey, ecdh_pubkey, sizeof(ecdh_pubkey), 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
 
     status = BCryptSecretAgreement(privkey, pubkey, &secret, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
-
-    if (status != STATUS_SUCCESS)
-    {
-        goto derive_end;
-    }
+    if (status != STATUS_SUCCESS) goto derive_end;
 
     /* verify result on windows 10 */
     status = BCryptDeriveKey(secret, BCRYPT_KDF_RAW_SECRET, NULL, NULL, 0, &size, 0);
@@ -2466,35 +2837,26 @@ static void test_ECDH(void)
     }
 
     todo_wine ok(status == STATUS_SUCCESS, "got %#lx\n", status);
-
-    if (status != STATUS_SUCCESS)
-    {
-        goto raw_secret_end;
-    }
+    if (status != STATUS_SUCCESS) goto raw_secret_end;
 
     ok(size == 32, "size of secret key incorrect, got %lu, expected 32\n", size);
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     status = BCryptDeriveKey(secret, BCRYPT_KDF_RAW_SECRET, NULL, buf, size, &size, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
     ok(!(memcmp(ecdh_secret, buf, size)), "wrong data\n");
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
-    raw_secret_end:
-
+raw_secret_end:
     status = BCryptDeriveKey(secret, BCRYPT_KDF_HASH, &hash_params, NULL, 0, &size, 0);
     todo_wine ok (status == STATUS_SUCCESS, "got %#lx\n", status);
-
-    if (status != STATUS_SUCCESS)
-    {
-        goto derive_end;
-    }
+    if (status != STATUS_SUCCESS) goto derive_end;
 
     ok (size == 20, "got %lu\n", size);
-    buf = HeapAlloc(GetProcessHeap(), 0, size);
+    buf = malloc(size);
     status = BCryptDeriveKey(secret, BCRYPT_KDF_HASH, &hash_params, buf, size, &size, 0);
     ok(status == STATUS_SUCCESS, "got %#lx\n", status);
     ok(!(memcmp(hashed_secret, buf, size)), "wrong data\n");
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     /* ulVersion is not verified */
     hash_params.ulVersion = 0xdeadbeef;
@@ -2513,11 +2875,44 @@ static void test_ECDH(void)
     status = BCryptDeriveKey(secret, BCRYPT_KDF_HASH, &hash_params, NULL, 0, &size, 0);
     ok (status == STATUS_NOT_SUPPORTED, "got %#lx\n", status);
 
-    derive_end:
-
+derive_end:
     BCryptDestroySecret(secret);
     BCryptDestroyKey(pubkey);
     BCryptDestroyKey(privkey);
+    BCryptCloseAlgorithmProvider(alg, 0);
+
+    status = BCryptOpenAlgorithmProvider(&alg, BCRYPT_ECDH_P384_ALGORITHM, NULL, 0);
+    ok(status == STATUS_SUCCESS, "got %#lx\n", status);
+
+    key = NULL;
+    status = BCryptGenerateKeyPair(alg, &key, 384, 0);
+    ok(status == STATUS_SUCCESS, "got %#lx\n", status);
+    ok(key != NULL, "key not set\n");
+
+    status = BCryptFinalizeKeyPair(key, 0);
+    ok(status == STATUS_SUCCESS, "got %#lx\n", status);
+
+    size = 0;
+    status = BCryptExportKey(key, NULL, BCRYPT_ECCPUBLIC_BLOB, NULL, 0, &size, 0);
+    ok(status == STATUS_SUCCESS, "got %#lx\n", status);
+    ok(size, "size not set\n");
+
+    buf = malloc(size);
+    status = BCryptExportKey(key, NULL, BCRYPT_ECCPUBLIC_BLOB, buf, size, &size, 0);
+    ok(status == STATUS_SUCCESS, "got %#lx\n", status);
+    ecckey = (BCRYPT_ECCKEY_BLOB *)buf;
+    ok(ecckey->dwMagic == BCRYPT_ECDH_PUBLIC_P384_MAGIC, "got %#lx\n", ecckey->dwMagic);
+    ok(ecckey->cbKey == 48, "got %lu\n", ecckey->cbKey);
+    ok(size == sizeof(*ecckey) + ecckey->cbKey * 2, "got %lu\n", size);
+
+    status = BCryptImportKeyPair(alg, NULL, BCRYPT_PUBLIC_KEY_BLOB, &pubkey, buf, size, 0);
+    ok(status == STATUS_SUCCESS, "got %#lx\n", status);
+    BCryptDestroyKey(pubkey);
+
+    status = BCryptImportKeyPair(alg, NULL, BCRYPT_ECCPUBLIC_BLOB, &pubkey, buf, size, 0);
+    ok(status == STATUS_SUCCESS, "got %#lx\n", status);
+    free(buf);
+    BCryptDestroyKey(pubkey);
     BCryptCloseAlgorithmProvider(alg, 0);
 }
 
@@ -2962,7 +3357,7 @@ static void test_DSA(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
+    buf = calloc(1, size);
     ret = BCryptExportKey(key, NULL, BCRYPT_DSA_PUBLIC_BLOB, buf, size, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     dsablob = (BCRYPT_DSA_KEY_BLOB *)buf;
@@ -2975,7 +3370,7 @@ static void test_DSA(void)
 
     ret = BCryptImportKeyPair(alg, NULL, BCRYPT_DSA_PUBLIC_BLOB, &key, buf, size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     ret = BCryptVerifySignature(key, NULL, dsaHash, sizeof(dsaHash), sig, len, 0);
     ok(!ret, "got %#lx\n", ret);
@@ -2990,12 +3385,12 @@ static void test_DSA(void)
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size, "size not set\n");
 
-    buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size);
+    buf = calloc(1, size);
     ret = BCryptExportKey(key, NULL, LEGACY_DSA_V2_PRIVATE_BLOB, buf, size, &size, 0);
     ok(ret == STATUS_SUCCESS, "got %#lx\n", ret);
     ok(size == sizeof(dssKey), "got %lu expected %Iu\n", size, sizeof(dssKey));
     ok(!memcmp(dssKey, buf, size), "wrong data\n");
-    HeapFree(GetProcessHeap(), 0, buf);
+    free(buf);
 
     ret = BCryptDestroyKey(key);
     ok(!ret, "got %#lx\n", ret);

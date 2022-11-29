@@ -84,6 +84,7 @@ static NTSTATUS (WINAPI *pNtQueryDirectoryFile)(HANDLE,HANDLE,PIO_APC_ROUTINE,PV
 static NTSTATUS (WINAPI *pNtQueryVolumeInformationFile)(HANDLE,PIO_STATUS_BLOCK,PVOID,ULONG,FS_INFORMATION_CLASS);
 static NTSTATUS (WINAPI *pNtQueryFullAttributesFile)(const OBJECT_ATTRIBUTES*, FILE_NETWORK_OPEN_INFORMATION*);
 static NTSTATUS (WINAPI *pNtFlushBuffersFile)(HANDLE, IO_STATUS_BLOCK*);
+static NTSTATUS (WINAPI *pNtQueryEaFile)(HANDLE,PIO_STATUS_BLOCK,PVOID,ULONG,BOOLEAN,PVOID,ULONG,PULONG,BOOLEAN);
 
 static WCHAR fooW[] = {'f','o','o',0};
 
@@ -417,11 +418,9 @@ static void open_file_test(void)
     pRtlDosPathNameToNtPathName_U( path, &nameW, NULL, NULL );
     status = pNtOpenFile( &handle, GENERIC_READ, &attr, &io,
                           FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_DIRECTORY_FILE );
-    todo_wine
     ok( status == STATUS_OBJECT_PATH_NOT_FOUND, "open %s failed %lx\n", wine_dbgstr_w(nameW.Buffer), status );
     status = pNtOpenFile( &handle, GENERIC_READ, &attr, &io,
                           FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_NON_DIRECTORY_FILE );
-    todo_wine
     ok( status == STATUS_OBJECT_PATH_NOT_FOUND, "open %s failed %lx\n", wine_dbgstr_w(nameW.Buffer), status );
     pRtlFreeUnicodeString( &nameW );
 
@@ -1289,7 +1288,7 @@ static void test_file_full_size_information(void)
 
     /* Assume No Quota Settings configured on Wine Testbot */
     res = pNtQueryVolumeInformationFile(h, &io, &ffsi, sizeof ffsi, FileFsFullSizeInformation);
-    todo_wine ok(res == STATUS_SUCCESS, "cannot get attributes, res %lx\n", res);
+    ok(res == STATUS_SUCCESS, "cannot get attributes, res %lx\n", res);
     res = pNtQueryVolumeInformationFile(h, &io, &fsi, sizeof fsi, FileFsSizeInformation);
     ok(res == STATUS_SUCCESS, "cannot get attributes, res %lx\n", res);
 
@@ -1305,8 +1304,6 @@ static void test_file_full_size_information(void)
     ok(fsi.BytesPerSector == 512, "[fsi] BytesPerSector expected 512, got %ld\n",fsi.BytesPerSector);
     ok(fsi.SectorsPerAllocationUnit == 8, "[fsi] SectorsPerAllocationUnit expected 8, got %ld\n",fsi.SectorsPerAllocationUnit);
 
-    todo_wine
-    {
     ok(ffsi.TotalAllocationUnits.QuadPart > 0,
         "[ffsi] TotalAllocationUnits expected positive, got negative value 0x%s\n",
         wine_dbgstr_longlong(ffsi.TotalAllocationUnits.QuadPart));
@@ -1324,14 +1321,10 @@ static void test_file_full_size_information(void)
         "[ffsi] CallerAvailableAllocationUnits error fsi:0x%s, ffsi: 0x%s\n",
         wine_dbgstr_longlong(fsi.AvailableAllocationUnits.QuadPart),
         wine_dbgstr_longlong(ffsi.CallerAvailableAllocationUnits.QuadPart));
-    }
 
     /* Assume file system is NTFS */
-    todo_wine
-    {
     ok(ffsi.BytesPerSector == 512, "[ffsi] BytesPerSector expected 512, got %ld\n",ffsi.BytesPerSector);
     ok(ffsi.SectorsPerAllocationUnit == 8, "[ffsi] SectorsPerAllocationUnit expected 8, got %ld\n",ffsi.SectorsPerAllocationUnit);
-    }
 
     CloseHandle( h );
 }
@@ -1400,7 +1393,7 @@ static void test_file_basic_information(void)
     memset(&fbi, 0, sizeof(fbi));
     res = pNtQueryInformationFile(h, &io, &fbi, sizeof fbi, FileBasicInformation);
     ok ( res == STATUS_SUCCESS, "can't get attributes\n");
-    todo_wine ok ( (fbi.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_SYSTEM, "attribute %lx not FILE_ATTRIBUTE_SYSTEM\n", fbi.FileAttributes );
+    ok ( (fbi.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_SYSTEM, "attribute %lx not FILE_ATTRIBUTE_SYSTEM\n", fbi.FileAttributes );
 
     /* Then HIDDEN */
     memset(&fbi, 0, sizeof(fbi));
@@ -1413,7 +1406,7 @@ static void test_file_basic_information(void)
     memset(&fbi, 0, sizeof(fbi));
     res = pNtQueryInformationFile(h, &io, &fbi, sizeof fbi, FileBasicInformation);
     ok ( res == STATUS_SUCCESS, "can't get attributes\n");
-    todo_wine ok ( (fbi.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_HIDDEN, "attribute %lx not FILE_ATTRIBUTE_HIDDEN\n", fbi.FileAttributes );
+    ok ( (fbi.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_HIDDEN, "attribute %lx not FILE_ATTRIBUTE_HIDDEN\n", fbi.FileAttributes );
 
     /* Check NORMAL last of all (to make sure we can clear attributes) */
     memset(&fbi, 0, sizeof(fbi));
@@ -1470,7 +1463,7 @@ static void test_file_all_information(void)
     memset(&fai_buf.fai, 0, sizeof(fai_buf.fai));
     res = pNtQueryInformationFile(h, &io, &fai_buf.fai, sizeof fai_buf, FileAllInformation);
     ok ( res == STATUS_SUCCESS, "can't get attributes, res %x\n", res);
-    todo_wine ok ( (fai_buf.fai.BasicInformation.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_SYSTEM, "attribute %lx not FILE_ATTRIBUTE_SYSTEM\n", fai_buf.fai.BasicInformation.FileAttributes );
+    ok ( (fai_buf.fai.BasicInformation.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_SYSTEM, "attribute %lx not FILE_ATTRIBUTE_SYSTEM\n", fai_buf.fai.BasicInformation.FileAttributes );
 
     /* Then HIDDEN */
     memset(&fai_buf.fai.BasicInformation, 0, sizeof(fai_buf.fai.BasicInformation));
@@ -1483,7 +1476,7 @@ static void test_file_all_information(void)
     memset(&fai_buf.fai, 0, sizeof(fai_buf.fai));
     res = pNtQueryInformationFile(h, &io, &fai_buf.fai, sizeof fai_buf, FileAllInformation);
     ok ( res == STATUS_SUCCESS, "can't get attributes\n");
-    todo_wine ok ( (fai_buf.fai.BasicInformation.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_HIDDEN, "attribute %lx not FILE_ATTRIBUTE_HIDDEN\n", fai_buf.fai.BasicInformation.FileAttributes );
+    ok ( (fai_buf.fai.BasicInformation.FileAttributes & attrib_mask) == FILE_ATTRIBUTE_HIDDEN, "attribute %lx not FILE_ATTRIBUTE_HIDDEN\n", fai_buf.fai.BasicInformation.FileAttributes );
 
     /* Check NORMAL last of all (to make sure we can clear attributes) */
     memset(&fai_buf.fai.BasicInformation, 0, sizeof(fai_buf.fai.BasicInformation));
@@ -4251,6 +4244,18 @@ static void test_NtCreateFile(void)
     pRtlFreeUnicodeString( &nameW );
     SetFileAttributesW(path, FILE_ATTRIBUTE_ARCHIVE);
     DeleteFileW( path );
+
+    wcscat( path, L"\\" );
+    pRtlDosPathNameToNtPathName_U(path, &nameW, NULL, NULL);
+
+    status = pNtCreateFile( &handle, GENERIC_READ, &attr, &io, NULL,
+                            0, FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_CREATE, 0, NULL, 0);
+    ok( status == STATUS_OBJECT_NAME_INVALID, "failed %s %lx\n", debugstr_w(nameW.Buffer), status );
+    status = pNtCreateFile( &handle, GENERIC_READ, &attr, &io, NULL,
+                            0, FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_CREATE,
+                            FILE_DIRECTORY_FILE, NULL, 0);
+    ok( !status, "failed %s %lx\n", debugstr_w(nameW.Buffer), status );
+    RemoveDirectoryW( path );
 }
 
 static void test_read_write(void)
@@ -5108,6 +5113,86 @@ static void test_flush_buffers_file(void)
     DeleteFileA(buffer);
 }
 
+static void test_query_ea(void)
+{
+#define EA_BUFFER_SIZE 4097
+    unsigned char data[EA_BUFFER_SIZE + 8];
+    unsigned char *buffer = (void *)(((DWORD_PTR)data + 7) & ~7);
+    DWORD buffer_len, i;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+    HANDLE handle;
+
+    if (!(handle = create_temp_file(0))) return;
+
+    /* test with INVALID_HANDLE_VALUE */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    memset(buffer, 0xcc, EA_BUFFER_SIZE);
+    buffer_len = EA_BUFFER_SIZE - 1;
+    status = pNtQueryEaFile(INVALID_HANDLE_VALUE, &io, buffer, buffer_len, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_OBJECT_TYPE_MISMATCH, "expected STATUS_OBJECT_TYPE_MISMATCH, got %#lx\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %#lx\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %#Ix\n", io.Information);
+    ok(buffer[0] == 0xcc, "data at position 0 overwritten\n");
+
+    /* test with 0xdeadbeef */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    memset(buffer, 0xcc, EA_BUFFER_SIZE);
+    buffer_len = EA_BUFFER_SIZE - 1;
+    status = pNtQueryEaFile((void *)0xdeadbeef, &io, buffer, buffer_len, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_INVALID_HANDLE, "expected STATUS_INVALID_HANDLE, got %#lx\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %#lx\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %#Ix\n", io.Information);
+    ok(buffer[0] == 0xcc, "data at position 0 overwritten\n");
+
+    /* test without buffer */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    status = pNtQueryEaFile(handle, &io, NULL, 0, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_NO_EAS_ON_FILE, "expected STATUS_NO_EAS_ON_FILE, got %#lx\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %#lx\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %#Ix\n", io.Information);
+
+    /* test with zero buffer */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    status = pNtQueryEaFile(handle, &io, buffer, 0, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_NO_EAS_ON_FILE, "expected STATUS_NO_EAS_ON_FILE, got %#lx\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %#lx\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %#Ix\n", io.Information);
+
+    /* test with very small buffer */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    memset(buffer, 0xcc, EA_BUFFER_SIZE);
+    buffer_len = 4;
+    status = pNtQueryEaFile(handle, &io, buffer, buffer_len, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_NO_EAS_ON_FILE, "expected STATUS_NO_EAS_ON_FILE, got %#lx\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %#lx\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %#Ix\n", io.Information);
+    for (i = 0; i < buffer_len && !buffer[i]; i++);
+    ok(i == buffer_len,  "expected %lu bytes filled with 0x00, got %lu bytes\n", buffer_len, i);
+    ok(buffer[i] == 0xcc, "data at position %u overwritten\n", buffer[i]);
+
+    /* test with very big buffer */
+    U(io).Status = 0xdeadbeef;
+    io.Information = 0xdeadbeef;
+    memset(buffer, 0xcc, EA_BUFFER_SIZE);
+    buffer_len = EA_BUFFER_SIZE - 1;
+    status = pNtQueryEaFile(handle, &io, buffer, buffer_len, TRUE, NULL, 0, NULL, FALSE);
+    ok(status == STATUS_NO_EAS_ON_FILE, "expected STATUS_NO_EAS_ON_FILE, got %#lx\n", status);
+    ok(U(io).Status == 0xdeadbeef, "expected 0xdeadbeef, got %#lx\n", U(io).Status);
+    ok(io.Information == 0xdeadbeef, "expected 0xdeadbeef, got %#Ix\n", io.Information);
+    for (i = 0; i < buffer_len && !buffer[i]; i++);
+    ok(i == buffer_len,  "expected %lu bytes filled with 0x00, got %lu bytes\n", buffer_len, i);
+    ok(buffer[i] == 0xcc, "data at position %u overwritten\n", buffer[i]);
+
+    CloseHandle(handle);
+#undef EA_BUFFER_SIZE
+}
+
 static void test_file_readonly_access(void)
 {
     static const DWORD default_sharing = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
@@ -5241,6 +5326,34 @@ static void test_mailslot_name(void)
     CloseHandle( device );
 }
 
+static void test_reparse_points(void)
+{
+    OBJECT_ATTRIBUTES attr;
+    HANDLE handle;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status;
+    UNICODE_STRING nameW;
+    unsigned char reparse_data[1];
+
+    pRtlInitUnicodeString( &nameW, L"\\??\\C:\\" );
+    InitializeObjectAttributes( &attr, &nameW, 0, NULL, NULL );
+
+    status = pNtOpenFile( &handle, READ_CONTROL, &attr, &io, 0, 0 );
+    ok( !status, "open %s failed %#lx\n", wine_dbgstr_w(nameW.Buffer), status );
+
+    status = pNtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, NULL, 0 );
+    ok( status == STATUS_INVALID_USER_BUFFER, "expected %#lx, got %#lx\n", STATUS_INVALID_USER_BUFFER, status );
+
+    status = pNtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, reparse_data, 0 );
+    ok( status == STATUS_INVALID_USER_BUFFER, "expected %#lx, got %#lx\n", STATUS_INVALID_USER_BUFFER, status );
+
+    /* a volume cannot be a reparse point by definition */
+    status = pNtFsControlFile( handle, NULL, NULL, NULL, &io, FSCTL_GET_REPARSE_POINT, NULL, 0, reparse_data, 1 );
+    ok( status == STATUS_NOT_A_REPARSE_POINT, "expected %#lx, got %#lx\n", STATUS_NOT_A_REPARSE_POINT, status );
+
+    CloseHandle( handle );
+}
+
 START_TEST(file)
 {
     HMODULE hkernel32 = GetModuleHandleA("kernel32.dll");
@@ -5281,6 +5394,7 @@ START_TEST(file)
     pNtQueryVolumeInformationFile = (void *)GetProcAddress(hntdll, "NtQueryVolumeInformationFile");
     pNtQueryFullAttributesFile = (void *)GetProcAddress(hntdll, "NtQueryFullAttributesFile");
     pNtFlushBuffersFile = (void *)GetProcAddress(hntdll, "NtFlushBuffersFile");
+    pNtQueryEaFile          = (void *)GetProcAddress(hntdll, "NtQueryEaFile");
 
     test_read_write();
     test_NtCreateFile();
@@ -5310,6 +5424,8 @@ START_TEST(file)
     test_query_volume_information_file();
     test_query_attribute_information_file();
     test_ioctl();
+    test_query_ea();
     test_flush_buffers_file();
     test_mailslot_name();
+    test_reparse_points();
 }

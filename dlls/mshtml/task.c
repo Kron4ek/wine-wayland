@@ -208,12 +208,33 @@ HRESULT clear_task_timer(HTMLInnerWindow *window, DWORD id)
 
     LIST_FOR_EACH_ENTRY(iter, &thread_data->timer_list, task_timer_t, entry) {
         if(iter->id == id && iter->window == window) {
-            release_task_timer(thread_data->thread_hwnd, iter);
+            if(iter->type != TIMER_ANIMATION_FRAME)
+                release_task_timer(thread_data->thread_hwnd, iter);
             return S_OK;
         }
     }
 
     WARN("timet not found\n");
+    return S_OK;
+}
+
+HRESULT clear_animation_timer(HTMLInnerWindow *window, DWORD id)
+{
+    thread_data_t *thread_data = get_thread_data(FALSE);
+    task_timer_t *iter;
+
+    if(!thread_data)
+        return S_OK;
+
+    LIST_FOR_EACH_ENTRY(iter, &thread_data->timer_list, task_timer_t, entry) {
+        if(iter->id == id && iter->window == window) {
+            if(iter->type == TIMER_ANIMATION_FRAME)
+                release_task_timer(thread_data->thread_hwnd, iter);
+            return S_OK;
+        }
+    }
+
+    WARN("timer not found\n");
     return S_OK;
 }
 
@@ -395,6 +416,7 @@ thread_data_t *get_thread_data(BOOL create)
         TlsSetValue(mshtml_tls, thread_data);
         list_init(&thread_data->task_list);
         list_init(&thread_data->timer_list);
+        wine_rb_init(&thread_data->session_storage_map, session_storage_map_cmp);
     }
 
     return thread_data;

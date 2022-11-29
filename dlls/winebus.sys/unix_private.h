@@ -78,6 +78,7 @@ struct effect_params
     BOOL axis_enabled[2];
     BOOL direction_enabled;
     UINT16 direction[2];
+    BYTE gain_percent;
     BYTE condition_count;
     /* only for periodic, constant or ramp forces */
     struct effect_envelope envelope;
@@ -89,6 +90,8 @@ struct effect_params
         struct effect_ramp_force ramp_force;
     };
 };
+
+struct unix_device;
 
 struct raw_device_vtbl
 {
@@ -256,6 +259,7 @@ extern BOOL hid_device_set_rel_axis(struct unix_device *iface, ULONG index, LONG
 extern BOOL hid_device_set_button(struct unix_device *iface, ULONG index, BOOL is_set) DECLSPEC_HIDDEN;
 extern BOOL hid_device_set_hatswitch_x(struct unix_device *iface, ULONG index, LONG new_x) DECLSPEC_HIDDEN;
 extern BOOL hid_device_set_hatswitch_y(struct unix_device *iface, ULONG index, LONG new_y) DECLSPEC_HIDDEN;
+extern BOOL hid_device_move_hatswitch(struct unix_device *iface, ULONG index, LONG x, LONG y) DECLSPEC_HIDDEN;
 
 extern BOOL hid_device_sync_report(struct unix_device *iface) DECLSPEC_HIDDEN;
 extern void hid_device_drop_report(struct unix_device *iface) DECLSPEC_HIDDEN;

@@ -19,25 +19,14 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <assert.h>
-#include <stdarg.h>
-#include <string.h>
-
-#include "windef.h"
-#include "winbase.h"
-#include "winnls.h"
-#include "wingdi.h"
-#include "controls.h"
-#include "win.h"
-#include "dbt.h"
 #include "user_private.h"
+#include "controls.h"
+#include "dbt.h"
 #include "wine/asm.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(msg);
 WINE_DECLARE_DEBUG_CHANNEL(relay);
-
-#define WINPROC_PROC16  ((void *)1)  /* placeholder for 16-bit window procs */
 
 union packed_structs
 {
@@ -64,13 +53,6 @@ static inline void *get_buffer( void *static_buffer, size_t size, size_t need )
 static inline void free_buffer( void *static_buffer, void *buffer )
 {
     if (buffer != static_buffer) HeapFree( GetProcessHeap(), 0, buffer );
-}
-
-/* return the window proc for a given handle, or NULL for an invalid handle,
- * or WINPROC_PROC16 for a handle to a 16-bit proc. */
-static inline WINDOWPROC *handle_to_proc( WNDPROC handle )
-{
-    return (WINDOWPROC *)NtUserCallOneParam( HandleToUlong(handle), NtUserGetWinProcPtr );
 }
 
 #ifdef __i386__
@@ -137,12 +119,12 @@ static LRESULT call_window_proc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRES
 {
     WNDPROC proc = arg;
 
-    TRACE_(relay)( "\1Call window proc %p (hwnd=%p,msg=%s,wp=%08lx,lp=%08lx)\n",
+    TRACE_(relay)( "\1Call window proc %p (hwnd=%p,msg=%s,wp=%08Ix,lp=%08Ix)\n",
                    proc, hwnd, SPY_GetMsgName(msg, hwnd), wp, lp );
 
     *result = WINPROC_wrapper( proc, hwnd, msg, wp, lp );
 
-    TRACE_(relay)( "\1Ret  window proc %p (hwnd=%p,msg=%s,wp=%08lx,lp=%08lx) retval=%08lx\n",
+    TRACE_(relay)( "\1Ret  window proc %p (hwnd=%p,msg=%s,wp=%08Ix,lp=%08Ix) retval=%08Ix\n",
                    proc, hwnd, SPY_GetMsgName(msg, hwnd), wp, lp, *result );
     return *result;
 }
@@ -154,10 +136,8 @@ static LRESULT call_dialog_proc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRES
     WNDPROC proc = arg;
     LRESULT ret;
 
-    USER_CheckNotLock();
-
     hwnd = WIN_GetFullHandle( hwnd );
-    TRACE_(relay)( "\1Call dialog proc %p (hwnd=%p,msg=%s,wp=%08lx,lp=%08lx)\n",
+    TRACE_(relay)( "\1Call dialog proc %p (hwnd=%p,msg=%s,wp=%08Ix,lp=%08Ix)\n",
                    proc, hwnd, SPY_GetMsgName(msg, hwnd), wp, lp );
 
     context = SetThreadDpiAwarenessContext( GetWindowDpiAwarenessContext( hwnd ));
@@ -165,7 +145,7 @@ static LRESULT call_dialog_proc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRES
     *result = GetWindowLongPtrW( hwnd, DWLP_MSGRESULT );
     SetThreadDpiAwarenessContext( context );
 
-    TRACE_(relay)( "\1Ret  dialog proc %p (hwnd=%p,msg=%s,wp=%08lx,lp=%08lx) retval=%08lx result=%08lx\n",
+    TRACE_(relay)( "\1Ret  dialog proc %p (hwnd=%p,msg=%s,wp=%08Ix,lp=%08Ix) retval=%08Ix result=%08Ix\n",
                    proc, hwnd, SPY_GetMsgName(msg, hwnd), wp, lp, ret, *result );
     return ret;
 }
@@ -212,7 +192,7 @@ LRESULT WINPROC_CallProcAtoW( winproc_callback_t callback, HWND hwnd, UINT msg, 
 {
     LRESULT ret = 0;
 
-    TRACE_(msg)("(hwnd=%p,msg=%s,wp=%08lx,lp=%08lx)\n",
+    TRACE_(msg)("(hwnd=%p,msg=%s,wp=%08Ix,lp=%08Ix)\n",
                 hwnd, SPY_GetMsgName(msg, hwnd), wParam, lParam);
 
     switch(msg)
@@ -473,7 +453,7 @@ static LRESULT WINPROC_CallProcWtoA( winproc_callback_t callback, HWND hwnd, UIN
 {
     LRESULT ret = 0;
 
-    TRACE_(msg)("(hwnd=%p,msg=%s,wp=%08lx,lp=%08lx)\n",
+    TRACE_(msg)("(hwnd=%p,msg=%s,wp=%08Ix,lp=%08Ix)\n",
                 hwnd, SPY_GetMsgName(msg, hwnd), wParam, lParam);
 
     switch(msg)
@@ -486,6 +466,7 @@ static LRESULT WINPROC_CallProcWtoA( winproc_callback_t callback, HWND hwnd, UIN
             CREATESTRUCTA csA = *(CREATESTRUCTA *)csW;
             MDICREATESTRUCTA mdi_cs;
             DWORD name_lenA = 0, name_lenW = 0, class_lenA = 0, class_lenW = 0;
+            char int_name_buf[4];
 
             if (!IS_INTRESOURCE(csW->lpszClass))
             {
@@ -494,8 +475,20 @@ static LRESULT WINPROC_CallProcWtoA( winproc_callback_t callback, HWND hwnd, UIN
             }
             if (!IS_INTRESOURCE(csW->lpszName))
             {
-                name_lenW = (lstrlenW(csW->lpszName) + 1) * sizeof(WCHAR);
-                RtlUnicodeToMultiByteSize(&name_lenA, csW->lpszName, name_lenW);
+                /* resource ID string is a special case */
+                if (csW->lpszName[0] == 0xffff)
+                {
+                    int_name_buf[0] = 0xff;
+                    int_name_buf[1] = csW->lpszName[1];
+                    int_name_buf[2] = csW->lpszName[1] >> 8;
+                    int_name_buf[3] = 0;
+                    csA.lpszName = int_name_buf;
+                }
+                else
+                {
+                    name_lenW = (lstrlenW(csW->lpszName) + 1) * sizeof(WCHAR);
+                    RtlUnicodeToMultiByteSize(&name_lenA, csW->lpszName, name_lenW);
+                }
             }
 
             if (!(cls = get_buffer( buffer, sizeof(buffer), class_lenA + name_lenA ))) break;
@@ -719,7 +712,7 @@ static LRESULT WINPROC_CallProcWtoA( winproc_callback_t callback, HWND hwnd, UIN
 }
 
 
-static void dispatch_win_proc_params( struct win_proc_params *params )
+void dispatch_win_proc_params( struct win_proc_params *params )
 {
     DPI_AWARENESS_CONTEXT context = SetThreadDpiAwarenessContext( params->dpi_awareness );
 
@@ -728,78 +721,24 @@ static void dispatch_win_proc_params( struct win_proc_params *params )
         if (params->procW == WINPROC_PROC16)
             WINPROC_CallProcWtoA( wow_handlers.call_window_proc, params->hwnd, params->msg, params->wparam,
                                   params->lparam, params->result, params->func );
-        else if (params->is_dialog)
-        {
-            if (!params->ansi_dst)
-            {
-                if (params->procW)
-                    call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
-                                      params->result, params->procW );
-                else
-                    call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
-                                      params->result, params->func );
-            }
-            else
-            {
-                if (params->procA)
-                    WINPROC_CallProcWtoA( call_window_proc, params->hwnd, params->msg, params->wparam,
-                                          params->lparam, params->result, params->procA );
-                else
-                    WINPROC_CallProcWtoA( call_window_proc, params->hwnd, params->msg, params->wparam,
-                                          params->lparam, params->result, params->func );
-            }
-        }
-        else if (params->procW)
-            call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
-                              params->result, params->procW );
-        else if (params->procA)
-            WINPROC_CallProcWtoA( call_window_proc, params->hwnd, params->msg, params->wparam,
-                                  params->lparam, params->result, params->procA );
         else if (!params->ansi_dst)
             call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
-                              params->result, params->func );
+                              params->result, params->procW );
         else
             WINPROC_CallProcWtoA( call_window_proc, params->hwnd, params->msg, params->wparam,
-                                  params->lparam, params->result, params->func );
+                                  params->lparam, params->result, params->procA );
     }
     else
     {
         if (params->procA == WINPROC_PROC16)
             wow_handlers.call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
                                            params->result, params->func );
-        else if (params->is_dialog)
-        {
-            if (!params->ansi_dst)
-            {
-                if (params->procW)
-                    WINPROC_CallProcAtoW( call_window_proc, params->hwnd, params->msg, params->wparam,
-                                          params->lparam, params->result, params->procW, params->mapping );
-                else
-                    WINPROC_CallProcAtoW( call_window_proc, params->hwnd, params->msg, params->wparam,
-                                          params->lparam, params->result, params->func, params->mapping );
-            }
-            else
-            {
-                if (params->procA)
-                    call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
-                                      params->result, params->procA );
-                else
-                    call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
-                                      params->result, params->func );
-            }
-        }
-        else if (params->procA)
-            call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
-                              params->result, params->procA );
-        else if (params->procW)
-            WINPROC_CallProcAtoW( call_window_proc, params->hwnd, params->msg, params->wparam,
-                                  params->lparam, params->result, params->procW, params->mapping );
         else if (!params->ansi_dst)
             WINPROC_CallProcAtoW( call_window_proc, params->hwnd, params->msg, params->wparam,
-                                  params->lparam, params->result, params->func, params->mapping );
+                                  params->lparam, params->result, params->procW, params->mapping );
         else
             call_window_proc( params->hwnd, params->msg, params->wparam, params->lparam,
-                              params->result, params->func );
+                              params->result, params->procA );
     }
 
     SetThreadDpiAwarenessContext( context );
@@ -808,7 +747,8 @@ static void dispatch_win_proc_params( struct win_proc_params *params )
 /* make sure that there is space for 'size' bytes in buffer, growing it if needed */
 static inline void *get_buffer_space( void **buffer, size_t size, size_t prev_size )
 {
-    if (prev_size > size && !(*buffer = HeapAlloc( GetProcessHeap(), 0, size ))) return NULL;
+    if (prev_size < size)
+        *buffer = HeapAlloc( GetProcessHeap(), 0, size );
     return *buffer;
 }
 
@@ -1239,13 +1179,13 @@ static BOOL unpack_message( HWND hwnd, UINT message, WPARAM *wparam, LPARAM *lpa
 
 BOOL WINAPI User32CallWindowProc( struct win_proc_params *params, ULONG size )
 {
+    LRESULT result, *result_ptr = params->result;
+    params->result = &result;
 
     if (params->needs_unpack)
     {
         char stack_buffer[128];
         void *buffer;
-        LRESULT result;
-        MSG msg;
 
         if (size > sizeof(*params))
         {
@@ -1260,39 +1200,25 @@ BOOL WINAPI User32CallWindowProc( struct win_proc_params *params, ULONG size )
         if (!unpack_message( params->hwnd, params->msg, &params->wparam,
                              &params->lparam, &buffer, size ))
             return 0;
-        params->result = &result;
 
-        msg.hwnd    = params->hwnd;
-        msg.message = params->msg;
-        msg.wParam  = params->wparam;
-        msg.lParam  = params->lparam;
         dispatch_win_proc_params( params );
 
-        NtUserReplyMessage( result, &msg );
+        NtUserMessageCall( params->hwnd, params->msg, params->wparam, params->lparam,
+                           (void *)result, NtUserWinProcResult, FALSE );
         if (buffer != stack_buffer && buffer != params + 1)
             HeapFree( GetProcessHeap(), 0, buffer );
     }
-    else dispatch_win_proc_params( params );
-    return TRUE;
-}
-
-void get_winproc_params( struct win_proc_params *params )
-{
-    WINDOWPROC *proc = handle_to_proc( params->func );
-
-    if (!proc)
-    {
-        params->procW = params->procA = NULL;
-    }
-    else if (proc == WINPROC_PROC16)
-    {
-        params->procW = params->procA = WINPROC_PROC16;
-    }
     else
     {
-        params->procA = proc->procA;
-        params->procW = proc->procW;
+        dispatch_win_proc_params( params );
+        if (result_ptr)
+        {
+            *result_ptr = result;
+            return TRUE;
+        }
+        NtCallbackReturn( &result, sizeof(result), TRUE );
     }
+    return TRUE;
 }
 
 BOOL WINAPI User32CallSendAsyncCallback( const struct send_async_params *params, ULONG size )
@@ -1361,50 +1287,59 @@ LRESULT WINAPI CallWindowProcW( WNDPROC func, HWND hwnd, UINT msg, WPARAM wParam
 /**********************************************************************
  *		WINPROC_CallDlgProcA
  */
-INT_PTR WINPROC_CallDlgProcA( DLGPROC func, HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+INT_PTR WINPROC_CallDlgProcA( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
-    WINDOWPROC *proc;
+    DLGPROC func, proc;
     LRESULT result;
-    INT_PTR ret;
 
-    if (!func) return 0;
+#ifdef _WIN64
+    proc = (DLGPROC)NtUserGetWindowLongPtrA( hwnd, DWLP_DLGPROC );
+#else
+    proc = (DLGPROC)NtUserGetWindowLongA( hwnd, DWLP_DLGPROC );
+#endif
+    if (!proc) return 0;
+    if (!(func = NtUserGetDialogProc( proc, TRUE )) &&
+        !(func = NtUserGetDialogProc( proc, FALSE ))) return 0;
 
-    if (!(proc = handle_to_proc( (WNDPROC)func )))
-        ret = call_dialog_proc( hwnd, msg, wParam, lParam, &result, func );
-    else if (proc == WINPROC_PROC16)
+    if (func == WINPROC_PROC16)
     {
-        ret = wow_handlers.call_dialog_proc( hwnd, msg, wParam, lParam, &result, func );
+        INT_PTR ret;
+        ret = wow_handlers.call_dialog_proc( hwnd, msg, wParam, lParam, &result, proc );
         SetWindowLongPtrW( hwnd, DWLP_MSGRESULT, result );
+        return ret;
     }
-    else
-        ret = call_dialog_proc( hwnd, msg, wParam, lParam, &result, proc->procW ? proc->procW : proc->procA );
 
-    return ret;
+    return call_dialog_proc( hwnd, msg, wParam, lParam, &result, func );
 }
 
 
 /**********************************************************************
  *		WINPROC_CallDlgProcW
  */
-INT_PTR WINPROC_CallDlgProcW( DLGPROC func, HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
+INT_PTR WINPROC_CallDlgProcW( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
-    WINDOWPROC *proc;
+    DLGPROC func, proc;
     LRESULT result;
-    INT_PTR ret;
 
-    if (!func) return 0;
+#ifdef _WIN64
+    proc = (DLGPROC)NtUserGetWindowLongPtrW( hwnd, DWLP_DLGPROC );
+#else
+    proc = (DLGPROC)NtUserGetWindowLongW( hwnd, DWLP_DLGPROC );
+#endif
+    if (!proc) return 0;
+    if (!(func = NtUserGetDialogProc( proc, FALSE )) &&
+        !(func = NtUserGetDialogProc( proc, TRUE ))) return 0;
 
-    if (!(proc = handle_to_proc( (WNDPROC)func )))
-        ret = call_dialog_proc( hwnd, msg, wParam, lParam, &result, func );
-    else if (proc == WINPROC_PROC16)
+    if (func == WINPROC_PROC16)
     {
-        ret = WINPROC_CallProcWtoA( wow_handlers.call_dialog_proc, hwnd, msg, wParam, lParam, &result, func );
+        INT_PTR ret;
+        ret = WINPROC_CallProcWtoA( wow_handlers.call_dialog_proc,
+                                    hwnd, msg, wParam, lParam, &result, proc );
         SetWindowLongPtrW( hwnd, DWLP_MSGRESULT, result );
+        return ret;
     }
-    else
-        ret = call_dialog_proc( hwnd, msg, wParam, lParam, &result, proc->procW ? proc->procW : proc->procA );
 
-    return ret;
+    return call_dialog_proc( hwnd, msg, wParam, lParam, &result, func );
 }
 
 

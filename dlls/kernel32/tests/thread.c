@@ -956,12 +956,15 @@ static VOID test_thread_processor(void)
            affinity_new.Mask, affinity.Mask);
 
         /* show that the "all processors" flag is not supported for SetThreadGroupAffinity */
-        affinity_new.Group = 0;
-        affinity_new.Mask  = ~0u;
-        SetLastError(0xdeadbeef);
-        ok(!pSetThreadGroupAffinity(curthread, &affinity_new, NULL), "SetThreadGroupAffinity succeeded\n");
-        ok(GetLastError() == ERROR_INVALID_PARAMETER,
-           "Expected ERROR_INVALID_PARAMETER, got %ld\n", GetLastError());
+        if (sysInfo.dwNumberOfProcessors < 8 * sizeof(DWORD_PTR))
+        {
+            affinity_new.Group = 0;
+            affinity_new.Mask  = ~(DWORD_PTR)0;
+            SetLastError(0xdeadbeef);
+            ok(!pSetThreadGroupAffinity(curthread, &affinity_new, NULL), "SetThreadGroupAffinity succeeded\n");
+            ok(GetLastError() == ERROR_INVALID_PARAMETER,
+               "Expected ERROR_INVALID_PARAMETER, got %ld\n", GetLastError());
+        }
 
         affinity_new.Group = 1; /* assumes that you have less than 64 logical processors */
         affinity_new.Mask  = 0x1;
@@ -2535,13 +2538,11 @@ static void test_thread_description(void)
     thread = OpenThread(THREAD_SET_LIMITED_INFORMATION, FALSE, GetCurrentThreadId());
 
     hr = pSetThreadDescription(thread, desc);
-    todo_wine
     ok(hr == HRESULT_FROM_NT(STATUS_SUCCESS), "Failed to set thread description, hr %#lx.\n", hr);
 
     ptr = NULL;
     hr = pGetThreadDescription(GetCurrentThread(), &ptr);
     ok(hr == HRESULT_FROM_NT(STATUS_SUCCESS), "Failed to get thread description, hr %#lx.\n", hr);
-    todo_wine
     ok(!lstrcmpW(ptr, desc), "Unexpected description %s.\n", wine_dbgstr_w(ptr));
     LocalFree(ptr);
 

@@ -133,6 +133,7 @@ static const char * const shader_opcode_names[] =
     /* WINED3DSIH_ENDREP                           */ "endrep",
     /* WINED3DSIH_ENDSWITCH                        */ "endswitch",
     /* WINED3DSIH_EQ                               */ "eq",
+    /* WINED3DSIH_EVAL_CENTROID                    */ "eval_centroid",
     /* WINED3DSIH_EVAL_SAMPLE_INDEX                */ "eval_sample_index",
     /* WINED3DSIH_EXP                              */ "exp",
     /* WINED3DSIH_EXPP                             */ "expp",
@@ -4123,7 +4124,7 @@ void find_ps_compile_args(const struct wined3d_state *state, const struct wined3
             else
                 args->color_fixup[i] = texture->resource.format->color_fixup;
 
-            if (texture->resource.format_flags & WINED3DFMT_FLAG_SHADOW)
+            if (texture->resource.format_caps & WINED3D_FORMAT_CAP_SHADOW)
                 args->shadow |= 1u << i;
 
             /* Flag samplers that need NP2 texcoord fixup. */

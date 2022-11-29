@@ -1380,7 +1380,7 @@ typedef struct _NMTBCUSTOMDRAW
 #define TBCDRF_NOETCHEDEFFECT 0x00100000  /* No etched effect for          */
                                           /* disabled items                */
 #define TBCDRF_BLENDICON      0x00200000  /* ILD_BLEND50 on the icon image */
-#define TBCDRF_NOBACKGROUND   0x00400000  /* ILD_BLEND50 on the icon image */
+#define TBCDRF_NOBACKGROUND   0x00400000  /* Don't draw button background  */
 #define TBCDRF_USECDCOLORS    0x00800000
 
 
@@ -1834,6 +1834,8 @@ typedef struct tagTOOLINFOW {
 } TTTOOLINFOW, *LPTOOLINFOW, *PTOOLINFOW, *LPTTTOOLINFOW;
 
 #define TTTOOLINFO WINELIB_NAME_AW(TTTOOLINFO)
+#define TOOLINFOA TTTOOLINFOA
+#define TOOLINFOW TTTOOLINFOW
 #define TOOLINFO WINELIB_NAME_AW(TTTOOLINFO)
 #define PTOOLINFO WINELIB_NAME_AW(PTOOLINFO)
 #define LPTTTOOLINFO WINELIB_NAME_AW(LPTTTOOLINFO)
@@ -3605,6 +3607,8 @@ typedef struct tagLVCOLUMNW
 #define LVCOLUMN_V1_SIZE WINELIB_NAME_AW(LVCOLUMN_V1_SIZE)
 
 #define LV_COLUMN       LVCOLUMN
+#define LV_COLUMNA      LVCOLUMNA
+#define LV_COLUMNW      LVCOLUMNW
 
 
 typedef struct tagNMLISTVIEW

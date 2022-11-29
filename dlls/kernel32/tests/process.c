@@ -1573,6 +1573,10 @@ static void test_Console(void)
     SetConsoleMode(startup.hStdInput, modeIn);
     SetConsoleMode(startup.hStdOutput, modeOut);
 
+    /* don't test flag that is changed at startup if WINETEST_COLOR is set */
+    modeOut = (modeOut & ~ENABLE_VIRTUAL_TERMINAL_PROCESSING) |
+              (modeOutC & ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+
     cpInC = GetConsoleCP();
     cpOutC = GetConsoleOutputCP();
 
@@ -3773,7 +3777,7 @@ static void test_process_info(HANDLE hproc)
         return;
     }
 
-    for (i = 0; i < MaxProcessInfoClass; i++)
+    for (i = 0; i < ARRAY_SIZE(info_size); i++)
     {
         ret_len = 0;
         status = pNtQueryInformationProcess(hproc, i, buf, info_size[i], &ret_len);

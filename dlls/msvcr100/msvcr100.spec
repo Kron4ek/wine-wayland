@@ -122,10 +122,10 @@
 @ stub -arch=win64 ??0message_not_found@Concurrency@@QEAA@PEBD@Z
 @ stub -arch=win32 ??0message_not_found@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??0message_not_found@Concurrency@@QEAA@XZ
-@ stub -arch=win32 ??0missing_wait@Concurrency@@QAE@PBD@Z
-@ stub -arch=win64 ??0missing_wait@Concurrency@@QEAA@PEBD@Z
-@ stub -arch=win32 ??0missing_wait@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0missing_wait@Concurrency@@QEAA@XZ
+@ thiscall -arch=win32 ??0missing_wait@Concurrency@@QAE@PBD@Z(ptr str) missing_wait_ctor_str
+@ cdecl -arch=win64 ??0missing_wait@Concurrency@@QEAA@PEBD@Z(ptr str) missing_wait_ctor_str
+@ thiscall -arch=win32 ??0missing_wait@Concurrency@@QAE@XZ(ptr) missing_wait_ctor
+@ cdecl -arch=win64 ??0missing_wait@Concurrency@@QEAA@XZ(ptr) missing_wait_ctor
 @ stub -arch=win32 ??0nested_scheduler_missing_detach@Concurrency@@QAE@PBD@Z
 @ stub -arch=win64 ??0nested_scheduler_missing_detach@Concurrency@@QEAA@PEBD@Z
 @ stub -arch=win32 ??0nested_scheduler_missing_detach@Concurrency@@QAE@XZ
@@ -1264,9 +1264,9 @@
 @ varargs _scprintf_p(str)
 @ varargs _scprintf_p_l(str ptr)
 @ varargs _scwprintf(wstr)
-@ stub _scwprintf_l
-@ stub _scwprintf_p
-@ stub _scwprintf_p_l
+@ varargs _scwprintf_l(wstr ptr)
+@ varargs _scwprintf_p(wstr)
+@ varargs _scwprintf_p_l(wstr ptr)
 @ cdecl _searchenv(str str ptr)
 @ cdecl _searchenv_s(str str ptr long)
 @ stdcall -arch=i386 _seh_longjmp_unwind4(ptr)
@@ -1422,13 +1422,13 @@
 @ cdecl _utime32(str ptr)
 @ cdecl _utime64(str ptr)
 @ cdecl _vcprintf(str ptr)
-@ stub _vcprintf_l
+@ cdecl _vcprintf_l(str ptr ptr)
 @ stub _vcprintf_p
 @ stub _vcprintf_p_l
 @ stub _vcprintf_s
 @ stub _vcprintf_s_l
 @ cdecl _vcwprintf(wstr ptr)
-@ stub _vcwprintf_l
+@ cdecl _vcwprintf_l(wstr ptr ptr)
 @ stub _vcwprintf_p
 @ stub _vcwprintf_p_l
 @ stub _vcwprintf_s

@@ -218,7 +218,7 @@ static LRESULT call_hook16( WNDPROC16 hook, HWND hwnd, UINT msg, WPARAM wp, LPAR
     CONTEXT context;
     WORD params[5];
 
-    TRACE( "%p: %p %08x %x %lx: stub\n", hook, hwnd, msg, wp, lp );
+    TRACE( "%p: %p %08x %x %Ix: stub\n", hook, hwnd, msg, wp, lp );
 
     memset( &context, 0, sizeof(context) );
     context.SegDs = context.SegEs = CURRENT_SS;
@@ -249,8 +249,8 @@ static UINT_PTR CALLBACK call_hook_proc( WNDPROC16 hook, HWND hwnd, UINT msg, WP
             CREATESTRUCT16 cs;
 
             CREATESTRUCT32Ato16( cs32, &cs );
-            cs.lpszName  = MapLS( cs32->lpszName );
-            cs.lpszClass = MapLS( cs32->lpszClass );
+            cs.lpszName  = MapLS( (void *)cs32->lpszName );
+            cs.lpszClass = MapLS( (void *)cs32->lpszClass );
             lp = MapLS( &cs );
             ret = call_hook16( hook, hwnd, msg, wp, lp );
             UnMapLS( lp );
@@ -547,7 +547,7 @@ static UINT_PTR CALLBACK dummy_hook( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
  */
 BOOL16 CALLBACK FileOpenDlgProc16(HWND16 hWnd16, UINT16 wMsg, WPARAM16 wParam, LPARAM lParam)
 {
-    FIXME( "%04x %04x %04x %08lx: stub\n", hWnd16, wMsg, wParam, lParam );
+    FIXME( "%04x %04x %04x %08Ix: stub\n", hWnd16, wMsg, wParam, lParam );
     return FALSE;
 }
 
@@ -556,7 +556,7 @@ BOOL16 CALLBACK FileOpenDlgProc16(HWND16 hWnd16, UINT16 wMsg, WPARAM16 wParam, L
  */
 BOOL16 CALLBACK FileSaveDlgProc16(HWND16 hWnd16, UINT16 wMsg, WPARAM16 wParam, LPARAM lParam)
 {
-    FIXME( "%04x %04x %04x %08lx: stub\n", hWnd16, wMsg, wParam, lParam );
+    FIXME( "%04x %04x %04x %08Ix: stub\n", hWnd16, wMsg, wParam, lParam );
     return FALSE;
 }
 

@@ -427,6 +427,7 @@ NTSTATUS wg_transform_create(void *args)
         case WG_MAJOR_TYPE_AUDIO_MPEG4:
         case WG_MAJOR_TYPE_AUDIO_WMA:
         case WG_MAJOR_TYPE_VIDEO_CINEPAK:
+        case WG_MAJOR_TYPE_VIDEO_INDEO:
             if (!(element = transform_find_element(GST_ELEMENT_FACTORY_TYPE_DECODER, src_caps, raw_caps))
                     || !transform_append_element(transform, element, &first, &last))
             {
@@ -439,6 +440,7 @@ NTSTATUS wg_transform_create(void *args)
         case WG_MAJOR_TYPE_VIDEO:
             break;
         case WG_MAJOR_TYPE_UNKNOWN:
+        case WG_MAJOR_TYPE_VIDEO_WMV:
             GST_FIXME("Format %u not implemented!", input_format.major_type);
             gst_caps_unref(raw_caps);
             goto out;
@@ -480,6 +482,8 @@ NTSTATUS wg_transform_create(void *args)
         case WG_MAJOR_TYPE_VIDEO_CINEPAK:
         case WG_MAJOR_TYPE_VIDEO_H264:
         case WG_MAJOR_TYPE_UNKNOWN:
+        case WG_MAJOR_TYPE_VIDEO_WMV:
+        case WG_MAJOR_TYPE_VIDEO_INDEO:
             GST_FIXME("Format %u not implemented!", output_format.major_type);
             goto out;
     }
@@ -648,6 +652,8 @@ NTSTATUS wg_transform_push_data(void *args)
         GST_BUFFER_DURATION(buffer) = sample->duration * 100;
     if (!(sample->flags & WG_SAMPLE_FLAG_SYNC_POINT))
         GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT);
+    if (sample->flags & WG_SAMPLE_FLAG_DISCONTINUITY)
+        GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DISCONT);
     gst_atomic_queue_push(transform->input_queue, buffer);
 
     params->result = S_OK;
@@ -781,6 +787,8 @@ static NTSTATUS read_transform_output_data(GstBuffer *buffer, GstCaps *caps, gsi
     }
     if (!GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT))
         sample->flags |= WG_SAMPLE_FLAG_SYNC_POINT;
+    if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DISCONT))
+        sample->flags |= WG_SAMPLE_FLAG_DISCONTINUITY;
 
     if (needs_copy)
     {
@@ -923,5 +931,14 @@ NTSTATUS wg_transform_read_data(void *args)
 
     params->result = S_OK;
     wg_allocator_release_sample(transform->allocator, sample, discard_data);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS wg_transform_get_status(void *args)
+{
+    struct wg_transform_get_status_params *params = args;
+    struct wg_transform *transform = params->transform;
+
+    params->accepts_input = gst_atomic_queue_length(transform->input_queue) < transform->input_max_length;
     return STATUS_SUCCESS;
 }

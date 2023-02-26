@@ -171,17 +171,13 @@ struct d3dx_effect
     ID3DXEffect ID3DXEffect_iface;
     LONG ref;
 
-    unsigned int parameter_count;
     unsigned int technique_count;
     unsigned int object_count;
-    struct d3dx_top_level_parameter *parameters;
     struct d3dx_technique *techniques;
     struct d3dx_object *objects;
     DWORD flags;
 
-    struct wine_rb_tree param_tree;
-    char *full_name_tmp;
-    unsigned int full_name_tmp_size;
+    struct d3dx_parameters_store params;
 
     struct ID3DXEffectStateManager *manager;
     struct IDirect3DDevice9 *device;
@@ -527,7 +523,7 @@ static struct d3dx_parameter *get_valid_parameter(struct d3dx_effect *effect, D3
             sizeof(parameter_magic_string)))
         return handle_param;
 
-    return effect->flags & D3DXFX_LARGEADDRESSAWARE ? NULL : get_parameter_by_name(effect, NULL, parameter);
+    return effect->flags & D3DXFX_LARGEADDRESSAWARE ? NULL : get_parameter_by_name(&effect->params, NULL, parameter);
 }
 
 static struct d3dx_parameter_block *get_valid_parameter_block(D3DXHANDLE handle)
@@ -749,6 +745,40 @@ static void free_parameter_block(struct d3dx_parameter_block *block)
     heap_free(block);
 }
 
+static int param_rb_compare(const void *key, const struct wine_rb_entry *entry)
+{
+    const char *name = key;
+    struct d3dx_parameter *param = WINE_RB_ENTRY_VALUE(entry, struct d3dx_parameter, rb_entry);
+
+    return strcmp(name, param->full_name);
+}
+
+HRESULT d3dx_init_parameters_store(struct d3dx_parameters_store *store, unsigned int count)
+{
+    store->count = count;
+    wine_rb_init(&store->tree, param_rb_compare);
+
+    if (store->count && !(store->parameters = heap_alloc_zero(sizeof(*store->parameters) * store->count)))
+        return E_OUTOFMEMORY;
+
+    return S_OK;
+}
+
+void d3dx_parameters_store_cleanup(struct d3dx_parameters_store *store)
+{
+    unsigned int i;
+
+    heap_free(store->full_name_tmp);
+
+    if (store->parameters)
+    {
+        for (i = 0; i < store->count; ++i)
+            free_top_level_parameter(&store->parameters[i]);
+        heap_free(store->parameters);
+        store->parameters = NULL;
+    }
+}
+
 static void d3dx_effect_cleanup(struct d3dx_effect *effect)
 {
     struct d3dx_parameter_block *block, *cursor;
@@ -764,14 +794,7 @@ static void d3dx_effect_cleanup(struct d3dx_effect *effect)
         free_parameter_block(block);
     }
 
-    heap_free(effect->full_name_tmp);
-
-    if (effect->parameters)
-    {
-        for (i = 0; i < effect->parameter_count; ++i)
-            free_top_level_parameter(&effect->parameters[i]);
-        heap_free(effect->parameters);
-    }
+    d3dx_parameters_store_cleanup(&effect->params);
 
     if (effect->techniques)
     {
@@ -947,7 +970,7 @@ static HRESULT set_value(struct d3dx_parameter *param, const void *data, unsigne
     return D3D_OK;
 }
 
-static struct d3dx_parameter *get_parameter_element_by_name(struct d3dx_effect *effect,
+static struct d3dx_parameter *get_parameter_element_by_name(struct d3dx_parameters_store *store,
         struct d3dx_parameter *parameter, const char *name)
 {
     UINT element;
@@ -969,7 +992,7 @@ static struct d3dx_parameter *get_parameter_element_by_name(struct d3dx_effect *
         switch (*part++)
         {
             case '.':
-                return get_parameter_by_name(effect, temp_parameter, part);
+                return get_parameter_by_name(store, temp_parameter, part);
 
             case '\0':
                 TRACE("Returning parameter %p\n", temp_parameter);
@@ -1013,10 +1036,10 @@ static struct d3dx_parameter *get_annotation_by_name(struct d3dx_effect *effect,
             switch (*part++)
             {
                 case '.':
-                    return get_parameter_by_name(effect, temp_parameter, part);
+                    return get_parameter_by_name(&effect->params, temp_parameter, part);
 
                 case '[':
-                    return get_parameter_element_by_name(effect, temp_parameter, part);
+                    return get_parameter_element_by_name(&effect->params, temp_parameter, part);
 
                 default:
                     FIXME("Unhandled case \"%c\"\n", *--part);
@@ -1029,7 +1052,7 @@ static struct d3dx_parameter *get_annotation_by_name(struct d3dx_effect *effect,
     return NULL;
 }
 
-struct d3dx_parameter *get_parameter_by_name(struct d3dx_effect* effect,
+struct d3dx_parameter *get_parameter_by_name(struct d3dx_parameters_store *store,
         struct d3dx_parameter *parameter, const char *name)
 {
     struct d3dx_parameter *temp_parameter;
@@ -1040,13 +1063,13 @@ struct d3dx_parameter *get_parameter_by_name(struct d3dx_effect* effect,
     const char *part;
     char *full_name;
 
-    TRACE("effect %p, parameter %p, name %s.\n", effect, parameter, debugstr_a(name));
+    TRACE("store %p, parameter %p, name %s.\n", store, parameter, debugstr_a(name));
 
     if (!name || !*name) return NULL;
 
     if (!parameter)
     {
-        if ((entry = wine_rb_get(&effect->param_tree, name)))
+        if ((entry = wine_rb_get(&store->tree, name)))
             return WINE_RB_ENTRY_VALUE(entry, struct d3dx_parameter, rb_entry);
         return NULL;
     }
@@ -1056,26 +1079,26 @@ struct d3dx_parameter *get_parameter_by_name(struct d3dx_effect* effect,
         name_len = strlen(name);
         param_name_len = strlen(parameter->full_name);
         full_name_size = name_len + param_name_len + 2;
-        if (effect->full_name_tmp_size < full_name_size)
+        if (store->full_name_tmp_size < full_name_size)
         {
-            if (!(full_name = heap_realloc(effect->full_name_tmp, full_name_size)))
+            if (!(full_name = heap_realloc(store->full_name_tmp, full_name_size)))
             {
                 ERR("Out of memory.\n");
                 return NULL;
             }
-            effect->full_name_tmp = full_name;
-            effect->full_name_tmp_size = full_name_size;
+            store->full_name_tmp = full_name;
+            store->full_name_tmp_size = full_name_size;
         }
         else
         {
-            full_name = effect->full_name_tmp;
+            full_name = store->full_name_tmp;
         }
         memcpy(full_name, parameter->full_name, param_name_len);
         full_name[param_name_len] = '.';
         memcpy(full_name + param_name_len + 1, name, name_len);
         full_name[param_name_len + 1 + name_len] = 0;
 
-        if ((entry = wine_rb_get(&effect->param_tree, full_name)))
+        if ((entry = wine_rb_get(&store->tree, full_name)))
             return WINE_RB_ENTRY_VALUE(entry, struct d3dx_parameter, rb_entry);
         return NULL;
     }
@@ -1101,10 +1124,10 @@ struct d3dx_parameter *get_parameter_by_name(struct d3dx_effect* effect,
             switch (*part++)
             {
                 case '.':
-                    return get_parameter_by_name(effect, temp_parameter, part);
+                    return get_parameter_by_name(store, temp_parameter, part);
 
                 case '[':
-                    return get_parameter_element_by_name(effect, temp_parameter, part);
+                    return get_parameter_element_by_name(store, temp_parameter, part);
 
                 default:
                     FIXME("Unhandled case \"%c\"\n", *--part);
@@ -2025,7 +2048,7 @@ static HRESULT WINAPI d3dx_effect_GetDesc(ID3DXEffect *iface, D3DXEFFECT_DESC *d
     /* TODO: add creator and function count. */
     desc->Creator = NULL;
     desc->Functions = 0;
-    desc->Parameters = effect->parameter_count;
+    desc->Parameters = effect->params.count;
     desc->Techniques = effect->technique_count;
 
     return D3D_OK;
@@ -2150,10 +2173,10 @@ static D3DXHANDLE WINAPI d3dx_effect_GetParameter(ID3DXEffect *iface, D3DXHANDLE
 
     if (!parameter)
     {
-        if (index < effect->parameter_count)
+        if (index < effect->params.count)
         {
-            TRACE("Returning parameter %p.\n", &effect->parameters[index]);
-            return get_parameter_handle(&effect->parameters[index].param);
+            TRACE("Returning parameter %p.\n", &effect->params.parameters[index]);
+            return get_parameter_handle(&effect->params.parameters[index].param);
         }
     }
     else
@@ -2186,7 +2209,7 @@ static D3DXHANDLE WINAPI d3dx_effect_GetParameterByName(ID3DXEffect *iface, D3DX
         return handle;
     }
 
-    handle = get_parameter_handle(get_parameter_by_name(effect, param, name));
+    handle = get_parameter_handle(get_parameter_by_name(&effect->params, param, name));
     TRACE("Returning parameter %p.\n", handle);
 
     return handle;
@@ -2204,9 +2227,9 @@ static D3DXHANDLE WINAPI d3dx_effect_GetParameterBySemantic(ID3DXEffect *iface, 
 
     if (!parameter)
     {
-        for (i = 0; i < effect->parameter_count; ++i)
+        for (i = 0; i < effect->params.count; ++i)
         {
-            temp_param = &effect->parameters[i].param;
+            temp_param = &effect->params.parameters[i].param;
 
             if (!temp_param->semantic)
             {
@@ -2263,10 +2286,10 @@ static D3DXHANDLE WINAPI d3dx_effect_GetParameterElement(ID3DXEffect *iface, D3D
 
     if (!param)
     {
-        if (index < effect->parameter_count)
+        if (index < effect->params.count)
         {
-            TRACE("Returning parameter %p.\n", &effect->parameters[index]);
-            return get_parameter_handle(&effect->parameters[index].param);
+            TRACE("Returning parameter %p.\n", &effect->params.parameters[index]);
+            return get_parameter_handle(&effect->params.parameters[index].param);
         }
     }
     else
@@ -4178,8 +4201,8 @@ static HRESULT WINAPI d3dx_effect_OnLostDevice(ID3DXEffect *iface)
 
     TRACE("iface %p.\n", iface);
 
-    for (i = 0; i < effect->parameter_count; ++i)
-        walk_parameter_tree(&effect->parameters[i].param, param_on_lost_device, NULL);
+    for (i = 0; i < effect->params.count; ++i)
+        walk_parameter_tree(&effect->params.parameters[i].param, param_on_lost_device, NULL);
 
     return D3D_OK;
 }
@@ -4405,10 +4428,10 @@ static HRESULT WINAPI d3dx_effect_CloneEffect(ID3DXEffect *iface, IDirect3DDevic
         return hr;
     }
 
-    for (i = 0; i < src->parameter_count; ++i)
+    for (i = 0; i < src->params.count; ++i)
     {
-        const struct d3dx_top_level_parameter *src_param = &src->parameters[i];
-        struct d3dx_top_level_parameter *dst_param = &dst->parameters[i];
+        const struct d3dx_top_level_parameter *src_param = &src->params.parameters[i];
+        struct d3dx_top_level_parameter *dst_param = &dst->params.parameters[i];
 
         copy_parameter(dst, src, &dst_param->param, &src_param->param);
         for (j = 0; j < src_param->annotation_count; ++j)
@@ -5375,14 +5398,6 @@ static void param_set_magic_number(struct d3dx_parameter *param)
     memcpy(param->magic_string, parameter_magic_string, sizeof(parameter_magic_string));
 }
 
-static int param_rb_compare(const void *key, const struct wine_rb_entry *entry)
-{
-    const char *name = key;
-    struct d3dx_parameter *param = WINE_RB_ENTRY_VALUE(entry, struct d3dx_parameter, rb_entry);
-
-    return strcmp(name, param->full_name);
-}
-
 static void add_param_to_tree(struct d3dx_effect *effect, struct d3dx_parameter *param,
         struct d3dx_parameter *parent, char separator, unsigned int element)
 {
@@ -5438,7 +5453,7 @@ static void add_param_to_tree(struct d3dx_effect *effect, struct d3dx_parameter 
         memcpy(param->full_name, param->name, len);
     }
     TRACE("Full name is %s.\n", param->full_name);
-    wine_rb_put(&effect->param_tree, param->full_name, &param->rb_entry);
+    wine_rb_put(&effect->params.tree, param->full_name, &param->rb_entry);
 
     if (is_top_level_parameter(param))
         for (i = 0; i < param->top_level_param->annotation_count; ++i)
@@ -6071,7 +6086,7 @@ static HRESULT d3dx_parse_array_selector(struct d3dx_effect *effect, struct d3dx
     TRACE("Parsing array entry selection state for parameter %p.\n", param);
 
     string_size = *(uint32_t *)ptr;
-    state->referenced_param = get_parameter_by_name(effect, NULL, ptr + 4);
+    state->referenced_param = get_parameter_by_name(&effect->params, NULL, ptr + 4);
     if (state->referenced_param)
     {
         TRACE("Mapping to parameter %s.\n", debugstr_a(state->referenced_param->name));
@@ -6085,7 +6100,7 @@ static HRESULT d3dx_parse_array_selector(struct d3dx_effect *effect, struct d3dx
 
     if (string_size % sizeof(uint32_t))
         FIXME("Unaligned string_size %u.\n", string_size);
-    if (FAILED(ret = d3dx_create_param_eval(effect, (uint32_t *)(ptr + string_size) + 1,
+    if (FAILED(ret = d3dx_create_param_eval(&effect->params, (uint32_t *)(ptr + string_size) + 1,
             object->size - (string_size + sizeof(uint32_t)), D3DXPT_INT, &param->param_eval,
             get_version_counter_ptr(effect), NULL, 0)))
         return ret;
@@ -6106,7 +6121,7 @@ static HRESULT d3dx_parse_array_selector(struct d3dx_effect *effect, struct d3dx
             {
                 TRACE("Creating preshader for object %u.\n", param->members[i].object_id);
                 object = &effect->objects[param->members[i].object_id];
-                if (FAILED(ret = d3dx_create_param_eval(effect, object->data, object->size, param->type,
+                if (FAILED(ret = d3dx_create_param_eval(&effect->params, object->data, object->size, param->type,
                         &param->members[i].param_eval, get_version_counter_ptr(effect),
                         skip_constants, skip_constants_count)))
                     break;
@@ -6145,13 +6160,13 @@ static HRESULT d3dx_parse_resource(struct d3dx_effect *effect, const char *data,
         struct d3dx_parameter *parameter;
         struct d3dx_sampler *sampler;
 
-        if (index >= effect->parameter_count)
+        if (index >= effect->params.count)
         {
-            FIXME("Index out of bounds: index %u >= parameter_count %u.\n", index, effect->parameter_count);
+            FIXME("Index out of bounds: index %u >= parameter count %u.\n", index, effect->params.count);
             return E_FAIL;
         }
 
-        parameter = &effect->parameters[index].param;
+        parameter = &effect->params.parameters[index].param;
         if (element_index != 0xffffffff)
         {
             if (element_index >= parameter->element_count && parameter->element_count != 0)
@@ -6224,7 +6239,7 @@ static HRESULT d3dx_parse_resource(struct d3dx_effect *effect, const char *data,
                     {
                         if (FAILED(hr = d3dx9_create_object(effect, object)))
                             return hr;
-                        if (FAILED(hr = d3dx_create_param_eval(effect, object->data, object->size, param->type,
+                        if (FAILED(hr = d3dx_create_param_eval(&effect->params, object->data, object->size, param->type,
                                 &param->param_eval, get_version_counter_ptr(effect),
                                 skip_constants, skip_constants_count)))
                             return hr;
@@ -6238,7 +6253,7 @@ static HRESULT d3dx_parse_resource(struct d3dx_effect *effect, const char *data,
                     state->type = ST_FXLC;
                     if (FAILED(hr = d3dx9_copy_data(effect, param->object_id, ptr)))
                         return hr;
-                    if (FAILED(hr = d3dx_create_param_eval(effect, object->data, object->size, param->type,
+                    if (FAILED(hr = d3dx_create_param_eval(&effect->params, object->data, object->size, param->type,
                             &param->param_eval, get_version_counter_ptr(effect), NULL, 0)))
                         return hr;
                     break;
@@ -6255,7 +6270,7 @@ static HRESULT d3dx_parse_resource(struct d3dx_effect *effect, const char *data,
                 return hr;
 
             TRACE("Looking for parameter %s.\n", debugstr_a(object->data));
-            state->referenced_param = get_parameter_by_name(effect, NULL, object->data);
+            state->referenced_param = get_parameter_by_name(&effect->params, NULL, object->data);
             if (state->referenced_param)
             {
                 struct d3dx_parameter *refpar = state->referenced_param;
@@ -6267,7 +6282,7 @@ static HRESULT d3dx_parse_resource(struct d3dx_effect *effect, const char *data,
 
                     if (!refpar->param_eval)
                     {
-                        if (FAILED(hr = d3dx_create_param_eval(effect, refobj->data, refobj->size,
+                        if (FAILED(hr = d3dx_create_param_eval(&effect->params, refobj->data, refobj->size,
                                 refpar->type, &refpar->param_eval, get_version_counter_ptr(effect),
                                 skip_constants, skip_constants_count)))
                             return hr;
@@ -6305,13 +6320,13 @@ static BOOL param_set_top_level_param(void *top_level_param, struct d3dx_paramet
 static HRESULT d3dx_parse_effect(struct d3dx_effect *effect, const char *data, UINT data_size,
         uint32_t start, const char **skip_constants, unsigned int skip_constants_count)
 {
-    unsigned int string_count, resource_count;
+    unsigned int string_count, resource_count, params_count;
     const char *ptr = data + start;
     unsigned int i;
     HRESULT hr;
 
-    effect->parameter_count = read_u32(&ptr);
-    TRACE("Parameter count: %u.\n", effect->parameter_count);
+    params_count = read_u32(&ptr);
+    TRACE("Parameter count: %u.\n", params_count);
 
     effect->technique_count = read_u32(&ptr);
     TRACE("Technique count: %u.\n", effect->technique_count);
@@ -6330,29 +6345,23 @@ static HRESULT d3dx_parse_effect(struct d3dx_effect *effect, const char *data, U
         goto err_out;
     }
 
-    wine_rb_init(&effect->param_tree, param_rb_compare);
-    if (effect->parameter_count)
+    if (FAILED(hr = d3dx_init_parameters_store(&effect->params, params_count)))
     {
-        effect->parameters = heap_alloc_zero(sizeof(*effect->parameters) * effect->parameter_count);
-        if (!effect->parameters)
+        hr = E_OUTOFMEMORY;
+        goto err_out;
+    }
+
+    for (i = 0; i < effect->params.count; ++i)
+    {
+        param_set_magic_number(&effect->params.parameters[i].param);
+        hr = d3dx_parse_effect_parameter(effect, &effect->params.parameters[i], data, &ptr, effect->objects);
+        if (hr != D3D_OK)
         {
-            ERR("Out of memory.\n");
-            hr = E_OUTOFMEMORY;
+            WARN("Failed to parse parameter %u.\n", i);
             goto err_out;
         }
-
-        for (i = 0; i < effect->parameter_count; ++i)
-        {
-            param_set_magic_number(&effect->parameters[i].param);
-            hr = d3dx_parse_effect_parameter(effect, &effect->parameters[i], data, &ptr, effect->objects);
-            if (hr != D3D_OK)
-            {
-                WARN("Failed to parse parameter %u.\n", i);
-                goto err_out;
-            }
-            walk_parameter_tree(&effect->parameters[i].param, param_set_top_level_param, &effect->parameters[i]);
-            add_param_to_tree(effect, &effect->parameters[i].param, NULL, 0, 0);
-        }
+        walk_parameter_tree(&effect->params.parameters[i].param, param_set_top_level_param, &effect->params.parameters[i]);
+        add_param_to_tree(effect, &effect->params.parameters[i].param, NULL, 0, 0);
     }
 
     if (effect->technique_count)
@@ -6412,12 +6421,12 @@ static HRESULT d3dx_parse_effect(struct d3dx_effect *effect, const char *data, U
         }
     }
 
-    for (i = 0; i < effect->parameter_count; ++i)
+    for (i = 0; i < effect->params.count; ++i)
     {
-        if (FAILED(hr = d3dx_pool_sync_shared_parameter(effect->pool, &effect->parameters[i])))
+        if (FAILED(hr = d3dx_pool_sync_shared_parameter(effect->pool, &effect->params.parameters[i])))
             goto err_out;
-        effect->parameters[i].version_counter = get_version_counter_ptr(effect);
-        set_dirty(&effect->parameters[i].param);
+        effect->params.parameters[i].version_counter = get_version_counter_ptr(effect);
+        set_dirty(&effect->params.parameters[i].param);
     }
     return D3D_OK;
 
@@ -6431,15 +6440,7 @@ err_out:
         effect->techniques = NULL;
     }
 
-    if (effect->parameters)
-    {
-        for (i = 0; i < effect->parameter_count; ++i)
-        {
-            free_top_level_parameter(&effect->parameters[i]);
-        }
-        heap_free(effect->parameters);
-        effect->parameters = NULL;
-    }
+    d3dx_parameters_store_cleanup(&effect->params);
 
     if (effect->objects)
     {
@@ -6587,7 +6588,7 @@ static HRESULT d3dx9_effect_init_from_dxbc(struct d3dx_effect *effect,
     for (i = 0; i < skip_constants_count; ++i)
     {
         struct d3dx_parameter *param;
-        param = get_parameter_by_name(effect, NULL, skip_constants[i]);
+        param = get_parameter_by_name(&effect->params, NULL, skip_constants[i]);
         if (param)
         {
             for (j = 0; j < effect->technique_count; ++j)
@@ -6630,11 +6631,11 @@ fail:
         heap_free(effect->techniques);
     }
 
-    if (effect->parameters)
+    if (effect->params.parameters)
     {
-        for (i = 0; i < effect->parameter_count; ++i)
-            free_top_level_parameter(&effect->parameters[i]);
-        heap_free(effect->parameters);
+        for (i = 0; i < effect->params.count; ++i)
+            free_top_level_parameter(&effect->params.parameters[i]);
+        heap_free(effect->params.parameters);
     }
 
     if (effect->objects)

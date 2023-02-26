@@ -173,6 +173,7 @@ static const NodeImplVtbl HTMLTitleElementImplVtbl = {
     HTMLTitleElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col
 };
@@ -194,7 +195,7 @@ HRESULT HTMLTitleElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HT
 {
     HTMLTitleElement *ret;
 
-    ret = heap_alloc_zero(sizeof(*ret));
+    ret = calloc(1, sizeof(*ret));
     if(!ret)
         return E_OUTOFMEMORY;
 
@@ -345,6 +346,7 @@ static const NodeImplVtbl HTMLHtmlElementImplVtbl = {
     HTMLHtmlElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -379,7 +381,7 @@ HRESULT HTMLHtmlElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HTM
 {
     HTMLHtmlElement *ret;
 
-    ret = heap_alloc_zero(sizeof(*ret));
+    ret = calloc(1, sizeof(*ret));
     if(!ret)
         return E_OUTOFMEMORY;
 
@@ -594,6 +596,7 @@ static const NodeImplVtbl HTMLMetaElementImplVtbl = {
     HTMLMetaElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col
 };
@@ -616,7 +619,7 @@ HRESULT HTMLMetaElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HTM
 {
     HTMLMetaElement *ret;
 
-    ret = heap_alloc_zero(sizeof(*ret));
+    ret = calloc(1, sizeof(*ret));
     if(!ret)
         return E_OUTOFMEMORY;
 
@@ -759,6 +762,7 @@ static const NodeImplVtbl HTMLHeadElementImplVtbl = {
     HTMLHeadElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col
 };
@@ -780,7 +784,7 @@ HRESULT HTMLHeadElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HTM
 {
     HTMLHeadElement *ret;
 
-    ret = heap_alloc_zero(sizeof(*ret));
+    ret = calloc(1, sizeof(*ret));
     if(!ret)
         return E_OUTOFMEMORY;
 

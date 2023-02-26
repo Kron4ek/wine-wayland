@@ -108,7 +108,7 @@ static WINDOWPROC *find_winproc( WNDPROC func, BOOL ansi )
 
 /* return the window proc for a given handle, or NULL for an invalid handle,
  * or WINPROC_PROC16 for a handle to a 16-bit proc. */
-WINDOWPROC *get_winproc_ptr( WNDPROC handle )
+static WINDOWPROC *get_winproc_ptr( WNDPROC handle )
 {
     UINT index = LOWORD(handle);
     if ((ULONG_PTR)handle >> 16 != WINPROC_HANDLE) return NULL;
@@ -241,9 +241,9 @@ DLGPROC get_dialog_proc( DLGPROC ret, BOOL ansi )
 {
     WINDOWPROC *proc;
 
-    if (!(proc = get_winproc_ptr( ret ))) return ret;
+    if (!(proc = get_winproc_ptr( (WNDPROC)ret ))) return ret;
     if (proc == WINPROC_PROC16) return WINPROC_PROC16;
-    return ansi ? proc->procA : proc->procW;
+    return (DLGPROC)(ansi ? proc->procA : proc->procW);
 }
 
 static void init_user(void)
@@ -353,8 +353,9 @@ static void release_class_ptr( CLASS *ptr )
 static CLASS *find_class( HINSTANCE module, UNICODE_STRING *name )
 {
     ATOM atom = get_int_atom_value( name );
-    ULONG_PTR instance = (UINT_PTR)module & ~0xffff;
+    ULONG_PTR instance = (UINT_PTR)module;
     CLASS *class;
+    int is_win16;
 
     user_lock();
     LIST_FOR_EACH_ENTRY( class, &class_list, CLASS, entry )
@@ -368,7 +369,9 @@ static CLASS *find_class( HINSTANCE module, UNICODE_STRING *name )
             if (wcsnicmp( class->name, name->Buffer, name->Length / sizeof(WCHAR) ) ||
                 class->name[name->Length / sizeof(WCHAR)]) continue;
         }
-        if (!class->local || !module || (class->instance & ~0xffff) == instance)
+        is_win16 = !(class->instance >> 16);
+        if (!instance || !class->local || class->instance == instance ||
+            (!is_win16 && ((class->instance & ~0xffff) == (instance & ~0xffff))))
         {
             TRACE( "%s %lx -> %p\n", debugstr_us(name), instance, class );
             return class;

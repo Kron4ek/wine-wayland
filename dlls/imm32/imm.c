@@ -33,7 +33,7 @@
 #include "winerror.h"
 #include "wine/debug.h"
 #include "imm.h"
-#include "ddk/imm.h"
+#include "immdev.h"
 #include "winnls.h"
 #include "winreg.h"
 #include "wine/list.h"
@@ -62,13 +62,13 @@ typedef struct _tagImmHkl{
     HWND        UIWnd;
 
     /* Function Pointers */
-    BOOL (WINAPI *pImeInquire)(IMEINFO *, WCHAR *, const WCHAR *);
+    BOOL (WINAPI *pImeInquire)(IMEINFO *, WCHAR *, DWORD);
     BOOL (WINAPI *pImeConfigure)(HKL, HWND, DWORD, void *);
     BOOL (WINAPI *pImeDestroy)(UINT);
     LRESULT (WINAPI *pImeEscape)(HIMC, UINT, void *);
     BOOL (WINAPI *pImeSelect)(HIMC, BOOL);
     BOOL (WINAPI *pImeSetActiveContext)(HIMC, BOOL);
-    UINT (WINAPI *pImeToAsciiEx)(UINT, UINT, const BYTE *, DWORD *, UINT, HIMC);
+    UINT (WINAPI *pImeToAsciiEx)(UINT, UINT, const BYTE *, TRANSMSGLIST *, UINT, HIMC);
     BOOL (WINAPI *pNotifyIME)(HIMC, DWORD, DWORD, DWORD);
     BOOL (WINAPI *pImeRegisterWord)(const WCHAR *, DWORD, const WCHAR *);
     BOOL (WINAPI *pImeUnregisterWord)(const WCHAR *, DWORD, const WCHAR *);
@@ -79,6 +79,9 @@ typedef struct _tagImmHkl{
     UINT (WINAPI *pImeGetRegisterWordStyle)(UINT, STYLEBUFW *);
     DWORD (WINAPI *pImeGetImeMenuItems)(HIMC, DWORD, DWORD, IMEMENUITEMINFOW *, IMEMENUITEMINFOW *, DWORD);
 } ImmHkl;
+
+static HRESULT (WINAPI *pCoRevokeInitializeSpy)(ULARGE_INTEGER cookie);
+static void (WINAPI *pCoUninitialize)(void);
 
 typedef struct tagInputContextData
 {
@@ -93,12 +96,6 @@ typedef struct tagInputContextData
 } InputContextData;
 
 #define WINE_IMC_VALID_MAGIC 0x56434D49
-
-typedef struct _tagTRANSMSG {
-    UINT message;
-    WPARAM wParam;
-    LPARAM lParam;
-} TRANSMSG, *LPTRANSMSG;
 
 struct coinit_spy
 {
@@ -249,7 +246,7 @@ static void imm_couninit_thread(BOOL cleanup)
 
     if (cleanup && spy->cookie.QuadPart)
     {
-        CoRevokeInitializeSpy(spy->cookie);
+        pCoRevokeInitializeSpy(spy->cookie);
         spy->cookie.QuadPart = 0;
     }
 
@@ -261,7 +258,7 @@ static void imm_couninit_thread(BOOL cleanup)
     {
         spy->apt_flags &= ~IMM_APT_CREATED;
         if (spy->apt_flags & IMM_APT_CAN_FREE)
-            CoUninitialize();
+            pCoUninitialize();
     }
     if (cleanup)
         spy->apt_flags = 0;
@@ -359,10 +356,19 @@ static const IInitializeSpyVtbl InitializeSpyVtbl =
     InitializeSpy_PostUninitialize,
 };
 
+static BOOL WINAPI init_ole32_funcs( INIT_ONCE *once, void *param, void **context )
+{
+    HMODULE module_ole32 = GetModuleHandleA("ole32");
+    pCoRevokeInitializeSpy = (void*)GetProcAddress(module_ole32, "CoRevokeInitializeSpy");
+    pCoUninitialize = (void*)GetProcAddress(module_ole32, "CoUninitialize");
+    return TRUE;
+}
+
 static void imm_coinit_thread(void)
 {
     struct coinit_spy *spy;
     HRESULT hr;
+    static INIT_ONCE init_ole32_once = INIT_ONCE_STATIC_INIT;
 
     TRACE("implicit COM initialization\n");
 
@@ -391,6 +397,8 @@ static void imm_coinit_thread(void)
     hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (SUCCEEDED(hr))
         spy->apt_flags |= IMM_APT_CREATED;
+
+    InitOnceExecuteOnce(&init_ole32_once, init_ole32_funcs, NULL, NULL);
 }
 
 static BOOL IMM_IsDefaultContext(HIMC imc)
@@ -494,7 +502,7 @@ static ImmHkl *IMM_GetImmHkl(HKL hkl)
     if (ptr->hIME)
     {
         LOAD_FUNCPTR(ImeInquire);
-        if (!ptr->pImeInquire || !ptr->pImeInquire(&ptr->imeInfo, ptr->imeClassName, NULL))
+        if (!ptr->pImeInquire || !ptr->pImeInquire(&ptr->imeInfo, ptr->imeClassName, 0))
         {
             FreeLibrary(ptr->hIME);
             ptr->hIME = NULL;
@@ -2363,6 +2371,9 @@ BOOL WINAPI ImmSetCompositionStringA(
     if (!data)
         return FALSE;
 
+    if (IMM_IsCrossThreadAccess(NULL, hIMC))
+        return FALSE;
+
     if (!(dwIndex == SCS_SETSTR ||
           dwIndex == SCS_CHANGEATTR ||
           dwIndex == SCS_CHANGECLAUSE ||
@@ -2416,6 +2427,9 @@ BOOL WINAPI ImmSetCompositionStringW(
             hIMC, dwIndex, lpComp, dwCompLen, lpRead, dwReadLen);
 
     if (!data)
+        return FALSE;
+
+    if (IMM_IsCrossThreadAccess(NULL, hIMC))
         return FALSE;
 
     if (!(dwIndex == SCS_SETSTR ||
@@ -2984,7 +2998,7 @@ BOOL WINAPI ImmTranslateMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lKeyD
     HIMC imc = ImmGetContext(hwnd);
     BYTE state[256];
     UINT scancode;
-    LPVOID list = 0;
+    TRANSMSGLIST *list = NULL;
     UINT msg_count;
     UINT uVirtKey;
     static const DWORD list_count = 10;
@@ -3000,7 +3014,7 @@ BOOL WINAPI ImmTranslateMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lKeyD
     scancode = lKeyData >> 0x10 & 0xff;
 
     list = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, list_count * sizeof(TRANSMSG) + sizeof(DWORD));
-    ((DWORD*)list)[0] = list_count;
+    list->uMsgCount = list_count;
 
     if (data->immKbd->imeInfo.fdwProperty & IME_PROP_KBD_CHAR_FIRST)
     {
@@ -3020,7 +3034,7 @@ BOOL WINAPI ImmTranslateMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lKeyD
     if (msg_count && msg_count <= list_count)
     {
         UINT i;
-        LPTRANSMSG msgs = (LPTRANSMSG)((LPBYTE)list + sizeof(DWORD));
+        LPTRANSMSG msgs = list->TransMsg;
 
         for (i = 0; i < msg_count; i++)
             ImmInternalPostIMEMessage(data, msgs[i].message, msgs[i].wParam, msgs[i].lParam);
@@ -3102,7 +3116,7 @@ BOOL WINAPI ImmEnumInputContext(DWORD idThread, IMCENUMPROC lpfn, LPARAM lParam)
  *              ImmGetHotKey(IMM32.@)
  */
 
-BOOL WINAPI ImmGetHotKey(DWORD hotkey, UINT *modifiers, UINT *key, HKL hkl)
+BOOL WINAPI ImmGetHotKey(DWORD hotkey, UINT *modifiers, UINT *key, HKL *hkl)
 {
     FIXME("%lx, %p, %p, %p: stub\n", hotkey, modifiers, key, hkl);
     return FALSE;

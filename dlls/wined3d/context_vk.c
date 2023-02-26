@@ -667,7 +667,7 @@ void wined3d_context_vk_destroy_vk_framebuffer(struct wined3d_context_vk *contex
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkDestroyFramebuffer(device_vk->vk_device, vk_framebuffer, NULL));
         TRACE("Destroyed framebuffer 0x%s.\n", wine_dbgstr_longlong(vk_framebuffer));
@@ -708,7 +708,7 @@ static void wined3d_context_vk_reset_vk_descriptor_pool(struct wined3d_context_v
 {
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         wined3d_context_vk_return_vk_descriptor_pool(context_vk, vk_descriptor_pool);
         TRACE("Reset descriptor pool 0x%s.\n", wine_dbgstr_longlong(vk_descriptor_pool));
@@ -733,7 +733,7 @@ void wined3d_context_vk_destroy_vk_memory(struct wined3d_context_vk *context_vk,
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkFreeMemory(device_vk->vk_device, vk_memory, NULL));
         TRACE("Freed memory 0x%s.\n", wine_dbgstr_longlong(vk_memory));
@@ -756,7 +756,7 @@ void wined3d_context_vk_destroy_allocator_block(struct wined3d_context_vk *conte
 {
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         wined3d_context_vk_free_memory(context_vk, block);
         TRACE("Freed block %p.\n", block);
@@ -811,7 +811,7 @@ static void wined3d_context_vk_destroy_bo_slab_slice(struct wined3d_context_vk *
 {
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         wined3d_bo_slab_vk_free_slice(slab, idx, context_vk);
         return;
@@ -836,7 +836,7 @@ static void wined3d_context_vk_destroy_vk_buffer(struct wined3d_context_vk *cont
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkDestroyBuffer(device_vk->vk_device, vk_buffer, NULL));
         TRACE("Destroyed buffer 0x%s.\n", wine_dbgstr_longlong(vk_buffer));
@@ -861,7 +861,7 @@ void wined3d_context_vk_destroy_vk_image(struct wined3d_context_vk *context_vk,
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkDestroyImage(device_vk->vk_device, vk_image, NULL));
         TRACE("Destroyed image 0x%s.\n", wine_dbgstr_longlong(vk_image));
@@ -886,7 +886,7 @@ void wined3d_context_vk_destroy_vk_buffer_view(struct wined3d_context_vk *contex
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkDestroyBufferView(device_vk->vk_device, vk_view, NULL));
         TRACE("Destroyed buffer view 0x%s.\n", wine_dbgstr_longlong(vk_view));
@@ -911,7 +911,7 @@ void wined3d_context_vk_destroy_vk_image_view(struct wined3d_context_vk *context
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkDestroyImageView(device_vk->vk_device, vk_view, NULL));
         TRACE("Destroyed image view 0x%s.\n", wine_dbgstr_longlong(vk_view));
@@ -971,7 +971,7 @@ void wined3d_context_vk_destroy_vk_pipeline(struct wined3d_context_vk *context_v
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkDestroyPipeline(device_vk->vk_device, vk_pipeline, NULL));
         TRACE("Destroyed pipeline 0x%s.\n", wine_dbgstr_longlong(vk_pipeline));
@@ -997,7 +997,7 @@ void wined3d_context_vk_destroy_vk_sampler(struct wined3d_context_vk *context_vk
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkDestroySampler(device_vk->vk_device, vk_sampler, NULL));
         TRACE("Destroyed sampler 0x%s.\n", wine_dbgstr_longlong(vk_sampler));
@@ -1022,7 +1022,7 @@ void wined3d_context_vk_destroy_vk_event(struct wined3d_context_vk *context_vk,
     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
     struct wined3d_retired_object_vk *o;
 
-    if (context_vk->completed_command_buffer_id > command_buffer_id)
+    if (context_vk->completed_command_buffer_id >= command_buffer_id)
     {
         VK_CALL(vkDestroyEvent(device_vk->vk_device, vk_event, NULL));
         TRACE("Destroyed event 0x%s.\n", wine_dbgstr_longlong(vk_event));
@@ -1985,10 +1985,9 @@ static int wined3d_graphics_pipeline_vk_compare(const void *key, const struct wi
     if ((ret = wined3d_uint32_compare(a->ts_desc.patchControlPoints, b->ts_desc.patchControlPoints)))
         return ret;
 
-    if ((ret = memcmp(&a->viewport, &b->viewport, sizeof(a->viewport))))
+    if ((ret = memcmp(a->viewports, b->viewports, sizeof(a->viewports))))
         return ret;
-
-    if ((ret = memcmp(&a->scissor, &b->scissor, sizeof(a->scissor))))
+    if ((ret = memcmp(a->scissors, b->scissors, sizeof(a->scissors))))
         return ret;
 
     if ((ret = memcmp(&a->rs_desc, &b->rs_desc, sizeof(a->rs_desc))))
@@ -2066,10 +2065,8 @@ static void wined3d_context_vk_init_graphics_pipeline_key(struct wined3d_context
     key->ts_desc.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
 
     key->vp_desc.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    key->vp_desc.viewportCount = 1;
-    key->vp_desc.pViewports = &key->viewport;
-    key->vp_desc.scissorCount = 1;
-    key->vp_desc.pScissors = &key->scissor;
+    key->vp_desc.pViewports = key->viewports;
+    key->vp_desc.pScissors = key->scissors;
 
     key->rs_desc.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     key->rs_desc.lineWidth = 1.0f;
@@ -2418,36 +2415,65 @@ static bool wined3d_context_vk_update_graphics_pipeline_key(struct wined3d_conte
             || wined3d_context_is_graphics_state_dirty(&context_vk->c, STATE_SCISSORRECT)
             || wined3d_context_is_graphics_state_dirty(&context_vk->c, STATE_RASTERIZER))
     {
-        key->viewport.x = state->viewports[0].x;
-        key->viewport.y = state->viewports[0].y;
-        key->viewport.width = state->viewports[0].width;
-        key->viewport.height = state->viewports[0].height;
-        key->viewport.minDepth = state->viewports[0].min_z;
-        key->viewport.maxDepth = state->viewports[0].max_z;
+        key->vp_desc.viewportCount = (context_vk->vk_info->multiple_viewports ? WINED3D_MAX_VIEWPORTS : 1);
+        key->vp_desc.scissorCount = key->vp_desc.viewportCount;
 
-        if (state->rasterizer_state && state->rasterizer_state->desc.scissor)
+        for (i = 0; i < key->vp_desc.viewportCount; ++i)
         {
-            const RECT *r = &state->scissor_rects[0];
+            const struct wined3d_viewport *src_viewport = &state->viewports[i];
+            VkViewport *viewport = &key->viewports[i];
+            VkRect2D *scissor = &key->scissors[i];
 
-            key->scissor.offset.x = r->left;
-            key->scissor.offset.y = r->top;
-            key->scissor.extent.width =  r->right - r->left;
-            key->scissor.extent.height = r->bottom - r->top;
+            if (i >= state->viewport_count)
+            {
+                viewport->x = 0.0f;
+                viewport->y = 0.0f;
+                viewport->width = 1.0f;
+                viewport->height = 1.0f;
+                viewport->minDepth = 0.0f;
+                viewport->maxDepth = 0.0f;
+
+                memset(scissor, 0, sizeof(*scissor));
+                continue;
+            }
+
+            viewport->x = src_viewport->x;
+            viewport->y = src_viewport->y;
+            viewport->width = src_viewport->width;
+            viewport->height = src_viewport->height;
+            viewport->minDepth = src_viewport->min_z;
+            viewport->maxDepth = src_viewport->max_z;
+
+            if (state->rasterizer_state && state->rasterizer_state->desc.scissor)
+            {
+                const RECT *r = &state->scissor_rects[i];
+
+                if (i >= state->scissor_rect_count)
+                {
+                    memset(scissor, 0, sizeof(*scissor));
+                    continue;
+                }
+
+                scissor->offset.x = r->left;
+                scissor->offset.y = r->top;
+                scissor->extent.width =  r->right - r->left;
+                scissor->extent.height = r->bottom - r->top;
+            }
+            else
+            {
+                scissor->offset.x = viewport->x;
+                scissor->offset.y = viewport->y;
+                scissor->extent.width = viewport->width;
+                scissor->extent.height = viewport->height;
+            }
+            /* Scissor offsets need to be non-negative (VUID-VkPipelineViewportStateCreateInfo-x-02821) */
+            if (scissor->offset.x < 0)
+                scissor->offset.x = 0;
+            if (scissor->offset.y < 0)
+                scissor->offset.y = 0;
+            viewport->y += viewport->height;
+            viewport->height = -viewport->height;
         }
-        else
-        {
-            key->scissor.offset.x = key->viewport.x;
-            key->scissor.offset.y = key->viewport.y;
-            key->scissor.extent.width = key->viewport.width;
-            key->scissor.extent.height = key->viewport.height;
-        }
-        /* Scissor offsets need to be non-negative (VUID-VkPipelineViewportStateCreateInfo-x-02821) */
-        if (key->scissor.offset.x < 0)
-            key->scissor.offset.x = 0;
-        if (key->scissor.offset.y < 0)
-            key->scissor.offset.y = 0;
-        key->viewport.y += key->viewport.height;
-        key->viewport.height = -key->viewport.height;
 
         update = true;
     }

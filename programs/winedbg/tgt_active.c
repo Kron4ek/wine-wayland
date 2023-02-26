@@ -153,7 +153,7 @@ static BOOL dbg_exception_prolog(BOOL is_debug, const EXCEPTION_RECORD* rec)
 
     if (addr.Mode != dbg_curr_thread->addr_mode)
     {
-        const char* name = NULL;
+        const char* name;
 
         switch (addr.Mode)
         {
@@ -162,6 +162,7 @@ static BOOL dbg_exception_prolog(BOOL is_debug, const EXCEPTION_RECORD* rec)
         case AddrModeReal: name = "vm86";       break;
         case AddrModeFlat: name = dbg_curr_process->be_cpu->pointer_size == 4
                                   ? "32 bit" : "64 bit"; break;
+        default: return FALSE;
         }
         dbg_printf("In %s mode.\n", name);
         dbg_curr_thread->addr_mode = addr.Mode;
@@ -500,8 +501,7 @@ static unsigned dbg_handle_debug_event(DEBUG_EVENT* de)
                    de->dwProcessId, de->dwThreadId,
                    de->u.UnloadDll.lpBaseOfDll);
         break_delete_xpoints_from_module((DWORD_PTR)de->u.UnloadDll.lpBaseOfDll);
-        types_unload_module((DWORD_PTR)de->u.UnloadDll.lpBaseOfDll);
-        SymUnloadModule64(dbg_curr_process->handle, (DWORD_PTR)de->u.UnloadDll.lpBaseOfDll);
+        dbg_unload_module(dbg_curr_process, (DWORD_PTR)de->u.UnloadDll.lpBaseOfDll);
         break;
 
     case OUTPUT_DEBUG_STRING_EVENT:

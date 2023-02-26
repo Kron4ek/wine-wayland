@@ -110,7 +110,7 @@ static inline ULONGLONG monotonic_counter(void)
 
 static int futex_private = 128;
 
-static inline int futex_wait( const int *addr, int val, struct timespec *timeout )
+static inline int futex_wait( const LONG *addr, int val, struct timespec *timeout )
 {
 #if (defined(__i386__) || defined(__arm__)) && _TIME_BITS==64
     if (timeout && sizeof(*timeout) != 8)
@@ -126,14 +126,14 @@ static inline int futex_wait( const int *addr, int val, struct timespec *timeout
     return syscall( __NR_futex, addr, FUTEX_WAIT | futex_private, val, timeout, 0, 0 );
 }
 
-static inline int futex_wake( const int *addr, int val )
+static inline int futex_wake( const LONG *addr, int val )
 {
     return syscall( __NR_futex, addr, FUTEX_WAKE | futex_private, val, NULL, 0, 0 );
 }
 
 static inline int use_futexes(void)
 {
-    static int supported = -1;
+    static LONG supported = -1;
 
     if (supported == -1)
     {
@@ -152,8 +152,8 @@ static inline int use_futexes(void)
 
 
 /* create a struct security_descriptor and contained information in one contiguous piece of memory */
-NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_attributes **ret,
-                                  data_size_t *ret_len )
+unsigned int alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_attributes **ret,
+                                      data_size_t *ret_len )
 {
     unsigned int len = sizeof(**ret);
     SID *owner = NULL, *group = NULL;
@@ -245,7 +245,7 @@ NTSTATUS alloc_object_attributes( const OBJECT_ATTRIBUTES *attr, struct object_a
 }
 
 
-static NTSTATUS validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr )
+static unsigned int validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr )
 {
     if (!attr || attr->Length != sizeof(*attr)) return STATUS_INVALID_PARAMETER;
 
@@ -266,7 +266,7 @@ static NTSTATUS validate_open_object_attributes( const OBJECT_ATTRIBUTES *attr )
 NTSTATUS WINAPI NtCreateSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
                                    LONG initial, LONG max )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -298,7 +298,7 @@ NTSTATUS WINAPI NtCreateSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJ
  */
 NTSTATUS WINAPI NtOpenSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -327,17 +327,17 @@ NTSTATUS WINAPI NtOpenSemaphore( HANDLE *handle, ACCESS_MASK access, const OBJEC
 NTSTATUS WINAPI NtQuerySemaphore( HANDLE handle, SEMAPHORE_INFORMATION_CLASS class,
                                   void *info, ULONG len, ULONG *ret_len )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     SEMAPHORE_BASIC_INFORMATION *out = info;
 
     if (do_fsync())
         return fsync_query_semaphore( handle, class, info, len, ret_len );
 
-    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
+    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, (int)len, ret_len);
 
     if (class != SemaphoreBasicInformation)
     {
-        FIXME("(%p,%d,%u) Unknown class\n", handle, class, len);
+        FIXME("(%p,%d,%u) Unknown class\n", handle, class, (int)len);
         return STATUS_INVALID_INFO_CLASS;
     }
 
@@ -363,7 +363,7 @@ NTSTATUS WINAPI NtQuerySemaphore( HANDLE handle, SEMAPHORE_INFORMATION_CLASS cla
  */
 NTSTATUS WINAPI NtReleaseSemaphore( HANDLE handle, ULONG count, ULONG *previous )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     if (do_fsync())
         return fsync_release_semaphore( handle, count, previous );
@@ -389,7 +389,7 @@ NTSTATUS WINAPI NtReleaseSemaphore( HANDLE handle, ULONG count, ULONG *previous 
 NTSTATUS WINAPI NtCreateEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
                                EVENT_TYPE type, BOOLEAN state )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -421,7 +421,7 @@ NTSTATUS WINAPI NtCreateEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_
  */
 NTSTATUS WINAPI NtOpenEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -449,7 +449,7 @@ NTSTATUS WINAPI NtOpenEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_AT
  */
 NTSTATUS WINAPI NtSetEvent( HANDLE handle, LONG *prev_state )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     if (do_fsync())
         return fsync_set_event( handle, prev_state );
@@ -472,7 +472,7 @@ NTSTATUS WINAPI NtSetEvent( HANDLE handle, LONG *prev_state )
  */
 NTSTATUS WINAPI NtResetEvent( HANDLE handle, LONG *prev_state )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     if (do_fsync())
         return fsync_reset_event( handle, prev_state );
@@ -505,7 +505,7 @@ NTSTATUS WINAPI NtClearEvent( HANDLE handle )
  */
 NTSTATUS WINAPI NtPulseEvent( HANDLE handle, LONG *prev_state )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     if (do_fsync())
         return fsync_pulse_event( handle, prev_state );
@@ -528,18 +528,17 @@ NTSTATUS WINAPI NtPulseEvent( HANDLE handle, LONG *prev_state )
 NTSTATUS WINAPI NtQueryEvent( HANDLE handle, EVENT_INFORMATION_CLASS class,
                               void *info, ULONG len, ULONG *ret_len )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     EVENT_BASIC_INFORMATION *out = info;
 
     if (do_fsync())
         return fsync_query_event( handle, class, info, len, ret_len );
 
-    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
+    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, (int)len, ret_len);
 
     if (class != EventBasicInformation)
     {
-        FIXME("(%p, %d, %d) Unknown class\n",
-              handle, class, len);
+        FIXME("(%p, %d, %d) Unknown class\n", handle, class, (int)len);
         return STATUS_INVALID_INFO_CLASS;
     }
 
@@ -566,7 +565,7 @@ NTSTATUS WINAPI NtQueryEvent( HANDLE handle, EVENT_INFORMATION_CLASS class,
 NTSTATUS WINAPI NtCreateMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
                                 BOOLEAN owned )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -596,7 +595,7 @@ NTSTATUS WINAPI NtCreateMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT
  */
 NTSTATUS WINAPI NtOpenMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -624,7 +623,7 @@ NTSTATUS WINAPI NtOpenMutant( HANDLE *handle, ACCESS_MASK access, const OBJECT_A
  */
 NTSTATUS WINAPI NtReleaseMutant( HANDLE handle, LONG *prev_count )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     if (do_fsync())
         return fsync_release_mutex( handle, prev_count );
@@ -646,17 +645,17 @@ NTSTATUS WINAPI NtReleaseMutant( HANDLE handle, LONG *prev_count )
 NTSTATUS WINAPI NtQueryMutant( HANDLE handle, MUTANT_INFORMATION_CLASS class,
                                void *info, ULONG len, ULONG *ret_len )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     MUTANT_BASIC_INFORMATION *out = info;
 
     if (do_fsync())
         return fsync_query_mutex( handle, class, info, len, ret_len );
 
-    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, len, ret_len);
+    TRACE("(%p, %u, %p, %u, %p)\n", handle, class, info, (int)len, ret_len);
 
     if (class != MutantBasicInformation)
     {
-        FIXME( "(%p, %d, %d) Unknown class\n", handle, class, len );
+        FIXME( "(%p, %d, %d) Unknown class\n", handle, class, (int)len );
         return STATUS_INVALID_INFO_CLASS;
     }
 
@@ -683,7 +682,7 @@ NTSTATUS WINAPI NtQueryMutant( HANDLE handle, MUTANT_INFORMATION_CLASS class,
  */
 NTSTATUS WINAPI NtCreateJobObject( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -708,7 +707,7 @@ NTSTATUS WINAPI NtCreateJobObject( HANDLE *handle, ACCESS_MASK access, const OBJ
  */
 NTSTATUS WINAPI NtOpenJobObject( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -733,9 +732,9 @@ NTSTATUS WINAPI NtOpenJobObject( HANDLE *handle, ACCESS_MASK access, const OBJEC
  */
 NTSTATUS WINAPI NtTerminateJobObject( HANDLE handle, NTSTATUS status )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
-    TRACE( "(%p, %d)\n", handle, status );
+    TRACE( "(%p, %d)\n", handle, (int)status );
 
     SERVER_START_REQ( terminate_job )
     {
@@ -755,9 +754,9 @@ NTSTATUS WINAPI NtTerminateJobObject( HANDLE handle, NTSTATUS status )
 NTSTATUS WINAPI NtQueryInformationJobObject( HANDLE handle, JOBOBJECTINFOCLASS class, void *info,
                                              ULONG len, ULONG *ret_len )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
-    TRACE( "semi-stub: %p %u %p %u %p\n", handle, class, info, len, ret_len );
+    TRACE( "semi-stub: %p %u %p %u %p\n", handle, class, info, (int)len, ret_len );
 
     if (class >= MaxJobObjectInfoClass) return STATUS_INVALID_PARAMETER;
 
@@ -849,12 +848,12 @@ NTSTATUS WINAPI NtQueryInformationJobObject( HANDLE handle, JOBOBJECTINFOCLASS c
  */
 NTSTATUS WINAPI NtSetInformationJobObject( HANDLE handle, JOBOBJECTINFOCLASS class, void *info, ULONG len )
 {
-    NTSTATUS status = STATUS_NOT_IMPLEMENTED;
+    unsigned int status = STATUS_NOT_IMPLEMENTED;
     JOBOBJECT_BASIC_LIMIT_INFORMATION *basic_limit;
     ULONG info_size = sizeof(JOBOBJECT_BASIC_LIMIT_INFORMATION);
     DWORD limit_flags = JOB_OBJECT_BASIC_LIMIT_VALID_FLAGS;
 
-    TRACE( "(%p, %u, %p, %u)\n", handle, class, info, len );
+    TRACE( "(%p, %u, %p, %u)\n", handle, class, info, (int)len );
 
     if (class >= MaxJobObjectInfoClass) return STATUS_INVALID_PARAMETER;
 
@@ -893,7 +892,7 @@ NTSTATUS WINAPI NtSetInformationJobObject( HANDLE handle, JOBOBJECTINFOCLASS cla
         status = STATUS_SUCCESS;
         /* fall through */
     default:
-        FIXME( "stub: %p %u %p %u\n", handle, class, info, len );
+        FIXME( "stub: %p %u %p %u\n", handle, class, info, (int)len );
     }
     return status;
 }
@@ -904,7 +903,7 @@ NTSTATUS WINAPI NtSetInformationJobObject( HANDLE handle, JOBOBJECTINFOCLASS cla
  */
 NTSTATUS WINAPI NtIsProcessInJob( HANDLE process, HANDLE job )
 {
-    NTSTATUS status;
+    unsigned int status;
 
     TRACE( "(%p %p)\n", job, process );
 
@@ -924,7 +923,7 @@ NTSTATUS WINAPI NtIsProcessInJob( HANDLE process, HANDLE job )
  */
 NTSTATUS WINAPI NtAssignProcessToJobObject( HANDLE job, HANDLE process )
 {
-    NTSTATUS status;
+    unsigned int status;
 
     TRACE( "(%p %p)\n", job, process );
 
@@ -945,7 +944,7 @@ NTSTATUS WINAPI NtAssignProcessToJobObject( HANDLE job, HANDLE process )
 NTSTATUS WINAPI NtCreateDebugObject( HANDLE *handle, ACCESS_MASK access,
                                      OBJECT_ATTRIBUTES *attr, ULONG flags )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -973,7 +972,7 @@ NTSTATUS WINAPI NtCreateDebugObject( HANDLE *handle, ACCESS_MASK access,
 NTSTATUS WINAPI NtSetInformationDebugObject( HANDLE handle, DEBUGOBJECTINFOCLASS class,
                                              void *info, ULONG len, ULONG *ret_len )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     ULONG flags;
 
     if (class != DebugObjectKillProcessOnExitInformation) return STATUS_INVALID_PARAMETER;
@@ -1071,7 +1070,7 @@ NTSTATUS WINAPI NtWaitForDebugEvent( HANDLE handle, BOOLEAN alertable, LARGE_INT
                                      DBGUI_WAIT_STATE_CHANGE *state )
 {
     debug_event_t data;
-    NTSTATUS ret;
+    unsigned int ret;
     BOOL wait = TRUE;
 
     for (;;)
@@ -1104,7 +1103,7 @@ NTSTATUS WINAPI NtWaitForDebugEvent( HANDLE handle, BOOLEAN alertable, LARGE_INT
  */
 NTSTATUS WINAPI NtCreateDirectoryObject( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -1129,7 +1128,7 @@ NTSTATUS WINAPI NtCreateDirectoryObject( HANDLE *handle, ACCESS_MASK access, OBJ
  */
 NTSTATUS WINAPI NtOpenDirectoryObject( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -1157,7 +1156,7 @@ NTSTATUS WINAPI NtQueryDirectoryObject( HANDLE handle, DIRECTORY_BASIC_INFORMATI
                                         ULONG *context, ULONG *ret_size )
 {
     ULONG index = restart ? 0 : *context;
-    NTSTATUS ret;
+    unsigned int ret;
 
     if (single_entry)
     {
@@ -1212,7 +1211,7 @@ NTSTATUS WINAPI NtQueryDirectoryObject( HANDLE handle, DIRECTORY_BASIC_INFORMATI
 NTSTATUS WINAPI NtCreateSymbolicLinkObject( HANDLE *handle, ACCESS_MASK access,
                                             OBJECT_ATTRIBUTES *attr, UNICODE_STRING *target )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -1241,7 +1240,7 @@ NTSTATUS WINAPI NtCreateSymbolicLinkObject( HANDLE *handle, ACCESS_MASK access,
 NTSTATUS WINAPI NtOpenSymbolicLinkObject( HANDLE *handle, ACCESS_MASK access,
                                           const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -1266,7 +1265,7 @@ NTSTATUS WINAPI NtOpenSymbolicLinkObject( HANDLE *handle, ACCESS_MASK access,
  */
 NTSTATUS WINAPI NtQuerySymbolicLinkObject( HANDLE handle, UNICODE_STRING *target, ULONG *length )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     if (!target) return STATUS_ACCESS_VIOLATION;
 
@@ -1293,7 +1292,7 @@ NTSTATUS WINAPI NtQuerySymbolicLinkObject( HANDLE handle, UNICODE_STRING *target
  */
 NTSTATUS WINAPI NtMakeTemporaryObject( HANDLE handle )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     TRACE("%p\n", handle);
 
@@ -1313,7 +1312,7 @@ NTSTATUS WINAPI NtMakeTemporaryObject( HANDLE handle )
 NTSTATUS WINAPI NtCreateTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr,
                                TIMER_TYPE type )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -1342,7 +1341,7 @@ NTSTATUS WINAPI NtCreateTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_
  */
 NTSTATUS WINAPI NtOpenTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -1368,9 +1367,9 @@ NTSTATUS WINAPI NtOpenTimer( HANDLE *handle, ACCESS_MASK access, const OBJECT_AT
 NTSTATUS WINAPI NtSetTimer( HANDLE handle, const LARGE_INTEGER *when, PTIMER_APC_ROUTINE callback,
                             void *arg, BOOLEAN resume, ULONG period, BOOLEAN *state )
 {
-    NTSTATUS ret = STATUS_SUCCESS;
+    unsigned int ret = STATUS_SUCCESS;
 
-    TRACE( "(%p,%p,%p,%p,%08x,0x%08x,%p)\n", handle, when, callback, arg, resume, period, state );
+    TRACE( "(%p,%p,%p,%p,%08x,0x%08x,%p)\n", handle, when, callback, arg, resume, (int)period, state );
 
     SERVER_START_REQ( set_timer )
     {
@@ -1395,7 +1394,7 @@ NTSTATUS WINAPI NtSetTimer( HANDLE handle, const LARGE_INTEGER *when, PTIMER_APC
  */
 NTSTATUS WINAPI NtCancelTimer( HANDLE handle, BOOLEAN *state )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     SERVER_START_REQ( cancel_timer )
     {
@@ -1415,10 +1414,10 @@ NTSTATUS WINAPI NtQueryTimer( HANDLE handle, TIMER_INFORMATION_CLASS class,
                               void *info, ULONG len, ULONG *ret_len )
 {
     TIMER_BASIC_INFORMATION *basic_info = info;
-    NTSTATUS ret;
+    unsigned int ret;
     LARGE_INTEGER now;
 
-    TRACE( "(%p,%d,%p,0x%08x,%p)\n", handle, class, info, len, ret_len );
+    TRACE( "(%p,%d,%p,0x%08x,%p)\n", handle, class, info, (int)len, ret_len );
 
     switch (class)
     {
@@ -1551,7 +1550,7 @@ NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeou
         }
 
         /* Note that we yield after establishing the desired timeout */
-        usleep(0);
+        NtYieldExecution();
         if (!when) return STATUS_SUCCESS;
 
         for (;;)
@@ -1654,7 +1653,7 @@ NTSTATUS WINAPI NtSetTimerResolution( ULONG res, BOOLEAN set, ULONG *current_res
 {
     static BOOL has_request = FALSE;
 
-    TRACE( "(%u,%u,%p), semi-stub!\n", res, set, current_res );
+    TRACE( "(%u,%u,%p), semi-stub!\n", (int)res, set, current_res );
 
     /* Wine has no support for anything other that 1 ms and does not keep of
      * track resolution requests anyway.
@@ -1680,7 +1679,7 @@ NTSTATUS WINAPI NtSetTimerResolution( ULONG res, BOOLEAN set, ULONG *current_res
  */
 NTSTATUS WINAPI NtSetIntervalProfile( ULONG interval, KPROFILE_SOURCE source )
 {
-    FIXME( "%u,%d\n", interval, source );
+    FIXME( "%u,%d\n", (int)interval, source );
     return STATUS_SUCCESS;
 }
 
@@ -1723,7 +1722,7 @@ NTSTATUS system_time_precise( void *args )
 NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
                                     const OBJECT_ATTRIBUTES *attr, ULONG flags )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     data_size_t len;
     struct object_attributes *objattr;
 
@@ -1749,7 +1748,7 @@ NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
  */
 NTSTATUS WINAPI NtOpenKeyedEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -1812,11 +1811,11 @@ NTSTATUS WINAPI NtReleaseKeyedEvent( HANDLE handle, const void *key,
 NTSTATUS WINAPI NtCreateIoCompletion( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
                                       ULONG threads )
 {
-    NTSTATUS status;
+    unsigned int status;
     data_size_t len;
     struct object_attributes *objattr;
 
-    TRACE( "(%p, %x, %p, %d)\n", handle, access, attr, threads );
+    TRACE( "(%p, %x, %p, %d)\n", handle, (int)access, attr, (int)threads );
 
     *handle = 0;
     if ((status = alloc_object_attributes( attr, &objattr, &len ))) return status;
@@ -1840,7 +1839,7 @@ NTSTATUS WINAPI NtCreateIoCompletion( HANDLE *handle, ACCESS_MASK access, OBJECT
  */
 NTSTATUS WINAPI NtOpenIoCompletion( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS status;
+    unsigned int status;
 
     *handle = 0;
     if ((status = validate_open_object_attributes( attr ))) return status;
@@ -1866,9 +1865,9 @@ NTSTATUS WINAPI NtOpenIoCompletion( HANDLE *handle, ACCESS_MASK access, const OB
 NTSTATUS WINAPI NtSetIoCompletion( HANDLE handle, ULONG_PTR key, ULONG_PTR value,
                                    NTSTATUS status, SIZE_T count )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
-    TRACE( "(%p, %lx, %lx, %x, %lx)\n", handle, key, value, status, count );
+    TRACE( "(%p, %lx, %lx, %x, %lx)\n", handle, key, value, (int)status, count );
 
     SERVER_START_REQ( add_completion )
     {
@@ -1890,7 +1889,7 @@ NTSTATUS WINAPI NtSetIoCompletion( HANDLE handle, ULONG_PTR key, ULONG_PTR value
 NTSTATUS WINAPI NtRemoveIoCompletion( HANDLE handle, ULONG_PTR *key, ULONG_PTR *value,
                                       IO_STATUS_BLOCK *io, LARGE_INTEGER *timeout )
 {
-    NTSTATUS status;
+    unsigned int status;
 
     TRACE( "(%p, %p, %p, %p, %p)\n", handle, key, value, io, timeout );
 
@@ -1921,10 +1920,10 @@ NTSTATUS WINAPI NtRemoveIoCompletion( HANDLE handle, ULONG_PTR *key, ULONG_PTR *
 NTSTATUS WINAPI NtRemoveIoCompletionEx( HANDLE handle, FILE_IO_COMPLETION_INFORMATION *info, ULONG count,
                                         ULONG *written, LARGE_INTEGER *timeout, BOOLEAN alertable )
 {
-    NTSTATUS status;
+    unsigned int status;
     ULONG i = 0;
 
-    TRACE( "%p %p %u %p %p %u\n", handle, info, count, written, timeout, alertable );
+    TRACE( "%p %p %u %p %p %u\n", handle, info, (int)count, written, timeout, alertable );
 
     for (;;)
     {
@@ -1964,9 +1963,9 @@ NTSTATUS WINAPI NtRemoveIoCompletionEx( HANDLE handle, FILE_IO_COMPLETION_INFORM
 NTSTATUS WINAPI NtQueryIoCompletion( HANDLE handle, IO_COMPLETION_INFORMATION_CLASS class,
                                      void *buffer, ULONG len, ULONG *ret_len )
 {
-    NTSTATUS status;
+    unsigned int status;
 
-    TRACE( "(%p, %d, %p, 0x%x, %p)\n", handle, class, buffer, len, ret_len );
+    TRACE( "(%p, %d, %p, 0x%x, %p)\n", handle, class, buffer, (int)len, ret_len );
 
     if (!buffer) return STATUS_INVALID_PARAMETER;
 
@@ -2002,7 +2001,7 @@ NTSTATUS WINAPI NtCreateSection( HANDLE *handle, ACCESS_MASK access, const OBJEC
                                  const LARGE_INTEGER *size, ULONG protect,
                                  ULONG sec_flags, HANDLE file )
 {
-    NTSTATUS ret;
+    unsigned int ret;
     unsigned int file_access;
     data_size_t len;
     struct object_attributes *objattr;
@@ -2055,7 +2054,7 @@ NTSTATUS WINAPI NtCreateSection( HANDLE *handle, ACCESS_MASK access, const OBJEC
  */
 NTSTATUS WINAPI NtOpenSection( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     *handle = 0;
     if ((ret = validate_open_object_attributes( attr ))) return ret;
@@ -2081,7 +2080,7 @@ NTSTATUS WINAPI NtOpenSection( HANDLE *handle, ACCESS_MASK access, const OBJECT_
 NTSTATUS WINAPI NtCreatePort( HANDLE *handle, OBJECT_ATTRIBUTES *attr, ULONG info_len,
                               ULONG data_len, ULONG *reserved )
 {
-    FIXME( "(%p,%p,%u,%u,%p),stub!\n", handle, attr, info_len, data_len, reserved );
+    FIXME( "(%p,%p,%u,%u,%p),stub!\n", handle, attr, (int)info_len, (int)data_len, reserved );
     return STATUS_NOT_IMPLEMENTED;
 }
 
@@ -2129,7 +2128,7 @@ NTSTATUS WINAPI NtListenPort( HANDLE handle, LPC_MESSAGE *msg )
 NTSTATUS WINAPI NtAcceptConnectPort( HANDLE *handle, ULONG id, LPC_MESSAGE *msg, BOOLEAN accept,
                                      LPC_SECTION_WRITE *write, LPC_SECTION_READ *read )
 {
-    FIXME("(%p,%u,%p,%d,%p,%p),stub!\n", handle, id, msg, accept, write, read );
+    FIXME("(%p,%u,%p,%d,%p,%p),stub!\n", handle, (int)id, msg, accept, write, read );
     return STATUS_NOT_IMPLEMENTED;
 }
 
@@ -2182,7 +2181,7 @@ NTSTATUS WINAPI NtReplyWaitReceivePort( HANDLE handle, ULONG *id, LPC_MESSAGE *r
 #define MAX_ATOM_LEN  255
 #define IS_INTATOM(x) (((ULONG_PTR)(x) >> 16) == 0)
 
-static NTSTATUS is_integral_atom( const WCHAR *atomstr, ULONG len, RTL_ATOM *ret_atom )
+static unsigned int is_integral_atom( const WCHAR *atomstr, ULONG len, RTL_ATOM *ret_atom )
 {
     RTL_ATOM atom;
 
@@ -2231,7 +2230,7 @@ static ULONG integral_atom_name( WCHAR *buffer, ULONG len, RTL_ATOM atom )
  */
 NTSTATUS WINAPI NtAddAtom( const WCHAR *name, ULONG length, RTL_ATOM *atom )
 {
-    NTSTATUS status = is_integral_atom( name, length / sizeof(WCHAR), atom );
+    unsigned int status = is_integral_atom( name, length / sizeof(WCHAR), atom );
 
     if (status == STATUS_MORE_ENTRIES)
     {
@@ -2253,7 +2252,7 @@ NTSTATUS WINAPI NtAddAtom( const WCHAR *name, ULONG length, RTL_ATOM *atom )
  */
 NTSTATUS WINAPI NtDeleteAtom( RTL_ATOM atom )
 {
-    NTSTATUS status;
+    unsigned int status;
 
     SERVER_START_REQ( delete_atom )
     {
@@ -2270,7 +2269,7 @@ NTSTATUS WINAPI NtDeleteAtom( RTL_ATOM atom )
  */
 NTSTATUS WINAPI NtFindAtom( const WCHAR *name, ULONG length, RTL_ATOM *atom )
 {
-    NTSTATUS status = is_integral_atom( name, length / sizeof(WCHAR), atom );
+    unsigned int status = is_integral_atom( name, length / sizeof(WCHAR), atom );
 
     if (status == STATUS_MORE_ENTRIES)
     {
@@ -2293,7 +2292,7 @@ NTSTATUS WINAPI NtFindAtom( const WCHAR *name, ULONG length, RTL_ATOM *atom )
 NTSTATUS WINAPI NtQueryInformationAtom( RTL_ATOM atom, ATOM_INFORMATION_CLASS class,
                                         void *ptr, ULONG size, ULONG *retsize )
 {
-    NTSTATUS status;
+    unsigned int status;
 
     switch (class)
     {
@@ -2365,7 +2364,7 @@ union tid_alert_entry
 #else
     HANDLE event;
 #ifdef __linux__
-    int futex;
+    LONG futex;
 #endif
 #endif
 };
@@ -2409,7 +2408,7 @@ static union tid_alert_entry *get_tid_alert_entry( HANDLE tid )
 
         if (semaphore_create( mach_task_self(), &sem, SYNC_POLICY_FIFO, 0 ))
             return NULL;
-        if (InterlockedCompareExchange( (int *)&entry->sem, sem, 0 ))
+        if (InterlockedCompareExchange( (LONG *)&entry->sem, sem, 0 ))
             semaphore_destroy( mach_task_self(), sem );
     }
 #else
@@ -2451,7 +2450,7 @@ NTSTATUS WINAPI NtAlertThreadByThreadId( HANDLE tid )
 #ifdef __linux__
     if (use_futexes())
     {
-        int *futex = &entry->futex;
+        LONG *futex = &entry->futex;
         if (!InterlockedExchange( futex, 1 ))
             futex_wake( futex, 1 );
         return STATUS_SUCCESS;
@@ -2552,7 +2551,7 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
 #ifdef __linux__
     if (use_futexes())
     {
-        int *futex = &entry->futex;
+        LONG *futex = &entry->futex;
         ULONGLONG end;
         int ret;
 
@@ -2596,7 +2595,7 @@ NTSTATUS WINAPI NtWaitForAlertByThreadId( const void *address, const LARGE_INTEG
  */
 void set_async_direct_result( HANDLE *async_handle, NTSTATUS status, ULONG_PTR information, BOOL mark_pending )
 {
-    NTSTATUS ret;
+    unsigned int ret;
 
     /* if we got STATUS_ALERTED, we must have a valid async handle */
     assert( *async_handle );
@@ -2617,4 +2616,38 @@ void set_async_direct_result( HANDLE *async_handle, NTSTATUS status, ULONG_PTR i
         ERR( "cannot report I/O result back to server: %08x\n", ret );
 
     return;
+}
+
+/***********************************************************************
+ *           NtCreateTransaction (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCreateTransaction( HANDLE *handle, ACCESS_MASK mask, OBJECT_ATTRIBUTES *obj_attr, GUID *guid, HANDLE tm,
+        ULONG options, ULONG isol_level, ULONG isol_flags, PLARGE_INTEGER timeout, UNICODE_STRING *description )
+{
+    FIXME( "%p, %#x, %p, %s, %p, 0x%08x, 0x%08x, 0x%08x, %p, %p stub.\n", handle, (int)mask, obj_attr, debugstr_guid(guid), tm,
+            (int)options, (int)isol_level, (int)isol_flags, timeout, description );
+
+    *handle = ULongToHandle(1);
+
+    return STATUS_SUCCESS;
+}
+
+/***********************************************************************
+ *           NtCommitTransaction (NTDLL.@)
+ */
+NTSTATUS WINAPI NtCommitTransaction( HANDLE transaction, BOOLEAN wait )
+{
+    FIXME( "%p, %d stub.\n", transaction, wait );
+
+    return STATUS_SUCCESS;
+}
+
+/***********************************************************************
+ *           NtRollbackTransaction (NTDLL.@)
+ */
+NTSTATUS WINAPI NtRollbackTransaction( HANDLE transaction, BOOLEAN wait )
+{
+    FIXME( "%p, %d stub.\n", transaction, wait );
+
+    return STATUS_ACCESS_VIOLATION;
 }

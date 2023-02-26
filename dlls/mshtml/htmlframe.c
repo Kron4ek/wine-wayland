@@ -48,9 +48,14 @@ static HRESULT set_frame_doc(HTMLFrameBase *frame, nsIDOMDocument *nsdoc)
         return E_FAIL;
 
     window = mozwindow_to_window(mozwindow);
-    if(!window && frame->element.node.doc->browser)
+    if(!window && frame->element.node.doc->browser) {
         hres = create_outer_window(frame->element.node.doc->browser, mozwindow,
                 frame->element.node.doc->outer_window, &window);
+
+        /* Don't hold ref to the created window; the parent keeps ref to it */
+        if(SUCCEEDED(hres))
+            IHTMLWindow2_Release(&window->base.IHTMLWindow2_iface);
+    }
     mozIDOMWindowProxy_Release(mozwindow);
     if(FAILED(hres))
         return hres;
@@ -1013,6 +1018,7 @@ static const NodeImplVtbl HTMLFrameElementImplVtbl = {
     HTMLFrameElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -1048,7 +1054,7 @@ HRESULT HTMLFrameElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HT
 {
     HTMLFrameElement *ret;
 
-    ret = heap_alloc_zero(sizeof(HTMLFrameElement));
+    ret = calloc(1, sizeof(HTMLFrameElement));
     if(!ret)
         return E_OUTOFMEMORY;
 
@@ -1606,6 +1612,7 @@ static const NodeImplVtbl HTMLIFrameImplVtbl = {
     HTMLIFrame_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -1643,7 +1650,7 @@ HRESULT HTMLIFrame_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HTMLElem
 {
     HTMLIFrame *ret;
 
-    ret = heap_alloc_zero(sizeof(HTMLIFrame));
+    ret = calloc(1, sizeof(HTMLIFrame));
     if(!ret)
         return E_OUTOFMEMORY;
 

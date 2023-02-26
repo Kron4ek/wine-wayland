@@ -499,6 +499,7 @@ static const NodeImplVtbl HTMLTableCellImplVtbl = {
     HTMLTableCell_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -533,7 +534,7 @@ HRESULT HTMLTableCell_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HTMLE
     HTMLTableCell *ret;
     nsresult nsres;
 
-    ret = heap_alloc_zero(sizeof(*ret));
+    ret = calloc(1, sizeof(*ret));
     if(!ret)
         return E_OUTOFMEMORY;
 
@@ -945,6 +946,7 @@ static const NodeImplVtbl HTMLTableRowImplVtbl = {
     HTMLElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -979,7 +981,7 @@ HRESULT HTMLTableRow_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HTMLEl
     HTMLTableRow *ret;
     nsresult nsres;
 
-    ret = heap_alloc_zero(sizeof(HTMLTableRow));
+    ret = calloc(1, sizeof(HTMLTableRow));
     if(!ret)
         return E_OUTOFMEMORY;
 
@@ -1977,6 +1979,7 @@ static const NodeImplVtbl HTMLTableImplVtbl = {
     HTMLElement_destructor,
     HTMLTable_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -2013,7 +2016,7 @@ HRESULT HTMLTable_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HTMLEleme
     HTMLTable *ret;
     nsresult nsres;
 
-    ret = heap_alloc_zero(sizeof(HTMLTable));
+    ret = calloc(1, sizeof(HTMLTable));
     if(!ret)
         return E_OUTOFMEMORY;
 

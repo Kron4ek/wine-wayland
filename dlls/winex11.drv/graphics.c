@@ -1445,7 +1445,7 @@ BOOL CDECL X11DRV_ExtFloodFill( PHYSDEV dev, INT x, INT y, COLORREF color, UINT 
     RECT rect, bounds;
     POINT pt;
 
-    TRACE("X11DRV_ExtFloodFill %d,%d %06x %d\n", x, y, color, fillType );
+    TRACE("X11DRV_ExtFloodFill %d,%d %s %d\n", x, y, debugstr_color(color), fillType );
 
     pt.x = x;
     pt.y = y;
@@ -1643,18 +1643,6 @@ static char *get_icm_profile( unsigned long *size )
     return ret;
 }
 
-typedef struct
-{
-    unsigned int unknown[6];
-    unsigned int state[5];
-    unsigned int count[2];
-    unsigned char buffer[64];
-} sha_ctx;
-
-extern void WINAPI A_SHAInit( sha_ctx * );
-extern void WINAPI A_SHAUpdate( sha_ctx *, const unsigned char *, unsigned int );
-extern void WINAPI A_SHAFinal( sha_ctx *, unsigned char * );
-
 static const WCHAR mntr_key[] =
     {'\\','R','e','g','i','s','t','r','y','\\','M','a','c','h','i','n','e','\\',
      'S','o','f','t','w','a','r','e','\\','M','i','c','r','o','s','o','f','t','\\',
@@ -1704,7 +1692,7 @@ BOOL CDECL X11DRV_GetICMProfile( PHYSDEV dev, BOOL allow_default, LPDWORD size, 
         IO_STATUS_BLOCK io;
         UINT64 hash = 0;
         HANDLE file;
-        NTSTATUS status;
+        int status;
 
         for (i = 0; i < buflen; i++) hash = (hash << 16) - hash + buffer[i];
         for (i = 0; i < sizeof(hash) * 2; i++)

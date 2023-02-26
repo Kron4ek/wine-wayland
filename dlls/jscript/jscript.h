@@ -31,7 +31,6 @@
 
 #include "resource.h"
 
-#include "wine/heap.h"
 #include "wine/list.h"
 
 /*
@@ -69,22 +68,6 @@ void *heap_pool_grow(heap_pool_t*,void*,DWORD,DWORD) DECLSPEC_HIDDEN;
 void heap_pool_clear(heap_pool_t*) DECLSPEC_HIDDEN;
 void heap_pool_free(heap_pool_t*) DECLSPEC_HIDDEN;
 heap_pool_t *heap_pool_mark(heap_pool_t*) DECLSPEC_HIDDEN;
-
-static inline LPWSTR heap_strdupW(LPCWSTR str)
-{
-    LPWSTR ret = NULL;
-
-    if(str) {
-        DWORD size;
-
-        size = (lstrlenW(str)+1)*sizeof(WCHAR);
-        ret = heap_alloc(size);
-        if(ret)
-            memcpy(ret, str, size);
-    }
-
-    return ret;
-}
 
 typedef struct jsdisp_t jsdisp_t;
 
@@ -154,9 +137,20 @@ typedef struct named_item_t {
     struct list entry;
 } named_item_t;
 
+struct gc_ctx;
+
+enum gc_traverse_op {
+    GC_TRAVERSE_UNLINK,
+    GC_TRAVERSE_SPECULATIVELY,
+    GC_TRAVERSE
+};
+
 HRESULT create_named_item_script_obj(script_ctx_t*,named_item_t*) DECLSPEC_HIDDEN;
 named_item_t *lookup_named_item(script_ctx_t*,const WCHAR*,unsigned) DECLSPEC_HIDDEN;
 void release_named_item(named_item_t*) DECLSPEC_HIDDEN;
+HRESULT gc_run(script_ctx_t*) DECLSPEC_HIDDEN;
+HRESULT gc_process_linked_obj(struct gc_ctx*,enum gc_traverse_op,jsdisp_t*,jsdisp_t*,void**) DECLSPEC_HIDDEN;
+HRESULT gc_process_linked_val(struct gc_ctx*,enum gc_traverse_op,jsdisp_t*,jsval_t*) DECLSPEC_HIDDEN;
 
 typedef struct {
     const WCHAR *name;
@@ -176,6 +170,7 @@ typedef struct {
     unsigned (*idx_length)(jsdisp_t*);
     HRESULT (*idx_get)(jsdisp_t*,unsigned,jsval_t*);
     HRESULT (*idx_put)(jsdisp_t*,unsigned,jsval_t);
+    HRESULT (*gc_traverse)(struct gc_ctx*,enum gc_traverse_op,jsdisp_t*);
 } builtin_info_t;
 
 struct jsdisp_t {
@@ -183,15 +178,18 @@ struct jsdisp_t {
 
     LONG ref;
 
+    BOOLEAN extensible;
+    BOOLEAN gc_marked;
+
     DWORD buf_size;
     DWORD prop_cnt;
     dispex_prop_t *props;
     script_ctx_t *ctx;
-    BOOL extensible;
 
     jsdisp_t *prototype;
 
     const builtin_info_t *builtin_info;
+    struct list entry;
 };
 
 static inline IDispatch *to_disp(jsdisp_t *jsdisp)
@@ -242,8 +240,8 @@ HRESULT init_dispex_from_constr(jsdisp_t*,script_ctx_t*,const builtin_info_t*,js
 
 HRESULT disp_call(script_ctx_t*,IDispatch*,DISPID,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT disp_call_name(script_ctx_t*,IDispatch*,const WCHAR*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
-HRESULT disp_call_value(script_ctx_t*,IDispatch*,IDispatch*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
-HRESULT jsdisp_call_value(jsdisp_t*,IDispatch*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
+HRESULT disp_call_value_with_caller(script_ctx_t*,IDispatch*,jsval_t,WORD,unsigned,jsval_t*,jsval_t*,IServiceProvider*) DECLSPEC_HIDDEN;
+HRESULT jsdisp_call_value(jsdisp_t*,jsval_t,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT jsdisp_call(jsdisp_t*,DISPID,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT jsdisp_call_name(jsdisp_t*,const WCHAR*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT disp_propget(script_ctx_t*,IDispatch*,DISPID,jsval_t*) DECLSPEC_HIDDEN;
@@ -272,7 +270,7 @@ HRESULT create_builtin_function(script_ctx_t*,builtin_invoke_t,const WCHAR*,cons
         jsdisp_t*,jsdisp_t**) DECLSPEC_HIDDEN;
 HRESULT create_builtin_constructor(script_ctx_t*,builtin_invoke_t,const WCHAR*,const builtin_info_t*,DWORD,
         jsdisp_t*,jsdisp_t**) DECLSPEC_HIDDEN;
-HRESULT Function_invoke(jsdisp_t*,IDispatch*,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
+HRESULT Function_invoke(jsdisp_t*,jsval_t,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 
 HRESULT Function_value(script_ctx_t*,jsval_t,WORD,unsigned,jsval_t*,jsval_t*) DECLSPEC_HIDDEN;
 HRESULT Function_get_value(script_ctx_t*,jsdisp_t*,jsval_t*) DECLSPEC_HIDDEN;
@@ -333,12 +331,15 @@ typedef struct {
 
 void release_cc(cc_ctx_t*) DECLSPEC_HIDDEN;
 
+#define SP_CALLER_UNINITIALIZED ((IServiceProvider*)IntToPtr(-1))
+
 typedef struct {
     IServiceProvider IServiceProvider_iface;
 
     LONG ref;
 
     script_ctx_t *ctx;
+    IServiceProvider *caller;
 } JSCaller;
 
 #include "jsval.h"
@@ -367,6 +368,7 @@ struct _script_ctx_t {
 
     struct _call_frame_t *call_ctx;
     struct list named_items;
+    struct list objects;
     IActiveScriptSite *site;
     IInternetHostSecurityManager *secmgr;
     DWORD safeopt;
@@ -378,6 +380,9 @@ struct _script_ctx_t {
     jsexcept_t *ei;
 
     heap_pool_t tmp_heap;
+
+    BOOL gc_is_unlinking;
+    DWORD gc_last_tick;
 
     jsval_t *stack;
     unsigned stack_top;
@@ -476,6 +481,12 @@ static inline BOOL is_int32(double d)
 static inline DWORD make_grfdex(script_ctx_t *ctx, DWORD flags)
 {
     return ((ctx->version & 0xff) << 28) | flags;
+}
+
+static inline HRESULT disp_call_value(script_ctx_t *ctx, IDispatch *disp, jsval_t vthis, WORD flags, unsigned argc,
+        jsval_t *argv, jsval_t *r)
+{
+    return disp_call_value_with_caller(ctx, disp, vthis, flags, argc, argv, r, &ctx->jscaller->IServiceProvider_iface);
 }
 
 #define FACILITY_JSCRIPT 10

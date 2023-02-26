@@ -91,6 +91,23 @@ HRESULT mouse_enum_device( DWORD type, DWORD flags, DIDEVICEINSTANCEW *instance,
     return DI_OK;
 }
 
+static BOOL CALLBACK init_object_properties( const DIDEVICEOBJECTINSTANCEW *instance, void *data )
+{
+    struct mouse *impl = (struct mouse *)data;
+    struct object_properties *properties = impl->base.object_properties + instance->dwOfs / sizeof(LONG);
+
+    properties->range_min = DIPROPRANGE_NOMIN;
+    properties->range_max = DIPROPRANGE_NOMAX;
+
+    /* The z-axis (wheel) has a different granularity */
+    if (instance->dwOfs == DIMOFS_Z)
+        properties->granularity = WHEEL_DELTA;
+    else
+        properties->granularity = 1;
+
+    return DIENUM_CONTINUE;
+}
+
 HRESULT mouse_create_device( struct dinput *dinput, const GUID *guid, IDirectInputDevice8W **out )
 {
     struct mouse *impl;
@@ -112,6 +129,15 @@ HRESULT mouse_create_device( struct dinput *dinput, const GUID *guid, IDirectInp
     impl->base.caps.dwHardwareRevision = 100;
     impl->base.dwCoopLevel = DISCL_NONEXCLUSIVE | DISCL_BACKGROUND;
 
+    /* One object_properties per axis */
+    impl->base.object_properties = calloc( 3, sizeof(struct object_properties) );
+    if (!impl->base.object_properties)
+    {
+        IDirectInputDevice_Release( &impl->base.IDirectInputDevice8W_iface );
+        return E_OUTOFMEMORY;
+    }
+    IDirectInputDevice8_EnumObjects( &impl->base.IDirectInputDevice8W_iface, init_object_properties, impl, DIDFT_RELAXIS );
+
     get_app_key(&hkey, &appkey);
     if (!get_config_key( hkey, appkey, L"MouseWarpOverride", buffer, sizeof(buffer) ))
     {
@@ -122,11 +148,7 @@ HRESULT mouse_create_device( struct dinput *dinput, const GUID *guid, IDirectInp
     if (hkey) RegCloseKey(hkey);
 
     if (dinput->dwVersion >= 0x0800)
-    {
         impl->base.use_raw_input = TRUE;
-        impl->base.raw_device.usUsagePage = 1; /* HID generic device page */
-        impl->base.raw_device.usUsage = 2;     /* HID generic mouse */
-    }
 
     *out = &impl->base.IDirectInputDevice8W_iface;
     return DI_OK;
@@ -230,7 +252,6 @@ void dinput_mouse_rawinput_hook( IDirectInputDevice8W *iface, WPARAM wparam, LPA
     LeaveCriticalSection( &impl->base.crit );
 }
 
-/* low-level mouse hook */
 int dinput_mouse_hook( IDirectInputDevice8W *iface, WPARAM wparam, LPARAM lparam )
 {
     MSLLHOOKSTRUCT *hook = (MSLLHOOKSTRUCT *)lparam;
@@ -390,7 +411,6 @@ static HRESULT mouse_acquire( IDirectInputDevice8W *iface )
     DIMOUSESTATE2 *state = (DIMOUSESTATE2 *)impl->base.device_state;
     POINT point;
 
-    /* Init the mouse state */
     GetCursorPos( &point );
     if (impl->base.user_format.dwFlags & DIDF_ABSAXIS)
     {
@@ -410,7 +430,7 @@ static HRESULT mouse_acquire( IDirectInputDevice8W *iface )
 
     if (impl->base.dwCoopLevel & DISCL_EXCLUSIVE)
     {
-        ShowCursor( FALSE ); /* hide cursor */
+        ShowCursor( FALSE );
         warp_check( impl, TRUE );
     }
     else if (impl->warp_override == WARP_FORCE_ON)
@@ -435,7 +455,7 @@ static HRESULT mouse_unacquire( IDirectInputDevice8W *iface )
     if (impl->base.dwCoopLevel & DISCL_EXCLUSIVE)
     {
         ClipCursor( NULL );
-        ShowCursor( TRUE ); /* show cursor */
+        ShowCursor( TRUE );
         impl->clipped = FALSE;
     }
 

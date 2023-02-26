@@ -1373,7 +1373,7 @@ static BOOL elf_search_auxv(const struct process* pcs, unsigned type, ULONG_PTR*
     while (addr < str_max && ReadProcessMemory(pcs->handle, addr, &str, sizeof(str), NULL) && str == NULL)
         addr = (void*)((DWORD_PTR)addr + sizeof(str));
 
-    if (pcs->is_64bit)
+    if (pcs->is_system_64bit)
     {
         struct
         {
@@ -1445,7 +1445,7 @@ static BOOL elf_search_and_load_file(struct process* pcs, const WCHAR* filename,
         load_elf.elf_info    = elf_info;
 
         ret = search_unix_path(filename, process_getenv(pcs, L"LD_LIBRARY_PATH"), elf_load_file_cb, &load_elf)
-            || search_dll_path(pcs, filename, elf_load_file_cb, &load_elf);
+            || search_dll_path(pcs, filename, IMAGE_FILE_MACHINE_UNKNOWN, elf_load_file_cb, &load_elf);
     }
 
     return ret;
@@ -1467,7 +1467,7 @@ static BOOL elf_enum_modules_internal(const struct process* pcs,
     char bufstr[256];
     ULONG_PTR lm_addr;
 
-    if (pcs->is_64bit)
+    if (pcs->is_system_64bit)
     {
         struct
         {

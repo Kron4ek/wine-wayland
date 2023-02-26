@@ -96,6 +96,7 @@ static struct screen_buffer *create_screen_buffer( struct console *console, int 
         screen_buffer->attr       = console->active->attr;
         screen_buffer->popup_attr = console->active->attr;
         screen_buffer->font       = console->active->font;
+        memcpy( screen_buffer->color_map, console->active->color_map, sizeof(console->active->color_map) );
 
         if (screen_buffer->font.face_len)
         {
@@ -358,6 +359,8 @@ static void update_output( struct screen_buffer *screen_buffer, RECT *rect )
     int x, y, size, trailing_spaces;
     char_info_t *ch;
     char buf[8];
+    WCHAR wch;
+    const unsigned int mask = (1u << '\0') | (1u << '\b') | (1u << '\t') | (1u << '\n') | (1u << '\a') | (1u << '\r');
 
     if (!is_active( screen_buffer ) || rect->top > rect->bottom || rect->right < rect->left)
         return;
@@ -393,9 +396,11 @@ static void update_output( struct screen_buffer *screen_buffer, RECT *rect )
                 tty_write( screen_buffer->console, "\x1b[K", 3 );
                 break;
             }
-
+            wch = ch->ch;
+            if (screen_buffer->console->is_unix && wch < L' ' && mask & (1u << wch))
+                wch = L'?';
             size = WideCharToMultiByte( get_tty_cp( screen_buffer->console ), 0,
-                                        &ch->ch, 1, buf, sizeof(buf), NULL, NULL );
+                                        &wch, 1, buf, sizeof(buf), NULL, NULL );
             tty_write( screen_buffer->console, buf, size );
             screen_buffer->console->tty_cursor_x++;
         }
@@ -1458,6 +1463,29 @@ static NTSTATUS read_console( struct console *console, unsigned int ioctl, size_
     return process_console_input( console );
 }
 
+static BOOL map_to_ctrlevent( struct console *console, const INPUT_RECORD *record,
+                              unsigned int* event)
+{
+    if (record->EventType == KEY_EVENT)
+    {
+        if (record->Event.KeyEvent.uChar.UnicodeChar == 'C' - 64 &&
+            !(record->Event.KeyEvent.dwControlKeyState & ENHANCED_KEY))
+        {
+            *event = CTRL_C_EVENT;
+            return TRUE;
+        }
+        /* we want to get ctrl-pause/break, but it's already translated by user32 into VK_CANCEL */
+        if (record->Event.KeyEvent.uChar.UnicodeChar == 0 &&
+            record->Event.KeyEvent.wVirtualKeyCode == VK_CANCEL &&
+            record->Event.KeyEvent.dwControlKeyState == LEFT_CTRL_PRESSED)
+        {
+            *event = CTRL_BREAK_EVENT;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 /* add input events to a console input queue */
 NTSTATUS write_console_input( struct console *console, const INPUT_RECORD *records,
                               unsigned int count, BOOL flush )
@@ -1480,9 +1508,9 @@ NTSTATUS write_console_input( struct console *console, const INPUT_RECORD *recor
         unsigned int i = 0;
         while (i < count)
         {
-            if (records[i].EventType == KEY_EVENT &&
-		records[i].Event.KeyEvent.uChar.UnicodeChar == 'C' - 64 &&
-		!(records[i].Event.KeyEvent.dwControlKeyState & ENHANCED_KEY))
+            unsigned int event;
+
+            if (map_to_ctrlevent(console, &records[i], &event))
             {
                 if (i != count - 1)
                     memcpy( &console->records[console->record_count + i],
@@ -1494,7 +1522,7 @@ NTSTATUS write_console_input( struct console *console, const INPUT_RECORD *recor
                     struct condrv_ctrl_event ctrl_event;
                     IO_STATUS_BLOCK io;
 
-                    ctrl_event.event = CTRL_C_EVENT;
+                    ctrl_event.event = event;
                     ctrl_event.group_id = 0;
                     NtDeviceIoControlFile( console->server, NULL, NULL, NULL, &io, IOCTL_CONDRV_CTRL_EVENT,
                                            &ctrl_event, sizeof(ctrl_event), NULL, 0 );
@@ -1749,6 +1777,12 @@ static DWORD WINAPI tty_input( void *param )
                 break;
             case 0x1b:
                 i += process_input_escape( console, buf + i + 1, count - i - 1 );
+                break;
+            case 0x1c: /* map ctrl-\ unix-ism into ctrl-break/pause windows-ism for unix consoles */
+                if (console->is_unix)
+                    key_press( console, 0, VK_CANCEL, LEFT_CTRL_PRESSED );
+                else
+                    char_key_press( console, ch, 0 );
                 break;
             case 0x7f:
                 key_press( console, '\b', VK_BACK, 0 );
@@ -2855,9 +2889,18 @@ static int main_loop( struct console *console, HANDLE signal )
     return 0;
 }
 
+static void teardown( struct console *console )
+{
+    if (console->is_unix)
+    {
+        set_tty_attr( console, empty_char_info.attr );
+        tty_flush( console );
+    }
+}
+
 int __cdecl wmain(int argc, WCHAR *argv[])
 {
-    int headless = 0, i, width = 0, height = 0;
+    int headless = 0, i, width = 0, height = 0, ret;
     HANDLE signal = NULL;
     WCHAR *end;
 
@@ -2950,5 +2993,8 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         ShowWindow( console.win, (si.dwFlags & STARTF_USESHOWWINDOW) ? si.wShowWindow : SW_SHOW );
     }
 
-    return main_loop( &console, signal );
+    ret = main_loop( &console, signal );
+    teardown( &console );
+
+    return ret;
 }

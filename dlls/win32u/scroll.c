@@ -282,7 +282,7 @@ static BOOL get_scroll_bar_rect( HWND hwnd, int bar, RECT *rect, int *arrow_size
  *
  * Redraw the whole scrollbar.
  */
-void draw_scroll_bar( HWND hwnd, HDC hdc, int bar, enum SCROLL_HITTEST hit_test,
+static void draw_scroll_bar( HWND hwnd, HDC hdc, int bar, enum SCROLL_HITTEST hit_test,
                       const struct SCROLL_TRACKING_INFO *tracking_info, BOOL draw_arrows,
                       BOOL draw_interior )
 {
@@ -354,6 +354,7 @@ void draw_scroll_bar( HWND hwnd, HDC hdc, int bar, enum SCROLL_HITTEST hit_test,
     params.hdc = hdc;
     params.bar = bar;
     params.hit_test = hit_test;
+    params.tracking_info = *tracking_info;
     params.arrows = draw_arrows;
     params.interior = draw_interior;
     KeUserModeCallback( NtUserDrawScrollBar, &params, sizeof(params), &ret_ptr, &ret_len );
@@ -663,7 +664,7 @@ void handle_scroll_event( HWND hwnd, int bar, UINT msg, POINT pt )
     }
 
     TRACE( "Event: hwnd=%p bar=%d msg=%s pt=%d,%d hit=%d\n",
-           hwnd, bar, debugstr_msg_name( msg, hwnd ), pt.x, pt.y, hittest );
+           hwnd, bar, debugstr_msg_name( msg, hwnd ), (int)pt.x, (int)pt.y, hittest );
 
     switch (g_tracking_info.hit_test)
     {
@@ -1188,7 +1189,7 @@ static void create_scroll_bar( HWND hwnd, CREATESTRUCTW *create )
 
 static void handle_kbd_event( HWND hwnd, WPARAM wparam, LPARAM lparam )
 {
-    TRACE( "hwnd=%p wparam=%ld lparam=%ld\n", hwnd, wparam, lparam );
+    TRACE( "hwnd=%p wparam=%ld lparam=%ld\n", hwnd, (long)wparam, lparam );
 
     /* hide caret on first KEYDOWN to prevent flicker */
     if ((lparam & PFD_DOUBLEBUFFER_DONTCARE) == 0)
@@ -1420,12 +1421,12 @@ LRESULT scroll_bar_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
     case 0x00ed:
     case 0x00ee:
     case 0x00ef:
-        ERR( "unknown Win32 msg %04x wp=%08lx lp=%08lx\n", msg, wparam, lparam );
+        ERR( "unknown Win32 msg %04x wp=%08lx lp=%08lx\n", msg, (long)wparam, lparam );
         return 0;
 
     default:
         if (msg >= WM_USER)
-            WARN( "unknown msg %04x wp=%08lx lp=%08lx\n", msg, wparam, lparam );
+            WARN( "unknown msg %04x wp=%08lx lp=%08lx\n", msg, (long)wparam, lparam );
         return default_window_proc( hwnd, msg, wparam, lparam, ansi );
     }
 }
@@ -1460,7 +1461,7 @@ BOOL WINAPI NtUserShowScrollBar( HWND hwnd, INT bar, BOOL show )
  */
 BOOL WINAPI NtUserGetScrollBarInfo( HWND hwnd, LONG id, SCROLLBARINFO *info )
 {
-    TRACE( "hwnd=%p id=%d info=%p\n", hwnd, id, info );
+    TRACE( "hwnd=%p id=%d info=%p\n", hwnd, (int)id, info );
 
     /* Refer OBJID_CLIENT requests to the window */
     if (id == OBJID_CLIENT)

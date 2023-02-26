@@ -76,6 +76,7 @@
 @ stdcall CloseClipboard() NtUserCloseClipboard
 @ stdcall CloseDesktop(long) NtUserCloseDesktop
 @ stdcall CloseTouchInputHandle(long)
+@ stdcall CloseGestureInfoHandle(long)
 @ stdcall CloseWindow(long)
 @ stdcall CloseWindowStation(long) NtUserCloseWindowStation
 @ stdcall CopyAcceleratorTableA(long ptr long)
@@ -286,7 +287,7 @@
 @ stdcall GetCursorFrameInfo(long long long ptr ptr)
 @ stdcall GetCursorInfo(ptr) NtUserGetCursorInfo
 @ stdcall GetCursorPos(ptr)
-@ stdcall GetDC(long)
+@ stdcall GetDC(long) NtUserGetDC
 @ stdcall GetDCEx(long long long) NtUserGetDCEx
 @ stdcall GetDesktopWindow()
 @ stdcall GetDialogBaseUnits()
@@ -304,6 +305,7 @@
 @ stdcall GetFocus()
 @ stdcall GetForegroundWindow() NtUserGetForegroundWindow
 @ stdcall GetGestureConfig(long long long ptr ptr long)
+@ stdcall GetGestureExtraArgs(long long ptr)
 @ stdcall GetGestureInfo(long ptr)
 @ stdcall GetGUIThreadInfo(long ptr) NtUserGetGUIThreadInfo
 @ stdcall GetGuiResources(long long)
@@ -312,7 +314,7 @@
 @ stdcall GetIconInfoExW(long ptr)
 @ stub GetInputDesktop
 @ stdcall GetInputState()
-@ stdcall GetInternalWindowPos(long ptr ptr)
+@ stdcall GetInternalWindowPos(long ptr ptr) NtUserGetInternalWindowPos
 @ stdcall GetKBCodePage()
 @ stdcall GetKeyNameTextA(long ptr long)
 @ stdcall GetKeyNameTextW(long ptr long) NtUserGetKeyNameText
@@ -357,7 +359,10 @@
 @ stdcall GetParent(long)
 @ stdcall GetPhysicalCursorPos(ptr)
 @ stdcall GetPointerDevices(ptr ptr)
+@ stdcall GetPointerInfo(long ptr)
 @ stdcall GetPointerType(long ptr)
+@ stdcall GetPointerTouchInfo(long ptr)
+@ stdcall GetPointerTouchInfoHistory(long ptr ptr)
 @ stdcall GetPriorityClipboardFormat(ptr long) NtUserGetPriorityClipboardFormat
 @ stdcall GetProcessDefaultLayout(ptr)
 @ stdcall GetProcessDpiAwarenessInternal(long ptr)
@@ -401,7 +406,7 @@
 # @ stub GetWinStationInfo
 @ stdcall GetWindow(long long)
 @ stdcall GetWindowContextHelpId(long)
-@ stdcall GetWindowDC(long)
+@ stdcall GetWindowDC(long) NtUserGetWindowDC
 @ stdcall GetWindowDisplayAffinity(long ptr)
 @ stdcall GetWindowDpiAwarenessContext(long)
 @ stdcall GetWindowInfo(long ptr)
@@ -470,6 +475,7 @@
 # @ stub IsHungThread
 @ stdcall IsIconic(long)
 @ stdcall IsMenu(long)
+@ stdcall IsMouseInPointerEnabled() NtUserIsMouseInPointerEnabled
 @ stdcall IsProcessDPIAware()
 @ stdcall IsRectEmpty(ptr)
 # @ stub IsServerSideWindow
@@ -572,7 +578,7 @@
 @ stdcall PostQuitMessage(long)
 @ stdcall PostThreadMessageA(long long long long)
 @ stdcall PostThreadMessageW(long long long long) NtUserPostThreadMessage
-@ stdcall PrintWindow(long long long)
+@ stdcall PrintWindow(long long long) NtUserPrintWindow
 @ stdcall PrivateExtractIconExA(str long ptr ptr long)
 @ stdcall PrivateExtractIconExW(wstr long ptr ptr long)
 @ stdcall PrivateExtractIconsA (str long long long ptr ptr long long)
@@ -703,7 +709,7 @@
 @ stdcall SetScrollPos(long long long long)
 @ stdcall SetScrollRange(long long long long long)
 @ stdcall SetShellWindow(long)
-@ stdcall SetShellWindowEx (long long)
+@ stdcall SetShellWindowEx(long long) NtUserSetShellWindowEx
 @ stdcall SetSysColors(long ptr ptr) NtUserSetSysColors
 @ stdcall SetSysColorsTemp(ptr ptr long)
 @ stdcall SetSystemCursor(long long)
@@ -803,7 +809,7 @@
 @ stdcall UserSignalProc(long long long long)
 # @ stub VRipOutput
 # @ stub VTagOutput
-@ stdcall ValidateRect(long ptr)
+@ stdcall ValidateRect(long ptr) NtUserValidateRect
 @ stdcall ValidateRgn(long long)
 @ stdcall VkKeyScanA(long)
 @ stdcall VkKeyScanExA(long long)
@@ -815,7 +821,7 @@
 @ stdcall WINNLSGetIMEHotkey(long)
 @ stub WNDPROC_CALLBACK
 @ stdcall WaitForInputIdle(long long)
-@ stdcall WaitMessage()
+@ stdcall WaitMessage() NtUserWaitMessage
 # @ stub Win32PoolAllocationStats
 @ stdcall WinHelpA(long str long long)
 @ stdcall WinHelpW(long wstr long long)

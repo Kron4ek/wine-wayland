@@ -23,7 +23,6 @@
 #ifndef _WINE_INTERNET_H_
 #define _WINE_INTERNET_H_
 
-#include "wine/heap.h"
 #include "wine/list.h"
 
 #include <time.h>
@@ -89,43 +88,7 @@ typedef struct
 BOOL is_valid_netconn(netconn_t *) DECLSPEC_HIDDEN;
 void close_netconn(netconn_t *) DECLSPEC_HIDDEN;
 
-static inline void * __WINE_ALLOC_SIZE(2) heap_realloc_zero(void *mem, size_t len)
-{
-    return HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, mem, len);
-}
-
-static inline LPWSTR heap_strdupW(LPCWSTR str)
-{
-    LPWSTR ret = NULL;
-
-    if(str) {
-        DWORD size;
-
-        size = (lstrlenW(str)+1)*sizeof(WCHAR);
-        ret = heap_alloc(size);
-        if(ret)
-            memcpy(ret, str, size);
-    }
-
-    return ret;
-}
-
-static inline char *heap_strdupA(const char *str)
-{
-    char *ret = NULL;
-
-    if(str) {
-        DWORD size = strlen(str)+1;
-
-        ret = heap_alloc(size);
-        if(ret)
-            memcpy(ret, str, size);
-    }
-
-    return ret;
-}
-
-static inline LPWSTR heap_strndupW(LPCWSTR str, UINT max_len)
+static inline WCHAR *strndupW(const WCHAR *str, UINT max_len)
 {
     LPWSTR ret;
     UINT len;
@@ -137,7 +100,7 @@ static inline LPWSTR heap_strndupW(LPCWSTR str, UINT max_len)
         if(str[len] == '\0')
             break;
 
-    ret = heap_alloc(sizeof(WCHAR)*(len+1));
+    ret = malloc(sizeof(WCHAR) * (len + 1));
     if(ret) {
         memcpy(ret, str, sizeof(WCHAR)*len);
         ret[len] = '\0';
@@ -146,7 +109,7 @@ static inline LPWSTR heap_strndupW(LPCWSTR str, UINT max_len)
     return ret;
 }
 
-static inline WCHAR *heap_strndupAtoW(const char *str, int len_a, DWORD *len_w)
+static inline WCHAR *strndupAtoW(const char *str, int len_a, DWORD *len_w)
 {
     WCHAR *ret = NULL;
 
@@ -157,7 +120,7 @@ static inline WCHAR *heap_strndupAtoW(const char *str, int len_a, DWORD *len_w)
         else if(len_a > 0)
             len_a = strnlen(str, len_a);
         len = MultiByteToWideChar(CP_ACP, 0, str, len_a, NULL, 0);
-        ret = heap_alloc((len+1)*sizeof(WCHAR));
+        ret = malloc((len + 1) * sizeof(WCHAR));
         if(ret) {
             MultiByteToWideChar(CP_ACP, 0, str, len_a, ret, len);
             ret[len] = 0;
@@ -168,7 +131,7 @@ static inline WCHAR *heap_strndupAtoW(const char *str, int len_a, DWORD *len_w)
     return ret;
 }
 
-static inline WCHAR *heap_strdupAtoW(const char *str)
+static inline WCHAR *strdupAtoW(const char *str)
 {
     LPWSTR ret = NULL;
 
@@ -176,7 +139,7 @@ static inline WCHAR *heap_strdupAtoW(const char *str)
         DWORD len;
 
         len = MultiByteToWideChar(CP_ACP, 0, str, -1, NULL, 0);
-        ret = heap_alloc(len*sizeof(WCHAR));
+        ret = malloc(len * sizeof(WCHAR));
         if(ret)
             MultiByteToWideChar(CP_ACP, 0, str, -1, ret, len);
     }
@@ -184,13 +147,13 @@ static inline WCHAR *heap_strdupAtoW(const char *str)
     return ret;
 }
 
-static inline char *heap_strdupWtoA(LPCWSTR str)
+static inline char *strdupWtoA(const WCHAR *str)
 {
     char *ret = NULL;
 
     if(str) {
         DWORD size = WideCharToMultiByte(CP_ACP, 0, str, -1, NULL, 0, NULL, NULL);
-        ret = heap_alloc(size);
+        ret = malloc(size);
         if(ret)
             WideCharToMultiByte(CP_ACP, 0, str, -1, ret, size, NULL, NULL);
     }
@@ -262,6 +225,7 @@ typedef struct {
     void (*CloseConnection)(object_header_t*);
     DWORD (*QueryOption)(object_header_t*,DWORD,void*,DWORD*,BOOL);
     DWORD (*SetOption)(object_header_t*,DWORD,void*,DWORD);
+    DWORD (*SetFilePointer)(object_header_t*,LONG,DWORD);
     DWORD (*ReadFile)(object_header_t*,void*,DWORD,DWORD*,DWORD,DWORD_PTR);
     DWORD (*WriteFile)(object_header_t*,const void*,DWORD,DWORD*);
     DWORD (*QueryDataAvailable)(object_header_t*,DWORD*,DWORD,DWORD_PTR);
@@ -369,6 +333,7 @@ typedef struct
 
     FILETIME last_modified;
     HANDLE hCacheFile;
+    ULONGLONG cache_size;  /* size of cached data */
     req_file_t *req_file;
     FILETIME expires;
     struct HttpAuthInfo *authInfo;
@@ -376,6 +341,7 @@ typedef struct
 
     CRITICAL_SECTION read_section;  /* section to protect the following fields */
     ULONGLONG contentLength;  /* total number of bytes to be read */
+    ULONGLONG content_pos;    /* content read position */
     BOOL  read_gzip;      /* are we reading in gzip mode? */
     DWORD read_pos;       /* current read position in read_buf */
     DWORD read_size;      /* valid data size in read_buf */

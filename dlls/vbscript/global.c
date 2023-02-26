@@ -98,7 +98,7 @@ static ULONG WINAPI Builtin_Release(IDispatch *iface)
 
     if(!ref) {
         assert(!This->ctx);
-        heap_free(This);
+        free(This);
     }
 
     return ref;
@@ -249,7 +249,7 @@ static HRESULT WINAPI Builtin_Invoke(IDispatch *iface, DISPID id, REFIID riid, L
     if(argn <= ARRAY_SIZE(args_buf)) {
         args = args_buf;
     }else {
-        args = heap_alloc(argn * sizeof(*args));
+        args = malloc(argn * sizeof(*args));
         if(!args)
             return E_OUTOFMEMORY;
     }
@@ -263,7 +263,7 @@ static HRESULT WINAPI Builtin_Invoke(IDispatch *iface, DISPID id, REFIID riid, L
 
     hres = prop->proc(This, args, dp->cArgs, res);
     if(args != args_buf)
-        heap_free(args);
+        free(args);
     return hres;
 }
 
@@ -281,7 +281,7 @@ static HRESULT create_builtin_dispatch(script_ctx_t *ctx, const builtin_prop_t *
 {
     BuiltinDisp *disp;
 
-    if(!(disp = heap_alloc(sizeof(*disp))))
+    if(!(disp = malloc(sizeof(*disp))))
         return E_OUTOFMEMORY;
 
     disp->IDispatch_iface.lpVtbl = &BuiltinDispVtbl;
@@ -611,7 +611,7 @@ static HRESULT show_msgbox(script_ctx_t *ctx, BSTR prompt, unsigned type, BSTR o
         if(orig_title && *orig_title) {
             WCHAR *ptr;
 
-            title = title_buf = heap_alloc(sizeof(L"VBScript") + (lstrlenW(orig_title)+2)*sizeof(WCHAR));
+            title = title_buf = malloc(sizeof(L"VBScript") + (lstrlenW(orig_title)+2)*sizeof(WCHAR));
             if(!title)
                 return E_OUTOFMEMORY;
 
@@ -637,7 +637,7 @@ static HRESULT show_msgbox(script_ctx_t *ctx, BSTR prompt, unsigned type, BSTR o
         }
     }
 
-    heap_free(title_buf);
+    free(title_buf);
     IActiveScriptSiteWindow_Release(acts_window);
     if(FAILED(hres)) {
         FIXME("failed: %08lx\n", hres);
@@ -1170,7 +1170,7 @@ static HRESULT Global_LBound(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt,
 {
     SAFEARRAY *sa;
     HRESULT hres;
-    LONG ubound;
+    LONG lbound;
     int dim;
 
     assert(args_cnt == 1 || args_cnt == 2);
@@ -1184,6 +1184,9 @@ static HRESULT Global_LBound(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt,
     case VT_VARIANT|VT_ARRAY|VT_BYREF:
         sa = *V_ARRAYREF(arg);
         break;
+    case VT_EMPTY:
+    case VT_NULL:
+        return MAKE_VBSERROR(VBSE_TYPE_MISMATCH);
     default:
         FIXME("arg %s not supported\n", debugstr_variant(arg));
         return E_NOTIMPL;
@@ -1197,11 +1200,11 @@ static HRESULT Global_LBound(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt,
         dim = 1;
     }
 
-    hres = SafeArrayGetLBound(sa, dim, &ubound);
+    hres = SafeArrayGetLBound(sa, dim, &lbound);
     if(FAILED(hres))
         return hres;
 
-    return return_int(res, ubound);
+    return return_int(res, lbound);
 }
 
 static HRESULT Global_UBound(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
@@ -1222,6 +1225,9 @@ static HRESULT Global_UBound(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt,
     case VT_VARIANT|VT_ARRAY|VT_BYREF:
         sa = *V_ARRAYREF(arg);
         break;
+    case VT_EMPTY:
+    case VT_NULL:
+        return MAKE_VBSERROR(VBSE_TYPE_MISMATCH);
     default:
         FIXME("arg %s not supported\n", debugstr_variant(arg));
         return E_NOTIMPL;
@@ -1842,10 +1848,12 @@ static HRESULT Global_Asc(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VA
 
     if(!SysStringLen(str))
         hres = MAKE_VBSERROR(VBSE_ILLEGAL_FUNC_CALL);
+    else if (This->ctx->codepage == CP_UTF8)
+        hres = return_short(res, *str);
     else {
         unsigned char buf[2];
         short val = 0;
-        int n = WideCharToMultiByte(CP_ACP, 0, str, 1, (char*)buf, sizeof(buf), NULL, NULL);
+        int n = WideCharToMultiByte(This->ctx->codepage, 0, str, 1, (char*)buf, sizeof(buf), NULL, NULL);
         switch(n) {
         case 1:
             val = buf[0];
@@ -1865,9 +1873,6 @@ static HRESULT Global_Asc(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VA
     return hres;
 }
 
-/* The function supports only single-byte and double-byte character sets. It
- * ignores language specified by IActiveScriptSite::GetLCID. The argument needs
- * to be in range of short or unsigned short. */
 static HRESULT Global_Chr(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
 {
     int cp, c, len = 0;
@@ -1882,7 +1887,7 @@ static HRESULT Global_Chr(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VA
     if(FAILED(hres))
         return hres;
 
-    cp = GetACP();
+    cp = This->ctx->codepage;
     if(!GetCPInfo(cp, &cpi))
         cpi.MaxCharSize = 1;
 
@@ -1892,13 +1897,20 @@ static HRESULT Global_Chr(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VA
         return MAKE_VBSERROR(VBSE_ILLEGAL_FUNC_CALL);
     }
 
-    if(c>>8)
-        buf[len++] = c>>8;
-    if(!len || IsDBCSLeadByteEx(cp, buf[0]))
-        buf[len++] = c;
-    if(!MultiByteToWideChar(CP_ACP, 0, buf, len, &ch, 1)) {
-        WARN("invalid arg %d, cp %d\n", c, cp);
-        return E_FAIL;
+    if (cp == CP_UTF8)
+    {
+        ch = c;
+    }
+    else
+    {
+        if(c>>8)
+            buf[len++] = c>>8;
+        if(!len || IsDBCSLeadByteEx(cp, buf[0]))
+            buf[len++] = c;
+        if(!MultiByteToWideChar(cp, 0, buf, len, &ch, 1)) {
+            WARN("invalid arg %d, cp %d\n", c, cp);
+            return E_FAIL;
+        }
     }
 
     if(res) {
@@ -2164,6 +2176,12 @@ static HRESULT Global_Second(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt,
 
     hres = to_system_time(arg, &st);
     return FAILED(hres) ? hres : return_short(res, st.wSecond);
+}
+
+static HRESULT Global_SetLocale(BuiltinDisp *This, VARIANT *args, unsigned args_cnt, VARIANT *res)
+{
+    FIXME("\n");
+    return E_NOTIMPL;
 }
 
 static HRESULT Global_DateValue(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
@@ -2450,6 +2468,10 @@ static HRESULT Global_DatePart(BuiltinDisp *This, VARIANT *arg, unsigned args_cn
 
 static HRESULT Global_TypeName(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
 {
+    ITypeInfo *typeinfo;
+    BSTR name = NULL;
+    HRESULT hres;
+
     TRACE("(%s)\n", debugstr_variant(arg));
 
     assert(args_cnt == 1);
@@ -2482,6 +2504,18 @@ static HRESULT Global_TypeName(BuiltinDisp *This, VARIANT *arg, unsigned args_cn
             return return_string(res, L"Empty");
         case VT_NULL:
             return return_string(res, L"Null");
+        case VT_DISPATCH:
+            if (SUCCEEDED(IDispatch_GetTypeInfo(V_DISPATCH(arg), 0, GetUserDefaultLCID(), &typeinfo)))
+            {
+                hres = ITypeInfo_GetDocumentation(typeinfo, MEMBERID_NIL, &name, NULL, NULL, NULL);
+                ITypeInfo_Release(typeinfo);
+
+                if (SUCCEEDED(hres) && name && *name)
+                    return return_bstr(res, name);
+
+                SysFreeString(name);
+            }
+            return return_string(res, L"Object");
         default:
             FIXME("arg %s not supported\n", debugstr_variant(arg));
             return E_NOTIMPL;
@@ -2550,12 +2584,12 @@ static HRESULT Global_Join(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, V
 
 static HRESULT Global_Split(BuiltinDisp *This, VARIANT *args, unsigned args_cnt, VARIANT *res)
 {
-    BSTR str, string, delimiter = NULL;
+    BSTR string, delimiter = NULL;
     int count, max, mode, len, start, end, ret, delimiterlen = 1;
-    int i,*indices = NULL, indices_max = 8;
+    int i, *indices = NULL, *new_indices, indices_max = 8;
     SAFEARRAYBOUND bounds;
     SAFEARRAY *sa = NULL;
-    VARIANT *data, var;
+    VARIANT *data;
     HRESULT hres = S_OK;
 
     TRACE("%s %u...\n", debugstr_variant(args), args_cnt);
@@ -2614,7 +2648,7 @@ static HRESULT Global_Split(BuiltinDisp *This, VARIANT *args, unsigned args_cnt,
     len = SysStringLen(string);
     count = 0;
 
-    indices = heap_alloc( indices_max * sizeof(int));
+    indices = malloc( indices_max * sizeof(int));
     if(!indices) {
         hres = E_OUTOFMEMORY;
         goto error;
@@ -2634,12 +2668,13 @@ static HRESULT Global_Split(BuiltinDisp *This, VARIANT *args, unsigned args_cnt,
         }
 
         if (count == indices_max) {
-            indices_max *= 2;
-            indices = heap_realloc( indices, indices_max * sizeof(int));
-            if(!indices) {
+            new_indices = realloc(indices, indices_max * 2 * sizeof(int));
+            if(!new_indices) {
                 hres = E_OUTOFMEMORY;
                 goto error;
             }
+            indices = new_indices;
+            indices_max *= 2;
         }
         indices[count++] = end;
 
@@ -2662,18 +2697,12 @@ static HRESULT Global_Split(BuiltinDisp *This, VARIANT *args, unsigned args_cnt,
 
     start = 0;
     for (i = 0; i < count; i++) {
-        str = SysAllocStringLen(string + start, indices[i] - start);
-        if (!str) {
+        V_VT(&data[i]) = VT_BSTR;
+        V_BSTR(&data[i]) = SysAllocStringLen(string + start, indices[i] - start);
+
+        if (!V_BSTR(&data[i])) {
             hres = E_OUTOFMEMORY;
             break;
-        }
-        V_VT(&var) = VT_BSTR;
-        V_BSTR(&var) = str;
-
-        hres = VariantCopyInd(data+i, &var);
-        if(FAILED(hres)) {
-            SafeArrayUnaccessData(sa);
-            goto error;
         }
         start = indices[i]+delimiterlen;
     }
@@ -2687,7 +2716,7 @@ error:
         SafeArrayDestroy(sa);
     }
 
-    heap_free(indices);
+    free(indices);
     if(V_VT(args) != VT_BSTR)
         SysFreeString(string);
     if(args_cnt > 1 && V_VT(args+1) != VT_BSTR)
@@ -2929,28 +2958,134 @@ static HRESULT Global_ScriptEngineBuildVersion(BuiltinDisp *This, VARIANT *arg, 
     return return_int(res, VBSCRIPT_BUILD_VERSION);
 }
 
-static HRESULT Global_FormatNumber(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
+static HRESULT Global_FormatNumber(BuiltinDisp *This, VARIANT *args, unsigned args_cnt, VARIANT *res)
+{
+    union
+    {
+        struct
+        {
+            int num_dig, inc_lead, use_parens, group;
+        } s;
+        int val[4];
+    } int_args = { .s.num_dig = -1, .s.inc_lead = -2, .s.use_parens = -2, .s.group = -2 };
+    HRESULT hres;
+    BSTR str;
+    int i;
+
+    TRACE("\n");
+
+    assert(1 <= args_cnt && args_cnt <= 5);
+
+    for (i = 1; i < args_cnt; ++i)
+    {
+        if (V_VT(args+i) == VT_ERROR) continue;
+        if (V_VT(args+i) == VT_NULL) return MAKE_VBSERROR(VBSE_ILLEGAL_NULL_USE);
+        if (FAILED(hres = to_int(args+i, &int_args.val[i-1]))) return hres;
+    }
+
+    hres = VarFormatNumber(args, int_args.s.num_dig, int_args.s.inc_lead, int_args.s.use_parens,
+        int_args.s.group, 0, &str);
+    if (FAILED(hres)) return hres;
+
+    return return_bstr(res, str);
+}
+
+static HRESULT Global_FormatCurrency(BuiltinDisp *This, VARIANT *args, unsigned args_cnt, VARIANT *res)
+{
+    union
+    {
+        struct
+        {
+            int num_dig, inc_lead, use_parens, group;
+        } s;
+        int val[4];
+    } int_args = { .s.num_dig = -1, .s.inc_lead = -2, .s.use_parens = -2, .s.group = -2 };
+    HRESULT hres;
+    BSTR str;
+    int i;
+
+    TRACE("\n");
+
+    assert(1 <= args_cnt && args_cnt <= 5);
+
+    for (i = 1; i < args_cnt; ++i)
+    {
+        if (V_VT(args+i) == VT_ERROR) continue;
+        if (V_VT(args+i) == VT_NULL) return MAKE_VBSERROR(VBSE_ILLEGAL_NULL_USE);
+        if (FAILED(hres = to_int(args+i, &int_args.val[i-1]))) return hres;
+    }
+
+    hres = VarFormatCurrency(args, int_args.s.num_dig, int_args.s.inc_lead, int_args.s.use_parens,
+        int_args.s.group, 0, &str);
+    if (FAILED(hres)) return hres;
+
+    return return_bstr(res, str);
+}
+
+static HRESULT Global_FormatPercent(BuiltinDisp *This, VARIANT *args, unsigned args_cnt, VARIANT *res)
+{
+    union
+    {
+        struct
+        {
+            int num_dig, inc_lead, use_parens, group;
+        } s;
+        int val[4];
+    } int_args = { .s.num_dig = -1, .s.inc_lead = -2, .s.use_parens = -2, .s.group = -2 };
+    HRESULT hres;
+    BSTR str;
+    int i;
+
+    TRACE("\n");
+
+    assert(1 <= args_cnt && args_cnt <= 5);
+
+    for (i = 1; i < args_cnt; ++i)
+    {
+        if (V_VT(args+i) == VT_ERROR) continue;
+        if (V_VT(args+i) == VT_NULL) return MAKE_VBSERROR(VBSE_ILLEGAL_NULL_USE);
+        if (FAILED(hres = to_int(args+i, &int_args.val[i-1]))) return hres;
+    }
+
+    hres = VarFormatPercent(args, int_args.s.num_dig, int_args.s.inc_lead, int_args.s.use_parens,
+        int_args.s.group, 0, &str);
+    if (FAILED(hres)) return hres;
+
+    return return_bstr(res, str);
+}
+
+static HRESULT Global_GetLocale(BuiltinDisp *This, VARIANT *args, unsigned args_cnt, VARIANT *res)
 {
     FIXME("\n");
     return E_NOTIMPL;
 }
 
-static HRESULT Global_FormatCurrency(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
+static HRESULT Global_FormatDateTime(BuiltinDisp *This, VARIANT *args, unsigned args_cnt, VARIANT *res)
 {
-    FIXME("\n");
-    return E_NOTIMPL;
-}
+    int format = 0;
+    HRESULT hres;
+    BSTR str;
 
-static HRESULT Global_FormatPercent(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
-{
-    FIXME("\n");
-    return E_NOTIMPL;
-}
+    TRACE("\n");
 
-static HRESULT Global_FormatDateTime(BuiltinDisp *This, VARIANT *arg, unsigned args_cnt, VARIANT *res)
-{
-    FIXME("\n");
-    return E_NOTIMPL;
+    assert(1 <= args_cnt && args_cnt <= 2);
+
+    if (V_VT(args) == VT_NULL)
+        return MAKE_VBSERROR(VBSE_TYPE_MISMATCH);
+
+    if (args_cnt == 2)
+    {
+        if (V_VT(args+1) == VT_NULL) return MAKE_VBSERROR(VBSE_ILLEGAL_NULL_USE);
+        if (V_VT(args+1) != VT_ERROR)
+        {
+            if (FAILED(hres = to_int(args+1, &format))) return hres;
+        }
+    }
+
+    hres = VarFormatDateTime(args, format, 0, &str);
+    if (FAILED(hres)) return hres;
+
+    return return_bstr(res, str);
 }
 
 static HRESULT Global_WeekdayName(BuiltinDisp *This, VARIANT *args, unsigned args_cnt, VARIANT *res)
@@ -3147,6 +3282,7 @@ static const builtin_prop_t global_props[] = {
     {L"FormatDateTime",            Global_FormatDateTime, 0, 1, 2},
     {L"FormatNumber",              Global_FormatNumber, 0, 1, 5},
     {L"FormatPercent",             Global_FormatPercent, 0, 1, 5},
+    {L"GetLocale",                 Global_GetLocale, 0, 0},
     {L"GetObject",                 Global_GetObject, 0, 0, 2},
     {L"GetRef",                    Global_GetRef, 0, 1},
     {L"Hex",                       Global_Hex, 0, 1},
@@ -3193,6 +3329,7 @@ static const builtin_prop_t global_props[] = {
     {L"ScriptEngineMajorVersion",  Global_ScriptEngineMajorVersion, 0, 0},
     {L"ScriptEngineMinorVersion",  Global_ScriptEngineMinorVersion, 0, 0},
     {L"Second",                    Global_Second, 0, 1},
+    {L"SetLocale",                 Global_SetLocale, 0, 0, 1},
     {L"Sgn",                       Global_Sgn, 0, 1},
     {L"Sin",                       Global_Sin, 0, 1},
     {L"Space",                     Global_Space, 0, 1},

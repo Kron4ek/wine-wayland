@@ -29,10 +29,11 @@
 #define WIN32_NO_STATUS
 #include "win32u_private.h"
 #include "ntuser_private.h"
+#include "winnls.h"
 #include "hidusage.h"
 #include "dbt.h"
 #include "dde.h"
-#include "ddk/imm.h"
+#include "immdev.h"
 #include "wine/server.h"
 #include "wine/debug.h"
 
@@ -1346,6 +1347,14 @@ static LRESULT call_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 
     if (!needs_unpack) size = 0;
     if (!is_current_thread_window( hwnd )) return 0;
+
+    /* first the WH_CALLWNDPROC hook */
+    cwp.lParam  = lparam;
+    cwp.wParam  = wparam;
+    cwp.message = msg;
+    cwp.hwnd    = hwnd = get_full_window_handle( hwnd );
+    call_hooks( WH_CALLWNDPROC, HC_ACTION, same_thread, (LPARAM)&cwp, sizeof(cwp) );
+
     if (size && !(params = malloc( sizeof(*params) + size ))) return 0;
     if (!init_window_call_params( params, hwnd, msg, wparam, lparam, &result, !unicode, mapping ))
     {
@@ -1359,25 +1368,15 @@ static LRESULT call_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
         params->ansi = FALSE;
         if (size) memcpy( params + 1, buffer, size );
     }
-
-    /* first the WH_CALLWNDPROC hook */
-    cwp.lParam  = lparam;
-    cwp.wParam  = wparam;
-    cwp.message = msg;
-    cwp.hwnd    = params->hwnd;
-    call_hooks( WH_CALLWNDPROC, HC_ACTION, same_thread, (LPARAM)&cwp, sizeof(cwp) );
-
     dispatch_win_proc_params( params, sizeof(*params) + size );
+    if (params != &p) free( params );
 
     /* and finally the WH_CALLWNDPROCRET hook */
     cwpret.lResult = result;
     cwpret.lParam  = lparam;
     cwpret.wParam  = wparam;
     cwpret.message = msg;
-    cwpret.hwnd    = params->hwnd;
-
-    if (params != &p) free( params );
-
+    cwpret.hwnd    = hwnd;
     call_hooks( WH_CALLWNDPROCRET, HC_ACTION, same_thread, (LPARAM)&cwpret, sizeof(cwpret) );
     return result;
 }
@@ -1715,7 +1714,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
 
             if ((get_window_long( hwndTop, GWL_STYLE ) & (WS_POPUP|WS_CHILD)) != WS_CHILD)
             {
-                LONG ret = send_message( msg->hwnd, WM_MOUSEACTIVATE, (WPARAM)hwndTop,
+                UINT ret = send_message( msg->hwnd, WM_MOUSEACTIVATE, (WPARAM)hwndTop,
                                          MAKELONG( hittest, msg->message ) );
                 switch(ret)
                 {
@@ -1744,38 +1743,6 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
     /* Windows sends the normal mouse message as the message parameter
        in the WM_SETCURSOR message even if it's non-client mouse message */
     send_message( msg->hwnd, WM_SETCURSOR, (WPARAM)msg->hwnd, MAKELONG( hittest, msg->message ));
-
-    if (enable_mouse_in_pointer) switch (msg->message)
-    {
-    case WM_MOUSEMOVE:
-    case WM_LBUTTONDOWN:
-    case WM_LBUTTONUP:
-    case WM_RBUTTONDOWN:
-    case WM_RBUTTONUP:
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONUP:
-    case WM_XBUTTONDOWN:
-    case WM_XBUTTONUP:
-    {
-        WORD flags = POINTER_MESSAGE_FLAG_INRANGE|POINTER_MESSAGE_FLAG_INCONTACT|POINTER_MESSAGE_FLAG_PRIMARY;
-        if (msg->message == WM_LBUTTONDOWN) flags |= POINTER_MESSAGE_FLAG_FIRSTBUTTON;
-        if (msg->message == WM_RBUTTONDOWN) flags |= POINTER_MESSAGE_FLAG_SECONDBUTTON;
-        if (msg->message == WM_MBUTTONDOWN) flags |= POINTER_MESSAGE_FLAG_THIRDBUTTON;
-        if (msg->message == WM_XBUTTONDOWN && LOWORD( msg->wParam ) == MK_LBUTTON) flags |= POINTER_MESSAGE_FLAG_FIRSTBUTTON;
-        if (msg->message == WM_XBUTTONDOWN && LOWORD( msg->wParam ) == MK_RBUTTON) flags |= POINTER_MESSAGE_FLAG_SECONDBUTTON;
-        if (msg->message == WM_XBUTTONDOWN && LOWORD( msg->wParam ) == MK_MBUTTON) flags |= POINTER_MESSAGE_FLAG_THIRDBUTTON;
-        if (msg->message == WM_XBUTTONDOWN && LOWORD( msg->wParam ) == MK_XBUTTON1) flags |= POINTER_MESSAGE_FLAG_FOURTHBUTTON;
-        if (msg->message == WM_XBUTTONDOWN && LOWORD( msg->wParam ) == MK_XBUTTON2) flags |= POINTER_MESSAGE_FLAG_FIFTHBUTTON;
-        send_message( msg->hwnd, WM_POINTERUPDATE, MAKELONG( 1, flags ), MAKELONG( msg->pt.x, msg->pt.y ) );
-        break;
-    }
-    case WM_MOUSEWHEEL:
-        send_message( msg->hwnd, WM_POINTERWHEEL, MAKELONG( 1, HIWORD( msg->wParam ) ), MAKELONG( msg->pt.x, msg->pt.y ) );
-        break;
-    case WM_MOUSEHWHEEL:
-        send_message( msg->hwnd, WM_POINTERHWHEEL, MAKELONG( 1, HIWORD( msg->wParam ) ), MAKELONG( msg->pt.x, msg->pt.y ) );
-        break;
-    }
 
     msg->message = message;
     return !eat_msg;
@@ -1891,7 +1858,7 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
         TRACE( "got type %d msg %x (%s) hwnd %p wp %lx lp %lx\n",
                info.type, info.msg.message,
                (info.type == MSG_WINEVENT) ? "MSG_WINEVENT" : debugstr_msg_name(info.msg.message, info.msg.hwnd),
-               info.msg.hwnd, info.msg.wParam, info.msg.lParam );
+               info.msg.hwnd, (long)info.msg.wParam, info.msg.lParam );
 
         switch(info.type)
         {
@@ -1956,7 +1923,8 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
                 hook.time        = info.msg.time;
                 hook.dwExtraInfo = msg_data->hardware.info;
                 TRACE( "calling keyboard LL hook vk %x scan %x flags %x time %u info %lx\n",
-                       hook.vkCode, hook.scanCode, hook.flags, hook.time, hook.dwExtraInfo );
+                       (int)hook.vkCode, (int)hook.scanCode, (int)hook.flags,
+                       (int)hook.time, (long)hook.dwExtraInfo );
                 result = call_hooks( WH_KEYBOARD_LL, HC_ACTION, info.msg.wParam,
                                      (LPARAM)&hook, sizeof(hook) );
             }
@@ -1970,7 +1938,8 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
                 hook.time        = info.msg.time;
                 hook.dwExtraInfo = msg_data->hardware.info;
                 TRACE( "calling mouse LL hook pos %d,%d data %x flags %x time %u info %lx\n",
-                       hook.pt.x, hook.pt.y, hook.mouseData, hook.flags, hook.time, hook.dwExtraInfo );
+                       (int)hook.pt.x, (int)hook.pt.y, (int)hook.mouseData, (int)hook.flags,
+                       (int)hook.time, (long)hook.dwExtraInfo );
                 result = call_hooks( WH_MOUSE_LL, HC_ACTION, info.msg.wParam,
                                      (LPARAM)&hook, sizeof(hook) );
             }
@@ -2287,6 +2256,14 @@ DWORD WINAPI NtUserWaitForInputIdle( HANDLE process, DWORD timeout, BOOL wow )
 }
 
 /***********************************************************************
+ *           NtUserWaitMessage (win32u.@)
+ */
+BOOL WINAPI NtUserWaitMessage(void)
+{
+    return NtUserMsgWaitForMultipleObjectsEx( 0, NULL, INFINITE, QS_ALLINPUT, 0 ) != WAIT_FAILED;
+}
+
+/***********************************************************************
  *           NtUserPeekMessage  (win32u.@)
  */
 BOOL WINAPI NtUserPeekMessage( MSG *msg_out, HWND hwnd, UINT first, UINT last, UINT flags )
@@ -2490,7 +2467,7 @@ static void wait_message_reply( UINT flags )
 static LRESULT retrieve_reply( const struct send_message_info *info,
                                size_t reply_size, LRESULT *result )
 {
-    NTSTATUS status;
+    unsigned int status;
     void *reply_data = NULL;
 
     if (reply_size)
@@ -2515,7 +2492,7 @@ static LRESULT retrieve_reply( const struct send_message_info *info,
     free( reply_data );
 
     TRACE( "hwnd %p msg %x (%s) wp %lx lp %lx got reply %lx (err=%d)\n",
-           info->hwnd, info->msg, debugstr_msg_name(info->msg, info->hwnd), info->wparam,
+           info->hwnd, info->msg, debugstr_msg_name(info->msg, info->hwnd), (long)info->wparam,
            info->lparam, *result, status );
 
     /* MSDN states that last error is 0 on timeout, but at least NT4 returns ERROR_TIMEOUT */
@@ -2531,7 +2508,8 @@ static LRESULT send_inter_thread_message( const struct send_message_info *info, 
     size_t reply_size = 0;
 
     TRACE( "hwnd %p msg %x (%s) wp %lx lp %lx\n",
-           info->hwnd, info->msg, debugstr_msg_name(info->msg, info->hwnd), info->wparam, info->lparam );
+           info->hwnd, info->msg, debugstr_msg_name(info->msg, info->hwnd),
+           (long)info->wparam, info->lparam );
 
     user_check_not_lock();
 
@@ -2542,6 +2520,17 @@ static LRESULT send_inter_thread_message( const struct send_message_info *info, 
 
     wait_message_reply( info->flags );
     return retrieve_reply( info, reply_size, res_ptr );
+}
+
+static LRESULT send_inter_thread_callback( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
+                                           LRESULT *result, void *arg )
+{
+    struct send_message_info *info = arg;
+    info->hwnd   = hwnd;
+    info->msg    = msg;
+    info->wparam = wp;
+    info->lparam = lp;
+    return send_inter_thread_message( info, result );
 }
 
 /***********************************************************************
@@ -2809,6 +2798,8 @@ static BOOL broadcast_message( struct send_message_info *info, DWORD_PTR *res_pt
                 break;
             }
         }
+
+        free( list );
     }
 
     if (res_ptr) *res_ptr = 1;
@@ -2856,6 +2847,268 @@ static BOOL process_packed_message( struct send_message_info *info, LRESULT *res
     return TRUE;
 }
 
+static inline void *get_buffer( void *static_buffer, size_t size, size_t need )
+{
+    if (size >= need) return static_buffer;
+    return malloc( need );
+}
+
+static inline void free_buffer( void *static_buffer, void *buffer )
+{
+    if (buffer != static_buffer) free( buffer );
+}
+
+typedef LRESULT (*winproc_callback_t)( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
+                                       LRESULT *result, void *arg );
+
+/**********************************************************************
+ *           test_lb_for_string
+ *
+ * Return TRUE if the lparam is a string
+ */
+static inline BOOL test_lb_for_string( HWND hwnd, UINT msg )
+{
+    DWORD style = get_window_long( hwnd, GWL_STYLE );
+    if (msg <= CB_MSGMAX)
+        return (!(style & (CBS_OWNERDRAWFIXED | CBS_OWNERDRAWVARIABLE)) || (style & CBS_HASSTRINGS));
+    else
+        return (!(style & (LBS_OWNERDRAWFIXED | LBS_OWNERDRAWVARIABLE)) || (style & LBS_HASSTRINGS));
+
+}
+
+static CPTABLEINFO *get_input_codepage( void )
+{
+    const NLS_LOCALE_DATA *locale;
+    HKL hkl = NtUserGetKeyboardLayout( 0 );
+    CPTABLEINFO *ret = NULL;
+
+    locale = get_locale_data( LOWORD(hkl) );
+    if (locale && locale->idefaultansicodepage != CP_UTF8)
+        ret = get_cptable( locale->idefaultansicodepage );
+    return ret ? ret : &ansi_cp;
+}
+
+/***********************************************************************
+ *           map_wparam_AtoW
+ *
+ * Convert the wparam of an ASCII message to Unicode.
+ */
+static BOOL map_wparam_AtoW( UINT message, WPARAM *wparam, enum wm_char_mapping mapping )
+{
+    char ch[2];
+    WCHAR wch[2];
+
+    wch[0] = wch[1] = 0;
+    switch(message)
+    {
+    case WM_CHARTOITEM:
+    case EM_SETPASSWORDCHAR:
+    case WM_DEADCHAR:
+    case WM_SYSCHAR:
+    case WM_SYSDEADCHAR:
+    case WM_MENUCHAR:
+        ch[0] = LOBYTE(*wparam);
+        ch[1] = HIBYTE(*wparam);
+        win32u_mbtowc( get_input_codepage(), wch, 2, ch, 2 );
+        *wparam = MAKEWPARAM(wch[0], wch[1]);
+        break;
+
+    case WM_IME_CHAR:
+        ch[0] = HIBYTE(*wparam);
+        ch[1] = LOBYTE(*wparam);
+        if (ch[0]) win32u_mbtowc( get_input_codepage(), wch, 2, ch, 2 );
+        else win32u_mbtowc( get_input_codepage(), wch, 1, ch + 1, 1 );
+        *wparam = MAKEWPARAM(wch[0], HIWORD(*wparam));
+        break;
+    }
+    return TRUE;
+}
+
+/**********************************************************************
+ *           call_messageAtoW
+ *
+ * Call a window procedure, translating args from Ansi to Unicode.
+ */
+static LRESULT call_messageAtoW( winproc_callback_t callback, HWND hwnd, UINT msg, WPARAM wparam,
+                                 LPARAM lparam, LRESULT *result, void *arg, enum wm_char_mapping mapping )
+{
+    LRESULT ret = 0;
+
+    TRACE( "(hwnd=%p,msg=%s,wp=%#lx,lp=%#lx)\n", hwnd, debugstr_msg_name( msg, hwnd ),
+           (long)wparam, (long)lparam );
+
+    switch(msg)
+    {
+    case WM_MDICREATE:
+        {
+            WCHAR *ptr, buffer[512];
+            DWORD title_lenA = 0, title_lenW = 0, class_lenA = 0, class_lenW = 0;
+            MDICREATESTRUCTA *csA = (MDICREATESTRUCTA *)lparam;
+            MDICREATESTRUCTW csW;
+
+            memcpy( &csW, csA, sizeof(csW) );
+
+            if (!IS_INTRESOURCE(csA->szTitle))
+            {
+                title_lenA = strlen(csA->szTitle) + 1;
+                title_lenW = win32u_mbtowc_size( &ansi_cp, csA->szTitle, title_lenA );
+            }
+            if (!IS_INTRESOURCE(csA->szClass))
+            {
+                class_lenA = strlen(csA->szClass) + 1;
+                class_lenW = win32u_mbtowc_size( &ansi_cp, csA->szClass, class_lenA );
+            }
+
+            if (!(ptr = get_buffer( buffer, sizeof(buffer), (title_lenW + class_lenW) * sizeof(WCHAR) )))
+                break;
+
+            if (title_lenW)
+            {
+                csW.szTitle = ptr;
+                win32u_mbtowc( &ansi_cp, ptr, title_lenW, csA->szTitle, title_lenA );
+            }
+            if (class_lenW)
+            {
+                csW.szClass = ptr + title_lenW;
+                win32u_mbtowc( &ansi_cp, ptr + title_lenW, class_lenW, csA->szClass, class_lenA );
+            }
+            ret = callback( hwnd, msg, wparam, (LPARAM)&csW, result, arg );
+            free_buffer( buffer, ptr );
+        }
+        break;
+
+    case WM_GETTEXT:
+    case WM_ASKCBFORMATNAME:
+        {
+            WCHAR *ptr, buffer[512];
+            LPSTR str = (LPSTR)lparam;
+            DWORD len = wparam * sizeof(WCHAR);
+
+            if (!(ptr = get_buffer( buffer, sizeof(buffer), len ))) break;
+            ret = callback( hwnd, msg, wparam, (LPARAM)ptr, result, arg );
+            if (wparam)
+            {
+                len = 0;
+                len = *result ? win32u_wctomb( &ansi_cp, str, wparam - 1, ptr, *result ) : 0;
+                str[len] = 0;
+                *result = len;
+            }
+            free_buffer( buffer, ptr );
+        }
+        break;
+
+    case LB_ADDSTRING:
+    case LB_INSERTSTRING:
+    case LB_FINDSTRING:
+    case LB_FINDSTRINGEXACT:
+    case LB_SELECTSTRING:
+    case CB_ADDSTRING:
+    case CB_INSERTSTRING:
+    case CB_FINDSTRING:
+    case CB_FINDSTRINGEXACT:
+    case CB_SELECTSTRING:
+        if (!lparam || !test_lb_for_string( hwnd, msg ))
+        {
+            ret = callback( hwnd, msg, wparam, lparam, result, arg );
+            break;
+        }
+        /* fall through */
+    case WM_SETTEXT:
+    case WM_WININICHANGE:
+    case WM_DEVMODECHANGE:
+    case CB_DIR:
+    case LB_DIR:
+    case LB_ADDFILE:
+    case EM_REPLACESEL:
+        if (!lparam)
+        {
+            ret = callback( hwnd, msg, wparam, lparam, result, arg );
+        }
+        else
+        {
+            WCHAR *ptr, buffer[512];
+            LPCSTR strA = (LPCSTR)lparam;
+            DWORD lenW, lenA = strlen(strA) + 1;
+
+            lenW = win32u_mbtowc_size( &ansi_cp, strA, lenA );
+            if ((ptr = get_buffer( buffer, sizeof(buffer), lenW * sizeof(WCHAR) )))
+            {
+                win32u_mbtowc( &ansi_cp, ptr, lenW, strA, lenA );
+                ret = callback( hwnd, msg, wparam, (LPARAM)ptr, result, arg );
+                free_buffer( buffer, ptr );
+            }
+        }
+        break;
+
+    case EM_GETLINE:
+        {
+            WCHAR *ptr, buffer[512];
+            WORD len = *(WORD *)lparam;
+
+            if (!(ptr = get_buffer( buffer, sizeof(buffer), len * sizeof(WCHAR) ))) break;
+            *((WORD *)ptr) = len;   /* store the length */
+            ret = callback( hwnd, msg, wparam, (LPARAM)ptr, result, arg );
+            if (*result)
+            {
+                DWORD reslen;
+                reslen = win32u_wctomb( &ansi_cp, (char *)lparam, len, ptr, *result );
+                if (reslen < len) ((LPSTR)lparam)[reslen] = 0;
+                *result = reslen;
+            }
+            free_buffer( buffer, ptr );
+        }
+        break;
+
+    case WM_GETDLGCODE:
+        if (lparam)
+        {
+            MSG newmsg = *(MSG *)lparam;
+            if (map_wparam_AtoW( newmsg.message, &newmsg.wParam, WMCHAR_MAP_NOMAPPING ))
+                ret = callback( hwnd, msg, wparam, (LPARAM)&newmsg, result, arg );
+        }
+        else ret = callback( hwnd, msg, wparam, lparam, result, arg );
+        break;
+
+    case WM_CHARTOITEM:
+    case WM_MENUCHAR:
+    case WM_DEADCHAR:
+    case WM_SYSCHAR:
+    case WM_SYSDEADCHAR:
+    case EM_SETPASSWORDCHAR:
+    case WM_IME_CHAR:
+        if (map_wparam_AtoW( msg, &wparam, mapping ))
+            ret = callback( hwnd, msg, wparam, lparam, result, arg );
+        break;
+
+    case WM_GETTEXTLENGTH:
+    case CB_GETLBTEXTLEN:
+    case LB_GETTEXTLEN:
+        ret = callback( hwnd, msg, wparam, lparam, result, arg );
+        if (*result >= 0)
+        {
+            WCHAR *ptr, buffer[512];
+            LRESULT res;
+            DWORD len = *result + 1;
+            /* Determine respective GETTEXT message */
+            UINT msg_get_text = msg == WM_GETTEXTLENGTH ? WM_GETTEXT :
+                (msg == CB_GETLBTEXTLEN ? CB_GETLBTEXT : LB_GETTEXT);
+            /* wparam differs between the messages */
+            WPARAM wp = msg == WM_GETTEXTLENGTH ? len : wparam;
+
+            if (!(ptr = get_buffer( buffer, sizeof(buffer), len * sizeof(WCHAR) ))) break;
+
+            res = send_message( hwnd, msg_get_text, wp, (LPARAM)ptr );
+            *result = win32u_wctomb_size( &ansi_cp, ptr, res );
+            free_buffer( buffer, ptr );
+        }
+        break;
+
+    default:
+        ret = callback( hwnd, msg, wparam, lparam, result, arg );
+        break;
+    }
+    return ret;
+}
 
 /***********************************************************************
  *           process_message
@@ -2892,7 +3145,13 @@ static BOOL process_message( struct send_message_info *info, DWORD_PTR *res_ptr,
     {
         if (dest_pid != GetCurrentProcessId() && (info->type == MSG_ASCII || info->type == MSG_UNICODE))
             info->type = MSG_OTHER_PROCESS;
-        ret = send_inter_thread_message( info, &result );
+
+        /* MSG_ASCII can be sent unconverted except for WM_CHAR; everything else needs to be Unicode */
+        if (ansi && (info->type != MSG_ASCII || info->msg == WM_CHAR))
+            ret = call_messageAtoW( send_inter_thread_callback, info->hwnd, info->msg,
+                                    info->wparam, info->lparam, &result, info, info->wm_char );
+        else
+            ret = send_inter_thread_message( info, &result );
     }
     else if (info->type != MSG_OTHER_PROCESS)
     {
@@ -2941,7 +3200,7 @@ UINT_PTR WINAPI NtUserSetTimer( HWND hwnd, UINT_PTR id, UINT timeout, TIMERPROC 
     }
     SERVER_END_REQ;
 
-    TRACE( "Added %p %lx %p timeout %d\n", hwnd, id, winproc, timeout );
+    TRACE( "Added %p %lx %p timeout %d\n", hwnd, (long)id, winproc, timeout );
     return ret;
 }
 
@@ -2952,7 +3211,7 @@ UINT_PTR WINAPI NtUserSetSystemTimer( HWND hwnd, UINT_PTR id, UINT timeout )
 {
     UINT_PTR ret;
 
-    TRACE( "window %p, id %#lx, timeout %u\n", hwnd, id, timeout );
+    TRACE( "window %p, id %#lx, timeout %u\n", hwnd, (long)id, timeout );
 
     timeout = min( max( USER_TIMER_MINIMUM, timeout ), USER_TIMER_MAXIMUM );
 
@@ -3022,7 +3281,7 @@ static LRESULT send_window_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM l
     info.lparam  = lparam;
     info.flags   = SMTO_NORMAL;
     info.timeout = 0;
-    info.wm_char = WMCHAR_MAP_SENDMESSAGETIMEOUT;
+    info.wm_char = WMCHAR_MAP_SENDMESSAGE;
     info.params  = client_params;
 
     process_message( &info, &res, ansi );
@@ -3143,7 +3402,7 @@ BOOL WINAPI NtUserPostMessage( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam
     }
 
     TRACE( "hwnd %p msg %x (%s) wp %lx lp %lx\n",
-           hwnd, msg, debugstr_msg_name(msg, hwnd), wparam, lparam );
+           hwnd, msg, debugstr_msg_name(msg, hwnd), (long)wparam, lparam );
 
     info.type   = MSG_POSTED;
     info.hwnd   = hwnd;
@@ -3260,7 +3519,7 @@ LRESULT WINAPI NtUserMessageCall( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         return 0;
 
     default:
-        FIXME( "%p %x %lx %lx %p %x %x\n", hwnd, msg, wparam, lparam, result_info, type, ansi );
+        FIXME( "%p %x %lx %lx %p %x %x\n", hwnd, msg, (long)wparam, lparam, result_info, (int)type, ansi );
     }
     return 0;
 }
@@ -3280,8 +3539,8 @@ BOOL WINAPI NtUserTranslateMessage( const MSG *msg, UINT flags )
     if (msg->message < WM_KEYFIRST || msg->message > WM_KEYLAST) return FALSE;
     if (msg->message != WM_KEYDOWN && msg->message != WM_SYSKEYDOWN) return TRUE;
 
-    TRACE_(key)( "Translating key %s (%04lX), scancode %04x\n",
-                 debugstr_vkey_name( msg->wParam ), msg->wParam, HIWORD(msg->lParam) );
+    TRACE_(key)( "Translating key %s (%04x), scancode %04x\n",
+                 debugstr_vkey_name( msg->wParam ), LOWORD(msg->wParam), HIWORD(msg->lParam) );
 
     switch (msg->wParam)
     {

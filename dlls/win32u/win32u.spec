@@ -915,7 +915,7 @@
 @ stdcall -syscall NtUserGetCursor()
 @ stdcall -syscall NtUserGetCursorFrameInfo(long long ptr ptr)
 @ stdcall -syscall NtUserGetCursorInfo(ptr)
-@ stub NtUserGetDC
+@ stdcall -syscall NtUserGetDC(long)
 @ stdcall -syscall NtUserGetDCEx(long long long)
 @ stub NtUserGetDManipHookInitFunction
 @ stub NtUserGetDesktopID
@@ -943,7 +943,7 @@
 @ stub NtUserGetInteractiveControlDeviceInfo
 @ stub NtUserGetInteractiveControlInfo
 @ stub NtUserGetInteractiveCtrlSupportedWaveforms
-@ stub NtUserGetInternalWindowPos
+@ stdcall -syscall NtUserGetInternalWindowPos(long ptr ptr)
 @ stdcall -syscall NtUserGetKeyNameText(long ptr long)
 @ stdcall -syscall NtUserGetKeyState(long)
 @ stdcall -syscall NtUserGetKeyboardLayout(long)
@@ -971,7 +971,7 @@
 @ stub NtUserGetPointerDeviceRects
 @ stub NtUserGetPointerDevices
 @ stub NtUserGetPointerFrameTimes
-@ stub NtUserGetPointerInfoList
+@ stdcall -syscall NtUserGetPointerInfoList(long long long long long ptr ptr ptr)
 @ stub NtUserGetPointerInputTransform
 @ stub NtUserGetPointerProprietaryId
 @ stub NtUserGetPointerType
@@ -1009,7 +1009,7 @@
 @ stub NtUserGetWindowBand
 @ stub NtUserGetWindowCompositionAttribute
 @ stub NtUserGetWindowCompositionInfo
-@ stub NtUserGetWindowDC
+@ stdcall -syscall NtUserGetWindowDC(long)
 @ stub NtUserGetWindowDisplayAffinity
 @ stub NtUserGetWindowFeedbackSetting
 @ stub NtUserGetWindowGroupId
@@ -1051,7 +1051,7 @@
 @ stdcall -syscall NtUserInvalidateRgn(long long long)
 @ stub NtUserIsChildWindowDpiMessageEnabled
 @ stdcall -syscall NtUserIsClipboardFormatAvailable(long)
-@ stub NtUserIsMouseInPointerEnabled
+@ stdcall -syscall NtUserIsMouseInPointerEnabled()
 @ stub NtUserIsMouseInputEnabled
 @ stub NtUserIsNonClientDpiScalingEnabled
 @ stub NtUserIsResizeLayoutSynchronizationEnabled
@@ -1105,7 +1105,7 @@
 @ stub NtUserPostKeyboardInputMessage
 @ stdcall -syscall NtUserPostMessage(long long long long)
 @ stdcall -syscall NtUserPostThreadMessage(long long long long)
-@ stub NtUserPrintWindow
+@ stdcall -syscall NtUserPrintWindow(long long long)
 @ stub NtUserProcessConnect
 @ stub NtUserProcessInkFeedbackCommand
 @ stub NtUserPromoteMouseInPointer
@@ -1117,7 +1117,7 @@
 @ stdcall -syscall NtUserQueryInputContext(long long)
 @ stub NtUserQuerySendMessage
 @ stub NtUserQueryWindow
-@ stub NtUserRealChildWindowFromPoint
+@ stdcall -syscall NtUserRealChildWindowFromPoint(long long long)
 @ stub NtUserRealInternalGetMessage
 @ stub NtUserRealWaitMessageEx
 @ stdcall -syscall NtUserRedrawWindow(long ptr long long)
@@ -1226,7 +1226,7 @@
 @ stdcall -syscall NtUserSetScrollInfo(long long ptr long)
 @ stub NtUserSetSensorPresence
 @ stub NtUserSetSharedWindowData
-@ stub NtUserSetShellWindowEx
+@ stdcall -syscall NtUserSetShellWindowEx(long long)
 @ stdcall -syscall NtUserSetSysColors(long ptr ptr)
 @ stub NtUserSetSystemCursor
 @ stdcall -syscall NtUserSetSystemMenu(long long)
@@ -1300,7 +1300,7 @@
 @ stub NtUserUpdateWindowInputSinkHints
 @ stub NtUserUpdateWindowTrackingInfo
 @ stub NtUserUserHandleGrantAccess
-@ stub NtUserValidateRect
+@ stdcall -syscall NtUserValidateRect(long ptr)
 @ stub NtUserValidateTimerCallback
 @ stdcall -syscall NtUserVkKeyScanEx(long long)
 @ stub NtUserWOWCleanup
@@ -1308,7 +1308,7 @@
 @ stdcall -syscall NtUserWaitForInputIdle(long long long)
 @ stub NtUserWaitForMsgAndEvent
 @ stub NtUserWaitForRedirectionStartComplete
-@ stub NtUserWaitMessage
+@ stdcall -syscall NtUserWaitMessage()
 @ stdcall -syscall NtUserWindowFromDC(long)
 @ stub NtUserWindowFromPhysicalPoint
 @ stdcall -syscall NtUserWindowFromPoint(long long)
@@ -1322,9 +1322,6 @@
 
 # Graphics drivers
 @ cdecl __wine_send_input(long ptr ptr)
-
-# OpenGL
-@ cdecl __wine_get_wgl_driver(long long)
 
 # gdi32
 @ stdcall SetDIBits(long long long long ptr ptr long)

@@ -176,28 +176,28 @@ enum arm_trap_code
 
 struct syscall_frame
 {
-    DWORD                 r0;             /* 000 */
-    DWORD                 r1;             /* 004 */
-    DWORD                 r2;             /* 008 */
-    DWORD                 r3;             /* 00c */
-    DWORD                 r4;             /* 010 */
-    DWORD                 r5;             /* 014 */
-    DWORD                 r6;             /* 018 */
-    DWORD                 r7;             /* 01c */
-    DWORD                 r8;             /* 020 */
-    DWORD                 r9;             /* 024 */
-    DWORD                 r10;            /* 028 */
-    DWORD                 r11;            /* 02c */
-    DWORD                 r12;            /* 030 */
-    DWORD                 pc;             /* 034 */
-    DWORD                 sp;             /* 038 */
-    DWORD                 lr;             /* 03c */
-    DWORD                 cpsr;           /* 040 */
-    DWORD                 restore_flags;  /* 044 */
-    DWORD                 fpscr;          /* 048 */
+    UINT                  r0;             /* 000 */
+    UINT                  r1;             /* 004 */
+    UINT                  r2;             /* 008 */
+    UINT                  r3;             /* 00c */
+    UINT                  r4;             /* 010 */
+    UINT                  r5;             /* 014 */
+    UINT                  r6;             /* 018 */
+    UINT                  r7;             /* 01c */
+    UINT                  r8;             /* 020 */
+    UINT                  r9;             /* 024 */
+    UINT                  r10;            /* 028 */
+    UINT                  r11;            /* 02c */
+    UINT                  r12;            /* 030 */
+    UINT                  pc;             /* 034 */
+    UINT                  sp;             /* 038 */
+    UINT                  lr;             /* 03c */
+    UINT                  cpsr;           /* 040 */
+    UINT                  restore_flags;  /* 044 */
+    UINT                  fpscr;          /* 048 */
     struct syscall_frame *prev_frame;     /* 04c */
     SYSTEM_SERVICE_TABLE *syscall_table;  /* 050 */
-    DWORD                 align[3];       /* 054 */
+    UINT                  align[3];       /* 054 */
     ULONGLONG             d[32];          /* 060 */
 };
 
@@ -301,7 +301,7 @@ static uint32_t regmask(int first_bit, int n_bits)
 /***********************************************************************
  *           ehabi_virtual_unwind
  */
-static NTSTATUS ehabi_virtual_unwind( DWORD ip, DWORD *frame, CONTEXT *context,
+static NTSTATUS ehabi_virtual_unwind( UINT ip, DWORD *frame, CONTEXT *context,
                                       const struct exidx_entry *entry,
                                       PEXCEPTION_ROUTINE *handler, void **handler_data )
 {
@@ -314,12 +314,11 @@ static NTSTATUS ehabi_virtual_unwind( DWORD ip, DWORD *frame, CONTEXT *context,
     int extra_words;
     int finish = 0;
     int set_pc = 0;
-    DWORD func_begin = prel31_to_abs(&entry->addr);
+    UINT func_begin = prel31_to_abs(&entry->addr);
 
     *frame = context->Sp;
 
-    TRACE( "ip %#x function %#lx\n",
-           ip, (unsigned long)func_begin );
+    TRACE( "ip %#x function %#x\n", ip, func_begin );
 
     if (entry->data == 1)
     {
@@ -529,14 +528,14 @@ static NTSTATUS ehabi_virtual_unwind( DWORD ip, DWORD *frame, CONTEXT *context,
      * describes how both of them are restored separately, and as long as
      * the unwind info restored Pc, it doesn't have to be set from Lr. */
 
-    TRACE( "next function pc=%08x\n", context->Pc );
-    TRACE("  r0=%08x  r1=%08x  r2=%08x  r3=%08x\n",
+    TRACE( "next function pc=%08lx\n", context->Pc );
+    TRACE("  r0=%08lx  r1=%08lx  r2=%08lx  r3=%08lx\n",
           context->R0, context->R1, context->R2, context->R3 );
-    TRACE("  r4=%08x  r5=%08x  r6=%08x  r7=%08x\n",
+    TRACE("  r4=%08lx  r5=%08lx  r6=%08lx  r7=%08lx\n",
           context->R4, context->R5, context->R6, context->R7 );
-    TRACE("  r8=%08x  r9=%08x r10=%08x r11=%08x\n",
+    TRACE("  r8=%08lx  r9=%08lx r10=%08lx r11=%08lx\n",
           context->R8, context->R9, context->R10, context->R11 );
-    TRACE(" r12=%08x  sp=%08x  lr=%08x  pc=%08x\n",
+    TRACE(" r12=%08lx  sp=%08lx  lr=%08lx  pc=%08lx\n",
           context->R12, context->Sp, context->Lr, context->Pc );
 
     return STATUS_SUCCESS;
@@ -712,14 +711,14 @@ static NTSTATUS libunwind_virtual_unwind( DWORD ip, DWORD *frame, CONTEXT *conte
         context->Lr = *orig_lr;
     }
 
-    TRACE( "next function pc=%08x%s\n", context->Pc, rc ? "" : " (last frame)" );
-    TRACE("  r0=%08x  r1=%08x  r2=%08x  r3=%08x\n",
+    TRACE( "next function pc=%08lx%s\n", context->Pc, rc ? "" : " (last frame)" );
+    TRACE("  r0=%08lx  r1=%08lx  r2=%08lx  r3=%08lx\n",
           context->R0, context->R1, context->R2, context->R3 );
-    TRACE("  r4=%08x  r5=%08x  r6=%08x  r7=%08x\n",
+    TRACE("  r4=%08lx  r5=%08lx  r6=%08lx  r7=%08lx\n",
           context->R4, context->R5, context->R6, context->R7 );
-    TRACE("  r8=%08x  r9=%08x r10=%08x r11=%08x\n",
+    TRACE("  r8=%08lx  r9=%08lx r10=%08lx r11=%08lx\n",
           context->R8, context->R9, context->R10, context->R11 );
-    TRACE(" r12=%08x  sp=%08x  lr=%08x  pc=%08x\n",
+    TRACE(" r12=%08lx  sp=%08lx  lr=%08lx  pc=%08lx\n",
           context->R12, context->Sp, context->Lr, context->Pc );
     return STATUS_SUCCESS;
 }
@@ -1156,7 +1155,7 @@ NTSTATUS call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context
  *           call_user_mode_callback
  */
 extern NTSTATUS CDECL call_user_mode_callback( void *func, void *stack, void **ret_ptr,
-                                               ULONG *ret_len, TEB *teb );
+                                               ULONG *ret_len, TEB *teb ) DECLSPEC_HIDDEN;
 __ASM_GLOBAL_FUNC( call_user_mode_callback,
                    "push {r2-r12,lr}\n\t"
                    "ldr r4, [sp, #0x30]\n\t"  /* teb */
@@ -1185,7 +1184,7 @@ __ASM_GLOBAL_FUNC( call_user_mode_callback,
  *           user_mode_callback_return
  */
 extern void CDECL DECLSPEC_NORETURN user_mode_callback_return( void *ret_ptr, ULONG ret_len,
-                                                               NTSTATUS status, TEB *teb );
+                                                               NTSTATUS status, TEB *teb ) DECLSPEC_HIDDEN;
 __ASM_GLOBAL_FUNC( user_mode_callback_return,
                    "ldr r4, [r3, #0x1d8]\n\t" /* arm_thread_data()->syscall_frame */
                    "ldr r5, [r4, #0x4c]\n\t"  /* frame->prev_frame */
@@ -1255,23 +1254,22 @@ NTSTATUS WINAPI NtCallbackReturn( void *ret_ptr, ULONG ret_len, NTSTATUS status 
 static BOOL handle_syscall_fault( ucontext_t *context, EXCEPTION_RECORD *rec )
 {
     struct syscall_frame *frame = arm_thread_data()->syscall_frame;
-    DWORD i;
+    UINT i;
 
     if (!is_inside_syscall( context ) && !ntdll_get_thread_data()->jmp_buf) return FALSE;
 
-    TRACE( "code=%x flags=%x addr=%p pc=%08x tid=%04x\n",
-           rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress,
-           (DWORD)PC_sig(context), GetCurrentThreadId() );
+    TRACE( "code=%lx flags=%lx addr=%p pc=%08lx\n",
+           rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress, (DWORD)PC_sig(context) );
     for (i = 0; i < rec->NumberParameters; i++)
         TRACE( " info[%d]=%08lx\n", i, rec->ExceptionInformation[i] );
 
-    TRACE( " r0=%08x r1=%08x r2=%08x r3=%08x r4=%08x r5=%08x\n",
+    TRACE( " r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx\n",
            (DWORD)REGn_sig(0, context), (DWORD)REGn_sig(1, context), (DWORD)REGn_sig(2, context),
            (DWORD)REGn_sig(3, context), (DWORD)REGn_sig(4, context), (DWORD)REGn_sig(5, context) );
-    TRACE( " r6=%08x r7=%08x r8=%08x r9=%08x r10=%08x r11=%08x\n",
+    TRACE( " r6=%08lx r7=%08lx r8=%08lx r9=%08lx r10=%08lx r11=%08lx\n",
            (DWORD)REGn_sig(6, context), (DWORD)REGn_sig(7, context), (DWORD)REGn_sig(8, context),
            (DWORD)REGn_sig(9, context), (DWORD)REGn_sig(10, context), (DWORD)FP_sig(context) );
-    TRACE( " r12=%08x sp=%08x lr=%08x pc=%08x cpsr=%08x\n",
+    TRACE( " r12=%08lx sp=%08lx lr=%08lx pc=%08lx cpsr=%08lx\n",
            (DWORD)IP_sig(context), (DWORD)SP_sig(context), (DWORD)LR_sig(context),
            (DWORD)PC_sig(context), (DWORD)CPSR_sig(context) );
 
@@ -1285,7 +1283,7 @@ static BOOL handle_syscall_fault( ucontext_t *context, EXCEPTION_RECORD *rec )
     }
     else
     {
-        TRACE( "returning to user mode ip=%08x ret=%08x\n", frame->pc, rec->ExceptionCode );
+        TRACE( "returning to user mode ip=%08x ret=%08lx\n", frame->pc, rec->ExceptionCode );
         REGn_sig(0, context) = (DWORD)frame;
         REGn_sig(1, context) = rec->ExceptionCode;
         PC_sig(context)      = (DWORD)__wine_syscall_dispatcher_return;
@@ -1703,7 +1701,8 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
                    "ldr r5, [r4]\n\t"               /* table->ServiceTable */
                    "ldr ip, [r5, ip, lsl #2]\n\t"
                    "blx ip\n"
-                   "4:\tldr ip, [r8, #0x44]\n\t"    /* frame->restore_flags */
+                   __ASM_LOCAL_LABEL("__wine_syscall_dispatcher_return") ":\n\t"
+                   "ldr ip, [r8, #0x44]\n\t"    /* frame->restore_flags */
 #ifndef __SOFTFP__
                    "tst ip, #4\n\t"                 /* CONTEXT_FLOATING_POINT */
                    "beq 3f\n\t"
@@ -1723,12 +1722,47 @@ __ASM_GLOBAL_FUNC( __wine_syscall_dispatcher,
                    "5:\tmovw r0, #0x000d\n\t" /* STATUS_INVALID_PARAMETER */
                    "movt r0, #0xc000\n\t"
                    "add sp, sp, #0x10\n\t"
-                   "b 4b\n\t"
+                   "b " __ASM_LOCAL_LABEL("__wine_syscall_dispatcher_return") "\n\t"
                    ".globl " __ASM_NAME("__wine_syscall_dispatcher_return") "\n"
                    __ASM_NAME("__wine_syscall_dispatcher_return") ":\n\t"
                    "mov r8, r0\n\t"
                    "mov r0, r1\n\t"
-                   "b 4b" )
+                   "b " __ASM_LOCAL_LABEL("__wine_syscall_dispatcher_return") )
+
+
+/***********************************************************************
+ *           __wine_unix_call_dispatcher
+ */
+__ASM_GLOBAL_FUNC( __wine_unix_call_dispatcher,
+                   __ASM_EHABI(".cantunwind\n\t")
+                   "mrc p15, 0, r1, c13, c0, 2\n\t" /* NtCurrentTeb() */
+                   "ldr r1, [r1, #0x1d8]\n\t"       /* arm_thread_data()->syscall_frame */
+                   "add ip, r1, #0x10\n\t"
+                   "stm ip, {r4-r12,lr}\n\t"
+                   "str sp, [r1, #0x38]\n\t"
+                   "str lr, [r1, #0x3c]\n\t"
+                   "mrs r4, CPSR\n\t"
+                   "bfi r4, lr, #5, #1\n\t"         /* set thumb bit */
+                   "str r4, [r1, #0x40]\n\t"
+                   "mov r4, #0\n\t"
+                   "str r4, [r1, #0x44]\n\t"        /* frame->restore_flags */
+#ifndef __SOFTFP__
+                   "vmrs r4, fpscr\n\t"
+                   "str r4, [r1, #0x48]\n\t"
+                   "add r4, r1, #0x60\n\t"
+                   "vstm r4, {d0-d15}\n\t"
+#endif
+                   "ldr ip, [r0, r2, lsl #2]\n\t"
+                   "mov sp, r1\n\t"
+                   "mov r0, r3\n\t"                 /* args */
+                   "blx ip\n"
+                   "mov r8, sp\n\t"
+                   "ldr r1, [r8, #0x44]\n\t"        /* frame->restore_flags */
+                   "cbnz r1, 1f\n\t"
+                   "ldr sp, [r8, #0x38]\n\t"
+                   "add r8, r8, #0x10\n\t"
+                   "ldm r8, {r4-r12,pc}\n\t"
+                   "1:\tb " __ASM_LOCAL_LABEL("__wine_syscall_dispatcher_return") )
 
 
 /***********************************************************************

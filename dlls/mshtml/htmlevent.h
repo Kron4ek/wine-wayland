@@ -17,11 +17,14 @@
  */
 
 typedef enum {
+    EVENTID_INVALID_ID = -1,
     EVENTID_DOMCONTENTLOADED,
     EVENTID_ABORT,
+    EVENTID_AFTERPRINT,
     EVENTID_ANIMATIONEND,
     EVENTID_ANIMATIONSTART,
     EVENTID_BEFOREACTIVATE,
+    EVENTID_BEFOREPRINT,
     EVENTID_BEFOREUNLOAD,
     EVENTID_BLUR,
     EVENTID_CHANGE,
@@ -51,6 +54,8 @@ typedef enum {
     EVENTID_MOUSEUP,
     EVENTID_MOUSEWHEEL,
     EVENTID_MSTHUMBNAILCLICK,
+    EVENTID_PAGEHIDE,
+    EVENTID_PAGESHOW,
     EVENTID_PASTE,
     EVENTID_PROGRESS,
     EVENTID_READYSTATECHANGE,
@@ -63,6 +68,7 @@ typedef enum {
     EVENTID_SUBMIT,
     EVENTID_TIMEOUT,
     EVENTID_UNLOAD,
+    EVENTID_VISIBILITYCHANGE,
     EVENTID_LAST
 } eventid_t;
 
@@ -126,6 +132,7 @@ typedef struct {
     dispex_static_data_vtbl_t dispex_vtbl;
     nsISupports *(*get_gecko_target)(DispatchEx*);
     void (*bind_event)(DispatchEx*,eventid_t);
+    HRESULT (*dispatch_nsevent_hook)(DispatchEx*,DOMEvent*);
     EventTarget *(*get_parent_event_target)(DispatchEx*);
     HRESULT (*handle_event_default)(DispatchEx*,eventid_t,nsIDOMEvent*,BOOL*);
     ConnectionPointContainer *(*get_cp_container)(DispatchEx*);

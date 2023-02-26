@@ -20,10 +20,6 @@
 #ifndef __WINE_VULKAN_PRIVATE_H
 #define __WINE_VULKAN_PRIVATE_H
 
-/* Perform vulkan struct conversion on 32-bit x86 platforms. */
-#if defined(__i386__)
-#define USE_STRUCT_CONVERSION
-#endif
 #define WINE_VK_HOST
 #define VK_NO_PROTOTYPES
 
@@ -92,7 +88,7 @@ struct fs_comp_pipeline
     uint32_t push_size;
 };
 
-struct VkFSRObject //VkSwapchainKHR_T
+struct VkFSRObject
 {
     VkSwapchainKHR swapchain; /* native swapchain */
 
@@ -179,8 +175,11 @@ struct wine_phys_dev
     VkPhysicalDevice handle; /* client physical device */
     VkPhysicalDevice phys_dev; /* native physical device */
 
+    VkPhysicalDeviceMemoryProperties memory_properties;
     VkExtensionProperties *extensions;
     uint32_t extension_count;
+
+    uint32_t external_memory_align;
 
     struct wine_vk_mapping mapping;
 };
@@ -221,6 +220,17 @@ static inline struct wine_cmd_pool *wine_cmd_pool_from_handle(VkCommandPool hand
 {
     struct vk_command_pool *client_ptr = command_pool_from_handle(handle);
     return (struct wine_cmd_pool *)(uintptr_t)client_ptr->unix_handle;
+}
+
+struct wine_device_memory
+{
+    VkDeviceMemory memory;
+    void *mapping;
+};
+
+static inline struct wine_device_memory *wine_device_memory_from_handle(VkDeviceMemory handle)
+{
+    return (struct wine_device_memory *)(uintptr_t)handle;
 }
 
 struct wine_debug_utils_messenger
@@ -284,10 +294,10 @@ BOOL wine_vk_is_type_wrapped(VkObjectType type) DECLSPEC_HIDDEN;
 
 NTSTATUS init_vulkan(void *args) DECLSPEC_HIDDEN;
 
-NTSTATUS WINAPI vk_direct_unix_call(unixlib_handle_t handle, unsigned int code, void *arg) DECLSPEC_HIDDEN;
-
 NTSTATUS vk_is_available_instance_function(void *arg) DECLSPEC_HIDDEN;
 NTSTATUS vk_is_available_device_function(void *arg) DECLSPEC_HIDDEN;
+NTSTATUS vk_is_available_instance_function32(void *arg) DECLSPEC_HIDDEN;
+NTSTATUS vk_is_available_device_function32(void *arg) DECLSPEC_HIDDEN;
 
 struct conversion_context
 {
@@ -314,7 +324,7 @@ static inline void *conversion_context_alloc(struct conversion_context *pool, si
     if (pool->used + size <= sizeof(pool->buffer))
     {
         void *ret = pool->buffer + pool->used;
-        pool->used += size;
+        pool->used += (size + sizeof(UINT64) - 1) & ~(sizeof(UINT64) - 1);
         return ret;
     }
     else
@@ -325,6 +335,33 @@ static inline void *conversion_context_alloc(struct conversion_context *pool, si
         list_add_tail(&pool->alloc_entries, entry);
         return entry + 1;
     }
+}
+
+typedef UINT32 PTR32;
+
+typedef struct
+{
+    VkStructureType sType;
+    PTR32 pNext;
+} VkBaseInStructure32;
+
+typedef struct
+{
+    VkStructureType sType;
+    PTR32 pNext;
+} VkBaseOutStructure32;
+
+static inline void *find_next_struct32(void *s, VkStructureType t)
+{
+    VkBaseOutStructure32 *header;
+
+    for (header = s; header; header = UlongToPtr(header->pNext))
+    {
+        if (header->sType == t)
+            return header;
+    }
+
+    return NULL;
 }
 
 static inline void *find_next_struct(const void *s, VkStructureType t)

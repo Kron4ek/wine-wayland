@@ -37,7 +37,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(nsi);
 
-static unixlib_handle_t nsiproxy_handle;
 static HANDLE request_event;
 
 #define DECLARE_CRITICAL_SECTION(cs)                                    \
@@ -53,7 +52,7 @@ static LIST_ENTRY request_queue = LIST_ENTRY_INIT( request_queue );
 
 static NTSTATUS nsiproxy_call( unsigned int code, void *args )
 {
-    return __wine_unix_call( nsiproxy_handle, code, args );
+    return WINE_UNIX_CALL( code, args );
 }
 
 enum unix_calls
@@ -306,12 +305,10 @@ static NTSTATUS WINAPI nsi_ioctl( DEVICE_OBJECT *device, IRP *irp )
 
 static int add_device( DRIVER_OBJECT *driver )
 {
-    UNICODE_STRING name, link;
+    UNICODE_STRING name = RTL_CONSTANT_STRING( L"\\Device\\Nsi" );
+    UNICODE_STRING link = RTL_CONSTANT_STRING( L"\\??\\Nsi" );
     DEVICE_OBJECT *device;
     NTSTATUS status;
-
-    RtlInitUnicodeString( &name, L"\\Device\\Nsi" );
-    RtlInitUnicodeString( &link, L"\\??\\Nsi" );
 
     if (!(status = IoCreateDevice( driver, 0, &name, FILE_DEVICE_NETWORK, FILE_DEVICE_SECURE_OPEN, FALSE, &device )))
         status = IoCreateSymbolicLink( &link, &name );
@@ -425,15 +422,12 @@ static DWORD WINAPI request_thread_proc( void *arg )
 
 NTSTATUS WINAPI DriverEntry( DRIVER_OBJECT *driver, UNICODE_STRING *path )
 {
-    HMODULE instance;
     NTSTATUS status;
     HANDLE thread;
 
     TRACE( "(%p, %s)\n", driver, debugstr_w( path->Buffer ) );
 
-    RtlPcToFileHeader( &DriverEntry, (void *)&instance );
-    status = NtQueryVirtualMemory( GetCurrentProcess(), instance, MemoryWineUnixFuncs,
-                                   &nsiproxy_handle, sizeof(nsiproxy_handle), NULL );
+    status = __wine_init_unix_call();
     if (status) return status;
 
     driver->MajorFunction[IRP_MJ_DEVICE_CONTROL] = nsi_ioctl;

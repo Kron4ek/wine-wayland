@@ -1821,6 +1821,13 @@ static void test_wglChoosePixelFormatARB(HDC hdc)
         WGL_SUPPORT_OPENGL_ARB, 1,
         0
     };
+    static int attrib_list_flags[] =
+    {
+        WGL_DRAW_TO_WINDOW_ARB, 1,
+        WGL_SUPPORT_OPENGL_ARB, 1,
+        WGL_SUPPORT_GDI_ARB, 1,
+        0
+    };
 
     PIXELFORMATDESCRIPTOR fmt, last_fmt;
     BYTE depth, last_depth;
@@ -1867,15 +1874,41 @@ static void test_wglChoosePixelFormatARB(HDC hdc)
                     depth, last_depth, i, formats[i]);
         }
     }
+
+    format_count = 0;
+    res = pwglChoosePixelFormatARB(hdc, attrib_list_flags, NULL, ARRAY_SIZE(formats), formats, &format_count);
+    ok(res, "Got unexpected result %d.\n", res);
+
+    for (i = 0; i < format_count; ++i)
+    {
+        PIXELFORMATDESCRIPTOR format = {0};
+        BOOL ret;
+
+        winetest_push_context("%u", i);
+
+        ret = DescribePixelFormat(hdc, formats[i], sizeof(format), &format);
+        ok(ret, "DescribePixelFormat failed, error %lu\n", GetLastError());
+
+        ok(format.dwFlags & PFD_DRAW_TO_WINDOW, "got dwFlags %#lx\n", format.dwFlags);
+        ok(format.dwFlags & PFD_SUPPORT_OPENGL, "got dwFlags %#lx\n", format.dwFlags);
+        ok(format.dwFlags & PFD_SUPPORT_GDI, "got dwFlags %#lx\n", format.dwFlags);
+
+        winetest_pop_context();
+    }
 }
 
 static void test_copy_context(HDC hdc)
 {
-    HGLRC ctx, ctx2;
+    HGLRC ctx, ctx2, old_ctx;
     BOOL ret;
+
+    old_ctx = wglGetCurrentContext();
+    ok(!!old_ctx, "wglGetCurrentContext failed, last error %#lx.\n", GetLastError());
 
     ctx = wglCreateContext(hdc);
     ok(!!ctx, "Failed to create GL context, last error %#lx.\n", GetLastError());
+    ret = wglMakeCurrent(hdc, ctx);
+    ok(ret, "wglMakeCurrent failed, last error %#lx.\n", GetLastError());
     ctx2 = wglCreateContext(hdc);
     ok(!!ctx2, "Failed to create GL context, last error %#lx.\n", GetLastError());
 
@@ -1883,10 +1916,15 @@ static void test_copy_context(HDC hdc)
     todo_wine
     ok(ret, "Failed to copy GL context, last error %#lx.\n", GetLastError());
 
+    ret = wglMakeCurrent(NULL, NULL);
+    ok(ret, "wglMakeCurrent failed, last error %#lx.\n", GetLastError());
     ret = wglDeleteContext(ctx2);
     ok(ret, "Failed to delete GL context, last error %#lx.\n", GetLastError());
     ret = wglDeleteContext(ctx);
     ok(ret, "Failed to delete GL context, last error %#lx.\n", GetLastError());
+
+    ret = wglMakeCurrent(hdc, old_ctx);
+    ok(ret, "wglMakeCurrent failed, last error %#lx.\n", GetLastError());
 }
 
 START_TEST(opengl)

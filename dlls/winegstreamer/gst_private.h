@@ -33,7 +33,6 @@
 #define NONAMELESSUNION
 #include "dshow.h"
 #include "mfidl.h"
-#include "wmsdk.h"
 #include "wine/debug.h"
 #include "wine/strmbase.h"
 
@@ -96,6 +95,7 @@ void wg_parser_stream_notify_qos(struct wg_parser_stream *stream,
 
 /* Returns the duration in 100-nanosecond units. */
 uint64_t wg_parser_stream_get_duration(struct wg_parser_stream *stream);
+char *wg_parser_stream_get_tag(struct wg_parser_stream *stream, enum wg_parser_tag tag);
 /* start_pos and stop_pos are in 100-nanosecond units. */
 void wg_parser_stream_seek(struct wg_parser_stream *stream, double rate,
         uint64_t start_pos, uint64_t stop_pos, DWORD start_flags, DWORD stop_flags);
@@ -104,6 +104,7 @@ struct wg_transform *wg_transform_create(const struct wg_format *input_format,
         const struct wg_format *output_format);
 void wg_transform_destroy(struct wg_transform *transform);
 bool wg_transform_set_output_format(struct wg_transform *transform, struct wg_format *format);
+bool wg_transform_get_status(struct wg_transform *transform, bool *accepts_input);
 
 unsigned int wg_format_get_max_size(const struct wg_format *format);
 
@@ -147,6 +148,6 @@ HRESULT aac_decoder_create(REFIID riid, void **ret);
 HRESULT h264_decoder_create(REFIID riid, void **ret);
 HRESULT video_processor_create(REFIID riid, void **ret);
 
-HRESULT WINAPI winegstreamer_create_wm_sync_reader(IUnknown *outer, void **out);
+extern const GUID MFAudioFormat_RAW_AAC;
 
 #endif /* __GST_PRIVATE_INCLUDED__ */

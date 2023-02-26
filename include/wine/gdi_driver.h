@@ -253,7 +253,6 @@ struct gdi_adapter
 
 struct gdi_monitor
 {
-    WCHAR name[128];      /* name */
     RECT rc_monitor;      /* RcMonitor in MONITORINFO struct */
     RECT rc_work;         /* RcWork in MONITORINFO struct */
     DWORD state_flags;    /* StateFlags in DISPLAY_DEVICE struct */
@@ -299,6 +298,7 @@ struct user_driver_funcs
     /* display modes */
     LONG    (*pChangeDisplaySettings)(LPDEVMODEW,LPCWSTR,HWND,DWORD,LPVOID);
     BOOL    (*pGetCurrentDisplaySettings)(LPCWSTR,BOOL,LPDEVMODEW);
+    INT     (*pGetDisplayDepth)(LPCWSTR,BOOL);
     BOOL    (*pUpdateDisplayDevices)(const struct gdi_device_manager *,BOOL,void*);
     /* windowing functions */
     BOOL    (*pCreateDesktopWindow)(HWND);
@@ -339,7 +339,5 @@ struct user_driver_funcs
 extern void __wine_set_user_driver( const struct user_driver_funcs *funcs, UINT version );
 
 #endif /* WINE_UNIX_LIB */
-
-extern struct opengl_funcs * CDECL __wine_get_wgl_driver( HDC hdc, UINT version );
 
 #endif /* __WINE_WINE_GDI_DRIVER_H */

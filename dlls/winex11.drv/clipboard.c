@@ -564,7 +564,7 @@ static void *create_dib_from_bitmap( HBITMAP hBmp, size_t *size )
 
     /* Retrieve the DIB bits from the bitmap and fill in the
      * DIB color table if present */
-    hdc = NtUserGetDCEx( 0, 0, DCX_CACHE | DCX_WINDOW );
+    hdc = NtUserGetDC( 0 );
     nLinesCopied = NtGdiGetDIBitsInternal( hdc, hBmp, 0, bmp.bmHeight,  ret + OffsetBits,
                                            (LPBITMAPINFO) pbmiHeader, 0, 0, 0 );
     NtUserReleaseDC( 0, hdc );
@@ -986,7 +986,7 @@ static void *import_image_bmp( Atom type, const void *data, size_t size, size_t 
         else return NULL;
         if (!width || !height) return NULL;
 
-        hdc = NtUserGetDCEx( 0, 0, DCX_CACHE | DCX_WINDOW );
+        hdc = NtUserGetDC( 0 );
 
         if ((hbmp = NtGdiCreateDIBitmapInternal( hdc, width, height, CBM_INIT,
                                                  (const BYTE *)data + bfh->bfOffBits, bmi,
@@ -1285,7 +1285,7 @@ struct format_entry *import_xdnd_selection( Display *display, Window win, Atom s
     UINT i;
     void *data;
     struct clipboard_format *format;
-    struct format_entry *ret = NULL, *entry;
+    struct format_entry *ret = NULL, *tmp, *entry;
     BOOL have_hdrop = FALSE;
 
     register_x11_formats( targets, count );
@@ -1310,7 +1310,8 @@ struct format_entry *import_xdnd_selection( Display *display, Window win, Atom s
         entry_size = (FIELD_OFFSET( struct format_entry, data[size] ) + 7) & ~7;
         if (buf_size < size + entry_size)
         {
-            if (!(ret = realloc( ret, *ret_size + entry_size + 1024 ))) continue;
+            if (!(tmp = realloc( ret, *ret_size + entry_size + 1024 ))) continue;
+            ret = tmp;
             buf_size = *ret_size + entry_size + 1024; /* extra space for following entries */
         }
         entry = (struct format_entry *)((char *)ret + *ret_size);
@@ -1655,7 +1656,7 @@ static UINT *get_clipboard_formats( UINT *size )
         if (!(ids = malloc( *size * sizeof(*ids) ))) return NULL;
         if (NtUserGetUpdatedClipboardFormats( ids, *size, size )) break;
         free( ids );
-        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) return NULL;
+        if (RtlGetLastWin32Error() != ERROR_INSUFFICIENT_BUFFER) return NULL;
     }
     register_win32_formats( ids, *size );
     return ids;
@@ -2240,7 +2241,7 @@ static BOOL clipboard_init( HWND hwnd )
     xfixes_init();
     request_selection_contents( clipboard_display, TRUE );
 
-    TRACE( "clipboard thread %04x running\n", GetCurrentThreadId() );
+    TRACE( "clipboard thread running\n" );
     return TRUE;
 }
 

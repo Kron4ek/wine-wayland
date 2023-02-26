@@ -371,6 +371,7 @@ static event_target_vtbl_t DocumentType_event_target_vtbl = {
     },
     DocumentType_get_gecko_target,
     NULL,
+    NULL,
     DocumentType_get_parent_event_target,
     NULL,
     NULL,
@@ -398,7 +399,7 @@ HRESULT create_doctype_node(HTMLDocumentNode *doc, nsIDOMNode *nsnode, HTMLDOMNo
     DocumentType *doctype;
     nsresult nsres;
 
-    if(!(doctype = heap_alloc_zero(sizeof(*doctype))))
+    if(!(doctype = calloc(1, sizeof(*doctype))))
         return E_OUTOFMEMORY;
 
     nsres = nsIDOMNode_QueryInterface(nsnode, &IID_nsIDOMDocumentType, (void**)&nsdoctype);
@@ -486,55 +487,39 @@ static HRESULT WINAPI HTMLDocument_get_Script(IHTMLDocument2 *iface, IDispatch *
 static HRESULT WINAPI HTMLDocument_get_all(IHTMLDocument2 *iface, IHTMLElementCollection **p)
 {
     HTMLDocumentNode *This = impl_from_IHTMLDocument2(iface);
-    nsIDOMElement *nselem = NULL;
-    HTMLDOMNode *node;
-    nsresult nsres;
-    HRESULT hres;
 
     TRACE("(%p)->(%p)\n", This, p);
+    *p = create_all_collection(&This->node, FALSE);
 
-    if(!This->dom_document) {
-        WARN("NULL dom_document\n");
-        return E_UNEXPECTED;
-    }
-
-    nsres = nsIDOMDocument_GetDocumentElement(This->dom_document, &nselem);
-    if(NS_FAILED(nsres)) {
-        ERR("GetDocumentElement failed: %08lx\n", nsres);
-        return E_FAIL;
-    }
-
-    if(!nselem) {
-        *p = NULL;
-        return S_OK;
-    }
-
-    hres = get_node((nsIDOMNode*)nselem, TRUE, &node);
-    nsIDOMElement_Release(nselem);
-    if(FAILED(hres))
-        return hres;
-
-    *p = create_all_collection(node, TRUE);
-    node_release(node);
-    return hres;
+    return S_OK;
 }
 
 static HRESULT WINAPI HTMLDocument_get_body(IHTMLDocument2 *iface, IHTMLElement **p)
 {
     HTMLDocumentNode *This = impl_from_IHTMLDocument2(iface);
-    nsIDOMHTMLElement *nsbody = NULL;
+    nsIDOMElement *nsbody = NULL;
     HTMLElement *element;
+    nsresult nsres;
     HRESULT hres;
 
     TRACE("(%p)->(%p)\n", This, p);
 
     if(This->html_document) {
-        nsresult nsres;
-
-        nsres = nsIDOMHTMLDocument_GetBody(This->html_document, &nsbody);
+        nsres = nsIDOMHTMLDocument_GetBody(This->html_document, (nsIDOMHTMLElement **)&nsbody);
         if(NS_FAILED(nsres)) {
             TRACE("Could not get body: %08lx\n", nsres);
             return E_UNEXPECTED;
+        }
+    }else {
+        nsAString nsnode_name;
+        nsIDOMDocumentFragment *frag;
+
+        nsres = nsIDOMNode_QueryInterface(This->node.nsnode, &IID_nsIDOMDocumentFragment, (void**)&frag);
+        if(!NS_FAILED(nsres)) {
+            nsAString_InitDepend(&nsnode_name, L"BODY");
+            nsIDOMDocumentFragment_QuerySelector(frag, &nsnode_name, &nsbody);
+            nsAString_Finish(&nsnode_name);
+            nsIDOMDocumentFragment_Release(frag);
         }
     }
 
@@ -543,8 +528,8 @@ static HRESULT WINAPI HTMLDocument_get_body(IHTMLDocument2 *iface, IHTMLElement 
         return S_OK;
     }
 
-    hres = get_element((nsIDOMElement*)nsbody, &element);
-    nsIDOMHTMLElement_Release(nsbody);
+    hres = get_element(nsbody, &element);
+    nsIDOMElement_Release(nsbody);
     if(FAILED(hres))
         return hres;
 
@@ -1173,6 +1158,9 @@ static HRESULT WINAPI HTMLDocument_get_domain(IHTMLDocument2 *iface, BSTR *p)
         FIXME("Not implemented for XML document\n");
         return E_NOTIMPL;
     }
+
+    if(This->outer_window && !This->outer_window->uri)
+        return E_FAIL;
 
     nsAString_Init(&nsstr, NULL);
     nsres = nsIDOMHTMLDocument_GetDomain(This->html_document, &nsstr);
@@ -2721,7 +2709,7 @@ static HRESULT WINAPI HTMLDocument3_getElementsByName(IHTMLDocument3 *iface, BST
         return E_NOTIMPL;
     }
 
-    selector = heap_alloc(2*SysStringLen(v)*sizeof(WCHAR) + sizeof(formatW));
+    selector = malloc(2 * SysStringLen(v) * sizeof(WCHAR) + sizeof(formatW));
     if(!selector)
         return E_OUTOFMEMORY;
     swprintf(selector, 2*SysStringLen(v) + ARRAY_SIZE(formatW), formatW, v, v);
@@ -2734,7 +2722,7 @@ static HRESULT WINAPI HTMLDocument3_getElementsByName(IHTMLDocument3 *iface, BST
     nsAString_InitDepend(&selector_str, selector);
     nsres = nsIDOMDocument_QuerySelectorAll(This->dom_document, &selector_str, &node_list);
     nsAString_Finish(&selector_str);
-    heap_free(selector);
+    free(selector);
     if(NS_FAILED(nsres)) {
         ERR("QuerySelectorAll failed: %08lx\n", nsres);
         return E_FAIL;
@@ -4742,8 +4730,8 @@ static HRESULT WINAPI DocumentSelector_querySelector(IDocumentSelector *iface, B
     nsres = nsIDOMDocument_QuerySelector(This->dom_document, &nsstr, &nselem);
     nsAString_Finish(&nsstr);
     if(NS_FAILED(nsres)) {
-        ERR("QuerySelector failed: %08lx\n", nsres);
-        return E_FAIL;
+        WARN("QuerySelector failed: %08lx\n", nsres);
+        return map_nsresult(nsres);
     }
 
     if(!nselem) {
@@ -4765,16 +4753,17 @@ static HRESULT WINAPI DocumentSelector_querySelectorAll(IDocumentSelector *iface
     HTMLDocumentNode *This = impl_from_IDocumentSelector(iface);
     nsIDOMNodeList *node_list;
     nsAString nsstr;
+    nsresult nsres;
     HRESULT hres;
 
     TRACE("(%p)->(%s %p)\n", This, debugstr_w(v), pel);
 
     nsAString_InitDepend(&nsstr, v);
-    hres = map_nsresult(nsIDOMDocument_QuerySelectorAll(This->dom_document, &nsstr, &node_list));
+    nsres = nsIDOMDocument_QuerySelectorAll(This->dom_document, &nsstr, &node_list);
     nsAString_Finish(&nsstr);
-    if(FAILED(hres)) {
-        ERR("QuerySelectorAll failed: %08lx\n", hres);
-        return hres;
+    if(NS_FAILED(nsres)) {
+        WARN("QuerySelectorAll failed: %08lx\n", nsres);
+        return map_nsresult(nsres);
     }
 
     hres = create_child_collection(node_list, dispex_compat_mode(&This->node.event_target.dispex), pel);
@@ -4925,7 +4914,7 @@ static HRESULT has_elem_name(nsIDOMHTMLDocument *html_document, const WCHAR *nam
     size_t len;
 
     len = wcslen(name) + ARRAY_SIZE(fmt) - 2 /* %s */;
-    if(len > ARRAY_SIZE(buf) && !(selector = heap_alloc(len * sizeof(WCHAR))))
+    if(len > ARRAY_SIZE(buf) && !(selector = malloc(len * sizeof(WCHAR))))
         return E_OUTOFMEMORY;
     swprintf(selector, len, fmt, name);
 
@@ -4933,7 +4922,7 @@ static HRESULT has_elem_name(nsIDOMHTMLDocument *html_document, const WCHAR *nam
     nsres = nsIDOMHTMLDocument_QuerySelector(html_document, &selector_str, &nselem);
     nsAString_Finish(&selector_str);
     if(selector != buf)
-        heap_free(selector);
+        free(selector);
     if(NS_FAILED(nsres))
         return map_nsresult(nsres);
 
@@ -4954,7 +4943,7 @@ static HRESULT get_elem_by_name_or_id(nsIDOMHTMLDocument *html_document, const W
     size_t len;
 
     len = wcslen(name) * 4 + ARRAY_SIZE(fmt) - 8 /* %s */;
-    if(len > ARRAY_SIZE(buf) && !(selector = heap_alloc(len * sizeof(WCHAR))))
+    if(len > ARRAY_SIZE(buf) && !(selector = malloc(len * sizeof(WCHAR))))
         return E_OUTOFMEMORY;
     swprintf(selector, len, fmt, name, name, name, name);
 
@@ -4962,7 +4951,7 @@ static HRESULT get_elem_by_name_or_id(nsIDOMHTMLDocument *html_document, const W
     nsres = nsIDOMHTMLDocument_QuerySelector(html_document, &selector_str, &nselem);
     nsAString_Finish(&selector_str);
     if(selector != buf)
-        heap_free(selector);
+        free(selector);
     if(NS_FAILED(nsres))
         return map_nsresult(nsres);
 
@@ -4993,12 +4982,12 @@ static HRESULT dispid_from_elem_name(HTMLDocumentNode *This, const WCHAR *name, 
         WCHAR **new_vars;
 
         if(This->elem_vars_size) {
-            new_vars = heap_realloc(This->elem_vars, This->elem_vars_size*2*sizeof(WCHAR*));
+            new_vars = realloc(This->elem_vars, This->elem_vars_size * 2 * sizeof(WCHAR*));
             if(!new_vars)
                 return E_OUTOFMEMORY;
             This->elem_vars_size *= 2;
         }else {
-            new_vars = heap_alloc(16*sizeof(WCHAR*));
+            new_vars = malloc(16 * sizeof(WCHAR*));
             if(!new_vars)
                 return E_OUTOFMEMORY;
             This->elem_vars_size = 16;
@@ -5007,7 +4996,7 @@ static HRESULT dispid_from_elem_name(HTMLDocumentNode *This, const WCHAR *name, 
         This->elem_vars = new_vars;
     }
 
-    This->elem_vars[This->elem_vars_cnt] = heap_strdupW(name);
+    This->elem_vars[This->elem_vars_cnt] = wcsdup(name);
     if(!This->elem_vars[This->elem_vars_cnt])
         return E_OUTOFMEMORY;
 
@@ -5834,20 +5823,14 @@ void detach_document_node(HTMLDocumentNode *doc)
     detach_ranges(doc);
 
     for(i=0; i < doc->elem_vars_cnt; i++)
-        heap_free(doc->elem_vars[i]);
-    heap_free(doc->elem_vars);
+        free(doc->elem_vars[i]);
+    free(doc->elem_vars);
     doc->elem_vars_cnt = doc->elem_vars_size = 0;
     doc->elem_vars = NULL;
 
     if(doc->catmgr) {
         ICatInformation_Release(doc->catmgr);
         doc->catmgr = NULL;
-    }
-
-    if(!doc->dom_document && doc->window) {
-        /* document fragments own reference to inner window */
-        IHTMLWindow2_Release(&doc->window->base.IHTMLWindow2_iface);
-        doc->window = NULL;
     }
 
     if(doc->browser) {
@@ -5862,7 +5845,7 @@ static void HTMLDocumentNode_destructor(HTMLDOMNode *iface)
 
     TRACE("(%p)\n", This);
 
-    heap_free(This->event_vector);
+    free(This->event_vector);
     ConnectionPointContainer_Destroy(&This->cp_container);
 }
 
@@ -5914,6 +5897,7 @@ static const NodeImplVtbl HTMLDocumentNodeImplVtbl = {
     NULL,
     NULL,
     NULL,
+    NULL,
     HTMLDocumentNode_traverse,
     HTMLDocumentNode_unlink
 };
@@ -5930,6 +5914,19 @@ static HRESULT HTMLDocumentFragment_clone(HTMLDOMNode *iface, nsIDOMNode *nsnode
 
     *ret = &new_node->node;
     return S_OK;
+}
+
+static void HTMLDocumentFragment_unlink(HTMLDOMNode *iface)
+{
+    HTMLDocumentNode *This = impl_from_HTMLDOMNode(iface);
+
+    if(This->window) {
+        detach_document_node(This);
+
+        /* document fragments own reference to inner window */
+        IHTMLWindow2_Release(&This->window->base.IHTMLWindow2_iface);
+        This->window = NULL;
+    }
 }
 
 static inline HTMLDocumentNode *impl_from_DispatchEx(DispatchEx *iface)
@@ -6119,6 +6116,7 @@ static const event_target_vtbl_t HTMLDocumentNode_event_target_vtbl = {
     },
     HTMLDocumentNode_get_gecko_target,
     HTMLDocumentNode_bind_event,
+    NULL,
     HTMLDocumentNode_get_parent_event_target,
     NULL,
     HTMLDocumentNode_get_cp_container,
@@ -6130,7 +6128,21 @@ static const NodeImplVtbl HTMLDocumentFragmentImplVtbl = {
     HTMLDocumentNode_QI,
     HTMLDocumentNode_destructor,
     HTMLDocumentNode_cpc,
-    HTMLDocumentFragment_clone
+    HTMLDocumentFragment_clone,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    HTMLDocumentFragment_unlink
 };
 
 static const tid_t HTMLDocumentNode_iface_tids[] = {
@@ -6147,6 +6159,19 @@ static void HTMLDocumentNode_init_dispex_info(dispex_data_t *info, compat_mode_t
     static const dispex_hook_t document2_hooks[] = {
         {DISPID_IHTMLDOCUMENT2_URL,      NULL, L"URL"},
         {DISPID_IHTMLDOCUMENT2_LOCATION, HTMLDocumentNode_location_hook},
+        {DISPID_UNKNOWN}
+    };
+    static const dispex_hook_t document2_ie11_hooks[] = {
+        {DISPID_IHTMLDOCUMENT2_URL,              NULL, L"URL"},
+        {DISPID_IHTMLDOCUMENT2_LOCATION,         HTMLDocumentNode_location_hook},
+        {DISPID_IHTMLDOCUMENT2_CREATESTYLESHEET, NULL},
+        {DISPID_IHTMLDOCUMENT2_FILESIZE,         NULL},
+        {DISPID_IHTMLDOCUMENT2_SELECTION,        NULL},
+        {DISPID_UNKNOWN}
+    };
+    static const dispex_hook_t document3_ie11_hooks[] = {
+        {DISPID_IHTMLDOCUMENT3_ATTACHEVENT, NULL},
+        {DISPID_IHTMLDOCUMENT3_DETACHEVENT, NULL},
         {DISPID_UNKNOWN}
     };
     static const dispex_hook_t document6_ie9_hooks[] = {
@@ -6168,9 +6193,9 @@ static void HTMLDocumentNode_init_dispex_info(dispex_data_t *info, compat_mode_t
         dispex_info_add_interface(info, IHTMLDocument6_tid, NULL);
     }else {
         dispex_info_add_interface(info, IHTMLDocument6_tid, mode >= COMPAT_MODE_IE9 ? document6_ie9_hooks : NULL);
-        dispex_info_add_interface(info, IHTMLDocument3_tid, NULL);
+        dispex_info_add_interface(info, IHTMLDocument3_tid, mode >= COMPAT_MODE_IE11 ? document3_ie11_hooks : NULL);
     }
-    dispex_info_add_interface(info, IHTMLDocument2_tid, document2_hooks);
+    dispex_info_add_interface(info, IHTMLDocument2_tid, mode >= COMPAT_MODE_IE11 ? document2_ie11_hooks : document2_hooks);
 }
 
 static dispex_static_data_t HTMLDocumentNode_dispex = {
@@ -6185,7 +6210,7 @@ static HTMLDocumentNode *alloc_doc_node(HTMLDocumentObj *doc_obj, HTMLInnerWindo
 {
     HTMLDocumentNode *doc;
 
-    doc = heap_alloc_zero(sizeof(HTMLDocumentNode));
+    doc = calloc(1, sizeof(HTMLDocumentNode));
     if(!doc)
         return NULL;
 

@@ -382,7 +382,7 @@ static HRESULT HTMLScriptElement_QI(HTMLDOMNode *iface, REFIID riid, void **ppv)
 static void HTMLScriptElement_destructor(HTMLDOMNode *iface)
 {
     HTMLScriptElement *This = impl_from_HTMLDOMNode(iface);
-    heap_free(This->src_text);
+    free(This->src_text);
     HTMLElement_destructor(&This->element.node);
 }
 
@@ -438,6 +438,7 @@ static const NodeImplVtbl HTMLScriptElementImplVtbl = {
     HTMLScriptElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -492,7 +493,7 @@ HRESULT HTMLScriptElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, H
     HTMLScriptElement *ret;
     nsresult nsres;
 
-    ret = heap_alloc_zero(sizeof(HTMLScriptElement));
+    ret = calloc(1, sizeof(HTMLScriptElement));
     if(!ret)
         return E_OUTOFMEMORY;
 

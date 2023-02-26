@@ -253,12 +253,30 @@ const char * __cdecl __wine_dbg_strdup( const char *str )
 }
 
 /***********************************************************************
- *		__wine_dbg_write  (NTDLL.@)
+ *		unixcall_wine_dbg_write
  */
-int WINAPI __wine_dbg_write( const char *str, unsigned int len )
+NTSTATUS unixcall_wine_dbg_write( void *args )
 {
-    return write( 2, str, len );
+    struct wine_dbg_write_params *params = args;
+
+    return write( 2, params->str, params->len );
 }
+
+#ifdef _WIN64
+/***********************************************************************
+ *		wow64_wine_dbg_write
+ */
+NTSTATUS wow64_wine_dbg_write( void *args )
+{
+    struct
+    {
+        ULONG        str;
+        unsigned int len;
+    } const *params32 = args;
+
+    return write( 2, ULongToPtr(params32->str), params32->len );
+}
+#endif
 
 /***********************************************************************
  *		__wine_dbg_output  (NTDLL.@)
@@ -272,7 +290,7 @@ int __cdecl __wine_dbg_output( const char *str )
     if (end)
     {
         ret += append_output( info, str, end + 1 - str );
-        __wine_dbg_write( info->output, info->out_pos );
+        write( 2, info->output, info->out_pos );
         info->out_pos = 0;
         str = end + 1;
     }
@@ -299,11 +317,11 @@ int __cdecl __wine_dbg_header( enum __wine_debug_class cls, struct __wine_debug_
     {
         if (TRACE_ON(timestamp))
         {
-            ULONG ticks = NtGetTickCount();
+            UINT ticks = NtGetTickCount();
             pos += sprintf( pos, "%3u.%03u:", ticks / 1000, ticks % 1000 );
         }
-        if (TRACE_ON(pid)) pos += sprintf( pos, "%04x:", GetCurrentProcessId() );
-        pos += sprintf( pos, "%04x:", GetCurrentThreadId() );
+        if (TRACE_ON(pid)) pos += sprintf( pos, "%04x:", (UINT)GetCurrentProcessId() );
+        pos += sprintf( pos, "%04x:", (UINT)GetCurrentThreadId() );
     }
     if (function && cls < ARRAY_SIZE( classes ))
         pos += snprintf( pos, sizeof(info->output) - (pos - info->output), "%s:%s:%s ",
@@ -339,8 +357,8 @@ void dbg_init(void)
 NTSTATUS WINAPI NtTraceControl( ULONG code, void *inbuf, ULONG inbuf_len,
                                 void *outbuf, ULONG outbuf_len, ULONG *size )
 {
-    FIXME( "code %u, inbuf %p, inbuf_len %u, outbuf %p, outbuf_len %u, size %p\n", code, inbuf, inbuf_len,
-           outbuf, outbuf_len, size );
+    FIXME( "code %u, inbuf %p, inbuf_len %u, outbuf %p, outbuf_len %u, size %p\n",
+           (int)code, inbuf, (int)inbuf_len, outbuf, (int)outbuf_len, size );
     return STATUS_SUCCESS;
 }
 
@@ -350,7 +368,7 @@ NTSTATUS WINAPI NtTraceControl( ULONG code, void *inbuf, ULONG inbuf_len,
  */
 NTSTATUS WINAPI NtSetDebugFilterState( ULONG component_id, ULONG level, BOOLEAN state )
 {
-    FIXME( "component_id %#x, level %u, state %#x stub.\n", component_id, level, state );
+    FIXME( "component_id %#x, level %u, state %#x stub.\n", (int)component_id, (int)level, state );
 
     return STATUS_SUCCESS;
 }

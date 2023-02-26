@@ -371,8 +371,8 @@ static DWORD insert_header( struct request *request, struct header *header )
     if (!hdrs) return ERROR_OUTOFMEMORY;
 
     request->headers = hdrs;
-    request->headers[count - 1].field = strdupW( header->field );
-    request->headers[count - 1].value = strdupW( header->value );
+    request->headers[count - 1].field = wcsdup( header->field );
+    request->headers[count - 1].value = wcsdup( header->value );
     request->headers[count - 1].is_request = header->is_request;
     request->num_headers = count;
     return ERROR_SUCCESS;
@@ -798,6 +798,13 @@ BOOL WINAPI WinHttpQueryHeaders( HINTERNET hrequest, DWORD level, const WCHAR *n
     {
         release_object( &request->hdr );
         SetLastError( ERROR_WINHTTP_INCORRECT_HANDLE_TYPE );
+        return FALSE;
+    }
+    if (request->state < REQUEST_RESPONSE_STATE_RESPONSE_RECEIVED && !(level & WINHTTP_QUERY_FLAG_REQUEST_HEADERS)
+            && ((level & ~QUERY_MODIFIER_MASK) != WINHTTP_QUERY_REQUEST_METHOD))
+    {
+        release_object( &request->hdr );
+        SetLastError( ERROR_WINHTTP_INCORRECT_HANDLE_STATE );
         return FALSE;
     }
 
@@ -1449,7 +1456,7 @@ static void CALLBACK connection_collector( TP_CALLBACK_INSTANCE *instance, void 
                 {
                     TRACE("freeing %p\n", netconn);
                     list_remove(&netconn->entry);
-                    netconn_close(netconn);
+                    netconn_release(netconn);
                 }
                 else remaining_connections++;
             }
@@ -1562,7 +1569,7 @@ static DWORD open_connection( struct request *request )
             host->secure = is_secure;
             host->port = port;
             list_init( &host->connections );
-            if ((host->hostname = strdupW( connect->servername )))
+            if ((host->hostname = wcsdup( connect->servername )))
             {
                 list_add_head( &connection_pool, &host->entry );
             }
@@ -1591,7 +1598,7 @@ static DWORD open_connection( struct request *request )
 
         if (netconn_is_alive( netconn )) break;
         TRACE("connection %p no longer alive, closing\n", netconn);
-        netconn_close( netconn );
+        netconn_release( netconn );
         netconn = NULL;
     }
 
@@ -1654,7 +1661,7 @@ static DWORD open_connection( struct request *request )
                 {
                     request->netconn = NULL;
                     free( addressW );
-                    netconn_close( netconn );
+                    netconn_release( netconn );
                     return ret;
                 }
             }
@@ -1668,7 +1675,7 @@ static DWORD open_connection( struct request *request )
             {
                 request->netconn = NULL;
                 free( addressW );
-                netconn_close( netconn );
+                netconn_release( netconn );
                 return ret;
             }
         }
@@ -1687,7 +1694,7 @@ static DWORD open_connection( struct request *request )
     if (netconn->secure && !(request->server_cert = netconn_get_certificate( netconn )))
     {
         free( addressW );
-        netconn_close( netconn );
+        netconn_release( netconn );
         return ERROR_WINHTTP_SECURE_FAILURE;
     }
 
@@ -1704,10 +1711,8 @@ void close_connection( struct request *request )
 {
     if (!request->netconn) return;
 
-    send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_CLOSING_CONNECTION, 0, 0 );
-    netconn_close( request->netconn );
+    netconn_release( request->netconn );
     request->netconn = NULL;
-    send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_CONNECTION_CLOSED, 0, 0 );
 }
 
 static DWORD add_host_header( struct request *request, DWORD modifier )
@@ -1774,6 +1779,7 @@ static DWORD read_more_data( struct request *request, int maxlen, BOOL notify )
                         maxlen - request->read_size, 0, &len );
 
     if (notify) send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_RESPONSE_RECEIVED, &len, sizeof(len) );
+    request->read_reply_len += len;
 
     request->read_size += len;
     return ret;
@@ -1797,6 +1803,38 @@ static DWORD discard_eol( struct request *request, BOOL notify )
     return ERROR_SUCCESS;
 }
 
+static void update_value_from_digit( DWORD *value, char ch )
+{
+    if (ch >= '0' && ch <= '9') *value = *value * 16 + ch - '0';
+    else if (ch >= 'a' && ch <= 'f') *value = *value * 16 + ch - 'a' + 10;
+    else if (ch >= 'A' && ch <= 'F') *value = *value * 16 + ch - 'A' + 10;
+}
+
+/* read chunk size if already in the read buffer */
+static BOOL get_chunk_size( struct request *request )
+{
+    DWORD chunk_size;
+    char *p, *eol;
+
+    if (request->read_chunked_size != ~0ul) return TRUE;
+
+    eol = memchr( request->read_buf + request->read_pos, '\n', request->read_size );
+    if (!eol) return FALSE;
+
+    chunk_size = 0;
+    for (p = request->read_buf + request->read_pos; p != eol; ++p)
+    {
+        if (*p == ';' || *p == '\r') break;
+        update_value_from_digit( &chunk_size, *p );
+    }
+
+    request->read_chunked_size = chunk_size;
+    if (!chunk_size) request->read_chunked_eof = TRUE;
+
+    remove_data( request, (eol + 1) - (request->read_buf + request->read_pos) );
+    return TRUE;
+}
+
 /* read the size of the next chunk */
 static DWORD start_next_chunk( struct request *request, BOOL notify )
 {
@@ -1814,10 +1852,8 @@ static DWORD start_next_chunk( struct request *request, BOOL notify )
         while (request->read_size)
         {
             char ch = request->read_buf[request->read_pos];
-            if (ch >= '0' && ch <= '9') chunk_size = chunk_size * 16 + ch - '0';
-            else if (ch >= 'a' && ch <= 'f') chunk_size = chunk_size * 16 + ch - 'a' + 10;
-            else if (ch >= 'A' && ch <= 'F') chunk_size = chunk_size * 16 + ch - 'A' + 10;
-            else if (ch == ';' || ch == '\r' || ch == '\n')
+
+            if (ch == ';' || ch == '\r' || ch == '\n')
             {
                 TRACE( "reading %lu byte chunk\n", chunk_size );
 
@@ -1829,6 +1865,7 @@ static DWORD start_next_chunk( struct request *request, BOOL notify )
 
                 return discard_eol( request, notify );
             }
+            update_value_from_digit( &chunk_size, ch );
             remove_data( request, 1 );
         }
         if ((ret = read_more_data( request, -1, notify ))) return ret;
@@ -1868,7 +1905,7 @@ static DWORD refill_buffer( struct request *request, BOOL notify )
 
 static void finished_reading( struct request *request )
 {
-    BOOL close = FALSE;
+    BOOL close = FALSE, notify;
     WCHAR connection[20];
     DWORD size = sizeof(connection);
 
@@ -1884,7 +1921,18 @@ static void finished_reading( struct request *request )
     else if (!wcscmp( request->version, L"HTTP/1.0" )) close = TRUE;
 
     if (close)
-        netconn_close( request->netconn );
+    {
+        size = sizeof(connection);
+        notify = (!query_headers( request, WINHTTP_QUERY_CONNECTION | WINHTTP_QUERY_FLAG_REQUEST_HEADERS,
+                                  NULL, connection, &size, NULL )
+                  || !query_headers( request, WINHTTP_QUERY_PROXY_CONNECTION | WINHTTP_QUERY_FLAG_REQUEST_HEADERS,
+                                     NULL, connection, &size, NULL ))
+                 && !wcsicmp( connection, L"close" );
+
+        if (notify) send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_CLOSING_CONNECTION, 0, 0 );
+        netconn_release( request->netconn );
+        if (notify) send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_CONNECTION_CLOSED, 0, 0 );
+    }
     else
         cache_connection( request->netconn );
     request->netconn = NULL;
@@ -1893,7 +1941,11 @@ static void finished_reading( struct request *request )
 /* return the size of data available to be read immediately */
 static DWORD get_available_data( struct request *request )
 {
-    if (request->read_chunked) return min( request->read_chunked_size, request->read_size );
+    if (request->read_chunked)
+    {
+        if (!get_chunk_size( request )) return 0;
+        return min( request->read_chunked_size, request->read_size );
+    }
     return request->read_size;
 }
 
@@ -1910,6 +1962,9 @@ static DWORD read_data( struct request *request, void *buffer, DWORD size, DWORD
 {
     int count, bytes_read = 0;
     DWORD ret = ERROR_SUCCESS;
+
+    if (request->read_chunked && request->read_chunked_size == ~0u
+        && (ret = start_next_chunk( request, async ))) goto done;
 
     if (end_of_read_data( request )) goto done;
 
@@ -2161,9 +2216,15 @@ static DWORD send_request( struct request *request, const WCHAR *headers, DWORD 
 {
     struct connect *connect = request->connect;
     struct session *session = connect->session;
+    DWORD ret, len, buflen, content_length;
     char *wire_req;
     int bytes_sent;
-    DWORD ret, len;
+
+    TRACE( "request state %d.\n", request->state );
+
+    request->read_reply_status = ERROR_WINHTTP_INCORRECT_HANDLE_STATE;
+    request->read_reply_len = 0;
+    request->state = REQUEST_RESPONSE_STATE_NONE;
 
     if (request->flags & REQUEST_FLAG_WEBSOCKET_UPGRADE
         && request->websocket_set_send_buffer_size < MIN_WEBSOCKET_SEND_BUFFER_SIZE)
@@ -2185,7 +2246,7 @@ static DWORD send_request( struct request *request, const WCHAR *headers, DWORD 
     if (request->creds[TARGET_SERVER][SCHEME_BASIC].username)
         do_authorization( request, WINHTTP_AUTH_TARGET_SERVER, WINHTTP_AUTH_SCHEME_BASIC );
 
-    if (total_len || (request->verb && !wcscmp( request->verb, L"POST" )))
+    if (total_len || (request->verb && (!wcscmp( request->verb, L"POST" ) || !wcscmp( request->verb, L"PUT" ))))
     {
         WCHAR length[21]; /* decimal long int + null */
         swprintf( length, ARRAY_SIZE(length), L"%ld", total_len );
@@ -2230,6 +2291,7 @@ static DWORD send_request( struct request *request, const WCHAR *headers, DWORD 
     }
     TRACE("full request: %s\n", debugstr_a(wire_req));
 
+    request->state = REQUEST_RESPONSE_STATE_SENDING_REQUEST;
     send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_SENDING_REQUEST, NULL, 0 );
 
     ret = netconn_send( request->netconn, wire_req, len, &bytes_sent, NULL );
@@ -2244,6 +2306,28 @@ static DWORD send_request( struct request *request, const WCHAR *headers, DWORD 
         len += optional_len;
     }
     send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_REQUEST_SENT, &len, sizeof(len) );
+
+    buflen = sizeof(content_length);
+    if (query_headers( request, WINHTTP_QUERY_FLAG_REQUEST_HEADERS | WINHTTP_QUERY_CONTENT_LENGTH
+                       | WINHTTP_QUERY_FLAG_NUMBER, NULL, &content_length, &buflen, NULL ))
+        content_length = total_len;
+
+    if (content_length <= optional_len)
+    {
+        netconn_set_timeout( request->netconn, FALSE, request->receive_response_timeout );
+        request->read_reply_status = read_reply( request );
+        if (request->state == REQUEST_RESPONSE_STATE_READ_RESPONSE_QUEUED)
+            request->state = REQUEST_RESPONSE_STATE_READ_RESPONSE_QUEUED_REPLY_RECEIVED;
+        else
+            request->state = REQUEST_RESPONSE_STATE_REPLY_RECEIVED;
+    }
+    else
+    {
+        if (request->state == REQUEST_RESPONSE_STATE_READ_RESPONSE_QUEUED)
+            request->state = REQUEST_RESPONSE_STATE_READ_RESPONSE_QUEUED_REQUEST_SENT;
+        else
+            request->state = REQUEST_RESPONSE_STATE_REQUEST_SENT;
+    }
 
 end:
     if (async)
@@ -2309,7 +2393,7 @@ BOOL WINAPI WinHttpSendRequest( HINTERNET hrequest, const WCHAR *headers, DWORD 
             SetLastError( ERROR_OUTOFMEMORY );
             return FALSE;
         }
-        s->headers      = strdupW( headers );
+        s->headers      = wcsdup( headers );
         s->headers_len  = headers_len;
         s->optional     = optional;
         s->optional_len = optional_len;
@@ -2344,22 +2428,22 @@ static DWORD set_credentials( struct request *request, DWORD target, DWORD schem
     {
         free( request->creds[TARGET_SERVER][scheme].username );
         if (!username) request->creds[TARGET_SERVER][scheme].username = NULL;
-        else if (!(request->creds[TARGET_SERVER][scheme].username = strdupW( username ))) return ERROR_OUTOFMEMORY;
+        else if (!(request->creds[TARGET_SERVER][scheme].username = wcsdup( username ))) return ERROR_OUTOFMEMORY;
 
         free( request->creds[TARGET_SERVER][scheme].password );
         if (!password) request->creds[TARGET_SERVER][scheme].password = NULL;
-        else if (!(request->creds[TARGET_SERVER][scheme].password = strdupW( password ))) return ERROR_OUTOFMEMORY;
+        else if (!(request->creds[TARGET_SERVER][scheme].password = wcsdup( password ))) return ERROR_OUTOFMEMORY;
         break;
     }
     case WINHTTP_AUTH_TARGET_PROXY:
     {
         free( request->creds[TARGET_PROXY][scheme].username );
         if (!username) request->creds[TARGET_PROXY][scheme].username = NULL;
-        else if (!(request->creds[TARGET_PROXY][scheme].username = strdupW( username ))) return ERROR_OUTOFMEMORY;
+        else if (!(request->creds[TARGET_PROXY][scheme].username = wcsdup( username ))) return ERROR_OUTOFMEMORY;
 
         free( request->creds[TARGET_PROXY][scheme].password );
         if (!password) request->creds[TARGET_PROXY][scheme].password = NULL;
-        else if (!(request->creds[TARGET_PROXY][scheme].password = strdupW( password ))) return ERROR_OUTOFMEMORY;
+        else if (!(request->creds[TARGET_PROXY][scheme].password = wcsdup( password ))) return ERROR_OUTOFMEMORY;
         break;
     }
     default:
@@ -2483,7 +2567,7 @@ static DWORD read_line( struct request *request, char *buffer, DWORD *len )
         remove_data( request, bytes_read );
         if (eol) break;
 
-        if ((ret = read_more_data( request, -1, TRUE ))) return ret;
+        if ((ret = read_more_data( request, -1, FALSE ))) return ret;
         if (!request->read_size)
         {
             *len = 0;
@@ -2715,7 +2799,7 @@ static DWORD handle_redirect( struct request *request, DWORD status )
                 goto end;
             }
 
-            netconn_close( request->netconn );
+            netconn_release( request->netconn );
             request->netconn = NULL;
             request->content_length = request->content_read = 0;
             request->read_pos = request->read_size = 0;
@@ -2724,7 +2808,6 @@ static DWORD handle_redirect( struct request *request, DWORD status )
         else free( hostname );
 
         if ((ret = add_host_header( request, WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE ))) goto end;
-        if ((ret = open_connection( request ))) goto end;
 
         free( request->path );
         request->path = NULL;
@@ -2735,13 +2818,13 @@ static DWORD handle_redirect( struct request *request, DWORD status )
             memcpy( request->path, uc.lpszUrlPath, (len + 1) * sizeof(WCHAR) );
             request->path[len] = 0;
         }
-        else request->path = strdupW( L"/" );
+        else request->path = wcsdup( L"/" );
     }
 
     if (status != HTTP_STATUS_REDIRECT_KEEP_VERB && !wcscmp( request->verb, L"POST" ))
     {
         free( request->verb );
-        request->verb = strdupW( L"GET" );
+        request->verb = wcsdup( L"GET" );
         request->optional = NULL;
         request->optional_len = 0;
     }
@@ -2786,57 +2869,120 @@ static DWORD handle_passport_redirect( struct request *request )
     return ERROR_SUCCESS;
 }
 
-static DWORD receive_response( struct request *request, BOOL async )
+static void task_receive_response( void *ctx, BOOL abort );
+
+static DWORD queue_receive_response( struct request *request )
 {
+    struct receive_response *r;
+    DWORD ret;
+
+    if (!(r = malloc( sizeof(*r) ))) return ERROR_OUTOFMEMORY;
+    if ((ret = queue_task( &request->queue, task_receive_response, &r->task_hdr, &request->hdr )))
+        free( r );
+    return ret;
+}
+
+static DWORD receive_response( struct request *request )
+{
+    BOOL async_mode = request->connect->hdr.flags & WINHTTP_FLAG_ASYNC;
     DWORD ret, size, query, status;
 
-    if (!request->netconn) return ERROR_WINHTTP_INCORRECT_HANDLE_STATE;
+    TRACE( "request state %d.\n", request->state );
 
-    netconn_set_timeout( request->netconn, FALSE, request->receive_response_timeout );
-    for (;;)
+    switch (request->state)
     {
-        if ((ret = read_reply( request ))) break;
-
-        size = sizeof(DWORD);
-        query = WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER;
-        if ((ret = query_headers( request, query, NULL, &status, &size, NULL ))) break;
-
-        set_content_length( request, status );
-
-        if (!(request->hdr.disable_flags & WINHTTP_DISABLE_COOKIES)) record_cookies( request );
-
-        if (status == HTTP_STATUS_REDIRECT && is_passport_request( request ))
-        {
-            ret = handle_passport_redirect( request );
-        }
-        else if (status == HTTP_STATUS_MOVED || status == HTTP_STATUS_REDIRECT || status == HTTP_STATUS_REDIRECT_KEEP_VERB)
-        {
-            if (request->hdr.disable_flags & WINHTTP_DISABLE_REDIRECTS ||
-                request->hdr.redirect_policy == WINHTTP_OPTION_REDIRECT_POLICY_NEVER) break;
-
-            if (++request->redirect_count > request->max_redirects) return ERROR_WINHTTP_REDIRECT_FAILED;
-
-            if ((ret = handle_redirect( request, status ))) break;
-
-            /* recurse synchronously */
-            if (!(ret = send_request( request, NULL, 0, request->optional, request->optional_len, 0, 0, FALSE ))) continue;
-        }
-        else if (status == HTTP_STATUS_DENIED || status == HTTP_STATUS_PROXY_AUTH_REQ)
-        {
-            if (request->hdr.disable_flags & WINHTTP_DISABLE_AUTHENTICATION) break;
-
-            if (handle_authorization( request, status )) break;
-
-            /* recurse synchronously */
-            if (!(ret = send_request( request, NULL, 0, request->optional, request->optional_len, 0, 0, FALSE ))) continue;
-        }
+    case REQUEST_RESPONSE_RECURSIVE_REQUEST:
+        TRACE( "Sending request.\n" );
+        if ((ret = send_request( request, NULL, 0, request->optional, request->optional_len, 0, 0, FALSE ))) goto done;
+        send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_RECEIVING_RESPONSE, NULL, 0 );
         break;
+
+    case REQUEST_RESPONSE_STATE_SENDING_REQUEST:
+        if (!async_mode)
+        {
+            ret = ERROR_WINHTTP_INCORRECT_HANDLE_STATE;
+            goto done;
+        }
+        send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_RECEIVING_RESPONSE, NULL, 0 );
+        request->state = REQUEST_RESPONSE_STATE_READ_RESPONSE_QUEUED;
+        return queue_receive_response( request );
+
+
+    case REQUEST_RESPONSE_STATE_REQUEST_SENT:
+        send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_RECEIVING_RESPONSE, NULL, 0 );
+        if (async_mode)
+        {
+            request->state = REQUEST_RESPONSE_STATE_READ_RESPONSE_QUEUED_REQUEST_SENT;
+            return queue_receive_response( request );
+        }
+        /* fallthrough */
+    case REQUEST_RESPONSE_STATE_READ_RESPONSE_QUEUED_REQUEST_SENT:
+        netconn_set_timeout( request->netconn, FALSE, request->receive_response_timeout );
+        request->read_reply_status = read_reply( request );
+        request->state = REQUEST_RESPONSE_STATE_REPLY_RECEIVED;
+        break;
+
+    case REQUEST_RESPONSE_STATE_REPLY_RECEIVED:
+        send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_RECEIVING_RESPONSE, NULL, 0 );
+        break;
+
+    case REQUEST_RESPONSE_STATE_READ_RESPONSE_QUEUED_REPLY_RECEIVED:
+        request->state = REQUEST_RESPONSE_STATE_REPLY_RECEIVED;
+        break;
+
+    default:
+        ret = ERROR_WINHTTP_INCORRECT_HANDLE_STATE;
+        goto done;
     }
 
-    if (request->netconn) netconn_set_timeout( request->netconn, FALSE, request->receive_timeout );
-    if (request->content_length) ret = refill_buffer( request, FALSE );
+    send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_RESPONSE_RECEIVED,
+                   &request->read_reply_len, sizeof(request->read_reply_len) );
+    if ((ret = request->read_reply_status)) goto done;
 
-    if (async)
+    size = sizeof(DWORD);
+    query = WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER;
+    if ((ret = query_headers( request, query, NULL, &status, &size, NULL ))) goto done;
+
+    set_content_length( request, status );
+
+    if (!(request->hdr.disable_flags & WINHTTP_DISABLE_COOKIES)) record_cookies( request );
+
+    if (status == HTTP_STATUS_REDIRECT && is_passport_request( request ))
+    {
+        ret = handle_passport_redirect( request );
+        goto done;
+    }
+    if (status == HTTP_STATUS_MOVED || status == HTTP_STATUS_REDIRECT || status == HTTP_STATUS_REDIRECT_KEEP_VERB)
+    {
+        if (request->hdr.disable_flags & WINHTTP_DISABLE_REDIRECTS ||
+            request->hdr.redirect_policy == WINHTTP_OPTION_REDIRECT_POLICY_NEVER) goto done;
+
+        if (++request->redirect_count > request->max_redirects)
+        {
+            ret = ERROR_WINHTTP_REDIRECT_FAILED;
+            goto done;
+        }
+
+        if ((ret = handle_redirect( request, status ))) goto done;
+    }
+    else if (status == HTTP_STATUS_DENIED || status == HTTP_STATUS_PROXY_AUTH_REQ)
+    {
+        if (request->hdr.disable_flags & WINHTTP_DISABLE_AUTHENTICATION) goto done;
+
+        if (handle_authorization( request, status )) goto done;
+    }
+    else goto done;
+
+    request->state = REQUEST_RESPONSE_RECURSIVE_REQUEST;
+    return async_mode ? queue_receive_response( request ) : receive_response( request );
+
+done:
+    if (!ret)
+    {
+        request->state = REQUEST_RESPONSE_STATE_RESPONSE_RECEIVED;
+        if (request->netconn) netconn_set_timeout( request->netconn, FALSE, request->receive_timeout );
+    }
+    if (async_mode)
     {
         if (!ret) send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE, NULL, 0 );
         else
@@ -2846,6 +2992,7 @@ static DWORD receive_response( struct request *request, BOOL async )
             result.dwError  = ret;
             send_callback( &request->hdr, WINHTTP_CALLBACK_STATUS_REQUEST_ERROR, &result, sizeof(result) );
         }
+        return ERROR_SUCCESS;
     }
     return ret;
 }
@@ -2858,7 +3005,7 @@ static void task_receive_response( void *ctx, BOOL abort )
     if (abort) return;
 
     TRACE("running %p\n", ctx);
-    receive_response( request, TRUE );
+    receive_response( request );
 }
 
 /***********************************************************************
@@ -2883,20 +3030,7 @@ BOOL WINAPI WinHttpReceiveResponse( HINTERNET hrequest, LPVOID reserved )
         return FALSE;
     }
 
-    if (request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
-    {
-        struct receive_response *r;
-
-        if (!(r = malloc( sizeof(*r) )))
-        {
-            release_object( &request->hdr );
-            SetLastError( ERROR_OUTOFMEMORY );
-            return FALSE;
-        }
-        if ((ret = queue_task( &request->queue, task_receive_response, &r->task_hdr, &request->hdr )))
-            free( r );
-    }
-    else ret = receive_response( request, FALSE );
+    ret = receive_response( request );
 
     release_object( &request->hdr );
     SetLastError( ret );
@@ -3155,7 +3289,7 @@ static void socket_handle_closing( struct object_header *hdr )
     pending_tasks = cancel_queue( &socket->recv_q ) || pending_tasks;
 
     if (pending_tasks)
-        netconn_cancel_io( socket->request->netconn );
+        netconn_cancel_io( socket->netconn );
 }
 
 static BOOL socket_query_option( struct object_header *hdr, DWORD option, void *buffer, DWORD *buflen )
@@ -3181,7 +3315,8 @@ static void socket_destroy( struct object_header *hdr )
     stop_queue( &socket->send_q );
     stop_queue( &socket->recv_q );
 
-    release_object( &socket->request->hdr );
+    netconn_release( socket->netconn );
+    free( socket->read_buffer );
     free( socket->send_frame_buffer );
     free( socket );
 }
@@ -3203,7 +3338,7 @@ static BOOL socket_set_option( struct object_header *hdr, DWORD option, void *bu
             return FALSE;
         }
         socket->keepalive_interval = interval;
-        netconn_set_timeout( socket->request->netconn, FALSE, socket->keepalive_interval );
+        netconn_set_timeout( socket->netconn, FALSE, socket->keepalive_interval );
         SetLastError( ERROR_SUCCESS );
         TRACE( "WINHTTP_OPTION_WEB_SOCKET_KEEPALIVE_INTERVAL %lu.\n", interval);
         return TRUE;
@@ -3253,16 +3388,29 @@ HINTERNET WINAPI WinHttpWebSocketCompleteUpgrade( HINTERNET hrequest, DWORD_PTR 
     socket->hdr.callback = request->hdr.callback;
     socket->hdr.notify_mask = request->hdr.notify_mask;
     socket->hdr.context = context;
+    socket->hdr.flags = request->connect->hdr.flags & WINHTTP_FLAG_ASYNC;
     socket->keepalive_interval = 30000;
     socket->send_buffer_size = request->websocket_send_buffer_size;
+    if (request->read_size)
+    {
+        if (!(socket->read_buffer = malloc( request->read_size )))
+        {
+            ERR( "No memory.\n" );
+            free( socket );
+            release_object( &request->hdr );
+            return NULL;
+        }
+        socket->bytes_in_read_buffer = request->read_size;
+        memcpy( socket->read_buffer, request->read_buf + request->read_pos, request->read_size );
+        request->read_pos = request->read_size = 0;
+    }
     InitializeSRWLock( &socket->send_lock );
     init_queue( &socket->send_q );
     init_queue( &socket->recv_q );
+    netconn_addref( request->netconn );
+    socket->netconn = request->netconn;
 
-    addref_object( &request->hdr );
-    socket->request = request;
-
-    netconn_set_timeout( socket->request->netconn, FALSE, socket->keepalive_interval );
+    netconn_set_timeout( socket->netconn, FALSE, socket->keepalive_interval );
 
     if ((hsocket = alloc_handle( &socket->hdr )))
     {
@@ -3280,7 +3428,7 @@ static DWORD send_bytes( struct socket *socket, char *bytes, int len, int *sent,
 {
     int count;
     DWORD err;
-    err = netconn_send( socket->request->netconn, bytes, len, &count, ovr );
+    err = netconn_send( socket->netconn, bytes, len, &count, ovr );
     if (sent) *sent = count;
     if (err) return err;
     return (count == len || (ovr && count)) ? ERROR_SUCCESS : ERROR_INTERNAL_ERROR;
@@ -3392,7 +3540,7 @@ static DWORD complete_send_frame( struct socket *socket, WSAOVERLAPPED *ovr, con
 {
     DWORD ret, len, i;
 
-    if (!netconn_wait_overlapped_result( socket->request->netconn, ovr, &len ))
+    if (!netconn_wait_overlapped_result( socket->netconn, ovr, &len ))
         return WSAGetLastError();
 
     if (socket->bytes_in_send_frame_buffer)
@@ -3575,7 +3723,7 @@ DWORD WINAPI WinHttpWebSocketSend( HINTERNET hsocket, WINHTTP_WEB_SOCKET_BUFFER_
         return ERROR_INVALID_OPERATION;
     }
 
-    if (socket->request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
+    if (socket->hdr.flags & WINHTTP_FLAG_ASYNC)
     {
         BOOL async_send, complete_async = FALSE;
         struct socket_send *s;
@@ -3661,17 +3809,18 @@ static DWORD receive_bytes( struct socket *socket, char *buf, DWORD len, DWORD *
     char *ptr = buf;
     int received;
 
-    if (socket->request->read_size)
+    if (socket->bytes_in_read_buffer)
     {
-        size = min( needed, socket->request->read_size );
-        memcpy( ptr, socket->request->read_buf + socket->request->read_pos, size );
-        remove_data( socket->request, size );
+        size = min( needed, socket->bytes_in_read_buffer );
+        memcpy( ptr, socket->read_buffer, size );
+        memmove( socket->read_buffer, socket->read_buffer + size, socket->bytes_in_read_buffer - size );
+        socket->bytes_in_read_buffer -= size;
         needed -= size;
         ptr += size;
     }
     while (size != len)
     {
-        if ((err = netconn_recv( socket->request->netconn, ptr, needed, 0, &received ))) return err;
+        if ((err = netconn_recv( socket->netconn, ptr, needed, 0, &received ))) return err;
         if (!received) break;
         size += received;
         if (!read_full_buffer) break;
@@ -3750,7 +3899,7 @@ static void task_socket_send_pong( void *ctx, BOOL abort )
 
 static DWORD socket_send_pong( struct socket *socket )
 {
-    if (socket->request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
+    if (socket->hdr.flags & WINHTTP_FLAG_ASYNC)
     {
         BOOL async_send, complete_async = FALSE;
         struct socket_send *s;
@@ -4012,7 +4161,7 @@ DWORD WINAPI WinHttpWebSocketReceive( HINTERNET hsocket, void *buf, DWORD len, D
         return ERROR_INVALID_OPERATION;
     }
 
-    if (socket->request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
+    if (socket->hdr.flags & WINHTTP_FLAG_ASYNC)
     {
         struct socket_receive *r;
 
@@ -4082,7 +4231,7 @@ static DWORD send_socket_shutdown( struct socket *socket, USHORT status, const v
 
     if (socket->state < SOCKET_STATE_SHUTDOWN) socket->state = SOCKET_STATE_SHUTDOWN;
 
-    if (socket->request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
+    if (socket->hdr.flags & WINHTTP_FLAG_ASYNC)
     {
         BOOL async_send, complete_async = FALSE;
         struct socket_shutdown *s;
@@ -4240,7 +4389,7 @@ DWORD WINAPI WinHttpWebSocketClose( HINTERNET hsocket, USHORT status, void *reas
     prev_state = socket->state;
     socket->state = SOCKET_STATE_CLOSED;
 
-    if (socket->request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
+    if (socket->hdr.flags & WINHTTP_FLAG_ASYNC)
     {
         pending_receives = InterlockedIncrement( &socket->hdr.pending_receives );
         cancel_queue( &socket->recv_q );
@@ -4251,12 +4400,12 @@ DWORD WINAPI WinHttpWebSocketClose( HINTERNET hsocket, USHORT status, void *reas
 
     if (pending_receives == 1 && socket->close_frame_received)
     {
-        if (socket->request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
+        if (socket->hdr.flags & WINHTTP_FLAG_ASYNC)
             socket_close_complete( socket, socket->close_frame_receive_err );
         goto done;
     }
 
-    if (socket->request->connect->hdr.flags & WINHTTP_FLAG_ASYNC)
+    if (socket->hdr.flags & WINHTTP_FLAG_ASYNC)
     {
         struct socket_shutdown *s;
 
@@ -4659,12 +4808,12 @@ static HRESULT WINAPI winhttp_request_SetProxy(
         if (V_VT( &proxy_server ) == VT_BSTR)
         {
             free( request->proxy.lpszProxy );
-            request->proxy.lpszProxy = strdupW( V_BSTR( &proxy_server ) );
+            request->proxy.lpszProxy = wcsdup( V_BSTR( &proxy_server ) );
         }
         if (V_VT( &bypass_list ) == VT_BSTR)
         {
             free( request->proxy.lpszProxyBypass );
-            request->proxy.lpszProxyBypass = strdupW( V_BSTR( &bypass_list ) );
+            request->proxy.lpszProxyBypass = wcsdup( V_BSTR( &bypass_list ) );
         }
         break;
 
@@ -4796,7 +4945,7 @@ static HRESULT WINAPI winhttp_request_Open(
     memcpy( path, uc.lpszUrlPath, (uc.dwUrlPathLength + uc.dwExtraInfoLength) * sizeof(WCHAR) );
     path[uc.dwUrlPathLength + uc.dwExtraInfoLength] = 0;
 
-    if (!(verb = strdupW( method ))) goto error;
+    if (!(verb = wcsdup( method ))) goto error;
     if (SUCCEEDED( VariantChangeType( &async, &async, 0, VT_BOOL )) && V_BOOL( &async )) request->async = TRUE;
     else request->async = FALSE;
 
@@ -5166,7 +5315,7 @@ static HRESULT request_send( struct winhttp_request *request )
             size++;
         }
     }
-    wait_set_status_callback( request, WINHTTP_CALLBACK_STATUS_REQUEST_SENT );
+    wait_set_status_callback( request, WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE );
     if (!WinHttpSendRequest( request->hrequest, NULL, 0, ptr, size, size, 0 ))
     {
         err = GetLastError();

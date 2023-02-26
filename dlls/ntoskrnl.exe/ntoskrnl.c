@@ -2185,6 +2185,35 @@ LONG FASTCALL NTOSKRNL_InterlockedIncrement( LONG volatile *dest )
     return InterlockedIncrement( dest );
 }
 
+#ifdef __i386__
+
+/*************************************************************************
+ *           RtlUshortByteSwap   (NTOSKRNL.EXE.@)
+ */
+__ASM_FASTCALL_FUNC(RtlUshortByteSwap, 4,
+                    "movb %ch,%al\n\t"
+                    "movb %cl,%ah\n\t"
+                    "ret")
+
+/*************************************************************************
+ *           RtlUlongByteSwap   (NTOSKRNL.EXE.@)
+ */
+__ASM_FASTCALL_FUNC(RtlUlongByteSwap, 4,
+                    "movl %ecx,%eax\n\t"
+                    "bswap %eax\n\t"
+                    "ret")
+
+/*************************************************************************
+ *           RtlUlonglongByteSwap   (NTOSKRNL.EXE.@)
+ */
+__ASM_FASTCALL_FUNC(RtlUlonglongByteSwap, 8,
+                    "movl 4(%esp),%edx\n\t"
+                    "bswap %edx\n\t"
+                    "movl 8(%esp),%eax\n\t"
+                    "bswap %eax\n\t"
+                    "ret $8")
+
+#endif  /* __i386__ */
 
 /***********************************************************************
  *           ExAllocatePool   (NTOSKRNL.EXE.@)
@@ -2600,6 +2629,16 @@ ULONG WINAPI KeQueryActiveProcessorCountEx(USHORT group_number)
     TRACE("group_number %u.\n", group_number);
 
     return GetActiveProcessorCount(group_number);
+}
+
+ULONG WINAPI KeQueryActiveProcessorCount(PKAFFINITY active_processors)
+{
+    TRACE("active_processors %p.\n", active_processors);
+
+    if(active_processors)
+        *active_processors = KeQueryActiveProcessors();
+
+    return KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
 }
 
 /**********************************************************************
@@ -3412,6 +3451,22 @@ ULONG WINAPI KeGetCurrentProcessorNumberEx(PPROCESSOR_NUMBER process_number)
     }
 
     return cur_number;
+}
+
+/***********************************************************************
+ *          KeQueryMaximumProcessorCountEx   (NTOSKRNL.EXE.@)
+ */
+ULONG WINAPI KeQueryMaximumProcessorCountEx(USHORT group_number)
+{
+    return GetMaximumProcessorCount(group_number);
+}
+
+/***********************************************************************
+ *          KeQueryMaximumProcessorCount   (NTOSKRNL.EXE.@)
+ */
+ULONG WINAPI KeQueryMaximumProcessorCount(void)
+{
+    return KeQueryMaximumProcessorCountEx(0);
 }
 
 /***********************************************************************

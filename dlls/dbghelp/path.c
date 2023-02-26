@@ -722,7 +722,7 @@ static BOOL try_match_file(const WCHAR *name, BOOL (*match)(void*, HANDLE, const
     return FALSE;
 }
 
-BOOL search_dll_path(const struct process *process, const WCHAR *name, BOOL (*match)(void*, HANDLE, const WCHAR*), void *param)
+BOOL search_dll_path(const struct process *process, const WCHAR *name, WORD machine, BOOL (*match)(void*, HANDLE, const WCHAR*), void *param)
 {
     const WCHAR *env;
     WCHAR *p, *end;
@@ -733,7 +733,8 @@ BOOL search_dll_path(const struct process *process, const WCHAR *name, BOOL (*ma
 
     name = file_name(name);
 
-    cpu = process_get_cpu(process);
+    cpu = machine == IMAGE_FILE_MACHINE_UNKNOWN ? process_get_cpu(process) : cpu_find(machine);
+
     for (machine_dir = all_machine_dir; machine_dir < all_machine_dir + ARRAY_SIZE(all_machine_dir); machine_dir++)
         if (machine_dir->machine == cpu->machine) break;
     if (machine_dir >= all_machine_dir + ARRAY_SIZE(all_machine_dir)) return FALSE;
@@ -741,17 +742,14 @@ BOOL search_dll_path(const struct process *process, const WCHAR *name, BOOL (*ma
 
     if ((env = process_getenv(process, L"WINEBUILDDIR")))
     {
-        const WCHAR dllsW[] = { '\\','d','l','l','s','\\' };
-        const WCHAR programsW[] = { '\\','p','r','o','g','r','a','m','s','\\' };
-
         len = lstrlenW(env);
-        if (!(buf = heap_alloc((len + ARRAY_SIZE(programsW) + machine_dir_len +
+        if (!(buf = heap_alloc((len + wcslen(L"\\programs\\") + machine_dir_len +
                                 2 * lstrlenW(name) + 1) * sizeof(WCHAR)))) return FALSE;
         wcscpy(buf, env);
         end = buf + len;
 
-        memcpy(end, dllsW, sizeof(dllsW));
-        lstrcpyW(end + ARRAY_SIZE(dllsW), name);
+        wcscpy(end, L"\\dlls\\");
+        wcscat(end, name);
         if ((p = wcsrchr(end, '.')) && !lstrcmpW(p, L".so")) *p = 0;
         if ((p = wcsrchr(end, '.')) && !lstrcmpW(p, L".dll")) *p = 0;
         p = end + lstrlenW(end);
@@ -764,9 +762,9 @@ BOOL search_dll_path(const struct process *process, const WCHAR *name, BOOL (*ma
         lstrcpyW(p, name);
         if (try_match_file(buf, match, param)) goto found;
 
-        memcpy(end, programsW, sizeof(programsW));
-        end += ARRAY_SIZE(programsW);
-        lstrcpyW(end, name);
+        wcscpy(end, L"\\programs\\");
+        end += wcslen(end);
+        wcscpy(end, name);
         if ((p = wcsrchr(end, '.')) && !lstrcmpW(p, L".so")) *p = 0;
         if ((p = wcsrchr(end, '.')) && !lstrcmpW(p, L".exe")) *p = 0;
         p = end + lstrlenW(end);

@@ -171,6 +171,7 @@ AddService=EventLog,0x800,EventLogService
 AddService=HTTP,0,HTTPService
 AddService=MSIServer,0,MSIService
 AddService=RpcSs,0,RpcSsService
+AddService=scardsvr,0,ScardSvrService
 AddService=Spooler,0,SpoolerService
 AddService=StiSvc,0,StiService
 AddService=TermService,0,TerminalServices
@@ -190,6 +191,7 @@ AddService=EventLog,0x800,EventLogService
 AddService=HTTP,0,HTTPService
 AddService=MSIServer,0,MSIService
 AddService=RpcSs,0,RpcSsService
+AddService=scardsvr,0,ScardSvrService
 AddService=Spooler,0,SpoolerService
 AddService=StiSvc,0,StiService
 AddService=TermService,0,TerminalServices
@@ -209,6 +211,7 @@ AddService=EventLog,0x800,EventLogService
 AddService=HTTP,0,HTTPService
 AddService=MSIServer,0,MSIService
 AddService=RpcSs,0,RpcSsService
+AddService=scardsvr,0,ScardSvrService
 AddService=Spooler,0,SpoolerService
 AddService=StiSvc,0,StiService
 AddService=TermService,0,TerminalServices
@@ -228,6 +231,7 @@ AddService=EventLog,0x800,EventLogService
 AddService=HTTP,0,HTTPService
 AddService=MSIServer,0,MSIService
 AddService=RpcSs,0,RpcSsService
+AddService=scardsvr,0,ScardSvrService
 AddService=Spooler,0,SpoolerService
 AddService=StiSvc,0,StiService
 AddService=TermService,0,TerminalServices
@@ -2075,8 +2079,10 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 11,,urlmon.dll,1
 11,,windowscodecs.dll,1
 11,,winegstreamer.dll,1
+55,,wineps.drv,1
 11,,wineqtdecoder.dll,1
 11,,winevulkan.dll,1
+55,,winprint.dll,1
 11,,wintrust.dll,1
 11,,iexplore.exe,1
 
@@ -2148,7 +2154,9 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 16427,System\OLE DB,msdaps.dll
 16427,System\OLE DB,msdasql.dll
 16427,System\ADO,msado15.dll
+55,,wineps.drv
 66000,3,wineps.drv
+55,,winprint.dll
 12,,*.sys,-
 11,,*.msstyles,-
 11,,*
@@ -2210,7 +2218,9 @@ HKLM,%CurrentVersion%\Telephony\Country List\998,"SameAreaRule",,"G"
 16427,System\OLE DB,msdaps.dll
 16427,System\OLE DB,msdasql.dll
 16427,System\ADO,msado15.dll
+55,,wineps.drv
 66000,3,wineps.drv
+55,,winprint.dll
 12,,*.sys
 11,,*
 
@@ -2232,7 +2242,7 @@ system.ini, drivers32,,"msacm.msgsm610=msgsm32.acm"
 system.ini, drivers32,,"vidc.mrle=msrle32.dll"
 system.ini, drivers32,,"vidc.msvc=msvidc32.dll"
 system.ini, drivers32,,"vidc.cvid=iccvid.dll"
-system.ini, drivers32,,"; vidc.IV50=ir50_32.dll"
+system.ini, drivers32,,"vidc.IV50=ir50_32.dll"
 system.ini, drivers32,,"; vidc.IV31=ir32_32.dll"
 system.ini, drivers32,,"; vidc.IV32=ir32_32.dll"
 
@@ -2315,6 +2325,19 @@ ServiceType=32
 StartType=3
 ErrorControl=1
 
+[ScardSvrService]
+AddReg=ScardSvrServiceKeys
+DisplayName="Smart card server"
+ServiceBinary="%11%\svchost.exe -k netsvcs"
+ServiceType=32
+StartType=3
+ErrorControl=1
+
+[ScardSvrServiceKeys]
+HKR,Parameters,"ServiceDll",,"%11%\scardsvr.dll"
+HKR,Parameters,"ServiceMain",,"CalaisMain"
+HKLM,%CurrentVersionNT%\SvcHost,"netsvcs",0x00010008,"scardsvr"
+
 [SpoolerService]
 AddReg=SpoolerServiceKeys
 Description="Loads files to memory for later printing"
@@ -2364,15 +2387,15 @@ ErrorControl=1
 
 [BITSServiceKeys]
 HKR,Parameters,"ServiceDll",,"%11%\qmgr.dll"
-HKLM,%CurrentVersionNT%\SvcHost,"netsvcs",0x00010000,"BITS"
+HKLM,%CurrentVersionNT%\SvcHost,"netsvcs",0x00010008,"BITS"
 
 [EventLogServiceKeys]
 HKR,Parameters,"ServiceDll",,"%11%\wevtsvc.dll"
-HKLM,%CurrentVersionNT%\SvcHost,"LocalServiceNetworkRestricted",0x00010000,"EventLog"
+HKLM,%CurrentVersionNT%\SvcHost,"LocalServiceNetworkRestricted",0x00010008,"EventLog"
 
 [StiServiceKeys]
 HKR,Parameters,"ServiceDll",,"%11%\wiaservc.dll"
-HKLM,%CurrentVersionNT%\SvcHost,"imgsvc",0x00010000,"StiSvc"
+HKLM,%CurrentVersionNT%\SvcHost,"imgsvc",0x00010008,"StiSvc"
 
 [PlugPlayService]
 Description="Enables automatic configuration of devices"
@@ -2447,13 +2470,12 @@ HKLM,"System\CurrentControlSet\Services\Winsock\Parameters",,16
 HKLM,"System\CurrentControlSet\Services\Winsock2\Parameters\Protocol_Catalog9\Catalog_Entries",,16
 
 [VersionInfo]
-HKLM,%CurrentVersionNT%,"CurrentVersion",2,"6.1"
-HKLM,%CurrentVersionNT%,"CurrentMajorVersionNumber",0x10001,6
-HKLM,%CurrentVersionNT%,"CurrentMinorVersionNumber",0x10001,1
-HKLM,%CurrentVersionNT%,"CSDVersion",2,"Service Pack 1"
-HKLM,%CurrentVersionNT%,"CurrentBuild",2,"7601"
-HKLM,%CurrentVersionNT%,"CurrentBuildNumber",2,"7601"
-HKLM,%CurrentVersionNT%,"CurrentType",2,"Uniprocessor Free"
+HKLM,%CurrentVersionNT%,"CurrentVersion",2,"6.3"
+HKLM,%CurrentVersionNT%,"CurrentMajorVersionNumber",0x10001,10
+HKLM,%CurrentVersionNT%,"CurrentMinorVersionNumber",0x10001,0
+HKLM,%CurrentVersionNT%,"CurrentBuild",2,"18362"
+HKLM,%CurrentVersionNT%,"CurrentBuildNumber",2,"18362"
+HKLM,%CurrentVersionNT%,"CurrentType",2,"Multiprocessor Free"
 HKLM,%CurrentVersionNT%,"DigitalProductId",1,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
@@ -2461,17 +2483,18 @@ HKLM,%CurrentVersionNT%,"DigitalProductId",1,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
-HKLM,%CurrentVersionNT%,"ProductName",2,"Microsoft Windows 7"
+HKLM,%CurrentVersionNT%,"ProductName",2,"Windows 10 Pro"
 HKLM,%Control%\ProductOptions,"ProductType",2,"WinNT"
-HKLM,%Control%\Windows,"CSDVersion",0x10003,0x100
+HKLM,%Control%\Windows,"CSDVersion",0x10003,0
 HKLM,%Control%\Session Manager\Environment,"OS",2,"Windows_NT"
 
 [VersionInfo.ntamd64]
-HKLM,%CurrentVersionNT%,"CurrentVersion",2,"6.1"
-HKLM,%CurrentVersionNT%,"CSDVersion",2,"Service Pack 1"
-HKLM,%CurrentVersionNT%,"CurrentBuild",2,"7601"
-HKLM,%CurrentVersionNT%,"CurrentBuildNumber",2,"7601"
-HKLM,%CurrentVersionNT%,"CurrentType",2,"Uniprocessor Free"
+HKLM,%CurrentVersionNT%,"CurrentVersion",2,"6.3"
+HKLM,%CurrentVersionNT%,"CurrentMajorVersionNumber",0x10001,10
+HKLM,%CurrentVersionNT%,"CurrentMinorVersionNumber",0x10001,0
+HKLM,%CurrentVersionNT%,"CurrentBuild",2,"18362"
+HKLM,%CurrentVersionNT%,"CurrentBuildNumber",2,"18362"
+HKLM,%CurrentVersionNT%,"CurrentType",2,"Multiprocessor Free"
 HKLM,%CurrentVersionNT%,"DigitalProductId",1,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
@@ -2479,9 +2502,9 @@ HKLM,%CurrentVersionNT%,"DigitalProductId",1,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
-HKLM,%CurrentVersionNT%,"ProductName",2,"Microsoft Windows 7"
+HKLM,%CurrentVersionNT%,"ProductName",2,"Windows 10 Pro"
 HKLM,%Control%\ProductOptions,"ProductType",2,"WinNT"
-HKLM,%Control%\Windows,"CSDVersion",0x10003,0x100
+HKLM,%Control%\Windows,"CSDVersion",0x10003,0
 HKLM,%Control%\Session Manager\Environment,"OS",2,"Windows_NT"
 
 [Wow64]

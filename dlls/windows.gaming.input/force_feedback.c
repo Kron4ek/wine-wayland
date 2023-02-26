@@ -109,36 +109,79 @@ static ULONG WINAPI effect_impl_Release( IWineForceFeedbackEffectImpl *iface )
     return ref;
 }
 
+static int effect_reorient_direction( const WineForceFeedbackEffectParameters *params, Vector3 *direction )
+{
+    int sign = +1;
+
+    switch (params->type)
+    {
+    case WineForceFeedbackEffectType_Constant:
+        *direction = params->constant.direction;
+        sign = params->constant.direction.X < 0 ? -1 : +1;
+        break;
+
+    case WineForceFeedbackEffectType_Ramp:
+        *direction = params->ramp.start_vector;
+        sign = params->ramp.start_vector.X < 0 ? -1 : +1;
+        break;
+
+    case WineForceFeedbackEffectType_Periodic_SineWave:
+    case WineForceFeedbackEffectType_Periodic_TriangleWave:
+    case WineForceFeedbackEffectType_Periodic_SquareWave:
+    case WineForceFeedbackEffectType_Periodic_SawtoothWaveDown:
+    case WineForceFeedbackEffectType_Periodic_SawtoothWaveUp:
+        *direction = params->periodic.direction;
+        break;
+
+    case WineForceFeedbackEffectType_Condition_Spring:
+    case WineForceFeedbackEffectType_Condition_Damper:
+    case WineForceFeedbackEffectType_Condition_Inertia:
+    case WineForceFeedbackEffectType_Condition_Friction:
+        *direction = params->condition.direction;
+        sign = -1;
+        break;
+    }
+
+    direction->X *= -sign;
+    direction->Y *= -sign;
+    direction->Z *= -sign;
+
+    return sign;
+}
+
 static HRESULT WINAPI effect_impl_put_Parameters( IWineForceFeedbackEffectImpl *iface, WineForceFeedbackEffectParameters params,
                                                   WineForceFeedbackEffectEnvelope *envelope )
 {
     struct effect *impl = impl_from_IWineForceFeedbackEffectImpl( iface );
+    Vector3 direction = {0};
+    double magnitude = 0;
+    DWORD count = 0;
     HRESULT hr;
+    int sign;
 
     TRACE( "iface %p, params %p, envelope %p.\n", iface, &params, envelope );
 
     EnterCriticalSection( &impl->cs );
+
+    sign = effect_reorient_direction( &params, &direction );
+    /* Y and Z axes seems to be always ignored, is it really the case? */
+    magnitude += direction.X * direction.X;
+
     switch (params.type)
     {
     case WineForceFeedbackEffectType_Constant:
         impl->repeat_count = params.constant.repeat_count;
-        impl->constant_force.lMagnitude = round( params.constant.gain * params.constant.direction.X * 10000 );
-        impl->params.dwDuration = params.constant.duration.Duration / 10;
-        impl->params.dwStartDelay = params.constant.start_delay.Duration / 10;
-        impl->directions[0] = round( -params.constant.direction.X * 10000 );
-        impl->directions[1] = round( -params.constant.direction.Y * 10000 );
-        impl->directions[2] = round( -params.constant.direction.Z * 10000 );
+        impl->constant_force.lMagnitude = sign * round( params.constant.gain * sqrt( magnitude ) * 10000 );
+        impl->params.dwDuration = min( max( params.constant.duration.Duration / 10, 0 ), INFINITE );
+        impl->params.dwStartDelay = min( max( params.constant.start_delay.Duration / 10, 0 ), INFINITE );
         break;
 
     case WineForceFeedbackEffectType_Ramp:
         impl->repeat_count = params.ramp.repeat_count;
-        impl->ramp_force.lStart = round( params.ramp.gain * params.ramp.start_vector.X * 10000 );
+        impl->ramp_force.lStart = sign * round( params.ramp.gain * sqrt( magnitude ) * 10000 );
         impl->ramp_force.lEnd = round( params.ramp.gain * params.ramp.end_vector.X * 10000 );
-        impl->params.dwDuration = params.ramp.duration.Duration / 10;
-        impl->params.dwStartDelay = params.ramp.start_delay.Duration / 10;
-        impl->directions[0] = round( -params.ramp.start_vector.X * 10000 );
-        impl->directions[1] = round( -params.ramp.start_vector.Y * 10000 );
-        impl->directions[2] = round( -params.ramp.start_vector.Z * 10000 );
+        impl->params.dwDuration = min( max( params.ramp.duration.Duration / 10, 0 ), INFINITE );
+        impl->params.dwStartDelay = min( max( params.ramp.start_delay.Duration / 10, 0 ), INFINITE );
         break;
 
     case WineForceFeedbackEffectType_Periodic_SineWave:
@@ -151,11 +194,8 @@ static HRESULT WINAPI effect_impl_put_Parameters( IWineForceFeedbackEffectImpl *
         impl->periodic.dwPeriod = 1000000 / params.periodic.frequency;
         impl->periodic.dwPhase = round( params.periodic.phase * 36000 );
         impl->periodic.lOffset = round( params.periodic.bias * 10000 );
-        impl->params.dwDuration = params.periodic.duration.Duration / 10;
-        impl->params.dwStartDelay = params.periodic.start_delay.Duration / 10;
-        impl->directions[0] = round( -params.periodic.direction.X * 10000 );
-        impl->directions[1] = round( -params.periodic.direction.Y * 10000 );
-        impl->directions[2] = round( -params.periodic.direction.Z * 10000 );
+        impl->params.dwDuration = min( max( params.periodic.duration.Duration / 10, 0 ), INFINITE );
+        impl->params.dwStartDelay = min( max( params.periodic.start_delay.Duration / 10, 0 ), INFINITE );
         break;
 
     case WineForceFeedbackEffectType_Condition_Spring:
@@ -171,18 +211,19 @@ static HRESULT WINAPI effect_impl_put_Parameters( IWineForceFeedbackEffectImpl *
         impl->condition.lOffset = round( params.condition.bias * 10000 );
         impl->params.dwDuration = -1;
         impl->params.dwStartDelay = 0;
-        impl->directions[0] = round( params.condition.direction.X * 10000 );
-        impl->directions[1] = round( params.condition.direction.Y * 10000 );
-        impl->directions[2] = round( params.condition.direction.Z * 10000 );
         break;
     }
+
+    if (impl->axes[count] == DIJOFS_X) impl->directions[count++] = round( direction.X * 10000 );
+    if (impl->axes[count] == DIJOFS_Y) impl->directions[count++] = round( direction.Y * 10000 );
+    if (impl->axes[count] == DIJOFS_Z) impl->directions[count++] = round( direction.Z * 10000 );
 
     if (!envelope) impl->params.lpEnvelope = NULL;
     else
     {
-        impl->envelope.dwAttackTime = envelope->attack_duration.Duration / 10;
+        impl->envelope.dwAttackTime = min( max( envelope->attack_duration.Duration / 10, 0 ), INFINITE );
         impl->envelope.dwAttackLevel = round( envelope->attack_gain * 10000 );
-        impl->envelope.dwFadeTime = impl->params.dwDuration - envelope->release_duration.Duration / 10;
+        impl->envelope.dwFadeTime = impl->params.dwDuration - min( max( envelope->release_duration.Duration / 10, 0 ), INFINITE );
         impl->envelope.dwFadeLevel = round( envelope->release_gain * 10000 );
         impl->params.lpEnvelope = &impl->envelope;
     }
@@ -374,7 +415,7 @@ HRESULT force_feedback_effect_create( enum WineForceFeedbackEffectType type, IIn
     impl->params.dwTriggerButton = -1;
     impl->params.dwGain = 10000;
     impl->params.dwFlags = DIEFF_CARTESIAN|DIEFF_OBJECTOFFSETS;
-    impl->params.cAxes = 2;
+    impl->params.cAxes = -1;
     impl->axes[0] = DIJOFS_X;
     impl->axes[1] = DIJOFS_Y;
     impl->axes[2] = DIJOFS_Z;
@@ -532,30 +573,83 @@ static HRESULT WINAPI motor_get_IsEnabled( IForceFeedbackMotor *iface, BOOLEAN *
     return hr;
 }
 
+static BOOL CALLBACK check_ffb_axes( const DIDEVICEOBJECTINSTANCEW *obj, void *args )
+{
+    ForceFeedbackEffectAxes *value = args;
+
+    if (obj->dwType & DIDFT_FFACTUATOR)
+    {
+        if (IsEqualIID( &obj->guidType, &GUID_XAxis )) *value |= ForceFeedbackEffectAxes_X;
+        else if (IsEqualIID( &obj->guidType, &GUID_YAxis )) *value |= ForceFeedbackEffectAxes_Y;
+        else if (IsEqualIID( &obj->guidType, &GUID_ZAxis )) *value |= ForceFeedbackEffectAxes_Z;
+    }
+
+    return DIENUM_CONTINUE;
+}
+
 static HRESULT WINAPI motor_get_SupportedAxes( IForceFeedbackMotor *iface, enum ForceFeedbackEffectAxes *value )
 {
-    FIXME( "iface %p, value %p stub!\n", iface, value );
-    return E_NOTIMPL;
+    struct motor *impl = impl_from_IForceFeedbackMotor( iface );
+    HRESULT hr;
+
+    TRACE( "iface %p, value %p.\n", iface, value );
+
+    *value = ForceFeedbackEffectAxes_None;
+    if (FAILED(hr = IDirectInputDevice8_EnumObjects( impl->device, check_ffb_axes, value, DIDFT_AXIS )))
+        *value = ForceFeedbackEffectAxes_None;
+
+    return hr;
 }
 
 static HRESULT WINAPI motor_load_effect_async( IUnknown *invoker, IUnknown *param, PROPVARIANT *result )
 {
     struct effect *effect = impl_from_IForceFeedbackEffect( (IForceFeedbackEffect *)param );
-    struct motor *impl = impl_from_IForceFeedbackMotor( (IForceFeedbackMotor *)invoker );
+    IForceFeedbackMotor *motor = (IForceFeedbackMotor *)invoker;
+    struct motor *impl = impl_from_IForceFeedbackMotor( motor );
+    ForceFeedbackEffectAxes supported_axes = 0;
     IDirectInputEffect *dinput_effect;
     HRESULT hr;
 
-    if (SUCCEEDED(hr = IDirectInputDevice8_CreateEffect( impl->device, &effect->type, &effect->params, &dinput_effect, NULL )))
+    EnterCriticalSection( &effect->cs );
+
+    if (FAILED(hr = IForceFeedbackMotor_get_SupportedAxes( motor, &supported_axes )))
     {
-        EnterCriticalSection( &effect->cs );
-        if (!effect->effect)
-        {
-            effect->effect = dinput_effect;
-            IDirectInputEffect_AddRef( effect->effect );
-        }
-        LeaveCriticalSection( &effect->cs );
-        IDirectInputEffect_Release( dinput_effect );
+        WARN( "get_SupportedAxes for motor %p returned %#lx\n", motor, hr );
+        effect->params.cAxes = 0;
     }
+    else if (effect->params.cAxes == -1)
+    {
+        DWORD count = 0;
+
+        /* initialize axis mapping and re-map directions that were set with the initial mapping */
+        if (supported_axes & ForceFeedbackEffectAxes_X)
+        {
+            effect->directions[count] = effect->directions[0];
+            effect->axes[count++] = DIJOFS_X;
+        }
+        if (supported_axes & ForceFeedbackEffectAxes_Y)
+        {
+            effect->directions[count] = effect->directions[1];
+            effect->axes[count++] = DIJOFS_Y;
+        }
+        if (supported_axes & ForceFeedbackEffectAxes_Z)
+        {
+            effect->directions[count] = effect->directions[2];
+            effect->axes[count++] = DIJOFS_Z;
+        }
+
+        effect->params.cAxes = count;
+    }
+
+    if (SUCCEEDED(hr = IDirectInputDevice8_CreateEffect( impl->device, &effect->type, &effect->params,
+                                                         &dinput_effect, NULL )))
+    {
+        if (effect->effect) IDirectInputEffect_Release( effect->effect );
+        effect->effect = dinput_effect;
+        IDirectInputEffect_AddRef( effect->effect );
+    }
+
+    LeaveCriticalSection( &effect->cs );
 
     result->vt = VT_UI4;
     if (SUCCEEDED(hr)) result->ulVal = ForceFeedbackLoadEffectResult_Succeeded;

@@ -36,6 +36,7 @@
 #include "setupapi.h"
 #include "cfgmgr32.h"
 #include "newdev.h"
+#include "regstr.h"
 #include "dbt.h"
 #include "initguid.h"
 #include "devguid.h"
@@ -1631,6 +1632,13 @@ static void test_pnp_devices(void)
     if (ret)
         ok(GetLastError() == ERROR_INVALID_DATA, "got error %#lx\n", GetLastError());
 
+    ret = SetupDiGetDeviceRegistryPropertyA(set, &device, SPDRP_CONFIGFLAGS,
+            &type, (BYTE *)&dword, sizeof(dword), NULL);
+    ok(ret, "got error %#lx\n", GetLastError());
+    /* windows 7 sets CONFIGFLAG_FINISH_INSTALL; it's not clear what this means */
+    ok(!(dword & ~CONFIGFLAG_FINISH_INSTALL), "got flags %#lx\n", dword);
+    ok(type == REG_DWORD, "got type %lu\n", type);
+
     ret = SetupDiGetDeviceRegistryPropertyA(set, &device, SPDRP_DEVTYPE,
             &type, (BYTE *)&dword, sizeof(dword), NULL);
     ok(!ret, "expected failure\n");
@@ -1740,6 +1748,7 @@ static void test_pnp_driver(struct testsign_context *ctx)
     SC_HANDLE manager, service;
     BOOL ret, need_reboot;
     HANDLE catalog, file;
+    DWORD dword, type;
     unsigned int i;
     HDEVINFO set;
     FILE *f;
@@ -1798,10 +1807,21 @@ static void test_pnp_driver(struct testsign_context *ctx)
     ret = SetupDiCallClassInstaller(DIF_REGISTERDEVICE, set, &device);
     ok(ret, "failed to register device, error %#lx\n", GetLastError());
 
+    ret = SetupDiGetDeviceRegistryPropertyA(set, &device, SPDRP_CONFIGFLAGS,
+            &type, (BYTE *)&dword, sizeof(dword), NULL);
+    ok(!ret, "expected failure\n");
+    ok(GetLastError() == ERROR_INVALID_DATA, "got error %#lx\n", GetLastError());
+
     GetFullPathNameA("winetest.inf", sizeof(path), path, NULL);
     ret = UpdateDriverForPlugAndPlayDevicesA(NULL, hardware_id, path, INSTALLFLAG_FORCE, &need_reboot);
     ok(ret, "failed to install device, error %#lx\n", GetLastError());
     ok(!need_reboot, "expected no reboot necessary\n");
+
+    ret = SetupDiGetDeviceRegistryPropertyA(set, &device, SPDRP_CONFIGFLAGS,
+            &type, (BYTE *)&dword, sizeof(dword), NULL);
+    ok(ret, "got error %#lx\n", GetLastError());
+    ok(!dword, "got flags %#lx\n", dword);
+    ok(type == REG_DWORD, "got type %lu\n", type);
 
     /* Tests. */
 

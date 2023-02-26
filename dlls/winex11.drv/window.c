@@ -80,6 +80,7 @@ WINE_DECLARE_DEBUG_CHANNEL(systray);
 
 static const unsigned int net_wm_state_atoms[NB_NET_WM_STATES] =
 {
+    XATOM__KDE_NET_WM_STATE_SKIP_SWITCHER,
     XATOM__NET_WM_STATE_FULLSCREEN,
     XATOM__NET_WM_STATE_ABOVE,
     XATOM__NET_WM_STATE_MAXIMIZED_VERT,
@@ -182,7 +183,7 @@ HWND *build_hwnd_list(void)
 {
     NTSTATUS status;
     HWND *list;
-    UINT count = 128;
+    ULONG count = 128;
 
     for (;;)
     {
@@ -624,6 +625,7 @@ static void fetch_icon_data( HWND hwnd, HICON icon_big, HICON icon_small )
     unsigned long *bits;
     Pixmap icon_pixmap, mask_pixmap;
 
+    icon_big = get_icon_info( icon_big, &ii );
     if (!icon_big)
     {
         icon_big = get_icon_info( (HICON)send_message( hwnd, WM_GETICON, ICON_BIG, 0 ), &ii );
@@ -636,6 +638,8 @@ static void fetch_icon_data( HWND hwnd, HICON icon_big, HICON icon_small )
             icon_big = get_icon_info( icon_big, &ii );
         }
     }
+
+    icon_small = get_icon_info( icon_small, &ii_small );
     if (!icon_small)
     {
         icon_small = get_icon_info( (HICON)send_message( hwnd, WM_GETICON, ICON_SMALL, 0 ), &ii_small );
@@ -737,7 +741,7 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
 /***********************************************************************
  *              set_mwm_hints
  */
-static void set_mwm_hints( struct x11drv_win_data *data, DWORD style, DWORD ex_style )
+static void set_mwm_hints( struct x11drv_win_data *data, UINT style, UINT ex_style )
 {
     MwmHints mwm_hints;
 
@@ -980,7 +984,7 @@ static void update_net_wm_fullscreen_monitors( struct x11drv_win_data *data )
     if (!(data->net_wm_state & (1 << NET_WM_STATE_FULLSCREEN)) || is_virtual_desktop())
         return;
 
-    /* If the current display device handler can not detect dynamic device changes, do not use
+    /* If the current display device handler cannot detect dynamic device changes, do not use
      * _NET_WM_FULLSCREEN_MONITORS because xinerama_get_fullscreen_monitors() may report wrong
      * indices because of stale xinerama monitor information */
     if (!X11DRV_DisplayDevices_SupportEventHandlers())
@@ -1015,7 +1019,7 @@ static void update_net_wm_fullscreen_monitors( struct x11drv_win_data *data )
  */
 void update_net_wm_states( struct x11drv_win_data *data )
 {
-    DWORD i, style, ex_style, new_state = 0;
+    UINT i, style, ex_style, new_state = 0;
 
     if (!data->managed) return;
     if (data->whole_window == root_window) return;
@@ -1040,7 +1044,7 @@ void update_net_wm_states( struct x11drv_win_data *data )
     {
         if (data->skip_taskbar || (ex_style & WS_EX_NOACTIVATE)
             || (ex_style & WS_EX_TOOLWINDOW && !(ex_style & WS_EX_APPWINDOW)))
-            new_state |= (1 << NET_WM_STATE_SKIP_TASKBAR) | (1 << NET_WM_STATE_SKIP_PAGER);
+            new_state |= (1 << NET_WM_STATE_SKIP_TASKBAR) | (1 << NET_WM_STATE_SKIP_PAGER) | (1 << KDE_NET_WM_STATE_SKIP_SWITCHER);
         else if (!(ex_style & WS_EX_APPWINDOW) && NtUserGetWindowRelative( data->hwnd, GW_OWNER ))
             new_state |= (1 << NET_WM_STATE_SKIP_TASKBAR);
     }
@@ -1378,9 +1382,9 @@ static void sync_window_position( struct x11drv_win_data *data,
 #endif
 
     TRACE( "win %p/%lx pos %d,%d,%dx%d after %lx changes=%x serial=%lu\n",
-           data->hwnd, data->whole_window, data->whole_rect.left, data->whole_rect.top,
-           data->whole_rect.right - data->whole_rect.left,
-           data->whole_rect.bottom - data->whole_rect.top,
+           data->hwnd, data->whole_window, (int)data->whole_rect.left, (int)data->whole_rect.top,
+           (int)(data->whole_rect.right - data->whole_rect.left),
+           (int)(data->whole_rect.bottom - data->whole_rect.top),
            changes.sibling, mask, data->configure_serial );
 }
 
@@ -2053,7 +2057,7 @@ HWND create_foreign_window( Display *display, Window xwin )
     Window *xchildren;
     unsigned int nchildren;
     XWindowAttributes attr;
-    DWORD style = WS_CLIPCHILDREN;
+    UINT style = WS_CLIPCHILDREN;
     UNICODE_STRING class_name;
 
     if (!class_registered)
@@ -2067,7 +2071,7 @@ HWND create_foreign_window( Display *display, Window xwin )
         class.lpszClassName = classW;
         RtlInitUnicodeString( &class_name, classW );
         if (!NtUserRegisterClassExWOW( &class, &class_name, &version, NULL, 0, 0, NULL ) &&
-            GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+            RtlGetLastWin32Error() != ERROR_CLASS_ALREADY_EXISTS)
         {
             ERR( "Could not register foreign window class\n" );
             return FALSE;
@@ -2592,7 +2596,7 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags,
 {
     struct x11drv_thread_data *thread_data;
     struct x11drv_win_data *data;
-    DWORD new_style = NtUserGetWindowLongW( hwnd, GWL_STYLE );
+    UINT new_style = NtUserGetWindowLongW( hwnd, GWL_STYLE );
     RECT old_window_rect, old_whole_rect, old_client_rect;
     int event_type;
 
@@ -3094,7 +3098,7 @@ LRESULT X11DRV_WindowMessage( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp )
         taskbar_add_tab( hwnd );
         return 0;
     default:
-        FIXME( "got window msg %x hwnd %p wp %lx lp %lx\n", msg, hwnd, wp, lp );
+        FIXME( "got window msg %x hwnd %p wp %lx lp %lx\n", msg, hwnd, (long)wp, lp );
         return 0;
     }
 }
@@ -3197,7 +3201,7 @@ LRESULT X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam )
         if ((WCHAR)lparam) goto failed;  /* got an explicit char */
         if (NtUserGetWindowLongPtrW( hwnd, GWLP_ID )) goto failed;  /* window has a real menu */
         if (!(NtUserGetWindowLongW( hwnd, GWL_STYLE ) & WS_SYSMENU)) goto failed;  /* no system menu */
-        TRACE( "ignoring SC_KEYMENU wp %lx lp %lx\n", wparam, lparam );
+        TRACE( "ignoring SC_KEYMENU wp %lx lp %lx\n", (long)wparam, lparam );
         release_win_data( data );
         return 0;
 

@@ -116,7 +116,6 @@ static HRESULT create_dinput_device( DWORD version, const GUID *guid, IDirectInp
     ok( hr == DI_OK, "CreateDevice returned %#lx\n", hr );
 
     ref = IDirectInput_Release( dinput );
-    todo_wine
     ok( ref == 0, "Release returned %ld\n", ref );
 
     return DI_OK;
@@ -1100,15 +1099,11 @@ static void test_mouse_keyboard(void)
     raw_devices_count = ARRAY_SIZE(raw_devices);
     memset(raw_devices, 0, sizeof(raw_devices));
     hr = GetRegisteredRawInputDevices(raw_devices, &raw_devices_count, sizeof(RAWINPUTDEVICE));
-    todo_wine
     ok(hr == 1, "GetRegisteredRawInputDevices returned %ld, raw_devices_count: %d\n", hr, raw_devices_count);
-    todo_wine
-    ok(raw_devices[0].usUsagePage == 1, "Unexpected raw device usage page: %x\n", raw_devices[0].usUsagePage);
-    todo_wine
-    ok(raw_devices[0].usUsage == 6, "Unexpected raw device usage: %x\n", raw_devices[0].usUsage);
+    ok(raw_devices[0].usUsagePage == HID_USAGE_PAGE_GENERIC, "got usUsagePage: %x\n", raw_devices[0].usUsagePage);
+    ok(raw_devices[0].usUsage == HID_USAGE_GENERIC_KEYBOARD, "got usUsage: %x\n", raw_devices[0].usUsage);
     todo_wine
     ok(raw_devices[0].dwFlags == RIDEV_INPUTSINK, "Unexpected raw device flags: %#lx\n", raw_devices[0].dwFlags);
-    todo_wine
     ok(raw_devices[0].hwndTarget != NULL, "Unexpected raw device target: %p\n", raw_devices[0].hwndTarget);
     hr = IDirectInputDevice8_Unacquire(di_keyboard);
     ok(SUCCEEDED(hr), "IDirectInputDevice8_Acquire failed: %#lx\n", hr);
@@ -1137,10 +1132,9 @@ static void test_mouse_keyboard(void)
     memset(raw_devices, 0, sizeof(raw_devices));
     hr = GetRegisteredRawInputDevices(raw_devices, &raw_devices_count, sizeof(RAWINPUTDEVICE));
     ok(hr == 1, "GetRegisteredRawInputDevices returned %ld, raw_devices_count: %d\n", hr, raw_devices_count);
-    ok(raw_devices[0].usUsagePage == 1, "Unexpected raw device usage page: %x\n", raw_devices[0].usUsagePage);
-    ok(raw_devices[0].usUsage == 2, "Unexpected raw device usage: %x\n", raw_devices[0].usUsage);
+    ok(raw_devices[0].usUsagePage == HID_USAGE_PAGE_GENERIC, "got usUsagePage: %x\n", raw_devices[0].usUsagePage);
+    ok(raw_devices[0].usUsage == HID_USAGE_GENERIC_MOUSE, "got usUsage: %x\n", raw_devices[0].usUsage);
     ok(raw_devices[0].dwFlags == RIDEV_INPUTSINK, "Unexpected raw device flags: %#lx\n", raw_devices[0].dwFlags);
-    todo_wine
     ok(raw_devices[0].hwndTarget == di_hwnd, "Unexpected raw device target: %p\n", raw_devices[0].hwndTarget);
     hr = IDirectInputDevice8_Unacquire(di_mouse);
     ok(SUCCEEDED(hr), "IDirectInputDevice8_Acquire failed: %#lx\n", hr);
@@ -1152,16 +1146,16 @@ static void test_mouse_keyboard(void)
         di_hwnd = raw_devices[0].hwndTarget;
 
     /* expect dinput8 to take over any activated raw input devices */
-    raw_devices[0].usUsagePage = 0x01;
-    raw_devices[0].usUsage = 0x05;
+    raw_devices[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    raw_devices[0].usUsage = HID_USAGE_GENERIC_GAMEPAD;
     raw_devices[0].dwFlags = 0;
     raw_devices[0].hwndTarget = hwnd;
-    raw_devices[1].usUsagePage = 0x01;
-    raw_devices[1].usUsage = 0x06;
+    raw_devices[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    raw_devices[1].usUsage = HID_USAGE_GENERIC_KEYBOARD;
     raw_devices[1].dwFlags = 0;
     raw_devices[1].hwndTarget = hwnd;
-    raw_devices[2].usUsagePage = 0x01;
-    raw_devices[2].usUsage = 0x02;
+    raw_devices[2].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    raw_devices[2].usUsage = HID_USAGE_GENERIC_MOUSE;
     raw_devices[2].dwFlags = 0;
     raw_devices[2].hwndTarget = hwnd;
     raw_devices_count = ARRAY_SIZE(raw_devices);
@@ -1176,19 +1170,16 @@ static void test_mouse_keyboard(void)
     memset(raw_devices, 0, sizeof(raw_devices));
     hr = GetRegisteredRawInputDevices(raw_devices, &raw_devices_count, sizeof(RAWINPUTDEVICE));
     ok(hr == 3, "GetRegisteredRawInputDevices returned %ld, raw_devices_count: %d\n", hr, raw_devices_count);
-    ok(raw_devices[0].usUsagePage == 1, "Unexpected raw device usage page: %x\n", raw_devices[0].usUsagePage);
-    ok(raw_devices[0].usUsage == 2, "Unexpected raw device usage: %x\n", raw_devices[0].usUsage);
+    ok(raw_devices[0].usUsagePage == HID_USAGE_PAGE_GENERIC, "got usUsagePage: %x\n", raw_devices[0].usUsagePage);
+    ok(raw_devices[0].usUsage == HID_USAGE_GENERIC_MOUSE, "got usUsage: %x\n", raw_devices[0].usUsage);
     ok(raw_devices[0].dwFlags == RIDEV_INPUTSINK, "Unexpected raw device flags: %#lx\n", raw_devices[0].dwFlags);
     ok(raw_devices[0].hwndTarget == di_hwnd, "Unexpected raw device target: %p\n", raw_devices[0].hwndTarget);
-    ok(raw_devices[1].usUsagePage == 1, "Unexpected raw device usage page: %x\n", raw_devices[1].usUsagePage);
-    ok(raw_devices[1].usUsage == 5, "Unexpected raw device usage: %x\n", raw_devices[1].usUsage);
+    ok(raw_devices[1].usUsagePage == HID_USAGE_PAGE_GENERIC, "got usUsagePage: %x\n", raw_devices[1].usUsagePage);
+    ok(raw_devices[1].usUsage == HID_USAGE_GENERIC_GAMEPAD, "got usUsage: %x\n", raw_devices[1].usUsage);
     ok(raw_devices[1].dwFlags == 0, "Unexpected raw device flags: %#lx\n", raw_devices[1].dwFlags);
     ok(raw_devices[1].hwndTarget == hwnd, "Unexpected raw device target: %p\n", raw_devices[1].hwndTarget);
-    ok(raw_devices[2].usUsagePage == 1, "Unexpected raw device usage page: %x\n", raw_devices[1].usUsagePage);
-    ok(raw_devices[2].usUsage == 6, "Unexpected raw device usage: %x\n", raw_devices[1].usUsage);
-    todo_wine
-    ok(raw_devices[2].dwFlags == RIDEV_INPUTSINK, "Unexpected raw device flags: %#lx\n", raw_devices[1].dwFlags);
-    todo_wine
+    ok(raw_devices[2].usUsagePage == HID_USAGE_PAGE_GENERIC, "got usUsagePage: %x\n", raw_devices[1].usUsagePage);
+    ok(raw_devices[2].usUsage == HID_USAGE_GENERIC_KEYBOARD, "got usUsage: %x\n", raw_devices[1].usUsage);
     ok(raw_devices[2].hwndTarget == di_hwnd, "Unexpected raw device target: %p\n", raw_devices[1].hwndTarget);
     hr = IDirectInputDevice8_Unacquire(di_keyboard);
     ok(SUCCEEDED(hr), "IDirectInputDevice8_Acquire failed: %#lx\n", hr);
@@ -1196,7 +1187,6 @@ static void test_mouse_keyboard(void)
     ok(SUCCEEDED(hr), "IDirectInputDevice8_Acquire failed: %#lx\n", hr);
     raw_devices_count = ARRAY_SIZE(raw_devices);
     GetRegisteredRawInputDevices(NULL, &raw_devices_count, sizeof(RAWINPUTDEVICE));
-    todo_wine
     ok(raw_devices_count == 1, "Unexpected raw devices registered: %d\n", raw_devices_count);
 
     IDirectInputDevice8_SetCooperativeLevel(di_mouse, hwnd, DISCL_FOREGROUND|DISCL_EXCLUSIVE);
@@ -1211,7 +1201,6 @@ static void test_mouse_keyboard(void)
     hr = GetRegisteredRawInputDevices(raw_devices, &raw_devices_count, sizeof(RAWINPUTDEVICE));
     ok(hr == 3, "GetRegisteredRawInputDevices returned %ld, raw_devices_count: %d\n", hr, raw_devices_count);
     ok(raw_devices[0].dwFlags == (RIDEV_CAPTUREMOUSE|RIDEV_NOLEGACY), "Unexpected raw device flags: %#lx\n", raw_devices[0].dwFlags);
-    todo_wine
     ok(raw_devices[2].dwFlags == (RIDEV_NOHOTKEYS|RIDEV_NOLEGACY), "Unexpected raw device flags: %#lx\n", raw_devices[1].dwFlags);
     hr = IDirectInputDevice8_Unacquire(di_keyboard);
     ok(SUCCEEDED(hr), "IDirectInputDevice8_Acquire failed: %#lx\n", hr);
@@ -1220,12 +1209,27 @@ static void test_mouse_keyboard(void)
 
     raw_devices_count = ARRAY_SIZE(raw_devices);
     hr = GetRegisteredRawInputDevices(raw_devices, &raw_devices_count, sizeof(RAWINPUTDEVICE));
-    todo_wine
     ok(hr == 1, "GetRegisteredRawInputDevices returned %ld, raw_devices_count: %d\n", hr, raw_devices_count);
-    ok(raw_devices[0].usUsagePage == 1, "Unexpected raw device usage page: %x\n", raw_devices[0].usUsagePage);
-    ok(raw_devices[0].usUsage == 5, "Unexpected raw device usage: %x\n", raw_devices[0].usUsage);
+    ok(raw_devices[0].usUsagePage == HID_USAGE_PAGE_GENERIC, "got usUsagePage: %x\n", raw_devices[0].usUsagePage);
+    ok(raw_devices[0].usUsage == HID_USAGE_GENERIC_GAMEPAD, "got usUsage: %x\n", raw_devices[0].usUsage);
     ok(raw_devices[0].dwFlags == 0, "Unexpected raw device flags: %#lx\n", raw_devices[0].dwFlags);
     ok(raw_devices[0].hwndTarget == hwnd, "Unexpected raw device target: %p\n", raw_devices[0].hwndTarget);
+
+    raw_devices[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    raw_devices[0].usUsage = HID_USAGE_GENERIC_GAMEPAD;
+    raw_devices[0].dwFlags = RIDEV_REMOVE;
+    raw_devices[0].hwndTarget = 0;
+    raw_devices[1].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    raw_devices[1].usUsage = HID_USAGE_GENERIC_KEYBOARD;
+    raw_devices[1].dwFlags = RIDEV_REMOVE;
+    raw_devices[1].hwndTarget = 0;
+    raw_devices[2].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    raw_devices[2].usUsage = HID_USAGE_GENERIC_MOUSE;
+    raw_devices[2].dwFlags = RIDEV_REMOVE;
+    raw_devices[2].hwndTarget = 0;
+    raw_devices_count = ARRAY_SIZE(raw_devices);
+    hr = RegisterRawInputDevices(raw_devices, raw_devices_count, sizeof(RAWINPUTDEVICE));
+    ok(hr == TRUE, "RegisterRawInputDevices failed\n");
 
     IDirectInputDevice8_Release(di_mouse);
     IDirectInputDevice8_Release(di_keyboard);
@@ -1803,6 +1807,11 @@ static void test_sys_mouse( DWORD version )
     ok( hr == DIERR_UNSUPPORTED, "GetProperty DIPROP_SATURATION returned %#lx\n", hr );
     hr = IDirectInputDevice8_GetProperty( device, DIPROP_CALIBRATIONMODE, &prop_dword.diph );
     ok( hr == DIERR_UNSUPPORTED, "GetProperty DIPROP_CALIBRATIONMODE returned %#lx\n", hr );
+    prop_dword.diph.dwObj = DIMOFS_Z;
+    prop_dword.dwData = 0xdeadbeef;
+    hr = IDirectInputDevice8_GetProperty( device, DIPROP_GRANULARITY, &prop_dword.diph );
+    ok( hr == DI_OK, "GetProperty DIPROP_GRANULARITY returned %#lx\n", hr );
+    ok( prop_dword.dwData == WHEEL_DELTA, "got %ld expected %ld\n", prop_dword.dwData, (DWORD)WHEEL_DELTA );
     prop_range.lMin = 0xdeadbeef;
     prop_range.lMax = 0xdeadbeef;
     hr = IDirectInputDevice8_GetProperty( device, DIPROP_RANGE, &prop_range.diph );

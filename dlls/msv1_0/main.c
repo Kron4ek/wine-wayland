@@ -43,30 +43,28 @@ WINE_DEFAULT_DEBUG_CHANNEL(ntlm);
 static ULONG ntlm_package_id;
 static LSA_DISPATCH_TABLE lsa_dispatch;
 
-static unixlib_handle_t ntlm_handle;
-
 static NTSTATUS ntlm_check_version(void)
 {
-    return __wine_unix_call( ntlm_handle, unix_check_version, NULL );
+    return WINE_UNIX_CALL( unix_check_version, NULL );
 }
 
 static void ntlm_cleanup( struct ntlm_ctx *ctx )
 {
-    __wine_unix_call( ntlm_handle, unix_cleanup, ctx );
+    WINE_UNIX_CALL( unix_cleanup, ctx );
 }
 
 static NTSTATUS ntlm_chat( struct ntlm_ctx *ctx, char *buf, unsigned int buflen, unsigned int *retlen )
 {
     struct chat_params params = { ctx, buf, buflen, retlen };
 
-    return __wine_unix_call( ntlm_handle, unix_chat, &params );
+    return WINE_UNIX_CALL( unix_chat, &params );
 }
 
 static NTSTATUS ntlm_fork( struct ntlm_ctx *ctx, char **argv )
 {
     struct fork_params params = { ctx, argv };
 
-    return __wine_unix_call( ntlm_handle, unix_fork, &params );
+    return WINE_UNIX_CALL( unix_fork, &params );
 }
 
 #define NTLM_CAPS \
@@ -864,7 +862,7 @@ static NTSTATUS NTAPI ntlm_SpInitLsaModeContext( LSA_SEC_HANDLE cred_handle, LSA
     }
 
 done:
-    if (status != SEC_E_OK && status != SEC_I_CONTINUE_NEEDED)
+    if (status != SEC_E_OK && status != SEC_I_CONTINUE_NEEDED && !ctx_handle && !input)
     {
         ntlm_cleanup( ctx );
         free( ctx );
@@ -1080,7 +1078,7 @@ static NTSTATUS NTAPI ntlm_SpAcceptLsaModeContext( LSA_SEC_HANDLE cred_handle, L
     }
 
 done:
-    if (status != SEC_E_OK && status != SEC_I_CONTINUE_NEEDED)
+    if (status != SEC_E_OK && status != SEC_I_CONTINUE_NEEDED && !ctx_handle)
     {
         ntlm_cleanup( ctx );
         free( ctx );
@@ -1608,8 +1606,7 @@ BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, void *reserved )
     switch (reason)
     {
     case DLL_PROCESS_ATTACH:
-        if (NtQueryVirtualMemory( GetCurrentProcess(), hinst, MemoryWineUnixFuncs,
-                                  &ntlm_handle, sizeof(ntlm_handle), NULL ))
+        if (__wine_init_unix_call())
             return FALSE;
         DisableThreadLibraryCalls( hinst );
         break;

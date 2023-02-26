@@ -66,6 +66,7 @@ typedef int Status;
 #include "wine/gdi_driver.h"
 #include "unixlib.h"
 #include "wine/list.h"
+#include "wine/debug.h"
 
 #define MAX_DASHLEN 16
 
@@ -215,6 +216,7 @@ extern BOOL X11DRV_GetCursorPos( LPPOINT pos ) DECLSPEC_HIDDEN;
 extern BOOL X11DRV_ClipCursor( LPCRECT clip ) DECLSPEC_HIDDEN;
 extern LONG X11DRV_ChangeDisplaySettings( LPDEVMODEW displays, LPCWSTR primary_name, HWND hwnd, DWORD flags, LPVOID lpvoid ) DECLSPEC_HIDDEN;
 extern BOOL X11DRV_GetCurrentDisplaySettings( LPCWSTR name, BOOL is_primary, LPDEVMODEW devmode ) DECLSPEC_HIDDEN;
+extern INT X11DRV_GetDisplayDepth( LPCWSTR name, BOOL is_primary ) DECLSPEC_HIDDEN;
 extern BOOL X11DRV_UpdateDisplayDevices( const struct gdi_device_manager *device_manager,
                                          BOOL force, void *param ) DECLSPEC_HIDDEN;
 extern BOOL X11DRV_CreateDesktopWindow( HWND hwnd ) DECLSPEC_HIDDEN;
@@ -321,6 +323,15 @@ extern COLORREF X11DRV_PALETTE_ToLogical(X11DRV_PDEVICE *physDev, int pixel) DEC
 extern int X11DRV_PALETTE_ToPhysical(X11DRV_PDEVICE *physDev, COLORREF color) DECLSPEC_HIDDEN;
 extern COLORREF X11DRV_PALETTE_GetColor( X11DRV_PDEVICE *physDev, COLORREF color ) DECLSPEC_HIDDEN;
 extern int *get_window_surface_mapping( int bpp, int *mapping ) DECLSPEC_HIDDEN;
+
+static inline const char *debugstr_color( COLORREF color )
+{
+    if (color & (1 << 24))  /* PALETTEINDEX */
+        return wine_dbg_sprintf( "PALETTEINDEX(%u)", LOWORD(color) );
+    if (color >> 16 == 0x10ff)  /* DIBINDEX */
+        return wine_dbg_sprintf( "DIBINDEX(%u)", LOWORD(color) );
+    return wine_dbg_sprintf( "RGB(%02x,%02x,%02x)", GetRValue(color), GetGValue(color), GetBValue(color) );
+}
 
 /* GDI escapes */
 
@@ -442,7 +453,7 @@ extern int alloc_system_colors DECLSPEC_HIDDEN;
 extern int xrender_error_base DECLSPEC_HIDDEN;
 extern char *process_name DECLSPEC_HIDDEN;
 extern Display *clipboard_display DECLSPEC_HIDDEN;
-extern WNDPROC client_foreign_window_proc;
+extern WNDPROC client_foreign_window_proc DECLSPEC_HIDDEN;
 
 /* atoms */
 
@@ -472,6 +483,7 @@ enum x11drv_atoms
     XATOM_DndProtocol,
     XATOM_DndSelection,
     XATOM__ICC_PROFILE,
+    XATOM__KDE_NET_WM_STATE_SKIP_SWITCHER,
     XATOM__MOTIF_WM_HINTS,
     XATOM__NET_STARTUP_INFO_BEGIN,
     XATOM__NET_STARTUP_INFO,
@@ -584,6 +596,7 @@ enum x11drv_window_messages
 /* _NET_WM_STATE properties that we keep track of */
 enum x11drv_net_wm_state
 {
+    KDE_NET_WM_STATE_SKIP_SWITCHER,
     NET_WM_STATE_FULLSCREEN,
     NET_WM_STATE_ABOVE,
     NET_WM_STATE_MAXIMIZED,
@@ -813,7 +826,7 @@ extern struct x11drv_display_device_handler desktop_handler DECLSPEC_HIDDEN;
 extern BOOL X11DRV_InitXIM( const WCHAR *input_style ) DECLSPEC_HIDDEN;
 extern XIC X11DRV_CreateIC(XIM xim, struct x11drv_win_data *data) DECLSPEC_HIDDEN;
 extern void X11DRV_SetupXIM(void) DECLSPEC_HIDDEN;
-extern void X11DRV_XIMLookupChars( const char *str, DWORD count ) DECLSPEC_HIDDEN;
+extern void X11DRV_XIMLookupChars( const char *str, UINT count ) DECLSPEC_HIDDEN;
 
 #define XEMBED_MAPPED  (1 << 0)
 

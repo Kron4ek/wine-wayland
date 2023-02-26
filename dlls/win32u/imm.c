@@ -27,7 +27,7 @@
 #include <pthread.h>
 #include "win32u_private.h"
 #include "ntuser_private.h"
-#include "ddk/imm.h"
+#include "immdev.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(imm);
@@ -84,7 +84,7 @@ HIMC WINAPI NtUserCreateInputContext( UINT_PTR client_ptr )
         return 0;
     }
 
-    TRACE( "%lx returning %p\n", client_ptr, handle );
+    TRACE( "%lx returning %p\n", (long)client_ptr, handle );
     return handle;
 }
 
@@ -115,7 +115,7 @@ BOOL WINAPI NtUserUpdateInputContext( HIMC handle, UINT attr, UINT_PTR value )
     struct imc *imc;
     BOOL ret = TRUE;
 
-    TRACE( "%p %u %lx\n", handle, attr, value );
+    TRACE( "%p %u %lx\n", handle, attr, (long)value );
 
     if (!(imc = get_imc_ptr( handle ))) return FALSE;
 
@@ -171,7 +171,7 @@ UINT WINAPI NtUserAssociateInputContext( HWND hwnd, HIMC ctx, ULONG flags )
     WND *win;
     UINT ret = AICR_OK;
 
-    TRACE( "%p %p %x\n", hwnd, ctx, flags );
+    TRACE( "%p %p %x\n", hwnd, ctx, (int)flags );
 
     switch (flags)
     {
@@ -181,7 +181,7 @@ UINT WINAPI NtUserAssociateInputContext( HWND hwnd, HIMC ctx, ULONG flags )
         break;
 
     default:
-        FIXME( "unknown flags 0x%x\n", flags );
+        FIXME( "unknown flags 0x%x\n", (int)flags );
         return AICR_FAILED;
     }
 
@@ -277,12 +277,11 @@ BOOL register_imm_window( HWND hwnd )
     /* Create default IME window */
     if (!thread_data->window_cnt++)
     {
-        UNICODE_STRING class_name, name;
         static const WCHAR imeW[] = {'I','M','E',0};
         static const WCHAR default_imeW[] = {'D','e','f','a','u','l','t',' ','I','M','E',0};
+        UNICODE_STRING class_name = RTL_CONSTANT_STRING( imeW );
+        UNICODE_STRING name = RTL_CONSTANT_STRING( default_imeW );
 
-        RtlInitUnicodeString( &class_name, imeW );
-        RtlInitUnicodeString( &name, default_imeW );
         thread_data->default_hwnd = NtUserCreateWindowEx( 0, &class_name, &class_name, &name,
                                                           WS_POPUP | WS_DISABLED | WS_CLIPSIBLINGS,
                                                           0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, FALSE );
@@ -394,7 +393,7 @@ void cleanup_imm_thread(void)
     NtUserDestroyInputContext( UlongToHandle( thread_info->client_info.default_imc ));
 }
 
-BOOL WINAPI ImmProcessKey( HWND hwnd, HKL hkl, UINT vkey, LPARAM key_data, DWORD unknown )
+BOOL WINAPI DECLSPEC_HIDDEN ImmProcessKey( HWND hwnd, HKL hkl, UINT vkey, LPARAM key_data, DWORD unknown )
 {
     struct imm_process_key_params params =
         { .hwnd = hwnd, .hkl = hkl, .vkey = vkey, .key_data = key_data };
@@ -403,7 +402,7 @@ BOOL WINAPI ImmProcessKey( HWND hwnd, HKL hkl, UINT vkey, LPARAM key_data, DWORD
     return KeUserModeCallback( NtUserImmProcessKey, &params, sizeof(params), &ret_ptr, &ret_len );
 }
 
-BOOL WINAPI ImmTranslateMessage( HWND hwnd, UINT msg, WPARAM wparam, LPARAM key_data )
+BOOL WINAPI DECLSPEC_HIDDEN ImmTranslateMessage( HWND hwnd, UINT msg, WPARAM wparam, LPARAM key_data )
 {
     struct imm_translate_message_params params =
         { .hwnd = hwnd, .msg = msg, .wparam = wparam, .key_data = key_data };

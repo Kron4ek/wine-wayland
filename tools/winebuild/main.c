@@ -26,7 +26,6 @@
 
 #include <assert.h>
 #include <stdio.h>
-#include <signal.h>
 #include <errno.h>
 #include <string.h>
 #include <stdarg.h>
@@ -174,7 +173,7 @@ static void set_target( const char *name )
     target_alias = xstrdup( name );
 
     if (!parse_target( name, &target )) fatal_error( "Unrecognized target '%s'\n", name );
-    if (target.cpu == CPU_ARM && is_pe()) thumb_mode = 1;
+    thumb_mode = target.cpu == CPU_ARM && is_pe();
     if (is_pe()) unwind_tables = 1;
 }
 
@@ -182,6 +181,7 @@ static void set_target( const char *name )
 static void cleanup(void)
 {
     if (output_file_name) unlink( output_file_name );
+    if (!save_temps) remove_temp_files();
 }
 
 /* clean things up when aborting on a signal */
@@ -340,7 +340,11 @@ static void set_exec_mode( enum exec_mode_values mode )
 /* get the default entry point for a given spec file */
 static const char *get_default_entry_point( const DLLSPEC *spec )
 {
-    if (spec->characteristics & IMAGE_FILE_DLL) return "DllMain";
+    if (spec->characteristics & IMAGE_FILE_DLL)
+    {
+        add_spec_extra_ld_symbol("DllMain");
+        return "__wine_spec_dll_entry";
+    }
     if (spec->subsystem == IMAGE_SUBSYSTEM_NATIVE) return "DriverEntry";
     if (spec->type == SPEC_WIN16)
     {
@@ -614,12 +618,7 @@ int main(int argc, char **argv)
     struct strarray files;
     DLLSPEC *spec = main_spec = alloc_dll_spec();
 
-#ifdef SIGHUP
-    signal( SIGHUP, exit_on_signal );
-#endif
-    signal( SIGTERM, exit_on_signal );
-    signal( SIGINT, exit_on_signal );
-
+    init_signals( exit_on_signal );
     target = init_argv0_target( argv[0] );
     if (target.platform == PLATFORM_CYGWIN) target.platform = PLATFORM_MINGW;
     if (is_pe()) unwind_tables = 1;
@@ -627,7 +626,6 @@ int main(int argc, char **argv)
     files = parse_options( argc, argv, short_options, long_options, 0, option_callback );
 
     atexit( cleanup );  /* make sure we remove the output file on exit */
-    if (!save_temps) atexit( cleanup_tmp_files );
 
     if (spec->file_name && !strchr( spec->file_name, '.' ))
         strcat( spec->file_name, exec_mode == MODE_EXE ? ".exe" : ".dll" );

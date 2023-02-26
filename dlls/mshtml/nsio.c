@@ -179,7 +179,7 @@ static nsresult return_wstr_nsacstr(nsACString *ret_str, const WCHAR *str, int l
     }
 
     lena = WideCharToMultiByte(CP_UTF8, 0, str, len, NULL, 0, NULL, NULL);
-    stra = heap_alloc(lena+1);
+    stra = malloc(lena + 1);
     if(!stra)
         return NS_ERROR_OUT_OF_MEMORY;
 
@@ -187,7 +187,7 @@ static nsresult return_wstr_nsacstr(nsACString *ret_str, const WCHAR *str, int l
     stra[lena] = 0;
 
     nsACString_SetData(ret_str, stra);
-    heap_free(stra);
+    free(stra);
     return NS_OK;
 }
 
@@ -284,6 +284,7 @@ HRESULT load_nsuri(HTMLOuterWindow *window, nsWineURI *uri, nsIInputStream *post
         nsChannelBSC *channelbsc, DWORD flags)
 {
     nsIWebNavigation *web_navigation;
+    nsDocShellInfoLoadType load_type;
     nsIDocShellLoadInfo *load_info;
     nsIDocShell *doc_shell;
     HTMLDocumentNode *doc;
@@ -308,7 +309,11 @@ HRESULT load_nsuri(HTMLOuterWindow *window, nsWineURI *uri, nsIInputStream *post
         return E_FAIL;
     }
 
-    nsres = nsIDocShellLoadInfo_SetLoadType(load_info, (flags & LOAD_FLAGS_BYPASS_CACHE) ? loadNormalBypassCache : loadNormal);
+    if(flags & LOAD_FLAGS_IS_REFRESH)
+        load_type = (flags & LOAD_FLAGS_BYPASS_CACHE) ? loadReloadBypassCache : loadReloadNormal;
+    else
+        load_type = (flags & LOAD_FLAGS_BYPASS_CACHE) ? loadNormalBypassCache : loadNormal;
+    nsres = nsIDocShellLoadInfo_SetLoadType(load_info, load_type);
     assert(nsres == NS_OK);
 
     if(post_stream) {
@@ -369,22 +374,22 @@ static nsresult get_channel_http_header(struct list *headers, const nsACString *
     char *data;
 
     nsACString_GetData(header_name_str, &header_namea);
-    header_name = heap_strdupAtoW(header_namea);
+    header_name = strdupAtoW(header_namea);
     if(!header_name)
         return NS_ERROR_UNEXPECTED;
 
     header = find_http_header(headers, header_name, lstrlenW(header_name));
-    heap_free(header_name);
+    free(header_name);
     if(!header)
         return NS_ERROR_NOT_AVAILABLE;
 
-    data = heap_strdupWtoA(header->data);
+    data = strdupWtoA(header->data);
     if(!data)
         return NS_ERROR_UNEXPECTED;
 
     TRACE("%s -> %s\n", debugstr_a(header_namea), debugstr_a(data));
     nsACString_SetData(_retval, data);
-    heap_free(data);
+    free(data);
     return NS_OK;
 }
 
@@ -399,23 +404,23 @@ HRESULT set_http_header(struct list *headers, const WCHAR *name, int name_len,
     if(header) {
         WCHAR *new_data;
 
-        new_data = heap_strndupW(value, value_len);
+        new_data = strndupW(value, value_len);
         if(!new_data)
             return E_OUTOFMEMORY;
 
-        heap_free(header->data);
+        free(header->data);
         header->data = new_data;
     }else {
-        header = heap_alloc(sizeof(http_header_t));
+        header = malloc(sizeof(http_header_t));
         if(!header)
             return E_OUTOFMEMORY;
 
-        header->header = heap_strndupW(name, name_len);
-        header->data = heap_strndupW(value, value_len);
+        header->header = strndupW(name, name_len);
+        header->data = strndupW(value, value_len);
         if(!header->header || !header->data) {
-            heap_free(header->header);
-            heap_free(header->data);
-            heap_free(header);
+            free(header->header);
+            free(header->data);
+            free(header);
             return E_OUTOFMEMORY;
         }
 
@@ -433,21 +438,21 @@ static nsresult set_channel_http_header(struct list *headers, const nsACString *
     HRESULT hres;
 
     nsACString_GetData(name_str, &namea);
-    name = heap_strdupAtoW(namea);
+    name = strdupAtoW(namea);
     if(!name)
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(value_str, &valuea);
-    value = heap_strdupAtoW(valuea);
+    value = strdupAtoW(valuea);
     if(!value) {
-        heap_free(name);
+        free(name);
         return NS_ERROR_UNEXPECTED;
     }
 
     hres = set_http_header(headers, name, lstrlenW(name), value, lstrlenW(value));
 
-    heap_free(name);
-    heap_free(value);
+    free(name);
+    free(value);
     return SUCCEEDED(hres) ? NS_OK : NS_ERROR_UNEXPECTED;
 }
 
@@ -459,13 +464,13 @@ static nsresult visit_http_headers(struct list *headers, nsIHttpHeaderVisitor *v
     nsresult nsres;
 
     LIST_FOR_EACH_ENTRY(iter, headers, http_header_t, entry) {
-        header = heap_strdupWtoA(iter->header);
+        header = strdupWtoA(iter->header);
         if(!header)
             return NS_ERROR_OUT_OF_MEMORY;
 
-        value = heap_strdupWtoA(iter->data);
+        value = strdupWtoA(iter->data);
         if(!value) {
-            heap_free(header);
+            free(header);
             return NS_ERROR_OUT_OF_MEMORY;
         }
 
@@ -474,8 +479,8 @@ static nsresult visit_http_headers(struct list *headers, nsIHttpHeaderVisitor *v
         nsres = nsIHttpHeaderVisitor_VisitHeader(visitor, &header_str, &value_str);
         nsACString_Finish(&header_str);
         nsACString_Finish(&value_str);
-        heap_free(header);
-        heap_free(value);
+        free(header);
+        free(value);
         if(NS_FAILED(nsres))
             break;
     }
@@ -489,9 +494,9 @@ static void free_http_headers(struct list *list)
 
     LIST_FOR_EACH_ENTRY_SAFE(iter, iter_next, list, http_header_t, entry) {
         list_remove(&iter->entry);
-        heap_free(iter->header);
-        heap_free(iter->data);
-        heap_free(iter);
+        free(iter->header);
+        free(iter->data);
+        free(iter);
     }
 }
 
@@ -574,9 +579,9 @@ static nsrefcnt NSAPI nsChannel_Release(nsIHttpChannel *iface)
         free_http_headers(&This->response_headers);
         free_http_headers(&This->request_headers);
 
-        heap_free(This->content_type);
-        heap_free(This->charset);
-        heap_free(This);
+        free(This->content_type);
+        free(This->charset);
+        free(This);
     }
 
     return ref;
@@ -828,8 +833,8 @@ static nsresult NSAPI nsChannel_SetContentType(nsIHttpChannel *iface,
     TRACE("(%p)->(%s)\n", This, debugstr_nsacstr(aContentType));
 
     nsACString_GetData(aContentType, &content_type);
-    heap_free(This->content_type);
-    This->content_type = heap_strdupA(content_type);
+    free(This->content_type);
+    This->content_type = strdup(content_type);
 
     return NS_OK;
 }
@@ -860,11 +865,11 @@ static nsresult NSAPI nsChannel_SetContentCharset(nsIHttpChannel *iface,
     TRACE("(%p)->(%s)\n", This, debugstr_nsacstr(aContentCharset));
 
     nsACString_GetData(aContentCharset, &data);
-    charset = heap_strdupA(data);
+    charset = strdup(data);
     if(!charset)
         return NS_ERROR_OUT_OF_MEMORY;
 
-    heap_free(This->charset);
+    free(This->charset);
     This->charset = charset;
     return NS_OK;
 }
@@ -905,7 +910,7 @@ static nsresult NSAPI nsChannel_Open2(nsIHttpChannel *iface, nsIInputStream **_r
     return NS_ERROR_NOT_IMPLEMENTED;
 }
 
-static HTMLOuterWindow *get_channel_window(nsChannel *This)
+static HTMLOuterWindow *get_channel_window(nsChannel *This, UINT32 *load_type)
 {
     nsIWebProgress *web_progress = NULL;
     mozIDOMWindowProxy *mozwindow;
@@ -944,6 +949,8 @@ static HTMLOuterWindow *get_channel_window(nsChannel *This)
         return NULL;
     }
 
+    nsIWebProgress_GetLoadType(web_progress, load_type);
+
     nsres = nsIWebProgress_GetDOMWindow(web_progress, &mozwindow);
     nsIWebProgress_Release(web_progress);
     if(NS_FAILED(nsres) || !mozwindow) {
@@ -979,11 +986,11 @@ static void start_binding_task_destr(task_t *_task)
     start_binding_task_t *task = (start_binding_task_t*)_task;
 
     IBindStatusCallback_Release(&task->bscallback->bsc.IBindStatusCallback_iface);
-    heap_free(task);
+    free(task);
 }
 
-static nsresult async_open(nsChannel *This, HTMLOuterWindow *window, BOOL is_doc_channel, nsIStreamListener *listener,
-        nsISupports *context)
+static nsresult async_open(nsChannel *This, HTMLOuterWindow *window, BOOL is_doc_channel, UINT32 load_type,
+        nsIStreamListener *listener, nsISupports *context)
 {
     nsChannelBSC *bscallback;
     IMoniker *mon = NULL;
@@ -1008,14 +1015,14 @@ static nsresult async_open(nsChannel *This, HTMLOuterWindow *window, BOOL is_doc
     if(is_doc_channel) {
         hres = create_pending_window(window, bscallback);
         if(SUCCEEDED(hres))
-            async_start_doc_binding(window, window->pending_window);
+            async_start_doc_binding(window, window->pending_window, (load_type & LOAD_CMD_RELOAD) ? BINDING_REFRESH : BINDING_NAVIGATED);
         IBindStatusCallback_Release(&bscallback->bsc.IBindStatusCallback_iface);
         if(FAILED(hres))
             return NS_ERROR_UNEXPECTED;
     }else {
         start_binding_task_t *task;
 
-        task = heap_alloc(sizeof(start_binding_task_t));
+        task = malloc(sizeof(start_binding_task_t));
         if(!task) {
             IBindStatusCallback_Release(&bscallback->bsc.IBindStatusCallback_iface);
             return NS_ERROR_OUT_OF_MEMORY;
@@ -1035,6 +1042,7 @@ static nsresult NSAPI nsChannel_AsyncOpen(nsIHttpChannel *iface, nsIStreamListen
                                           nsISupports *aContext)
 {
     nsChannel *This = impl_from_nsIHttpChannel(iface);
+    UINT32 load_type = LOAD_CMD_NORMAL;
     HTMLOuterWindow *window = NULL;
     BOOL is_document_channel;
     BOOL cancel = FALSE;
@@ -1058,7 +1066,7 @@ static nsresult NSAPI nsChannel_AsyncOpen(nsIHttpChannel *iface, nsIStreamListen
         }
     }
 
-    window = get_channel_window(This);
+    window = get_channel_window(This, &load_type);
     if(!window) {
         ERR("window = NULL\n");
         return NS_ERROR_UNEXPECTED;
@@ -1081,14 +1089,14 @@ static nsresult NSAPI nsChannel_AsyncOpen(nsIHttpChannel *iface, nsIStreamListen
                     nsres = NS_BINDING_ABORTED;
                 }
             }else if(window->browser->doc->mime) {
-                heap_free(This->content_type);
-                This->content_type = heap_strdupWtoA(window->browser->doc->mime);
+                free(This->content_type);
+                This->content_type = strdupWtoA(window->browser->doc->mime);
             }
         }
     }
 
     if(!cancel)
-        nsres = async_open(This, window, is_document_channel, aListener, aContext);
+        nsres = async_open(This, window, is_document_channel, load_type, aListener, aContext);
 
     if(NS_SUCCEEDED(nsres) && This->load_group) {
         nsres = nsILoadGroup_AddRequest(This->load_group, (nsIRequest*)&This->nsIHttpChannel_iface,
@@ -1675,12 +1683,12 @@ static nsresult NSAPI nsUploadChannel_SetUploadStream(nsIUploadChannel *iface,
         if(*content_type) {
             WCHAR *ct;
 
-            ct = heap_strdupAtoW(content_type);
+            ct = strdupAtoW(content_type);
             if(!ct)
                 return NS_ERROR_UNEXPECTED;
 
             set_http_header(&This->request_headers, content_typeW, ARRAY_SIZE(content_typeW), ct, lstrlenW(ct));
-            heap_free(ct);
+            free(ct);
             This->post_data_contains_headers = FALSE;
         }
     }
@@ -2296,14 +2304,14 @@ static nsresult get_uri_string(nsWineURI *This, Uri_PROPERTY prop, nsACString *r
         return NS_ERROR_UNEXPECTED;
     }
 
-    vala = heap_strdupWtoU(hres == S_OK ? val : NULL);
+    vala = strdupWtoU(hres == S_OK ? val : NULL);
     SysFreeString(val);
     if(hres == S_OK && !vala)
         return NS_ERROR_OUT_OF_MEMORY;
 
     TRACE("ret %s\n", debugstr_a(vala));
     nsACString_SetData(ret, vala);
-    heap_free(vala);
+    free(vala);
     return NS_OK;
 }
 
@@ -2372,7 +2380,7 @@ static nsrefcnt NSAPI nsURI_Release(nsIFileURL *iface)
             IUri_Release(This->uri);
         if(This->uri_builder)
             IUriBuilder_Release(This->uri_builder);
-        heap_free(This);
+        free(This);
     }
 
     return ref;
@@ -2401,12 +2409,12 @@ static nsresult NSAPI nsURI_SetSpec(nsIFileURL *iface, const nsACString *aSpec)
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aSpec, &speca);
-    spec = heap_strdupUtoW(speca);
+    spec = strdupUtoW(speca);
     if(!spec)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = create_uri(spec, 0, &uri);
-    heap_free(spec);
+    free(spec);
     if(FAILED(hres)) {
         WARN("create_uri failed: %08lx\n", hres);
         return NS_ERROR_FAILURE;
@@ -2501,12 +2509,12 @@ static nsresult NSAPI nsURI_SetScheme(nsIFileURL *iface, const nsACString *aSche
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aScheme, &schemea);
-    scheme = heap_strdupUtoW(schemea);
+    scheme = strdupUtoW(schemea);
     if(!scheme)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = IUriBuilder_SetSchemeName(This->uri_builder, scheme);
-    heap_free(scheme);
+    free(scheme);
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
@@ -2561,7 +2569,7 @@ static nsresult NSAPI nsURI_SetUserPass(nsIFileURL *iface, const nsACString *aUs
     if(*user_pass) {
         WCHAR *ptr;
 
-        buf = heap_strdupUtoW(user_pass);
+        buf = strdupUtoW(user_pass);
         if(!buf)
             return NS_ERROR_OUT_OF_MEMORY;
 
@@ -2582,7 +2590,7 @@ static nsresult NSAPI nsURI_SetUserPass(nsIFileURL *iface, const nsACString *aUs
     if(SUCCEEDED(hres))
         hres = IUriBuilder_SetPassword(This->uri_builder, pass);
 
-    heap_free(buf);
+    free(buf);
     return SUCCEEDED(hres) ? NS_OK : NS_ERROR_FAILURE;
 }
 
@@ -2608,12 +2616,12 @@ static nsresult NSAPI nsURI_SetUsername(nsIFileURL *iface, const nsACString *aUs
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aUsername, &usera);
-    user = heap_strdupUtoW(usera);
+    user = strdupUtoW(usera);
     if(!user)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = IUriBuilder_SetUserName(This->uri_builder, user);
-    heap_free(user);
+    free(user);
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
@@ -2642,12 +2650,12 @@ static nsresult NSAPI nsURI_SetPassword(nsIFileURL *iface, const nsACString *aPa
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aPassword, &passa);
-    pass = heap_strdupUtoW(passa);
+    pass = strdupUtoW(passa);
     if(!pass)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = IUriBuilder_SetPassword(This->uri_builder, pass);
-    heap_free(pass);
+    free(pass);
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
@@ -2678,14 +2686,14 @@ static nsresult NSAPI nsURI_GetHostPort(nsIFileURL *iface, nsACString *aHostPort
         if(!ptr)
             ptr = val;
     }
-    vala = heap_strdupWtoU(ptr);
+    vala = strdupWtoU(ptr);
     SysFreeString(val);
     if(hres == S_OK && !vala)
         return NS_ERROR_OUT_OF_MEMORY;
 
     TRACE("ret %s\n", debugstr_a(vala));
     nsACString_SetData(aHostPort, vala);
-    heap_free(vala);
+    free(vala);
     return NS_OK;
 }
 
@@ -2721,12 +2729,12 @@ static nsresult NSAPI nsURI_SetHost(nsIFileURL *iface, const nsACString *aHost)
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aHost, &hosta);
-    host = heap_strdupUtoW(hosta);
+    host = strdupUtoW(hosta);
     if(!host)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = IUriBuilder_SetHost(This->uri_builder, host);
-    heap_free(host);
+    free(host);
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
@@ -2790,12 +2798,12 @@ static nsresult NSAPI nsURI_SetPath(nsIFileURL *iface, const nsACString *aPath)
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aPath, &patha);
-    path = heap_strdupUtoW(patha);
+    path = strdupUtoW(patha);
     if(!path)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = IUriBuilder_SetPath(This->uri_builder, path);
-    heap_free(path);
+    free(path);
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
@@ -2900,12 +2908,12 @@ static nsresult NSAPI nsURI_Resolve(nsIFileURL *iface, const nsACString *aRelati
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aRelativePath, &patha);
-    path = heap_strdupUtoW(patha);
+    path = strdupUtoW(patha);
     if(!path)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = combine_url(This->uri, path, &new_uri);
-    heap_free(path);
+    free(path);
     if(FAILED(hres))
         return NS_ERROR_FAILURE;
 
@@ -2914,14 +2922,14 @@ static nsresult NSAPI nsURI_Resolve(nsIFileURL *iface, const nsACString *aRelati
     if(FAILED(hres))
         return NS_ERROR_FAILURE;
 
-    reta = heap_strdupWtoU(ret);
+    reta = strdupWtoU(ret);
     SysFreeString(ret);
     if(!reta)
         return NS_ERROR_OUT_OF_MEMORY;
 
     TRACE("returning %s\n", debugstr_a(reta));
     nsACString_SetData(_retval, reta);
-    heap_free(reta);
+    free(reta);
     return NS_OK;
 }
 
@@ -2978,13 +2986,13 @@ static nsresult NSAPI nsURL_GetRef(nsIFileURL *iface, nsACString *aRef)
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
-    refa = heap_strdupWtoU(ref);
+    refa = strdupWtoU(ref);
     SysFreeString(ref);
     if(ref && !refa)
         return NS_ERROR_OUT_OF_MEMORY;
 
     nsACString_SetData(aRef, refa && *refa == '#' ? refa+1 : refa);
-    heap_free(refa);
+    free(refa);
     return NS_OK;
 }
 
@@ -3001,12 +3009,12 @@ static nsresult NSAPI nsURL_SetRef(nsIFileURL *iface, const nsACString *aRef)
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aRef, &refa);
-    ref = heap_strdupUtoW(refa);
+    ref = strdupUtoW(refa);
     if(!ref)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = IUriBuilder_SetFragment(This->uri_builder, ref);
-    heap_free(ref);
+    free(ref);
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
@@ -3154,12 +3162,12 @@ static nsresult NSAPI nsURL_SetQuery(nsIFileURL *iface, const nsACString *aQuery
         return NS_ERROR_UNEXPECTED;
 
     nsACString_GetData(aQuery, &querya);
-    query = heap_strdupUtoW(querya);
+    query = strdupUtoW(querya);
     if(!query)
         return NS_ERROR_OUT_OF_MEMORY;
 
     hres = IUriBuilder_SetQuery(This->uri_builder, query);
-    heap_free(query);
+    free(query);
     if(FAILED(hres))
         return NS_ERROR_UNEXPECTED;
 
@@ -3460,7 +3468,7 @@ static nsresult create_nsuri(IUri *iuri, nsWineURI **_retval)
     nsWineURI *ret;
     HRESULT hres;
 
-    ret = heap_alloc_zero(sizeof(nsWineURI));
+    ret = calloc(1, sizeof(nsWineURI));
     if(!ret)
         return NS_ERROR_OUT_OF_MEMORY;
 
@@ -3495,7 +3503,7 @@ static nsresult create_nschannel(nsWineURI *uri, nsChannel **ret)
     if(!ensure_uri(uri))
         return NS_ERROR_UNEXPECTED;
 
-    channel = heap_alloc_zero(sizeof(nsChannel));
+    channel = calloc(1, sizeof(nsChannel));
     if(!channel)
         return NS_ERROR_OUT_OF_MEMORY;
 
@@ -3626,7 +3634,7 @@ static nsrefcnt NSAPI nsProtocolHandler_Release(nsIProtocolHandler *iface)
     if(!ref) {
         if(This->nshandler)
             nsIProtocolHandler_Release(This->nshandler);
-        heap_free(This);
+        free(This);
     }
 
     return ref;
@@ -3806,7 +3814,7 @@ static nsresult NSAPI nsIOServiceHook_GetProtocolHandler(nsIIOServiceHook *iface
 
     nsIExternalProtocolHandler_Release(nsexthandler);
 
-    ret = heap_alloc(sizeof(nsProtocolHandler));
+    ret = malloc(sizeof(nsProtocolHandler));
     if(!ret)
         return NS_ERROR_OUT_OF_MEMORY;
 

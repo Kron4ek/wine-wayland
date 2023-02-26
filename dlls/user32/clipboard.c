@@ -157,11 +157,13 @@ static HANDLE marshal_data( UINT format, HANDLE handle, size_t *ret_size )
         }
     case CF_UNICODETEXT:
         {
-            WCHAR *ptr;
+            char *ptr;
             if (!(size = GlobalSize( handle ))) return 0;
             if ((data_size_t)size != size) return 0;
+            if (size < sizeof(WCHAR)) return 0;
             if (!(ptr = GlobalLock( handle ))) return 0;
-            ptr[(size + 1) / sizeof(WCHAR) - 1] = 0;  /* enforce null-termination */
+            /* enforce nul-termination the Windows way: ignoring alignment */
+            *((WCHAR *)(ptr + size) - 1) = 0;
             GlobalUnlock( handle );
             *ret_size = size;
             return handle;
@@ -189,7 +191,7 @@ static HANDLE marshal_data( UINT format, HANDLE handle, size_t *ret_size )
 /* rebuild the target handle from the data received in GetClipboardData */
 static HANDLE unmarshal_data( UINT format, void *data, data_size_t size )
 {
-    HANDLE handle = GlobalReAlloc( data, size, 0 );  /* release unused space */
+    HANDLE handle = GlobalReAlloc( data, size, GMEM_MOVEABLE );  /* release unused space */
 
     switch (format)
     {
@@ -349,7 +351,7 @@ static HANDLE render_synthesized_bitmap( HANDLE data, UINT from )
 {
     BITMAPINFO *bmi;
     HANDLE ret = 0;
-    HDC hdc = GetDC( 0 );
+    HDC hdc = NtUserGetDC( 0 );
 
     if ((bmi = GlobalLock( data )))
     {
@@ -369,7 +371,7 @@ static HANDLE render_synthesized_dib( HANDLE data, UINT format, UINT from )
     BITMAPINFO *bmi, *src;
     DWORD src_size, header_size, bits_size;
     HANDLE ret = 0;
-    HDC hdc = GetDC( 0 );
+    HDC hdc = NtUserGetDC( 0 );
 
     if (from == CF_BITMAP)
     {
@@ -428,7 +430,7 @@ static HANDLE render_synthesized_metafile( HANDLE data )
     void *bits;
     METAFILEPICT *pict;
     ENHMETAHEADER header;
-    HDC hdc = GetDC( 0 );
+    HDC hdc = NtUserGetDC( 0 );
 
     size = GetWinMetaFileBits( data, 0, NULL, MM_ISOTROPIC, hdc );
     if ((bits = HeapAlloc( GetProcessHeap(), 0, size )))

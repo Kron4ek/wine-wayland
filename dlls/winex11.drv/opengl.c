@@ -294,7 +294,7 @@ static BOOL glxRequireVersion(int requiredVersion);
 static void dump_PIXELFORMATDESCRIPTOR(const PIXELFORMATDESCRIPTOR *ppfd) {
   TRACE( "size %u version %u flags %u type %u color %u %u,%u,%u,%u "
          "accum %u depth %u stencil %u aux %u ",
-         ppfd->nSize, ppfd->nVersion, ppfd->dwFlags, ppfd->iPixelType,
+         ppfd->nSize, ppfd->nVersion, (int)ppfd->dwFlags, ppfd->iPixelType,
          ppfd->cColorBits, ppfd->cRedBits, ppfd->cGreenBits, ppfd->cBlueBits, ppfd->cAlphaBits,
          ppfd->cAccumBits, ppfd->cDepthBits, ppfd->cStencilBits, ppfd->cAuxBuffers );
 #define TEST_AND_DUMP(t,tv) if ((t) & (tv)) TRACE(#tv " ")
@@ -1350,7 +1350,11 @@ static struct gl_drawable *create_gl_drawable( HWND hwnd, const struct wgl_pixel
 #endif
     else
     {
-        WARN("XComposite is not available, using GLXPixmap hack\n");
+        static unsigned int once;
+
+        if (!once++)
+            ERR_(winediag)("XComposite is not available, using GLXPixmap hack.\n");
+        WARN("XComposite is not available, using GLXPixmap hack.\n");
 
         gl->type = DC_GL_PIXMAP_WIN;
         gl->pixmap = XCreatePixmap( gdi_display, root_window, width, height, visual->depth );
@@ -1659,8 +1663,8 @@ static int describe_pixel_format( int iPixelFormat, PIXELFORMATDESCRIPTOR *ppfd,
  *
  * Get the pixel-format descriptor associated to the given id
  */
-static int WINAPI glxdrv_wglDescribePixelFormat( HDC hdc, int iPixelFormat,
-                                                 UINT nBytes, PIXELFORMATDESCRIPTOR *ppfd)
+static int glxdrv_wglDescribePixelFormat( HDC hdc, int iPixelFormat,
+                                          UINT nBytes, PIXELFORMATDESCRIPTOR *ppfd)
 {
   TRACE("(%p,%d,%d,%p)\n", hdc, iPixelFormat, nBytes, ppfd);
 
@@ -1679,7 +1683,7 @@ static int WINAPI glxdrv_wglDescribePixelFormat( HDC hdc, int iPixelFormat,
 /***********************************************************************
  *		glxdrv_wglGetPixelFormat
  */
-static int WINAPI glxdrv_wglGetPixelFormat( HDC hdc )
+static int glxdrv_wglGetPixelFormat( HDC hdc )
 {
     struct gl_drawable *gl;
     int ret = 0;
@@ -1699,7 +1703,7 @@ static int WINAPI glxdrv_wglGetPixelFormat( HDC hdc )
 /***********************************************************************
  *		glxdrv_wglSetPixelFormat
  */
-static BOOL WINAPI glxdrv_wglSetPixelFormat( HDC hdc, int iPixelFormat, const PIXELFORMATDESCRIPTOR *ppfd )
+static BOOL glxdrv_wglSetPixelFormat( HDC hdc, int iPixelFormat, const PIXELFORMATDESCRIPTOR *ppfd )
 {
     return set_pixel_format(hdc, iPixelFormat, FALSE);
 }
@@ -1707,7 +1711,7 @@ static BOOL WINAPI glxdrv_wglSetPixelFormat( HDC hdc, int iPixelFormat, const PI
 /***********************************************************************
  *		glxdrv_wglCopyContext
  */
-static BOOL WINAPI glxdrv_wglCopyContext(struct wgl_context *src, struct wgl_context *dst, UINT mask)
+static BOOL glxdrv_wglCopyContext(struct wgl_context *src, struct wgl_context *dst, UINT mask)
 {
     TRACE("%p -> %p mask %#x\n", src, dst, mask);
 
@@ -1732,7 +1736,7 @@ static BOOL WINAPI glxdrv_wglCopyContext(struct wgl_context *src, struct wgl_con
 /***********************************************************************
  *		glxdrv_wglCreateContext
  */
-static struct wgl_context * WINAPI glxdrv_wglCreateContext( HDC hdc )
+static struct wgl_context *glxdrv_wglCreateContext( HDC hdc )
 {
     struct wgl_context *ret;
     struct gl_drawable *gl;
@@ -1760,7 +1764,7 @@ static struct wgl_context * WINAPI glxdrv_wglCreateContext( HDC hdc )
 /***********************************************************************
  *		glxdrv_wglDeleteContext
  */
-static BOOL WINAPI glxdrv_wglDeleteContext(struct wgl_context *ctx)
+static BOOL glxdrv_wglDeleteContext(struct wgl_context *ctx)
 {
     struct wgl_pbuffer *pb;
 
@@ -1789,7 +1793,7 @@ static BOOL WINAPI glxdrv_wglDeleteContext(struct wgl_context *ctx)
 /***********************************************************************
  *		glxdrv_wglGetProcAddress
  */
-static PROC WINAPI glxdrv_wglGetProcAddress(LPCSTR lpszProc)
+static PROC glxdrv_wglGetProcAddress(LPCSTR lpszProc)
 {
     if (!strncmp(lpszProc, "wgl", 3)) return NULL;
     return pglXGetProcAddressARB((const GLubyte*)lpszProc);
@@ -1814,7 +1818,7 @@ static void set_context_drawables( struct wgl_context *ctx, struct gl_drawable *
 /***********************************************************************
  *		glxdrv_wglMakeCurrent
  */
-static BOOL WINAPI glxdrv_wglMakeCurrent(HDC hdc, struct wgl_context *ctx)
+static BOOL glxdrv_wglMakeCurrent(HDC hdc, struct wgl_context *ctx)
 {
     BOOL ret = FALSE;
     struct gl_drawable *gl;
@@ -1911,7 +1915,7 @@ done:
 /***********************************************************************
  *		glxdrv_wglShareLists
  */
-static BOOL WINAPI glxdrv_wglShareLists(struct wgl_context *org, struct wgl_context *dest)
+static BOOL glxdrv_wglShareLists(struct wgl_context *org, struct wgl_context *dest)
 {
     TRACE("(%p, %p)\n", org, dest);
 
@@ -1927,14 +1931,14 @@ static BOOL WINAPI glxdrv_wglShareLists(struct wgl_context *org, struct wgl_cont
      * current or when it hasn't shared display lists before.
      */
 
-    if((org->has_been_current && dest->has_been_current) || dest->has_been_current)
+    if(dest->has_been_current)
     {
-        ERR("Could not share display lists, one of the contexts has been current already !\n");
+        ERR("Could not share display lists because the destination context has already been current\n");
         return FALSE;
     }
     else if(dest->sharing)
     {
-        ERR("Could not share display lists because hglrc2 has already shared lists before\n");
+        ERR("Could not share display lists because the destination context has already shared lists\n");
         return FALSE;
     }
     else
@@ -2634,6 +2638,8 @@ static BOOL X11DRV_wglChoosePixelFormatARB( HDC hdc, const int *piAttribIList, c
 
         if (i == nb_pixel_formats)
             continue;
+        if ((pixel_formats[i].dwFlags & dwFlags) != dwFlags)
+            continue;
 
         format = &formats[format_count];
         format->format = i + 1;
@@ -3319,7 +3325,7 @@ static void X11DRV_WineGL_LoadExtensions(void)
  *
  * Swap the buffers of this DC
  */
-static BOOL WINAPI glxdrv_wglSwapBuffers( HDC hdc )
+static BOOL glxdrv_wglSwapBuffers( HDC hdc )
 {
     struct x11drv_escape_flush_gl_drawable escape;
     struct gl_drawable *gl;

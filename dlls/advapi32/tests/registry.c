@@ -1672,7 +1672,8 @@ static void test_reg_load_app_key(void)
     RegCloseKey(appkey);
 
     wait_file_available(hivefilepath);
-    ok(DeleteFileA(hivefilepath), "couldn't delete hive file %ld\n", GetLastError());
+    ret = DeleteFileA(hivefilepath);
+    ok(ret, "couldn't delete hive file %ld\n", GetLastError());
 }
 
 /* tests that show that RegConnectRegistry and
@@ -2721,7 +2722,7 @@ static void test_redirection(void)
     check_key_value( key, "Winetest", 0, 64 );
     check_key_value( key, "Winetest", KEY_WOW64_64KEY, 64 );
     dw = get_key_value( key, "Winetest", KEY_WOW64_32KEY );
-    todo_wine ok( dw == 32, "wrong value %lu\n", dw );
+    todo_wine_if (ptr_size == 64) ok( dw == 32, "wrong value %lu\n", dw );
     RegCloseKey( key );
 
     err = RegCreateKeyExA( HKEY_LOCAL_MACHINE, "Software\\Wine", 0, NULL, 0,

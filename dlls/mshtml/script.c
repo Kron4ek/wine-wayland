@@ -91,12 +91,12 @@ struct ScriptHost {
 
 static ScriptHost *get_elem_script_host(HTMLInnerWindow*,HTMLScriptElement*);
 
-static BOOL set_script_prop(ScriptHost *script_host, DWORD property, VARIANT *val)
+static BOOL set_script_prop(IActiveScript *script, DWORD property, VARIANT *val)
 {
     IActiveScriptProperty *script_prop;
     HRESULT hres;
 
-    hres = IActiveScript_QueryInterface(script_host->script, &IID_IActiveScriptProperty,
+    hres = IActiveScript_QueryInterface(script, &IID_IActiveScriptProperty,
             (void**)&script_prop);
     if(FAILED(hres)) {
         WARN("Could not get IActiveScriptProperty iface: %08lx\n", hres);
@@ -113,7 +113,7 @@ static BOOL set_script_prop(ScriptHost *script_host, DWORD property, VARIANT *va
     return TRUE;
 }
 
-static BOOL init_script_engine(ScriptHost *script_host)
+static BOOL init_script_engine(ScriptHost *script_host, IActiveScript *script)
 {
     compat_mode_t compat_mode;
     IObjectSafety *safety;
@@ -122,13 +122,13 @@ static BOOL init_script_engine(ScriptHost *script_host)
     VARIANT var;
     HRESULT hres;
 
-    hres = IActiveScript_QueryInterface(script_host->script, &IID_IActiveScriptParse, (void**)&script_host->parse);
+    hres = IActiveScript_QueryInterface(script, &IID_IActiveScriptParse, (void**)&script_host->parse);
     if(FAILED(hres)) {
         WARN("Could not get IActiveScriptParse: %08lx\n", hres);
         return FALSE;
     }
 
-    hres = IActiveScript_QueryInterface(script_host->script, &IID_IObjectSafety, (void**)&safety);
+    hres = IActiveScript_QueryInterface(script, &IID_IObjectSafety, (void**)&safety);
     if(FAILED(hres)) {
         FIXME("Could not get IObjectSafety: %08lx\n", hres);
         return FALSE;
@@ -162,16 +162,16 @@ static BOOL init_script_engine(ScriptHost *script_host)
     }
     V_VT(&var) = VT_I4;
     V_I4(&var) = script_mode;
-    if(!set_script_prop(script_host, SCRIPTPROP_INVOKEVERSIONING, &var) && (script_mode & SCRIPTLANGUAGEVERSION_HTML)) {
+    if(!set_script_prop(script, SCRIPTPROP_INVOKEVERSIONING, &var) && (script_mode & SCRIPTLANGUAGEVERSION_HTML)) {
         /* If this failed, we're most likely using native jscript. */
         WARN("Failed to set script mode to HTML version.\n");
         V_I4(&var) = compat_mode < COMPAT_MODE_IE8 ? SCRIPTLANGUAGEVERSION_5_7 : SCRIPTLANGUAGEVERSION_5_8;
-        set_script_prop(script_host, SCRIPTPROP_INVOKEVERSIONING, &var);
+        set_script_prop(script, SCRIPTPROP_INVOKEVERSIONING, &var);
     }
 
     V_VT(&var) = VT_BOOL;
     V_BOOL(&var) = VARIANT_TRUE;
-    set_script_prop(script_host, SCRIPTPROP_HACK_TRIDENTEVENTSINK, &var);
+    set_script_prop(script, SCRIPTPROP_HACK_TRIDENTEVENTSINK, &var);
 
     hres = IActiveScriptParse_InitNew(script_host->parse);
     if(FAILED(hres)) {
@@ -179,36 +179,60 @@ static BOOL init_script_engine(ScriptHost *script_host)
         return FALSE;
     }
 
-    hres = IActiveScript_SetScriptSite(script_host->script, &script_host->IActiveScriptSite_iface);
+    hres = IActiveScript_SetScriptSite(script, &script_host->IActiveScriptSite_iface);
     if(FAILED(hres)) {
         WARN("SetScriptSite failed: %08lx\n", hres);
-        IActiveScript_Close(script_host->script);
+        IActiveScript_Close(script);
         return FALSE;
     }
 
-    hres = IActiveScript_GetScriptState(script_host->script, &state);
+    hres = IActiveScript_GetScriptState(script, &state);
     if(FAILED(hres))
         WARN("GetScriptState failed: %08lx\n", hres);
     else if(state != SCRIPTSTATE_INITIALIZED)
         FIXME("state = %x\n", state);
 
-    hres = IActiveScript_SetScriptState(script_host->script, SCRIPTSTATE_STARTED);
+    hres = IActiveScript_SetScriptState(script, SCRIPTSTATE_STARTED);
     if(FAILED(hres)) {
         WARN("Starting script failed: %08lx\n", hres);
         return FALSE;
     }
 
-    hres = IActiveScript_AddNamedItem(script_host->script, L"window",
+    hres = IActiveScript_AddNamedItem(script, L"window",
             SCRIPTITEM_ISVISIBLE|SCRIPTITEM_ISSOURCE|SCRIPTITEM_GLOBALMEMBERS);
     if(SUCCEEDED(hres)) {
+        ScriptHost *first_host;
+
         V_VT(&var) = VT_BOOL;
         V_BOOL(&var) = VARIANT_TRUE;
-        set_script_prop(script_host, SCRIPTPROP_ABBREVIATE_GLOBALNAME_RESOLUTION, &var);
+
+        LIST_FOR_EACH_ENTRY(first_host, &script_host->window->script_hosts, ScriptHost, entry) {
+            if(first_host->script) {
+                V_BOOL(&var) = VARIANT_FALSE;
+                break;
+            }
+        }
+        set_script_prop(script, SCRIPTPROP_ABBREVIATE_GLOBALNAME_RESOLUTION, &var);
+
+        /* if this was second engine initialized, also set it to first engine, since it used to be TRUE */
+        if(!V_BOOL(&var)) {
+            struct list *iter = &first_host->entry;
+            BOOL is_second_init = TRUE;
+
+            while((iter = list_next(&script_host->window->script_hosts, iter))) {
+                if(LIST_ENTRY(iter, ScriptHost, entry)->script) {
+                    is_second_init = FALSE;
+                    break;
+                }
+            }
+            if(is_second_init)
+                set_script_prop(first_host->script, SCRIPTPROP_ABBREVIATE_GLOBALNAME_RESOLUTION, &var);
+        }
     }else {
        WARN("AddNamedItem failed: %08lx\n", hres);
     }
 
-    hres = IActiveScript_QueryInterface(script_host->script, &IID_IActiveScriptParseProcedure2,
+    hres = IActiveScript_QueryInterface(script, &IID_IActiveScriptParseProcedure2,
                                         (void**)&script_host->parse_proc);
     if(FAILED(hres)) {
         /* FIXME: QI for IActiveScriptParseProcedure */
@@ -324,7 +348,7 @@ static ULONG WINAPI ActiveScriptSite_Release(IActiveScriptSite *iface)
         release_script_engine(This);
         if(This->window)
             list_remove(&This->entry);
-        heap_free(This);
+        free(This);
     }
 
     return ref;
@@ -690,10 +714,11 @@ static const IServiceProviderVtbl ASServiceProviderVtbl = {
 
 static ScriptHost *create_script_host(HTMLInnerWindow *window, const GUID *guid)
 {
+    IActiveScript *script;
     ScriptHost *ret;
     HRESULT hres;
 
-    ret = heap_alloc_zero(sizeof(*ret));
+    ret = calloc(1, sizeof(*ret));
     if(!ret)
         return NULL;
 
@@ -711,11 +736,15 @@ static ScriptHost *create_script_host(HTMLInnerWindow *window, const GUID *guid)
     list_add_tail(&window->script_hosts, &ret->entry);
 
     hres = CoCreateInstance(&ret->guid, NULL, CLSCTX_INPROC_SERVER|CLSCTX_INPROC_HANDLER,
-            &IID_IActiveScript, (void**)&ret->script);
+            &IID_IActiveScript, (void**)&script);
     if(FAILED(hres))
         WARN("Could not load script engine: %08lx\n", hres);
-    else if(!init_script_engine(ret))
-        release_script_engine(ret);
+    else {
+        BOOL succeeded = init_script_engine(ret, script);
+        ret->script = script;
+        if(!succeeded)
+            release_script_engine(ret);
+    }
 
     return ret;
 }
@@ -782,7 +811,7 @@ static void set_script_elem_readystate(HTMLScriptElement *script_elem, READYSTAT
             if(script_elem->pending_readystatechange_event)
                 return;
 
-            task = heap_alloc(sizeof(*task));
+            task = malloc(sizeof(*task));
             if(!task)
                 return;
 
@@ -838,7 +867,7 @@ static HRESULT get_binding_text(ScriptBSC *bsc, WCHAR **ret)
     WCHAR *text;
 
     if(!bsc->bsc.read) {
-        text = heap_alloc(sizeof(WCHAR));
+        text = malloc(sizeof(WCHAR));
         if(!text)
             return E_OUTOFMEMORY;
         *text = 0;
@@ -853,7 +882,7 @@ static HRESULT get_binding_text(ScriptBSC *bsc, WCHAR **ret)
             return E_FAIL;
         }
 
-        text = heap_alloc(bsc->bsc.read+sizeof(WCHAR));
+        text = malloc(bsc->bsc.read + sizeof(WCHAR));
         if(!text)
             return E_OUTOFMEMORY;
 
@@ -869,7 +898,7 @@ static HRESULT get_binding_text(ScriptBSC *bsc, WCHAR **ret)
         DWORD len;
 
         len = MultiByteToWideChar(cp, 0, bsc->buf, bsc->bsc.read, NULL, 0);
-        text = heap_alloc((len+1)*sizeof(WCHAR));
+        text = malloc((len + 1) * sizeof(WCHAR));
         if(!text)
             return E_OUTOFMEMORY;
 
@@ -906,7 +935,7 @@ static void script_file_available(ScriptBSC *bsc)
 
         TRACE("Adding to queue\n");
 
-        queue = heap_alloc(sizeof(*queue));
+        queue = malloc(sizeof(*queue));
         if(!queue)
             return;
 
@@ -956,8 +985,8 @@ static void ScriptBSC_destroy(BSCallback *bsc)
     if(This->load_group)
         nsILoadGroup_Release(This->load_group);
 
-    heap_free(This->buf);
-    heap_free(This);
+    free(This->buf);
+    free(This);
 }
 
 static HRESULT ScriptBSC_init_bindinfo(BSCallback *bsc)
@@ -1006,7 +1035,7 @@ static HRESULT ScriptBSC_stop_binding(BSCallback *bsc, HRESULT result)
         script_file_available(This);
     }else {
         FIXME("binding failed %08lx\n", result);
-        heap_free(This->buf);
+        free(This->buf);
         This->buf = NULL;
         This->size = 0;
     }
@@ -1031,7 +1060,7 @@ static HRESULT ScriptBSC_read_data(BSCallback *bsc, IStream *stream)
     HRESULT hres;
 
     if(!This->buf) {
-        This->buf = heap_alloc(128);
+        This->buf = malloc(128);
         if(!This->buf)
             return E_OUTOFMEMORY;
         This->size = 128;
@@ -1040,7 +1069,7 @@ static HRESULT ScriptBSC_read_data(BSCallback *bsc, IStream *stream)
     do {
         if(This->bsc.read >= This->size) {
             void *new_buf;
-            new_buf = heap_realloc(This->buf, This->size << 1);
+            new_buf = realloc(This->buf, This->size << 1);
             if(!new_buf)
                 return E_OUTOFMEMORY;
             This->size <<= 1;
@@ -1111,7 +1140,7 @@ HRESULT load_script(HTMLScriptElement *script_elem, const WCHAR *src, BOOL async
         return hres;
     }
 
-    bsc = heap_alloc_zero(sizeof(*bsc));
+    bsc = calloc(1, sizeof(*bsc));
     if(!bsc) {
         IMoniker_Release(mon);
         IUri_Release(uri);
@@ -1359,7 +1388,7 @@ IDispatch *script_parse_event(HTMLInnerWindow *window, LPCWSTR text)
         LPWSTR language;
         BOOL b;
 
-        language = heap_alloc((ptr-text+1)*sizeof(WCHAR));
+        language = malloc((ptr - text + 1) * sizeof(WCHAR));
         if(!language)
             return NULL;
 
@@ -1368,7 +1397,7 @@ IDispatch *script_parse_event(HTMLInnerWindow *window, LPCWSTR text)
 
         b = get_guid_from_language(language, &guid);
 
-        heap_free(language);
+        free(language);
 
         if(!b) {
             WARN("Could not find language\n");
@@ -1542,7 +1571,7 @@ static IDispatch *parse_event_elem(HTMLDocumentNode *doc, HTMLScriptElement *scr
         const PRUnichar *event_val;
 
         nsAString_GetData(&nsstr, &event_val);
-        event = heap_strdupW(event_val);
+        event = wcsdup(event_val);
     }
     nsAString_Finish(&nsstr);
     if(!event)
@@ -1550,7 +1579,7 @@ static IDispatch *parse_event_elem(HTMLDocumentNode *doc, HTMLScriptElement *scr
 
     if(!parse_event_str(event, &args)) {
         WARN("parsing %s failed\n", debugstr_w(event));
-        heap_free(event);
+        free(event);
         return NULL;
     }
 
@@ -1571,7 +1600,7 @@ static IDispatch *parse_event_elem(HTMLDocumentNode *doc, HTMLScriptElement *scr
     }
     nsAString_Finish(&nsstr);
     if(!disp) {
-        heap_free(event);
+        free(event);
         return NULL;
     }
 
@@ -1644,7 +1673,7 @@ void bind_event_scripts(HTMLDocumentNode *doc)
                     node_release(&plugin_container->element.node);
             }
 
-            heap_free(event);
+            free(event);
             IDispatch_Release(event_disp);
         }
 
@@ -1765,7 +1794,7 @@ void release_script_hosts(HTMLInnerWindow *window)
 
         list_remove(&queue_iter->entry);
         IHTMLScriptElement_Release(&queue_iter->script->IHTMLScriptElement_iface);
-        heap_free(queue_iter);
+        free(queue_iter);
     }
 
     while(!list_empty(&window->script_hosts)) {

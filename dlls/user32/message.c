@@ -1027,19 +1027,6 @@ BOOL WINAPI GetCurrentInputMessageSource( INPUT_MESSAGE_SOURCE *source )
 
 
 /***********************************************************************
- *		WaitMessage (USER.112) Suspend thread pending messages
- *		WaitMessage (USER32.@) Suspend thread pending messages
- *
- * WaitMessage() suspends a thread until events appear in the thread's
- * queue.
- */
-BOOL WINAPI WaitMessage(void)
-{
-    return NtUserMsgWaitForMultipleObjectsEx( 0, NULL, INFINITE, QS_ALLINPUT, 0 ) != WAIT_FAILED;
-}
-
-
-/***********************************************************************
  *		MsgWaitForMultipleObjects (USER32.@)
  */
 DWORD WINAPI MsgWaitForMultipleObjects( DWORD count, const HANDLE *handles,
@@ -1205,7 +1192,7 @@ LONG WINAPI BroadcastSystemMessageW( DWORD flags, LPDWORD recipients, UINT msg, 
 LONG WINAPI BroadcastSystemMessageExA( DWORD flags, LPDWORD recipients, UINT msg, WPARAM wp, LPARAM lp, PBSMINFO pinfo )
 {
     map_wparam_AtoW( msg, &wp, WMCHAR_MAP_NOMAPPING );
-    return BroadcastSystemMessageExW( flags, recipients, msg, wp, lp, NULL );
+    return BroadcastSystemMessageExW( flags, recipients, msg, wp, lp, pinfo );
 }
 
 

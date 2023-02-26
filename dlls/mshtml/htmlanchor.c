@@ -879,6 +879,7 @@ static const NodeImplVtbl HTMLAnchorElementImplVtbl = {
     HTMLElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLAnchorElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -913,7 +914,7 @@ HRESULT HTMLAnchorElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, H
     HTMLAnchorElement *ret;
     nsresult nsres;
 
-    ret = heap_alloc_zero(sizeof(HTMLAnchorElement));
+    ret = calloc(1, sizeof(HTMLAnchorElement));
     if(!ret)
         return E_OUTOFMEMORY;
 

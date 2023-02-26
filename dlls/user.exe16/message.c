@@ -945,15 +945,15 @@ LRESULT WINPROC_CallProc32ATo16( winproc_callback16_t callback, HWND hwnd, UINT 
             BOOL mdi_child = (GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_MDICHILD);
 
             CREATESTRUCT32Ato16( cs32, &cs );
-            cs.lpszName  = MapLS( cs32->lpszName );
-            cs.lpszClass = MapLS( cs32->lpszClass );
+            cs.lpszName  = MapLS( (void *)cs32->lpszName );
+            cs.lpszClass = MapLS( (void *)cs32->lpszClass );
 
             if (mdi_child)
             {
                 MDICREATESTRUCTA *mdi_cs = cs32->lpCreateParams;
                 MDICREATESTRUCT32Ato16( mdi_cs, &mdi_cs16 );
-                mdi_cs16.szTitle = MapLS( mdi_cs->szTitle );
-                mdi_cs16.szClass = MapLS( mdi_cs->szClass );
+                mdi_cs16.szTitle = MapLS( (void *)mdi_cs->szTitle );
+                mdi_cs16.szClass = MapLS( (void *)mdi_cs->szClass );
                 cs.lpCreateParams = MapLS( &mdi_cs16 );
             }
             lParam = MapLS( &cs );
@@ -975,8 +975,8 @@ LRESULT WINPROC_CallProc32ATo16( winproc_callback16_t callback, HWND hwnd, UINT 
             MDICREATESTRUCT16 cs;
 
             MDICREATESTRUCT32Ato16( cs32, &cs );
-            cs.szTitle = MapLS( cs32->szTitle );
-            cs.szClass = MapLS( cs32->szClass );
+            cs.szTitle = MapLS( (void *)cs32->szTitle );
+            cs.szClass = MapLS( (void *)cs32->szClass );
             lParam = MapLS( &cs );
             ret = callback( HWND_16(hwnd), msg, wParam, lParam, result, arg );
             UnMapLS( lParam );
@@ -1503,9 +1503,9 @@ LRESULT WINAPI SendMessage16( HWND16 hwnd16, UINT16 msg, WPARAM16 wparam, LPARAM
 
         if (!(winproc = (WNDPROC16)GetWindowLong16( hwnd16, GWLP_WNDPROC ))) return 0;
 
-        TRACE_(message)("(0x%04x) [%04x] wp=%04x lp=%08lx\n", hwnd16, msg, wparam, lparam );
+        TRACE_(message)("(0x%04x) [%04x] wp=%04x lp=%08Ix\n", hwnd16, msg, wparam, lparam );
         result = CallWindowProc16( winproc, hwnd16, msg, wparam, lparam );
-        TRACE_(message)("(0x%04x) [%04x] wp=%04x lp=%08lx returned %08lx\n",
+        TRACE_(message)("(0x%04x) [%04x] wp=%04x lp=%08Ix returned %08Ix\n",
                         hwnd16, msg, wparam, lparam, result );
     }
     else  /* map to 32-bit unicode for inter-thread/process message */
@@ -1730,9 +1730,9 @@ LONG WINAPI DispatchMessage16( const MSG16* msg )
         SetLastError( ERROR_INVALID_WINDOW_HANDLE );
         return 0;
     }
-    TRACE_(message)("(0x%04x) [%04x] wp=%04x lp=%08lx\n", msg->hwnd, msg->message, msg->wParam, msg->lParam );
+    TRACE_(message)("(0x%04x) [%04x] wp=%04x lp=%08Ix\n", msg->hwnd, msg->message, msg->wParam, msg->lParam );
     retval = CallWindowProc16( winproc, msg->hwnd, msg->message, msg->wParam, msg->lParam );
-    TRACE_(message)("(0x%04x) [%04x] wp=%04x lp=%08lx returned %08lx\n",
+    TRACE_(message)("(0x%04x) [%04x] wp=%04x lp=%08Ix returned %08Ix\n",
                     msg->hwnd, msg->message, msg->wParam, msg->lParam, retval );
     return retval;
 }

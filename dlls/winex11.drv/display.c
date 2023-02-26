@@ -163,7 +163,7 @@ void init_registry_display_settings(void)
     DISPLAY_DEVICEW dd = {sizeof(dd)};
     UNICODE_STRING device_name;
     DWORD i = 0;
-    LONG ret;
+    int ret;
 
     while (!NtUserEnumDisplayDevices( NULL, i++, &dd, 0 ))
     {
@@ -180,8 +180,8 @@ void init_registry_display_settings(void)
         }
 
         TRACE("Device %s current display mode %ux%u %ubits %uHz at %d,%d.\n",
-              wine_dbgstr_w(dd.DeviceName), dm.dmPelsWidth, dm.dmPelsHeight, dm.dmBitsPerPel,
-              dm.dmDisplayFrequency, dm.dmPosition.x, dm.dmPosition.y);
+              wine_dbgstr_w(dd.DeviceName), (int)dm.dmPelsWidth, (int)dm.dmPelsHeight,
+              (int)dm.dmBitsPerPel, (int)dm.dmDisplayFrequency, (int)dm.dmPosition.x, (int)dm.dmPosition.y);
 
         ret = NtUserChangeDisplaySettings( &device_name, &dm, NULL,
                                            CDS_GLOBAL | CDS_NORESET | CDS_UPDATEREGISTRY, NULL );
@@ -236,6 +236,16 @@ static DWORD get_display_depth(ULONG_PTR display_id)
         }
     }
     pthread_mutex_unlock( &settings_mutex );
+    return screen_bpp;
+}
+
+INT X11DRV_GetDisplayDepth(LPCWSTR name, BOOL is_primary)
+{
+    ULONG_PTR id;
+
+    if (settings_handler.get_id( name, is_primary, &id ))
+        return get_display_depth( id );
+
     return screen_bpp;
 }
 
@@ -348,9 +358,9 @@ static LONG apply_display_settings( DEVMODEW *displays, ULONG_PTR *ids, BOOL do_
         TRACE("handler:%s changing %s to position:(%d,%d) resolution:%ux%u frequency:%uHz "
               "depth:%ubits orientation:%#x.\n", settings_handler.name,
               wine_dbgstr_w(mode->dmDeviceName),
-              full_mode->dmPosition.x, full_mode->dmPosition.y, full_mode->dmPelsWidth,
-              full_mode->dmPelsHeight, full_mode->dmDisplayFrequency, full_mode->dmBitsPerPel,
-              full_mode->dmDisplayOrientation);
+              (int)full_mode->dmPosition.x, (int)full_mode->dmPosition.y, (int)full_mode->dmPelsWidth,
+              (int)full_mode->dmPelsHeight, (int)full_mode->dmDisplayFrequency,
+              (int)full_mode->dmBitsPerPel, (int)full_mode->dmDisplayOrientation);
 
         ret = settings_handler.set_current_mode(*id, full_mode);
         if (attached_mode && ret == DISP_CHANGE_SUCCESSFUL)
@@ -550,7 +560,7 @@ BOOL X11DRV_UpdateDisplayDevices( const struct gdi_device_manager *device_manage
     INT gpu_count, adapter_count, monitor_count;
     INT gpu, adapter, monitor;
     DEVMODEW *modes, *mode;
-    DWORD mode_count;
+    UINT mode_count;
 
     if (!force && !force_display_devices_refresh) return TRUE;
     force_display_devices_refresh = FALSE;
@@ -579,10 +589,7 @@ BOOL X11DRV_UpdateDisplayDevices( const struct gdi_device_manager *device_manage
 
             /* Initialize monitors */
             for (monitor = 0; monitor < monitor_count; monitor++)
-            {
-                TRACE("monitor: %#x %s\n", monitor, wine_dbgstr_w(monitors[monitor].name));
                 device_manager->add_monitor( &monitors[monitor], param );
-            }
 
             handler->free_monitors(monitors, monitor_count);
 

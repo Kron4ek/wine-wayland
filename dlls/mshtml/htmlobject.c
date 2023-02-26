@@ -754,6 +754,7 @@ static const NodeImplVtbl HTMLObjectElementImplVtbl = {
     HTMLObjectElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col,
     NULL,
@@ -788,7 +789,7 @@ HRESULT HTMLObjectElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, H
     HTMLObjectElement *ret;
     nsresult nsres;
 
-    ret = heap_alloc_zero(sizeof(*ret));
+    ret = calloc(1, sizeof(*ret));
     if(!ret)
         return E_OUTOFMEMORY;
 
@@ -1029,6 +1030,7 @@ static const NodeImplVtbl HTMLEmbedElementImplVtbl = {
     HTMLEmbedElement_destructor,
     HTMLElement_cpc,
     HTMLElement_clone,
+    HTMLElement_dispatch_nsevent_hook,
     HTMLElement_handle_event,
     HTMLElement_get_attr_col
 };
@@ -1050,7 +1052,7 @@ HRESULT HTMLEmbedElement_Create(HTMLDocumentNode *doc, nsIDOMElement *nselem, HT
 {
     HTMLEmbed *ret;
 
-    ret = heap_alloc_zero(sizeof(*ret));
+    ret = calloc(1, sizeof(*ret));
     if(!ret)
         return E_OUTOFMEMORY;
 

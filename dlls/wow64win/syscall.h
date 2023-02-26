@@ -131,10 +131,10 @@
     SYSCALL_ENTRY( NtUserDrawIconEx ) \
     SYSCALL_ENTRY( NtUserEmptyClipboard ) \
     SYSCALL_ENTRY( NtUserEnableMenuItem ) \
+    SYSCALL_ENTRY( NtUserEnableMouseInPointer ) \
     SYSCALL_ENTRY( NtUserEnableScrollBar ) \
     SYSCALL_ENTRY( NtUserEndDeferWindowPosEx ) \
     SYSCALL_ENTRY( NtUserEndMenu ) \
-    SYSCALL_ENTRY( NtUserEnableMouseInPointer ) \
     SYSCALL_ENTRY( NtUserEnumDisplayDevices ) \
     SYSCALL_ENTRY( NtUserEnumDisplayMonitors ) \
     SYSCALL_ENTRY( NtUserEnumDisplaySettings ) \
@@ -156,6 +156,7 @@
     SYSCALL_ENTRY( NtUserGetCursor ) \
     SYSCALL_ENTRY( NtUserGetCursorFrameInfo ) \
     SYSCALL_ENTRY( NtUserGetCursorInfo ) \
+    SYSCALL_ENTRY( NtUserGetDC ) \
     SYSCALL_ENTRY( NtUserGetDCEx ) \
     SYSCALL_ENTRY( NtUserGetDisplayConfigBufferSizes ) \
     SYSCALL_ENTRY( NtUserGetDoubleClickTime ) \
@@ -164,6 +165,7 @@
     SYSCALL_ENTRY( NtUserGetGUIThreadInfo ) \
     SYSCALL_ENTRY( NtUserGetIconInfo ) \
     SYSCALL_ENTRY( NtUserGetIconSize ) \
+    SYSCALL_ENTRY( NtUserGetInternalWindowPos ) \
     SYSCALL_ENTRY( NtUserGetKeyNameText ) \
     SYSCALL_ENTRY( NtUserGetKeyState ) \
     SYSCALL_ENTRY( NtUserGetKeyboardLayout ) \
@@ -177,6 +179,7 @@
     SYSCALL_ENTRY( NtUserGetMouseMovePointsEx ) \
     SYSCALL_ENTRY( NtUserGetObjectInformation ) \
     SYSCALL_ENTRY( NtUserGetOpenClipboardWindow ) \
+    SYSCALL_ENTRY( NtUserGetPointerInfoList ) \
     SYSCALL_ENTRY( NtUserGetPriorityClipboardFormat ) \
     SYSCALL_ENTRY( NtUserGetProcessDpiAwarenessContext ) \
     SYSCALL_ENTRY( NtUserGetProcessWindowStation ) \
@@ -195,6 +198,7 @@
     SYSCALL_ENTRY( NtUserGetUpdateRect ) \
     SYSCALL_ENTRY( NtUserGetUpdateRgn ) \
     SYSCALL_ENTRY( NtUserGetUpdatedClipboardFormats ) \
+    SYSCALL_ENTRY( NtUserGetWindowDC ) \
     SYSCALL_ENTRY( NtUserGetWindowPlacement ) \
     SYSCALL_ENTRY( NtUserGetWindowRgnEx ) \
     SYSCALL_ENTRY( NtUserHideCaret ) \
@@ -205,6 +209,7 @@
     SYSCALL_ENTRY( NtUserInvalidateRect ) \
     SYSCALL_ENTRY( NtUserInvalidateRgn ) \
     SYSCALL_ENTRY( NtUserIsClipboardFormatAvailable ) \
+    SYSCALL_ENTRY( NtUserIsMouseInPointerEnabled ) \
     SYSCALL_ENTRY( NtUserKillTimer ) \
     SYSCALL_ENTRY( NtUserLockWindowUpdate ) \
     SYSCALL_ENTRY( NtUserLogicalToPerMonitorDPIPhysicalPoint ) \
@@ -222,7 +227,9 @@
     SYSCALL_ENTRY( NtUserPerMonitorDPIPhysicalToLogicalPoint ) \
     SYSCALL_ENTRY( NtUserPostMessage ) \
     SYSCALL_ENTRY( NtUserPostThreadMessage ) \
+    SYSCALL_ENTRY( NtUserPrintWindow ) \
     SYSCALL_ENTRY( NtUserQueryInputContext ) \
+    SYSCALL_ENTRY( NtUserRealChildWindowFromPoint ) \
     SYSCALL_ENTRY( NtUserRedrawWindow ) \
     SYSCALL_ENTRY( NtUserRegisterClassExWOW ) \
     SYSCALL_ENTRY( NtUserRegisterHotKey ) \
@@ -255,6 +262,7 @@
     SYSCALL_ENTRY( NtUserSetProcessWindowStation ) \
     SYSCALL_ENTRY( NtUserSetProp ) \
     SYSCALL_ENTRY( NtUserSetScrollInfo ) \
+    SYSCALL_ENTRY( NtUserSetShellWindowEx ) \
     SYSCALL_ENTRY( NtUserSetSysColors ) \
     SYSCALL_ENTRY( NtUserSetSystemMenu ) \
     SYSCALL_ENTRY( NtUserSetSystemTimer ) \
@@ -287,8 +295,10 @@
     SYSCALL_ENTRY( NtUserUnregisterClass ) \
     SYSCALL_ENTRY( NtUserUnregisterHotKey ) \
     SYSCALL_ENTRY( NtUserUpdateInputContext ) \
+    SYSCALL_ENTRY( NtUserValidateRect ) \
     SYSCALL_ENTRY( NtUserVkKeyScanEx ) \
     SYSCALL_ENTRY( NtUserWaitForInputIdle ) \
+    SYSCALL_ENTRY( NtUserWaitMessage ) \
     SYSCALL_ENTRY( NtUserWindowFromDC ) \
     SYSCALL_ENTRY( NtUserWindowFromPoint )
 

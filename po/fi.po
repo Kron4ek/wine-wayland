@@ -778,7 +778,7 @@ msgstr "&Koko sana"
 msgid "Match &Case"
 msgstr "Kirjaink&oko"
 
-#: dlls/comdlg32/comdlg32.rc:325 dlls/joy.cpl/joy.rc:76
+#: dlls/comdlg32/comdlg32.rc:325
 msgid "Direction"
 msgstr "Suunta"
 
@@ -3701,6 +3701,18 @@ msgstr "Korotettu"
 msgid "High"
 msgstr "Korkea"
 
+#: dlls/ir50_32/ir50_32.rc:28
+#, fuzzy
+#| msgid "Index"
+msgid "Indeo5"
+msgstr "Sisällys"
+
+#: dlls/ir50_32/ir50_32.rc:29
+#, fuzzy
+#| msgid "Wine Video 1 video codec"
+msgid "Indeo Video Interactive version 5 video codec"
+msgstr "Winen Video 1 -videokoodekki"
+
 #: dlls/joy.cpl/joy.rc:37
 msgid "Joysticks"
 msgstr "Joystickit"
@@ -3742,28 +3754,89 @@ msgstr ""
 "päivity tähän, ellei tätä sovelmaa käynnistetä uudelleen."
 
 #: dlls/joy.cpl/joy.rc:55
-msgid "Test Joystick"
-msgstr "Testaa joystickia"
+msgid "DInput"
+msgstr "DInput"
 
 #: dlls/joy.cpl/joy.rc:59
+msgid "Axes"
+msgstr "Akselit"
+
+#: dlls/joy.cpl/joy.rc:60
+msgid "POVs"
+msgstr "POV:t"
+
+#: dlls/joy.cpl/joy.rc:61
 msgid "Buttons"
 msgstr "Painikkeet"
 
-#: dlls/joy.cpl/joy.rc:68
-msgid "Test Force Feedback"
-msgstr "Testaa voimapalautetta"
+#: dlls/joy.cpl/joy.rc:62
+msgid "Force Feedback Effect"
+msgstr "Voimapalautteen efekti"
 
-#: dlls/joy.cpl/joy.rc:72
-msgid "Available Effects"
-msgstr "Mahdolliset efektit"
-
-#: dlls/joy.cpl/joy.rc:74
+#: dlls/joy.cpl/joy.rc:64
 msgid ""
 "Press any button in the controller to activate the chosen effect. The effect "
 "direction can be changed with the controller axis."
 msgstr ""
 "Aktivoi valittu efekti painamalla mitä tahansa ohjaimen painiketta. Efektin "
 "suuntaa voi muuttaa ohjaimen akselilla."
+
+#: dlls/joy.cpl/joy.rc:70
+msgid "XInput"
+msgstr "XInput"
+
+#: dlls/joy.cpl/joy.rc:73
+msgid "User #0"
+msgstr "Käyttäjä #0"
+
+#: dlls/joy.cpl/joy.rc:74
+msgid "User #1"
+msgstr "Käyttäjä #1"
+
+#: dlls/joy.cpl/joy.rc:75
+msgid "User #2"
+msgstr "Käyttäjä #2"
+
+#: dlls/joy.cpl/joy.rc:76
+msgid "User #3"
+msgstr "Käyttäjä #3"
+
+#: dlls/joy.cpl/joy.rc:78
+msgid ""
+"No user detected on slot #0, make sure your gamepad is plugged in, and not "
+"overridden for DInput in the Joysticks tab."
+msgstr ""
+"Ei käyttäjää paikalla #0. Varmista, että ohjain on kytketty ja ettei sitä "
+"ole ohitettu DInput- tai Joystickit-välilehdellä."
+
+#: dlls/joy.cpl/joy.rc:82
+msgid ""
+"No user detected on slot #1, make sure your gamepad is plugged in, and not "
+"overridden for DInput in the Joysticks tab."
+msgstr ""
+"Ei käyttäjää paikalla #1. Varmista, että ohjain on kytketty ja ettei sitä "
+"ole ohitettu DInput- tai Joystickit-välilehdellä."
+
+#: dlls/joy.cpl/joy.rc:86
+msgid ""
+"No user detected on slot #2, make sure your gamepad is plugged in, and not "
+"overridden for DInput in the Joysticks tab."
+msgstr ""
+"Ei käyttäjää paikalla #2. Varmista, että ohjain on kytketty ja ettei sitä "
+"ole ohitettu DInput- tai Joystickit-välilehdellä."
+
+#: dlls/joy.cpl/joy.rc:90
+msgid ""
+"No user detected on slot #3, make sure your gamepad is plugged in, and not "
+"overridden for DInput in the Joysticks tab."
+msgstr ""
+"Ei käyttäjää paikalla #3. Varmista, että ohjain on kytketty ja ettei sitä "
+"ole ohitettu DInput- tai Joystickit-välilehdellä."
+
+#: dlls/joy.cpl/joy.rc:95 dlls/joy.cpl/joy.rc:96 dlls/joy.cpl/joy.rc:97
+#: dlls/joy.cpl/joy.rc:98
+msgid "Rumble"
+msgstr "Tärinä"
 
 #: dlls/joy.cpl/joy.rc:31
 msgid "Game Controllers"

@@ -27,6 +27,7 @@
 #include "in6addr.h"
 #include "inaddr.h"
 #include "ip2string.h"
+#include "wine/asm.h"
 
 #ifndef __WINE_WINTERNL_H
 
@@ -61,6 +62,18 @@ static inline USHORT __my_ushort_swap(USHORT s)
 #endif  /* WORDS_BIGENDIAN */
 
 
+#ifdef __ASM_USE_FASTCALL_WRAPPER
+extern ULONG WINAPI wrap_fastcall_func1( void *func, ULONG a );
+__ASM_STDCALL_FUNC( wrap_fastcall_func1, 8,
+                   "popl %ecx\n\t"
+                   "popl %eax\n\t"
+                   "xchgl (%esp),%ecx\n\t"
+                   "jmp *%eax" )
+#define call_fastcall_func1(func,a) wrap_fastcall_func1(func,a)
+#else
+#define call_fastcall_func1(func,a) func(a)
+#endif
+
 
 /* Function ptrs for ntdll calls */
 static HMODULE hntdll = 0;
@@ -68,7 +81,9 @@ static VOID      (WINAPI  *pRtlMoveMemory)(LPVOID,LPCVOID,SIZE_T);
 static VOID      (WINAPI  *pRtlFillMemory)(LPVOID,SIZE_T,BYTE);
 static VOID      (WINAPI  *pRtlFillMemoryUlong)(LPVOID,SIZE_T,ULONG);
 static VOID      (WINAPI  *pRtlZeroMemory)(LPVOID,SIZE_T);
-static ULONGLONG (WINAPIV *pRtlUlonglongByteSwap)(ULONGLONG source);
+static USHORT    (FASTCALL *pRtlUshortByteSwap)(USHORT source);
+static ULONG     (FASTCALL *pRtlUlongByteSwap)(ULONG source);
+static ULONGLONG (FASTCALL *pRtlUlonglongByteSwap)(ULONGLONG source);
 static DWORD     (WINAPI *pRtlGetThreadErrorMode)(void);
 static NTSTATUS  (WINAPI *pRtlSetThreadErrorMode)(DWORD, LPDWORD);
 static NTSTATUS  (WINAPI *pRtlIpv4AddressToStringExA)(const IN_ADDR *, USHORT, LPSTR, PULONG);
@@ -108,7 +123,9 @@ static void InitFunctionPtrs(void)
 	pRtlFillMemory = (void *)GetProcAddress(hntdll, "RtlFillMemory");
 	pRtlFillMemoryUlong = (void *)GetProcAddress(hntdll, "RtlFillMemoryUlong");
 	pRtlZeroMemory = (void *)GetProcAddress(hntdll, "RtlZeroMemory");
-	pRtlUlonglongByteSwap = (void *)GetProcAddress(hntdll, "RtlUlonglongByteSwap");
+        pRtlUshortByteSwap = (void *)GetProcAddress(hntdll, "RtlUshortByteSwap");
+        pRtlUlongByteSwap = (void *)GetProcAddress(hntdll, "RtlUlongByteSwap");
+        pRtlUlonglongByteSwap = (void *)GetProcAddress(hntdll, "RtlUlonglongByteSwap");
         pRtlGetThreadErrorMode = (void *)GetProcAddress(hntdll, "RtlGetThreadErrorMode");
         pRtlSetThreadErrorMode = (void *)GetProcAddress(hntdll, "RtlSetThreadErrorMode");
         pRtlIpv4AddressToStringExA = (void *)GetProcAddress(hntdll, "RtlIpv4AddressToStringExA");
@@ -317,312 +334,160 @@ static void test_RtlZeroMemory(void)
   ZERO(9); MCMP("\0\0\0\0\0\0\0\0\0 test!");
 }
 
-static void test_RtlUlonglongByteSwap(void)
+static void test_RtlByteSwap(void)
 {
-    ULONGLONG result;
+    ULONGLONG llresult;
+    ULONG     lresult;
+    USHORT    sresult;
 
-    if ( !pRtlUlonglongByteSwap )
+#ifdef _WIN64
+    /* the Rtl*ByteSwap() are always inlined and not exported from ntdll on 64bit */
+    sresult = RtlUshortByteSwap( 0x1234 );
+    ok( 0x3412 == sresult,
+        "inlined RtlUshortByteSwap() returns 0x%x\n", sresult );
+    lresult = RtlUlongByteSwap( 0x87654321 );
+    ok( 0x21436587 == lresult,
+        "inlined RtlUlongByteSwap() returns 0x%lx\n", lresult );
+    llresult = RtlUlonglongByteSwap( 0x7654321087654321ull );
+    ok( 0x2143658710325476 == llresult,
+        "inlined RtlUlonglongByteSwap() returns %#I64x\n", llresult );
+#else
+    ok( pRtlUshortByteSwap != NULL, "RtlUshortByteSwap is not available\n" );
+    if ( pRtlUshortByteSwap )
     {
-        win_skip("RtlUlonglongByteSwap is not available\n");
-        return;
+        sresult = call_fastcall_func1( pRtlUshortByteSwap, 0x1234u );
+        ok( 0x3412u == sresult,
+            "ntdll.RtlUshortByteSwap() returns %#x\n", sresult );
     }
 
-    result = pRtlUlonglongByteSwap( ((ULONGLONG)0x76543210 << 32) | 0x87654321 );
-    ok( (((ULONGLONG)0x21436587 << 32) | 0x10325476) == result,
-       "RtlUlonglongByteSwap(0x7654321087654321) returns 0x%s, expected 0x2143658710325476\n",
-       wine_dbgstr_longlong(result));
+    ok( pRtlUlongByteSwap != NULL, "RtlUlongByteSwap is not available\n" );
+    if ( pRtlUlongByteSwap )
+    {
+        lresult = call_fastcall_func1( pRtlUlongByteSwap, 0x87654321ul );
+        ok( 0x21436587ul == lresult,
+            "ntdll.RtlUlongByteSwap() returns %#lx\n", lresult );
+    }
+
+    ok( pRtlUlonglongByteSwap != NULL, "RtlUlonglongByteSwap is not available\n");
+    if ( pRtlUlonglongByteSwap )
+    {
+        llresult = pRtlUlonglongByteSwap( 0x7654321087654321ull );
+        ok( 0x2143658710325476ull == llresult,
+            "ntdll.RtlUlonglongByteSwap() returns %#I64x\n", llresult );
+    }
+#endif
 }
 
 
 static void test_RtlUniform(void)
 {
-    ULONGLONG num;
+    const ULONG step = 0x7fff;
+    ULONG num;
     ULONG seed;
     ULONG seed_bak;
     ULONG expected;
     ULONG result;
 
-/*
- * According to the documentation RtlUniform is using D.H. Lehmer's 1948
- * algorithm. This algorithm is:
- *
- * seed = (seed * const_1 + const_2) % const_3;
- *
- * According to the documentation the random number is distributed over
- * [0..MAXLONG]. Therefore const_3 is MAXLONG + 1:
- *
- * seed = (seed * const_1 + const_2) % (MAXLONG + 1);
- *
- * Because MAXLONG is 0x7fffffff (and MAXLONG + 1 is 0x80000000) the
- * algorithm can be expressed without division as:
- *
- * seed = (seed * const_1 + const_2) & MAXLONG;
- *
- * To find out const_2 we just call RtlUniform with seed set to 0:
- */
+    /*
+     * According to the documentation RtlUniform is using D.H. Lehmer's 1948
+     * algorithm.  We assume a more generic version of this algorithm,
+     * which is the linear congruential generator (LCG).  Its formula is:
+     *
+     *   X_(n+1) = (a * X_n + c) % m
+     *
+     * where a is the multiplier, c is the increment, and m is the modulus.
+     *
+     * According to the documentation, the random numbers are distributed over
+     * [0..MAXLONG].  Therefore, the modulus is MAXLONG + 1:
+     *
+     *   X_(n+1) = (a * X_n + c) % (MAXLONG + 1)
+     *
+     * To find out the increment, we just call RtlUniform with seed set to 0.
+     * This reveals c = 0x7fffffc3.
+     */
     seed = 0;
     expected = 0x7fffffc3;
     result = RtlUniform(&seed);
     ok(result == expected,
         "RtlUniform(&seed (seed == 0)) returns %lx, expected %lx\n",
         result, expected);
-/*
- * The algorithm is now:
- *
- * seed = (seed * const_1 + 0x7fffffc3) & MAXLONG;
- *
- * To find out const_1 we can use:
- *
- * const_1 = RtlUniform(1) - 0x7fffffc3;
- *
- * If that does not work a search loop can try all possible values of
- * const_1 and compare to the result to RtlUniform(1).
- * This way we find out that const_1 is 0xffffffed.
- *
- * For seed = 1 the const_2 is 0x7fffffc4:
- */
+
+    /*
+     * The formula is now:
+     *
+     *   X_(n+1) = (a * X_n + 0x7fffffc3) % (MAXLONG + 1)
+     *
+     * If the modulus is correct, RtlUniform(0) shall equal RtlUniform(MAXLONG + 1).
+     * However, testing reveals that this is not the case.
+     * That is, the modulus in the documentation is incorrect.
+     */
+    seed = 0x80000000U;
+    expected = 0x7fffffb1;
+    result = RtlUniform(&seed);
+
+    ok(result == expected,
+        "RtlUniform(&seed (seed == 0x80000000)) returns %lx, expected %lx\n",
+        result, expected);
+
+    /*
+     * We try another value for modulus, say MAXLONG.
+     * We discover that RtlUniform(0) equals RtlUniform(MAXLONG), which means
+     * the correct value for the modulus is actually MAXLONG.
+     */
+    seed = 0x7fffffff;
+    expected = 0x7fffffc3;
+    result = RtlUniform(&seed);
+    ok(result == expected,
+        "RtlUniform(&seed (seed == 0x7fffffff)) returns %lx, expected %lx\n",
+        result, expected);
+
+    /*
+     * The formula is now:
+     *
+     *   X_(n+1) = (a * X_n + 0x7fffffc3) % MAXLONG
+     *
+     * To find out the multiplier we can use:
+     *
+     *   a = RtlUniform(1) - 0x7fffffc3 (mod MAXLONG)
+     *
+     * This way, we find out that a = -18 (mod MAXLONG),
+     * which is congruent to 0x7fffffed (MAXLONG - 18).
+     */
     seed = 1;
-    expected = seed * 0xffffffed + 0x7fffffc3 + 1;
+    expected = ((ULONGLONG)seed * 0x7fffffed + 0x7fffffc3) % MAXLONG;
     result = RtlUniform(&seed);
     ok(result == expected,
         "RtlUniform(&seed (seed == 1)) returns %lx, expected %lx\n",
         result, expected);
-/*
- * For seed = 2 the const_2 is 0x7fffffc3:
- */
-    seed = 2;
-    expected = seed * 0xffffffed + 0x7fffffc3;
-    result = RtlUniform(&seed);
 
-/*
- * Windows Vista uses different algorithms, so skip the rest of the tests
- * until that is figured out. Trace output for the failures is about 10.5 MB!
- */
+    num = 2;
+    do
+    {
+        seed = num;
+        expected = ((ULONGLONG)seed * 0x7fffffed + 0x7fffffc3) % 0x7fffffff;
+        result = RtlUniform(&seed);
+        ok(result == expected,
+                "test: RtlUniform(&seed (seed == %lx)) returns %lx, expected %lx\n",
+                num, result, expected);
+        ok(seed == expected,
+                "test: RtlUniform(&seed (seed == %lx)) sets seed to %lx, expected %lx\n",
+                num, result, expected);
 
-    if (result == 0x7fffff9f) {
-        skip("Most likely running on Windows Vista which uses a different algorithm\n");
-        return;
-    }
+        num += step;
+    } while (num >= 2 + step);
 
-    ok(result == expected,
-        "RtlUniform(&seed (seed == 2)) returns %lx, expected %lx\n",
-        result, expected);
-
-/*
- * More tests show that if seed is odd the result must be incremented by 1:
- */
-    seed = 3;
-    expected = seed * 0xffffffed + 0x7fffffc3 + (seed & 1);
-    result = RtlUniform(&seed);
-    ok(result == expected,
-        "RtlUniform(&seed (seed == 3)) returns %lx, expected %lx\n",
-        result, expected);
-
-    seed = 0x6bca1aa;
-    expected = seed * 0xffffffed + 0x7fffffc3;
-    result = RtlUniform(&seed);
-    ok(result == expected,
-        "RtlUniform(&seed (seed == 0x6bca1aa)) returns %lx, expected %lx\n",
-        result, expected);
-
-    seed = 0x6bca1ab;
-    expected = seed * 0xffffffed + 0x7fffffc3 + 1;
-    result = RtlUniform(&seed);
-    ok(result == expected,
-        "RtlUniform(&seed (seed == 0x6bca1ab)) returns %lx, expected %lx\n",
-        result, expected);
-/*
- * When seed is 0x6bca1ac there is an exception:
- */
-    seed = 0x6bca1ac;
-    expected = seed * 0xffffffed + 0x7fffffc3 + 2;
-    result = RtlUniform(&seed);
-    ok(result == expected,
-        "RtlUniform(&seed (seed == 0x6bca1ac)) returns %lx, expected %lx\n",
-        result, expected);
-/*
- * Note that up to here const_3 is not used
- * (the highest bit of the result is not set).
- *
- * Starting with 0x6bca1ad: If seed is even the result must be incremented by 1:
- */
-    seed = 0x6bca1ad;
-    expected = (seed * 0xffffffed + 0x7fffffc3) & MAXLONG;
-    result = RtlUniform(&seed);
-    ok(result == expected,
-        "RtlUniform(&seed (seed == 0x6bca1ad)) returns %lx, expected %lx\n",
-        result, expected);
-
-    seed = 0x6bca1ae;
-    expected = (seed * 0xffffffed + 0x7fffffc3 + 1) & MAXLONG;
-    result = RtlUniform(&seed);
-    ok(result == expected,
-        "RtlUniform(&seed (seed == 0x6bca1ae)) returns %lx, expected %lx\n",
-        result, expected);
-/*
- * There are several ranges where for odd or even seed the result must be
- * incremented by 1. You can see this ranges in the following test.
- *
- * For a full test use one of the following loop heads:
- *
- *  for (num = 0; num <= 0xffffffff; num++) {
- *      seed = num;
- *      ...
- *
- *  seed = 0;
- *  for (num = 0; num <= 0xffffffff; num++) {
- *      ...
- */
     seed = 0;
     for (num = 0; num <= 100000; num++) {
-
-	expected = seed * 0xffffffed + 0x7fffffc3;
-	if (seed < 0x6bca1ac) {
-	    expected = expected + (seed & 1);
-	} else if (seed == 0x6bca1ac) {
-	    expected = (expected + 2) & MAXLONG;
-	} else if (seed < 0xd79435c) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x1435e50b) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x1af286ba) { 
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x21af2869) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x286bca18) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x2f286bc7) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x35e50d77) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x3ca1af26) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x435e50d5) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x4a1af284) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x50d79433) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x579435e2) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x5e50d792) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x650d7941) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x6bca1af0) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x7286bc9f) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x79435e4e) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x7ffffffd) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x86bca1ac) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed == 0x86bca1ac) {
-	    expected = (expected + 1) & MAXLONG;
-	} else if (seed < 0x8d79435c) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0x9435e50b) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0x9af286ba) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0xa1af2869) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0xa86bca18) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0xaf286bc7) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed == 0xaf286bc7) {
-	    expected = (expected + 2) & MAXLONG;
-	} else if (seed < 0xb5e50d77) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0xbca1af26) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0xc35e50d5) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0xca1af284) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0xd0d79433) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0xd79435e2) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0xde50d792) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0xe50d7941) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0xebca1af0) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0xf286bc9f) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else if (seed < 0xf9435e4e) {
-	    expected = expected + (seed & 1);
-	} else if (seed < 0xfffffffd) {
-	    expected = (expected + (~seed & 1)) & MAXLONG;
-	} else {
-	    expected = expected + (seed & 1);
-	} /* if */
+        expected = ((ULONGLONG)seed * 0x7fffffed + 0x7fffffc3) % 0x7fffffff;
         seed_bak = seed;
         result = RtlUniform(&seed);
         ok(result == expected,
-                "test: 0x%s RtlUniform(&seed (seed == %lx)) returns %lx, expected %lx\n",
-                wine_dbgstr_longlong(num), seed_bak, result, expected);
+                "test: %ld RtlUniform(&seed (seed == %lx)) returns %lx, expected %lx\n",
+                num, seed_bak, result, expected);
         ok(seed == expected,
-                "test: 0x%s RtlUniform(&seed (seed == %lx)) sets seed to %lx, expected %lx\n",
-                wine_dbgstr_longlong(num), seed_bak, result, expected);
+                "test: %ld RtlUniform(&seed (seed == %lx)) sets seed to %lx, expected %lx\n",
+                num, seed_bak, result, expected);
     } /* for */
-/*
- * Further investigation shows: In the different regions the highest bit
- * is set or cleared when even or odd seeds need an increment by 1.
- * This leads to a simplified algorithm:
- *
- * seed = seed * 0xffffffed + 0x7fffffc3;
- * if (seed == 0xffffffff || seed == 0x7ffffffe) {
- *     seed = (seed + 2) & MAXLONG;
- * } else if (seed == 0x7fffffff) {
- *     seed = 0;
- * } else if ((seed & 0x80000000) == 0) {
- *     seed = seed + (~seed & 1);
- * } else {
- *     seed = (seed + (seed & 1)) & MAXLONG;
- * }
- *
- * This is also the algorithm used for RtlUniform of wine (see dlls/ntdll/rtl.c).
- *
- * Now comes the funny part:
- * It took me one weekend, to find the complicated algorithm and one day more,
- * to find the simplified algorithm. Several weeks later I found out: The value
- * MAXLONG (=0x7fffffff) is never returned, neither with the native function
- * nor with the simplified algorithm. In reality the native function and our
- * function return a random number distributed over [0..MAXLONG-1]. Note
- * that this is different from what native documentation states [0..MAXLONG].
- * Expressed with D.H. Lehmer's 1948 algorithm it looks like:
- *
- * seed = (seed * const_1 + const_2) % MAXLONG;
- *
- * Further investigations show that the real algorithm is:
- *
- * seed = (seed * 0x7fffffed + 0x7fffffc3) % MAXLONG;
- *
- * This is checked with the test below:
- */
-    seed = 0;
-    for (num = 0; num <= 100000; num++) {
-	expected = (seed * 0x7fffffed + 0x7fffffc3) % 0x7fffffff;
-        seed_bak = seed;
-        result = RtlUniform(&seed);
-        ok(result == expected,
-                "test: 0x%s RtlUniform(&seed (seed == %lx)) returns %lx, expected %lx\n",
-                wine_dbgstr_longlong(num), seed_bak, result, expected);
-        ok(seed == expected,
-                "test: 0x%s RtlUniform(&seed (seed == %lx)) sets seed to %lx, expected %lx\n",
-                wine_dbgstr_longlong(num), seed_bak, result, expected);
-    } /* for */
-/*
- * More tests show that RtlUniform does not return 0x7ffffffd for seed values
- * in the range [0..MAXLONG-1]. Additionally 2 is returned twice. This shows
- * that there is more than one cycle of generated randon numbers ...
- */
 }
 
 
@@ -1364,7 +1229,7 @@ static const struct
     /* win_broken: XP and Vista do not handle this correctly
         ex_fail: Ex function does need the string to be terminated, non-Ex does not.
         ex_skip: test doesn't make sense for Ex (f.e. it's invalid for non-Ex but valid for Ex) */
-    enum { normal_6, win_broken_6 = 1, ex_fail_6 = 2, ex_skip_6 = 4 } flags;
+    enum { normal_6, win_broken_6 = 1, ex_fail_6 = 2, ex_skip_6 = 4, win_extra_zero = 8 } flags;
 } ipv6_tests[] =
 {
     { "0000:0000:0000:0000:0000:0000:0000:0000",        STATUS_SUCCESS,             39,
@@ -1531,12 +1396,12 @@ static const struct
             { 0, 0, 0, 0, 0, 0, 0, 0 } },
     { "::0:0:0:0:0:0",                                  STATUS_SUCCESS,             13,
             { 0, 0, 0, 0, 0, 0, 0, 0 } },
-    /* this one and the next one are incorrectly parsed by windows,
+    /* this one and the next one are incorrectly parsed before Windows 11,
         it adds one zero too many in front, cutting off the last digit. */
-    { "::0:0:0:0:0:0:0",                                STATUS_SUCCESS,             13,
-            { 0, 0, 0, 0, 0, 0, 0, 0 }, ex_fail_6 },
-    { "::0:a:b:c:d:e:f",                                STATUS_SUCCESS,             13,
-            { 0, 0, 0, 0xa00, 0xb00, 0xc00, 0xd00, 0xe00 }, ex_fail_6 },
+    { "::0:0:0:0:0:0:0",                                STATUS_SUCCESS,             15,
+            { 0, 0, 0, 0, 0, 0, 0, 0 }, win_broken_6|win_extra_zero },
+    { "::0:a:b:c:d:e:f",                                STATUS_SUCCESS,             15,
+            { 0, 0, 0xa00, 0xb00, 0xc00, 0xd00, 0xe00, 0xf00 }, win_broken_6|win_extra_zero },
     { "::123.123.123.123",                              STATUS_SUCCESS,             17,
             { 0, 0, 0, 0, 0, 0, 0x7b7b, 0x7b7b } },
     { "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",        STATUS_SUCCESS,             39,
@@ -2058,19 +1923,32 @@ static void test_RtlIpv6StringToAddress(void)
         }
         else
         {
-            ok(terminator == ipv6_tests[i].address + ipv6_tests[i].terminator_offset,
-               "[%s] terminator = %p, expected %p\n",
-               ipv6_tests[i].address, terminator, ipv6_tests[i].address + ipv6_tests[i].terminator_offset);
+            if (ipv6_tests[i].flags & win_extra_zero)
+                ok(terminator == ipv6_tests[i].address + ipv6_tests[i].terminator_offset ||
+                   broken(terminator != ipv6_tests[i].address + ipv6_tests[i].terminator_offset),
+                   "[%s] terminator = %p, expected %p\n",
+                   ipv6_tests[i].address, terminator, ipv6_tests[i].address + ipv6_tests[i].terminator_offset);
+            else
+                ok(terminator == ipv6_tests[i].address + ipv6_tests[i].terminator_offset,
+                   "[%s] terminator = %p, expected %p\n",
+                   ipv6_tests[i].address, terminator, ipv6_tests[i].address + ipv6_tests[i].terminator_offset);
         }
 
         init_ip6(&expected_ip, ipv6_tests[i].ip);
-        ok(!memcmp(&ip, &expected_ip, sizeof(ip)),
-           "[%s] ip = %x:%x:%x:%x:%x:%x:%x:%x, expected %x:%x:%x:%x:%x:%x:%x:%x\n",
-           ipv6_tests[i].address,
-           ip.s6_words[0], ip.s6_words[1], ip.s6_words[2], ip.s6_words[3],
-           ip.s6_words[4], ip.s6_words[5], ip.s6_words[6], ip.s6_words[7],
-           expected_ip.s6_words[0], expected_ip.s6_words[1], expected_ip.s6_words[2], expected_ip.s6_words[3],
-           expected_ip.s6_words[4], expected_ip.s6_words[5], expected_ip.s6_words[6], expected_ip.s6_words[7]);
+        if (ipv6_tests[i].flags & win_extra_zero)
+            ok(!memcmp(&ip, &expected_ip, sizeof(ip)) || broken(memcmp(&ip, &expected_ip, sizeof(ip))),
+               "[%s] ip = %x:%x:%x:%x:%x:%x:%x:%x, expected %x:%x:%x:%x:%x:%x:%x:%x\n",
+               ipv6_tests[i].address, ip.s6_words[0], ip.s6_words[1], ip.s6_words[2], ip.s6_words[3],
+               ip.s6_words[4], ip.s6_words[5], ip.s6_words[6], ip.s6_words[7],
+               expected_ip.s6_words[0], expected_ip.s6_words[1], expected_ip.s6_words[2], expected_ip.s6_words[3],
+               expected_ip.s6_words[4], expected_ip.s6_words[5], expected_ip.s6_words[6], expected_ip.s6_words[7]);
+        else
+            ok(!memcmp(&ip, &expected_ip, sizeof(ip)),
+               "[%s] ip = %x:%x:%x:%x:%x:%x:%x:%x, expected %x:%x:%x:%x:%x:%x:%x:%x\n",
+               ipv6_tests[i].address, ip.s6_words[0], ip.s6_words[1], ip.s6_words[2], ip.s6_words[3],
+               ip.s6_words[4], ip.s6_words[5], ip.s6_words[6], ip.s6_words[7],
+               expected_ip.s6_words[0], expected_ip.s6_words[1], expected_ip.s6_words[2], expected_ip.s6_words[3],
+               expected_ip.s6_words[4], expected_ip.s6_words[5], expected_ip.s6_words[6], expected_ip.s6_words[7]);
     }
 }
 
@@ -3730,6 +3608,31 @@ static void test_RtlFirstFreeAce(void)
     HeapFree(GetProcessHeap(), 0, acl);
 }
 
+static void test_TlsIndex(void)
+{
+    LIST_ENTRY *root = &NtCurrentTeb()->Peb->LdrData->InLoadOrderModuleList;
+    for (LIST_ENTRY *entry = root->Flink; entry != root; entry = entry->Flink)
+    {
+        LDR_DATA_TABLE_ENTRY *mod = CONTAINING_RECORD(entry, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
+        if (lstrcmpiW(L"ntdll.dll", mod->BaseDllName.Buffer) == 0)
+        {
+            /* Pick ntdll as a dll that definitely won't have TLS */
+            ok(mod->TlsIndex == 0, "ntdll.dll TlsIndex: %d instead of 0\n", mod->TlsIndex);
+        }
+        else if (mod->DllBase == GetModuleHandleA(NULL))
+        {
+            /* mingw gcc doesn't support MSVC-style TLS */
+            /* If we do get a way to add tls to this exe, uncomment the following test: */
+            /* ok(mod->TlsIndex == -1, "Test exe TlsIndex: %d instead of -1\n", mod->TlsIndex); */
+        }
+        else
+        {
+            ok(mod->TlsIndex == 0 || mod->TlsIndex == -1, "%s TlsIndex: %d\n",
+               debugstr_w(mod->BaseDllName.Buffer), mod->TlsIndex);
+        }
+    }
+}
+
 START_TEST(rtl)
 {
     InitFunctionPtrs();
@@ -3741,7 +3644,7 @@ START_TEST(rtl)
     test_RtlFillMemory();
     test_RtlFillMemoryUlong();
     test_RtlZeroMemory();
-    test_RtlUlonglongByteSwap();
+    test_RtlByteSwap();
     test_RtlUniform();
     test_RtlRandom();
     test_RtlAreAllAccessesGranted();
@@ -3774,4 +3677,5 @@ START_TEST(rtl)
     test_DbgPrint();
     test_RtlDestroyHeap();
     test_RtlFirstFreeAce();
+    test_TlsIndex();
 }

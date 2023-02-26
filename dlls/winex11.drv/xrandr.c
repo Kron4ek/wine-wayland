@@ -28,7 +28,11 @@
 
 #define NONAMELESSSTRUCT
 #define NONAMELESSUNION
-
+#include <assert.h>
+#include <X11/Xlib.h>
+#include <X11/extensions/Xrandr.h>
+#include <dlfcn.h>
+#include "x11drv.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(xrandr);
@@ -37,12 +41,6 @@ WINE_DECLARE_DEBUG_CHANNEL(winediag);
 #endif
 
 #ifdef SONAME_LIBXRANDR
-
-#include <assert.h>
-#include <X11/Xlib.h>
-#include <X11/extensions/Xrandr.h>
-#include <dlfcn.h>
-#include "x11drv.h"
 
 #define VK_NO_PROTOTYPES
 #define WINE_VK_HOST
@@ -298,7 +296,8 @@ static LONG xrandr10_set_current_mode( ULONG_PTR id, const DEVMODEW *mode )
     }
 
     if (mode->dmFields & DM_BITSPERPEL && mode->dmBitsPerPel != screen_bpp)
-        WARN("Cannot change screen bit depth from %dbits to %dbits!\n", screen_bpp, mode->dmBitsPerPel);
+        WARN("Cannot change screen bit depth from %dbits to %dbits!\n",
+             screen_bpp, (int)mode->dmBitsPerPel);
 
     root = DefaultRootWindow( gdi_display );
     screen_config = pXRRGetScreenInfo( gdi_display, root );
@@ -1028,9 +1027,6 @@ static void xrandr14_free_adapters( struct gdi_adapter *adapters )
 
 static BOOL xrandr14_get_monitors( ULONG_PTR adapter_id, struct gdi_monitor **new_monitors, int *count )
 {
-    static const WCHAR generic_nonpnp_monitorW[] = {
-        'G','e','n','e','r','i','c',' ',
-        'N','o','n','-','P','n','P',' ','M','o','n','i','t','o','r',0};
     struct gdi_monitor *realloc_monitors, *monitors = NULL;
     XRRScreenResources *screen_resources = NULL;
     XRROutputInfo *output_info = NULL, *enum_output_info = NULL;
@@ -1064,7 +1060,6 @@ static BOOL xrandr14_get_monitors( ULONG_PTR adapter_id, struct gdi_monitor **ne
     /* Inactive but attached monitor, no need to check for mirrored/replica monitors */
     if (!output_info->crtc || !crtc_info->mode)
     {
-        lstrcpyW( monitors[monitor_count].name, generic_nonpnp_monitorW );
         monitors[monitor_count].state_flags = DISPLAY_DEVICE_ATTACHED;
         monitors[monitor_count].edid_len = get_edid( adapter_id, &monitors[monitor_count].edid );
         monitor_count = 1;
@@ -1109,9 +1104,6 @@ static BOOL xrandr14_get_monitors( ULONG_PTR adapter_id, struct gdi_monitor **ne
                     enum_crtc_info->width == crtc_info->width &&
                     enum_crtc_info->height == crtc_info->height)
                 {
-                    /* FIXME: Read output EDID property and parse the data to get the correct name */
-                    lstrcpyW( monitors[monitor_count].name, generic_nonpnp_monitorW );
-
                     SetRect( &monitors[monitor_count].rc_monitor, crtc_info->x, crtc_info->y,
                              crtc_info->x + crtc_info->width, crtc_info->y + crtc_info->height );
                     monitors[monitor_count].rc_work = get_work_area( &monitors[monitor_count].rc_monitor );
@@ -1556,7 +1548,8 @@ static LONG xrandr14_set_current_mode( ULONG_PTR id, const DEVMODEW *mode )
     RRMode rrmode;
 
     if (mode->dmFields & DM_BITSPERPEL && mode->dmBitsPerPel != screen_bpp)
-        WARN("Cannot change screen color depth from %ubits to %ubits!\n", screen_bpp, mode->dmBitsPerPel);
+        WARN("Cannot change screen color depth from %ubits to %ubits!\n",
+             screen_bpp, (int)mode->dmBitsPerPel);
 
     screen_resources = xrandr_get_screen_resources();
     if (!screen_resources)

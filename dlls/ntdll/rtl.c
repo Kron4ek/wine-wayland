@@ -355,7 +355,7 @@ NTSTATUS WINAPI vDbgPrintExWithPrefix( LPCSTR prefix, ULONG id, ULONG level, LPC
     len += _vsnprintf( buf + len, sizeof(buf) - len, fmt, args );
     end = buf + len - 1;
 
-    WARN_(debugstr)(*end == '\n' ? "%08x:%08x: %s" : "%08x:%08x: %s\n", id, level_mask, buf);
+    WARN_(debugstr)(*end == '\n' ? "%08lx:%08lx: %s" : "%08lx:%08lx: %s\n", id, level_mask, buf);
 
     if (level_mask & (1 << DPFLTR_ERROR_LEVEL) && NtCurrentTeb()->Peb->BeingDebugged)
     {
@@ -443,7 +443,7 @@ ULONG WINAPI RtlNumberGenericTableElements(RTL_GENERIC_TABLE *table)
  */
 void * WINAPI RtlGetElementGenericTable(RTL_GENERIC_TABLE *table, ULONG index)
 {
-    FIXME("(%p, %u) stub!\n", table, index);
+    FIXME("(%p, %lu) stub!\n", table, index);
     return NULL;
 }
 
@@ -575,7 +575,7 @@ void WINAPI RtlCopyMemory(void *dest, const void *src, SIZE_T len)
  */
 void WINAPI RtlAssert(void *assertion, void *filename, ULONG linenumber, char *message)
 {
-    FIXME("(%s, %s, %u, %s): stub\n", debugstr_a((char*)assertion), debugstr_a((char*)filename),
+    FIXME("(%s, %s, %lu, %s): stub\n", debugstr_a((char*)assertion), debugstr_a((char*)filename),
         linenumber, debugstr_a(message));
 }
 
@@ -594,7 +594,7 @@ void WINAPI RtlAssert(void *assertion, void *filename, ULONG linenumber, char *m
  */
 VOID WINAPI RtlFillMemoryUlong(ULONG* lpDest, ULONG ulCount, ULONG ulValue)
 {
-  TRACE("(%p,%d,%d)\n", lpDest, ulCount, ulValue);
+  TRACE("(%p,%lu,%lu)\n", lpDest, ulCount, ulValue);
 
   ulCount /= sizeof(ULONG);
   while(ulCount--)
@@ -618,7 +618,7 @@ DWORD WINAPI RtlComputeCrc32(DWORD dwInitial, const BYTE *pData, INT iLen)
 {
   DWORD crc = ~dwInitial;
 
-  TRACE("(%d,%p,%d)\n", dwInitial, pData, iLen);
+  TRACE("(%lu,%p,%d)\n", dwInitial, pData, iLen);
 
   while (iLen > 0)
   {
@@ -641,10 +641,14 @@ DWORD WINAPI RtlComputeCrc32(DWORD dwInitial, const BYTE *pData, INT iLen)
  * RETURNS
  *  The value with its bytes swapped.
  */
-ULONGLONG __cdecl RtlUlonglongByteSwap(ULONGLONG i)
-{
-  return ((ULONGLONG)RtlUlongByteSwap(i) << 32) | RtlUlongByteSwap(i>>32);
-}
+#ifdef __i386__
+__ASM_FASTCALL_FUNC(RtlUlonglongByteSwap, 8,
+                    "movl 4(%esp),%edx\n\t"
+                    "bswap %edx\n\t"
+                    "movl 8(%esp),%eax\n\t"
+                    "bswap %eax\n\t"
+                    "ret $8")
+#endif
 
 /*************************************************************************
  * RtlUlongByteSwap    [NTDLL.@]
@@ -655,10 +659,10 @@ ULONGLONG __cdecl RtlUlonglongByteSwap(ULONGLONG i)
  *  ix86 version takes argument in %ecx. Other systems use the inline version.
  */
 #ifdef __i386__
-__ASM_GLOBAL_FUNC(NTDLL_RtlUlongByteSwap,
-                  "movl %ecx,%eax\n\t"
-                  "bswap %eax\n\t"
-                  "ret")
+__ASM_FASTCALL_FUNC(RtlUlongByteSwap, 4,
+                    "movl %ecx,%eax\n\t"
+                    "bswap %eax\n\t"
+                    "ret")
 #endif
 
 /*************************************************************************
@@ -670,17 +674,17 @@ __ASM_GLOBAL_FUNC(NTDLL_RtlUlongByteSwap,
  *  i386 version takes argument in %cx. Other systems use the inline version.
  */
 #ifdef __i386__
-__ASM_GLOBAL_FUNC(NTDLL_RtlUshortByteSwap,
-                  "movb %ch,%al\n\t"
-                  "movb %cl,%ah\n\t"
-                  "ret")
+__ASM_FASTCALL_FUNC(RtlUshortByteSwap, 4,
+                    "movb %ch,%al\n\t"
+                    "movb %cl,%ah\n\t"
+                    "ret")
 #endif
 
 
 /*************************************************************************
  * RtlUniform   [NTDLL.@]
  *
- * Generates an uniform random number
+ * Generates a uniform random number
  *
  * PARAMS
  *  seed [O] The seed of the Random function
@@ -689,12 +693,7 @@ __ASM_GLOBAL_FUNC(NTDLL_RtlUshortByteSwap,
  *  It returns a random number uniformly distributed over [0..MAXLONG-1].
  *
  * NOTES
- *  Generates an uniform random number using D.H. Lehmer's 1948 algorithm.
- *  In our case the algorithm is:
- *
- *|  result = (*seed * 0x7fffffed + 0x7fffffc3) % MAXLONG;
- *|
- *|  *seed = result;
+ *  Generates a uniform random number using a linear congruential generator.
  *
  * DIFFERENCES
  *  The native documentation states that the random number is
@@ -702,27 +701,10 @@ __ASM_GLOBAL_FUNC(NTDLL_RtlUshortByteSwap,
  *  function and our function return a random number uniformly
  *  distributed over [0..MAXLONG-1].
  */
-ULONG WINAPI RtlUniform (PULONG seed)
+ULONG WINAPI RtlUniform( ULONG *seed )
 {
-    ULONG result;
-
-   /*
-    * Instead of the algorithm stated above, we use the algorithm
-    * below, which is totally equivalent (see the tests), but does
-    * not use a division and therefore is faster.
-    */
-    result = *seed * 0xffffffed + 0x7fffffc3;
-    if (result == 0xffffffff || result == 0x7ffffffe) {
-	result = (result + 2) & MAXLONG;
-    } else if (result == 0x7fffffff) {
-	result = 0;
-    } else if ((result & 0x80000000) == 0) {
-	result = result + (~result & 1);
-    } else {
-	result = (result + (result & 1)) & MAXLONG;
-    } /* if */
-    *seed = result;
-    return result;
+    /* See the tests for details. */
+    return (*seed = ((ULONGLONG)*seed * 0x7fffffed + 0x7fffffc3) % 0x7fffffff);
 }
 
 
@@ -1122,9 +1104,7 @@ static NTSTATUS ipv6_string_to_address(const WCHAR *str, BOOL ex,
     {
         if (str[1] != ':') goto error;
         str++;
-        /* Windows bug: a double colon at the beginning is treated as 4 bytes of zeros instead of 2 */
         address->u.Word[0] = 0;
-        n_bytes = 2;
     }
 
     for (;;)
@@ -1323,7 +1303,7 @@ NTSTATUS WINAPI RtlIpv4AddressToStringExW(const IN_ADDR *pin, USHORT port, LPWST
     if (!pin || !buffer || !psize)
         return STATUS_INVALID_PARAMETER;
 
-    TRACE("(%p:0x%x, %d, %p, %p:%d)\n", pin, pin->S_un.S_addr, port, buffer, psize, *psize);
+    TRACE("(%p:0x%lx, %d, %p, %p:%ld)\n", pin, pin->S_un.S_addr, port, buffer, psize, *psize);
 
     needed = swprintf(tmp_ip, ARRAY_SIZE(tmp_ip), L"%u.%u.%u.%u",
                       pin->S_un.S_un_b.s_b1, pin->S_un.S_un_b.s_b2,
@@ -1356,7 +1336,7 @@ NTSTATUS WINAPI RtlIpv4AddressToStringExA(const IN_ADDR *pin, USHORT port, LPSTR
     if (!pin || !buffer || !psize)
         return STATUS_INVALID_PARAMETER;
 
-    TRACE("(%p:0x%x, %d, %p, %p:%d)\n", pin, pin->S_un.S_addr, port, buffer, psize, *psize);
+    TRACE("(%p:0x%lx, %d, %p, %p:%ld)\n", pin, pin->S_un.S_addr, port, buffer, psize, *psize);
 
     needed = sprintf(tmp_ip, "%u.%u.%u.%u",
                      pin->S_un.S_un_b.s_b1, pin->S_un.S_un_b.s_b2,
@@ -1437,7 +1417,7 @@ NTSTATUS WINAPI RtlIpv6AddressToStringExA(const IN6_ADDR *address, ULONG scope, 
     ULONG needed;
     NTSTATUS ret;
 
-    TRACE("(%p %u %u %p %p)\n", address, scope, port, str, size);
+    TRACE("(%p %lu %u %p %p)\n", address, scope, port, str, size);
 
     if (!address || !str || !size)
         return STATUS_INVALID_PARAMETER;
@@ -1483,7 +1463,7 @@ NTSTATUS WINAPI RtlIpv6AddressToStringExA(const IN6_ADDR *address, ULONG scope, 
         p = RtlIpv4AddressToStringA((IN_ADDR *)(address->s6_words + 6), p);
     }
 
-    if (scope) p += sprintf(p, "%%%u", scope);
+    if (scope) p += sprintf(p, "%%%lu", scope);
 
     if (port) p += sprintf(p, "]:%u", ntohs(port));
 
@@ -1837,7 +1817,7 @@ NTSTATUS WINAPI RtlCompressBuffer(USHORT format, PUCHAR uncompressed, ULONG unco
                                   PUCHAR compressed, ULONG compressed_size, ULONG chunk_size,
                                   PULONG final_size, PVOID workspace)
 {
-    FIXME("0x%04x, %p, %u, %p, %u, %u, %p, %p: semi-stub\n", format, uncompressed,
+    FIXME("0x%04x, %p, %lu, %p, %lu, %lu, %p, %p: semi-stub\n", format, uncompressed,
           uncompressed_size, compressed, compressed_size, chunk_size, final_size, workspace);
 
     switch (format & ~COMPRESSION_ENGINE_MAXIMUM)
@@ -2040,7 +2020,7 @@ NTSTATUS WINAPI RtlDecompressFragment(USHORT format, PUCHAR uncompressed, ULONG 
                                PUCHAR compressed, ULONG compressed_size, ULONG offset,
                                PULONG final_size, PVOID workspace)
 {
-    TRACE("0x%04x, %p, %u, %p, %u, %u, %p, %p\n", format, uncompressed,
+    TRACE("0x%04x, %p, %lu, %p, %lu, %lu, %p, %p\n", format, uncompressed,
           uncompressed_size, compressed, compressed_size, offset, final_size, workspace);
 
     switch (format & ~COMPRESSION_ENGINE_MAXIMUM)
@@ -2066,7 +2046,7 @@ NTSTATUS WINAPI RtlDecompressFragment(USHORT format, PUCHAR uncompressed, ULONG 
 NTSTATUS WINAPI RtlDecompressBuffer(USHORT format, PUCHAR uncompressed, ULONG uncompressed_size,
                                     PUCHAR compressed, ULONG compressed_size, PULONG final_size)
 {
-    TRACE("0x%04x, %p, %u, %p, %u, %p\n", format, uncompressed,
+    TRACE("0x%04x, %p, %lu, %p, %lu, %p\n", format, uncompressed,
         uncompressed_size, compressed, compressed_size, final_size);
 
     return RtlDecompressFragment(format, uncompressed, uncompressed_size,
@@ -2165,7 +2145,7 @@ void WINAPI RtlInitializeGenericTableAvl(PRTL_AVL_TABLE table, PRTL_AVL_COMPARE_
  */
 void WINAPI RtlInsertElementGenericTableAvl(PRTL_AVL_TABLE table, void *buffer, ULONG size, BOOL *element)
 {
-    FIXME("%p %p %u %p: stub\n", table, buffer, size, element);
+    FIXME("%p %p %lu %p: stub\n", table, buffer, size, element);
 }
 
 /*********************************************************************

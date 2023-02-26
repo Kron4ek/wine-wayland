@@ -65,7 +65,7 @@ typedef struct tagWND
     struct tagCLASS   *class;         /* Window class */
     struct dce        *dce;           /* DCE pointer */
     WNDPROC            winproc;       /* Window procedure */
-    DWORD              tid;           /* Owner thread id */
+    UINT               tid;           /* Owner thread id */
     HINSTANCE          hInstance;     /* Window hInstance (from CreateWindow) */
     RECT               client_rect;   /* Client area rel. to parent client area */
     RECT               window_rect;   /* Whole window rel. to parent client area */
@@ -75,10 +75,10 @@ typedef struct tagWND
     POINT              max_pos;       /* Position for maximized window */
     WCHAR             *text;          /* Window text */
     struct win_scroll_bar_info *pScroll; /* Scroll-bar info */
-    DWORD              dwStyle;       /* Window style (from CreateWindow) */
-    DWORD              dwExStyle;     /* Extended style (from CreateWindowEx) */
+    UINT               dwStyle;       /* Window style (from CreateWindow) */
+    UINT               dwExStyle;     /* Extended style (from CreateWindowEx) */
     UINT_PTR           wIDmenu;       /* ID or hmenu (from CreateWindow) */
-    DWORD              helpContext;   /* Help context ID */
+    UINT               helpContext;   /* Help context ID */
     UINT               flags;         /* Misc. flags (see below) */
     HMENU              hSysMenu;      /* window's copy of System Menu */
     HICON              hIcon;         /* window's icon */
@@ -131,7 +131,7 @@ struct user_thread_info
     struct user_key_state_info   *key_state;              /* Cache of global key state */
     struct imm_thread_data       *imm_thread_data;        /* IMM thread data */
     HKL                           kbd_layout;             /* Current keyboard layout */
-    DWORD                         kbd_layout_id;          /* Current keyboard layout ID */
+    UINT                          kbd_layout_id;          /* Current keyboard layout ID */
     struct rawinput_thread_data  *rawinput;               /* RawInput thread local data / buffer */
     UINT                          spy_indent;             /* Current spy indent */
 };
@@ -253,7 +253,7 @@ static inline UINT win_get_flags( HWND hwnd )
 }
 
 WND *get_win_ptr( HWND hwnd ) DECLSPEC_HIDDEN;
-BOOL is_child( HWND parent, HWND child );
+BOOL is_child( HWND parent, HWND child ) DECLSPEC_HIDDEN;
 BOOL is_window( HWND hwnd ) DECLSPEC_HIDDEN;
 
 #endif /* __WINE_NTUSER_PRIVATE_H */

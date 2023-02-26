@@ -223,7 +223,7 @@ static struct device *add_device( HKEY key, DWORD type )
     struct device *device;
     RID_DEVICE_INFO info;
     IO_STATUS_BLOCK io;
-    NTSTATUS status;
+    unsigned int status;
     UINT32 handle;
     void *buffer;
     SIZE_T size;
@@ -249,7 +249,7 @@ static struct device *add_device( HKEY key, DWORD type )
     if ((status = NtOpenFile( &file, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, &attr, &io,
                               FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_NONALERT )))
     {
-        ERR( "Failed to open device file %s, status %#x.\n", debugstr_w(path), status );
+        WARN( "Failed to open device file %s, status %#x.\n", debugstr_w(path), status );
         return NULL;
     }
 
@@ -671,10 +671,20 @@ UINT WINAPI NtUserGetRawInputBuffer( RAWINPUT *data, UINT *data_size, UINT heade
         if (!rawinput_from_hardware_message( data, msg_data )) break;
         if (overhead)
         {
+            /* Under WoW64, GetRawInputBuffer always gives 64-bit RAWINPUT structs. */
+            RAWINPUT64 *ri64 = (RAWINPUT64 *)data;
             memmove( (char *)&data->data + overhead, &data->data,
                      data->header.dwSize - sizeof(RAWINPUTHEADER) );
+            ri64->header.dwSize += overhead;
+
+            /* Need to copy wParam before hDevice so it's not overwritten. */
+            ri64->header.wParam = data->header.wParam;
+#ifdef _WIN64
+            ri64->header.hDevice = data->header.hDevice;
+#else
+            ri64->header.hDevice = HandleToULong(data->header.hDevice);
+#endif
         }
-        data->header.dwSize += overhead;
         remaining -= data->header.dwSize;
         data = NEXTRAWINPUTBLOCK(data);
         msg_data = (struct hardware_msg_data *)((char *)msg_data + msg_data->size);
@@ -837,7 +847,7 @@ BOOL WINAPI NtUserRegisterRawInputDevices( const RAWINPUTDEVICE *devices, UINT d
     for (i = 0; i < device_count; ++i)
     {
         TRACE( "device %u: page %#x, usage %#x, flags %#x, target %p.\n", i, devices[i].usUsagePage,
-               devices[i].usUsage, devices[i].dwFlags, devices[i].hwndTarget );
+               devices[i].usUsage, (int)devices[i].dwFlags, devices[i].hwndTarget );
 
         if ((devices[i].dwFlags & RIDEV_INPUTSINK) && !devices[i].hwndTarget)
         {
@@ -852,7 +862,7 @@ BOOL WINAPI NtUserRegisterRawInputDevices( const RAWINPUTDEVICE *devices, UINT d
         }
 
         if (devices[i].dwFlags & ~(RIDEV_REMOVE|RIDEV_NOLEGACY|RIDEV_INPUTSINK|RIDEV_DEVNOTIFY))
-            FIXME( "Unhandled flags %#x for device %u.\n", devices[i].dwFlags, i );
+            FIXME( "Unhandled flags %#x for device %u.\n", (int)devices[i].dwFlags, i );
     }
 
     pthread_mutex_lock( &rawinput_mutex );

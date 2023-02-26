@@ -2512,61 +2512,163 @@ static void test_create_texture1d(void)
     ok(!refcount, "Device has %lu references left.\n", refcount);
 }
 
-#define test_dxgi_resource(a) test_dxgi_resource_(__LINE__, a)
-static void test_dxgi_resource_(unsigned int line, void *iface)
+static void test_dxgi_resource(void *iface, unsigned int bind_flags)
 {
     IDXGIResource *resource, *resource2;
     IDXGISurface *surface, *surface2;
+    DXGI_USAGE usage, expected_usage;
     IUnknown *object = iface, *unk;
     DWORD data;
     HRESULT hr;
     UINT size;
 
     hr = IUnknown_QueryInterface(object, &IID_IDXGIResource, (void **)&resource);
-    ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-    if (FAILED(hr)) return;
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+
+    hr = IDXGIResource_GetUsage(resource, &usage);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    expected_usage = 0;
+    if (bind_flags & D3D11_BIND_RENDER_TARGET)
+        expected_usage |= DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    if (bind_flags & D3D11_BIND_SHADER_RESOURCE)
+        expected_usage |= DXGI_USAGE_SHADER_INPUT;
+    if (bind_flags & D3D11_BIND_UNORDERED_ACCESS)
+        expected_usage |= DXGI_USAGE_UNORDERED_ACCESS;
+    ok(usage == expected_usage, "Got usage %#x.\n", usage);
 
     if (SUCCEEDED(IUnknown_QueryInterface(object, &IID_IDXGISurface, (void **)&surface)))
     {
         hr = IDXGISurface_QueryInterface(surface, &IID_IDXGIDeviceSubObject, (void **)&unk);
-        ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-        ok_(__FILE__, line)((IUnknown *)resource == unk, "Unexpected interface pointer.\n");
+        ok(hr == S_OK, "Got hr %#lx.\n", hr);
+        ok((IUnknown *)resource == unk, "Unexpected interface pointer.\n");
         IUnknown_Release(unk);
 
         hr = IDXGISurface_QueryInterface(surface, &IID_IDXGIObject, (void **)&unk);
-        ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-        ok_(__FILE__, line)((IUnknown *)resource == unk, "Unexpected interface pointer.\n");
+        ok(hr == S_OK, "Got hr %#lx.\n", hr);
+        ok((IUnknown *)resource == unk, "Unexpected interface pointer.\n");
         IUnknown_Release(unk);
 
         hr = IDXGISurface_QueryInterface(surface, &IID_IDXGIResource, (void **)&resource2);
-        ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-        ok_(__FILE__, line)(resource2 == resource, "Unexpected resource pointer.\n");
+        ok(hr == S_OK, "Got hr %#lx.\n", hr);
+        ok(resource2 == resource, "Unexpected resource pointer.\n");
         IDXGIResource_Release(resource2);
 
         hr = IDXGIResource_QueryInterface(resource, &IID_IDXGISurface, (void **)&surface2);
-        ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-        ok_(__FILE__, line)(surface2 == surface, "Unexpected surface pointer.\n");
+        ok(hr == S_OK, "Got hr %#lx.\n", hr);
+        ok(surface2 == surface, "Unexpected surface pointer.\n");
         IDXGISurface_Release(surface2);
 
         hr = IDXGISurface_GetParent(surface, &IID_IDXGIResource, (void **)&resource2);
-        ok_(__FILE__, line)(hr == E_NOINTERFACE, "Got unexpected hr %#lx.\n", hr);
+        ok(hr == E_NOINTERFACE, "Got hr %#lx.\n", hr);
         hr = IDXGIResource_GetParent(resource, &IID_IDXGISurface, (void **)&surface2);
-        ok_(__FILE__, line)(hr == E_NOINTERFACE, "Got unexpected hr %#lx.\n", hr);
+        ok(hr == E_NOINTERFACE, "Got hr %#lx.\n", hr);
 
         data = 123;
         hr = IDXGIResource_SetPrivateData(resource, &IID_IUnknown, sizeof(data), &data);
-        ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+        ok(hr == S_OK, "Got hr %#lx.\n", hr);
 
         size = sizeof(data);
         data = 0;
         hr = IDXGISurface_GetPrivateData(surface, &IID_IUnknown, &size, &data);
-        ok_(__FILE__, line)(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-        ok_(__FILE__, line)(data == 123, "Unexpected data %#lx.\n", data);
+        ok(hr == S_OK, "Got hr %#lx.\n", hr);
+        ok(data == 123, "Unexpected data %#lx.\n", data);
 
         IDXGISurface_Release(surface);
     }
 
     IDXGIResource_Release(resource);
+}
+
+static void test_dxgi_resources(void)
+{
+    struct d3d11_test_context test_context;
+    ID3D11Device *device;
+    unsigned int i, j;
+    HRESULT hr;
+
+    static const unsigned int bind_flags[] =
+    {
+        0,
+        D3D11_BIND_SHADER_RESOURCE,
+        D3D11_BIND_RENDER_TARGET,
+        D3D11_BIND_DEPTH_STENCIL,
+        D3D11_BIND_UNORDERED_ACCESS,
+        D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
+        D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS,
+        D3D11_BIND_CONSTANT_BUFFER,
+        D3D11_BIND_VERTEX_BUFFER,
+        D3D11_BIND_INDEX_BUFFER,
+        D3D11_BIND_STREAM_OUTPUT,
+    };
+
+    static const struct
+    {
+        D3D11_RESOURCE_DIMENSION dimension;
+        unsigned int level_count;
+    }
+    dimensions[] =
+    {
+        {D3D11_RESOURCE_DIMENSION_BUFFER, 0},
+        {D3D11_RESOURCE_DIMENSION_TEXTURE1D, 1},
+        {D3D11_RESOURCE_DIMENSION_TEXTURE1D, 0},
+        {D3D11_RESOURCE_DIMENSION_TEXTURE2D, 1},
+        {D3D11_RESOURCE_DIMENSION_TEXTURE2D, 0},
+        {D3D11_RESOURCE_DIMENSION_TEXTURE3D, 1},
+        {D3D11_RESOURCE_DIMENSION_TEXTURE3D, 0},
+    };
+
+    if (!init_test_context(&test_context, NULL))
+        return;
+    device = test_context.device;
+
+    for (i = 0; i < ARRAY_SIZE(bind_flags); ++i)
+    {
+        if ((bind_flags[i] & D3D11_BIND_UNORDERED_ACCESS)
+                && ID3D11Device_GetFeatureLevel(device) < D3D_FEATURE_LEVEL_11_0)
+            continue;
+
+        for (j = 0; j < ARRAY_SIZE(dimensions); ++j)
+        {
+            struct resource_desc resource_desc =
+            {
+                .dimension = dimensions[j].dimension,
+                .width = 64,
+                .height = 64,
+                .depth_or_array_size = 1,
+                .level_count = dimensions[j].level_count,
+                .format = DXGI_FORMAT_R8G8B8A8_UNORM,
+                .sample_desc.Count = 1,
+                .usage = D3D11_USAGE_DEFAULT,
+                .bind_flags = bind_flags[i],
+            };
+            ID3D11Resource *resource;
+
+            if ((bind_flags[i] & (D3D11_BIND_CONSTANT_BUFFER | D3D11_BIND_VERTEX_BUFFER
+                    | D3D11_BIND_INDEX_BUFFER | D3D11_BIND_STREAM_OUTPUT))
+                    && resource_desc.dimension != D3D11_RESOURCE_DIMENSION_BUFFER)
+                continue;
+
+            if (bind_flags[i] & D3D11_BIND_DEPTH_STENCIL)
+            {
+                resource_desc.format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+                if (resource_desc.dimension != D3D11_RESOURCE_DIMENSION_TEXTURE1D
+                        && resource_desc.dimension != D3D11_RESOURCE_DIMENSION_TEXTURE2D)
+                    continue;
+            }
+
+            winetest_push_context("Bind flags %#x, dimension %#x, level_count %u",
+                    bind_flags[i], dimensions[j].dimension, dimensions[j].level_count);
+
+            hr = create_resource(device, &resource_desc, NULL, &resource);
+            ok(hr == S_OK, "Got hr %#lx.\n", hr);
+            test_dxgi_resource(resource, bind_flags[i]);
+            ID3D11Resource_Release(resource);
+
+            winetest_pop_context();
+        }
+    }
+
+    release_test_context(&test_context);
 }
 
 static void test_texture1d_interfaces(void)
@@ -2628,15 +2730,12 @@ static void test_texture1d_interfaces(void)
 
     hr = ID3D11Device_CreateTexture1D(device, &desc, NULL, &texture);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-    test_dxgi_resource(texture);
     ID3D11Texture1D_Release(texture);
 
     desc.MipLevels = 0;
     hr = ID3D11Device_CreateTexture1D(device, &desc, NULL, &texture);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-    test_dxgi_resource(texture);
     check_interface(texture, &IID_IDXGISurface, FALSE, FALSE);
-    check_interface(texture, &IID_IDXGIResource, TRUE, FALSE);
     hr = check_interface(texture, &IID_ID3D10Texture1D, TRUE, TRUE); /* Not available on all Windows versions. */
     ID3D11Texture1D_Release(texture);
     if (FAILED(hr))
@@ -3025,16 +3124,12 @@ static void test_texture2d_interfaces(void)
     hr = ID3D11Device_CreateTexture2D(device, &desc, NULL, &texture);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     check_interface(texture, &IID_IDXGISurface, TRUE, FALSE);
-    check_interface(texture, &IID_IDXGIResource, TRUE, FALSE);
-    test_dxgi_resource(texture);
     ID3D11Texture2D_Release(texture);
 
     desc.MipLevels = 0;
     hr = ID3D11Device_CreateTexture2D(device, &desc, NULL, &texture);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     check_interface(texture, &IID_IDXGISurface, FALSE, FALSE);
-    check_interface(texture, &IID_IDXGIResource, TRUE, FALSE);
-    test_dxgi_resource(texture);
     hr = check_interface(texture, &IID_ID3D10Texture2D, TRUE, TRUE); /* Not available on all Windows versions. */
     ID3D11Texture2D_Release(texture);
     if (FAILED(hr))
@@ -3299,8 +3394,6 @@ static void test_texture3d_interfaces(void)
     hr = ID3D11Device_CreateTexture3D(device, &desc, NULL, &texture);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     check_interface(texture, &IID_IDXGISurface, FALSE, FALSE);
-    check_interface(texture, &IID_IDXGIResource, TRUE, FALSE);
-    test_dxgi_resource(texture);
     hr = check_interface(texture, &IID_ID3D10Texture3D, TRUE, TRUE); /* Not available on all Windows versions. */
     ID3D11Texture3D_Release(texture);
     if (FAILED(hr))
@@ -16349,6 +16442,13 @@ static void check_rgba_sint8_(unsigned int line, DWORD data, const struct uvec4 
             data, expected[0], expected[1], x, v->x, v->y, v->z, v->w);
 }
 
+static void clear_uav(ID3D11DeviceContext *context, ID3D11UnorderedAccessView *uav, const struct uvec4 *uv4)
+{
+    /* Cast to (const unsigned int *) instead of passing &uv4->x, since gcc warns about
+     * overreading an unsigned int[4] from an unsigned int otherwise. */
+    ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, (const unsigned int *)uv4);
+}
+
 static void test_clear_buffer_unordered_access_view(void)
 {
     D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc;
@@ -16464,13 +16564,13 @@ static void test_clear_buffer_unordered_access_view(void)
     for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
     {
         uvec4 = uvec4_data[i];
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        clear_uav(context, uav, &uvec4);
         get_buffer_readback(buffer, &rb);
         SetRect(&rect, 0, 0, buffer_desc.ByteWidth / sizeof(uvec4.x), 1);
         check_readback_data_color(&rb, &rect, uvec4.x, 0);
         release_resource_readback(&rb);
 
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        clear_uav(context, uav2, &fe_uvec4);
         get_buffer_readback(buffer, &rb);
         SetRect(&rect, 0, 0, U(uav_desc).Buffer.NumElements * buffer_desc.StructureByteStride / sizeof(uvec4.x), 1);
         check_readback_data_color(&rb, &rect, fe_uvec4.x, 0);
@@ -16504,13 +16604,13 @@ static void test_clear_buffer_unordered_access_view(void)
     for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
     {
         uvec4 = uvec4_data[i];
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        clear_uav(context, uav, &uvec4);
         get_buffer_readback(buffer, &rb);
         SetRect(&rect, 0, 0, buffer_desc.ByteWidth / sizeof(uvec4.x), 1);
         check_readback_data_color(&rb, &rect, uvec4.x, 0);
         release_resource_readback(&rb);
 
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        clear_uav(context, uav2, &fe_uvec4);
         get_buffer_readback(buffer, &rb);
         SetRect(&rect, 0, 0, U(uav_desc).Buffer.FirstElement, 1);
         check_readback_data_color(&rb, &rect, uvec4.x, 0);
@@ -16543,13 +16643,13 @@ static void test_clear_buffer_unordered_access_view(void)
     for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
     {
         uvec4 = uvec4_data[i];
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        clear_uav(context, uav, &uvec4);
         get_buffer_readback(buffer, &rb);
         SetRect(&rect, 0, 0, buffer_desc.ByteWidth / sizeof(uvec4.x), 1);
         check_readback_data_color(&rb, &rect, uvec4.x, 0);
         release_resource_readback(&rb);
 
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        clear_uav(context, uav2, &fe_uvec4);
         get_buffer_readback(buffer, &rb);
         SetRect(&rect, 0, 0, U(uav_desc).Buffer.FirstElement, 1);
         check_readback_data_color(&rb, &rect, uvec4.x, 0);
@@ -16579,7 +16679,7 @@ static void test_clear_buffer_unordered_access_view(void)
         BOOL all_match;
 
         uvec4 = uvec4_data[i];
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        clear_uav(context, uav, &uvec4);
         get_buffer_readback(buffer, &rb);
         for (x = 0, all_match = TRUE; x < buffer_desc.ByteWidth / sizeof(uvec4); ++x)
         {
@@ -16595,7 +16695,7 @@ static void test_clear_buffer_unordered_access_view(void)
                 data->x, data->y, data->z, data->w, uvec4.x, uvec4.y, uvec4.z, uvec4.w, x);
         release_resource_readback(&rb);
 
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        clear_uav(context, uav2, &fe_uvec4);
         get_buffer_readback(buffer, &rb);
         for (x = 0, all_match = TRUE; x < buffer_desc.ByteWidth / sizeof(uvec4); ++x)
         {
@@ -16615,7 +16715,7 @@ static void test_clear_buffer_unordered_access_view(void)
     }
 
     uvec4.x = uvec4.y = uvec4.z = uvec4.w = 0xdeadbeef;
-    ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+    clear_uav(context, uav, &uvec4);
     ID3D11UnorderedAccessView_Release(uav);
     ID3D11UnorderedAccessView_Release(uav2);
 
@@ -16634,14 +16734,14 @@ static void test_clear_buffer_unordered_access_view(void)
     for (i = 0; i < ARRAY_SIZE(uvec4_data); ++i)
     {
         uvec4 = uvec4_data[i];
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav, &uvec4.x);
+        clear_uav(context, uav, &uvec4);
         get_buffer_readback(buffer, &rb);
         todo_wine check_rgba_sint8(get_readback_color(&rb, 0, 0, 0), &uvec4);
         todo_wine check_rgba_sint8(get_readback_color(&rb, 7, 0, 0), &uvec4);
         todo_wine check_rgba_sint8(get_readback_color(&rb, 15, 0, 0), &uvec4);
         release_resource_readback(&rb);
 
-        ID3D11DeviceContext_ClearUnorderedAccessViewUint(context, uav2, &fe_uvec4.x);
+        clear_uav(context, uav2, &fe_uvec4);
         get_buffer_readback(buffer, &rb);
         todo_wine check_rgba_sint8(get_readback_color(&rb, 0, 0, 0), &uvec4);
         todo_wine check_rgba_sint8(get_readback_color(&rb, U(uav_desc).Buffer.FirstElement - 1, 0, 0), &uvec4);
@@ -21832,7 +21932,7 @@ static void test_stencil_separate(void)
     rs_desc.ScissorEnable = FALSE;
     rs_desc.MultisampleEnable = FALSE;
     rs_desc.AntialiasedLineEnable = FALSE;
-    ID3D11Device_CreateRasterizerState(device, &rs_desc, &rs);
+    hr = ID3D11Device_CreateRasterizerState(device, &rs_desc, &rs);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     ID3D11DeviceContext_ClearRenderTargetView(context, test_context.backbuffer_rtv, red);
@@ -21852,7 +21952,7 @@ static void test_stencil_separate(void)
 
     ID3D11RasterizerState_Release(rs);
     rs_desc.FrontCounterClockwise = TRUE;
-    ID3D11Device_CreateRasterizerState(device, &rs_desc, &rs);
+    hr = ID3D11Device_CreateRasterizerState(device, &rs_desc, &rs);
     ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
     ID3D11DeviceContext_RSSetState(context, rs);
 
@@ -28401,7 +28501,7 @@ static void test_depth_bias(void)
                 for (k = 0; k < ARRAY_SIZE(bias_clamp_tests); ++k)
                 {
                     rasterizer_desc.DepthBiasClamp = bias_clamp_tests[k];
-                    ID3D11Device_CreateRasterizerState(device, &rasterizer_desc, &rs);
+                    hr = ID3D11Device_CreateRasterizerState(device, &rasterizer_desc, &rs);
                     ok(hr == S_OK, "Format %#x, quad %u, bias %u, clamp %u: Got unexpected hr %#lx.\n",
                             format, i, j, k, hr);
                     ID3D11DeviceContext_RSSetState(context, rs);
@@ -28485,7 +28585,7 @@ static void test_depth_bias(void)
                 {
                     BOOL all_match = TRUE;
                     rasterizer_desc.DepthBiasClamp = bias_clamp_tests[k];
-                    ID3D11Device_CreateRasterizerState(device, &rasterizer_desc, &rs);
+                    hr = ID3D11Device_CreateRasterizerState(device, &rasterizer_desc, &rs);
                     ok(hr == S_OK, "Format %#x, slope %u, bias %u, clamp %u: Got unexpected hr %#lx.\n",
                             format, i, j, k, hr);
                     ID3D11DeviceContext_RSSetState(context, rs);
@@ -34348,11 +34448,10 @@ static void test_dynamic_map_synchronization(void)
 {
     static const struct vec4 green = {0.0f, 1.0f, 0.0f, 1.0f};
     static const struct vec4 red = {1.0f, 0.0f, 0.0f, 1.0f};
-    ID3D11DeviceContext *immediate, *deferred;
     struct d3d11_test_context test_context;
     D3D11_BUFFER_DESC buffer_desc = {0};
     D3D11_MAPPED_SUBRESOURCE map_desc;
-    ID3D11CommandList *list;
+    ID3D11DeviceContext *immediate;
     ID3D11Device *device;
     unsigned int x, y;
     HRESULT hr;
@@ -34361,9 +34460,6 @@ static void test_dynamic_map_synchronization(void)
         return;
     device = test_context.device;
     immediate = test_context.immediate_context;
-
-    hr = ID3D11Device_CreateDeferredContext(device, 0, &deferred);
-    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
     buffer_desc.ByteWidth = 200 * 4 * sizeof(struct vec3);
     buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
@@ -34376,33 +34472,14 @@ static void test_dynamic_map_synchronization(void)
 
     for (y = 0; y < 200; ++y)
     {
-        if (y % 2)
-        {
-            hr = ID3D11DeviceContext_Map(immediate, (ID3D11Resource *)test_context.vb,
-                    0, D3D11_MAP_WRITE_DISCARD, 0, &map_desc);
-            ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
+        hr = ID3D11DeviceContext_Map(immediate, (ID3D11Resource *)test_context.vb,
+                0, D3D11_MAP_WRITE_DISCARD, 0, &map_desc);
+        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
 
-            fill_dynamic_vb_quad(&map_desc, 0, y);
+        fill_dynamic_vb_quad(&map_desc, 0, y);
 
-            ID3D11DeviceContext_Unmap(immediate, (ID3D11Resource *)test_context.vb, 0);
-            draw_color_quad(&test_context, &green);
-        }
-        else
-        {
-            hr = ID3D11DeviceContext_Map(deferred, (ID3D11Resource *)test_context.vb,
-                    0, D3D11_MAP_WRITE_DISCARD, 0, &map_desc);
-            ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-
-            fill_dynamic_vb_quad(&map_desc, 0, y);
-
-            ID3D11DeviceContext_Unmap(deferred, (ID3D11Resource *)test_context.vb, 0);
-
-            hr = ID3D11DeviceContext_FinishCommandList(deferred, FALSE, &list);
-            ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
-            ID3D11DeviceContext_ExecuteCommandList(immediate, list, TRUE);
-            ID3D11CommandList_Release(list);
-            draw_color_quad(&test_context, &green);
-        }
+        ID3D11DeviceContext_Unmap(immediate, (ID3D11Resource *)test_context.vb, 0);
+        draw_color_quad(&test_context, &green);
 
         for (x = 1; x < 200; ++x)
         {
@@ -34419,7 +34496,6 @@ static void test_dynamic_map_synchronization(void)
 
     check_texture_color(test_context.backbuffer, 0xff00ff00, 0);
 
-    ID3D11DeviceContext_Release(deferred);
     release_test_context(&test_context);
 }
 
@@ -34742,6 +34818,196 @@ static void test_rtv_depth_slice(void)
     release_test_context(&test_context);
 }
 
+static void test_vertex_formats(void)
+{
+    struct d3d11_test_context test_context;
+    ID3D11DeviceContext *context;
+    ID3D11RenderTargetView *rtv;
+    ID3D11Device *device;
+    ID3D11Texture2D *rt;
+    unsigned int i;
+    HRESULT hr;
+
+    static const D3D11_TEXTURE2D_DESC rt_desc =
+    {
+        .Width = 4,
+        .Height = 4,
+        .MipLevels = 1,
+        .ArraySize = 1,
+        .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+        .SampleDesc.Count = 1,
+        .Usage = D3D11_USAGE_DEFAULT,
+        .BindFlags = D3D11_BIND_RENDER_TARGET,
+    };
+
+    static const struct quad
+    {
+        struct vec2 position;
+        unsigned int color[4];
+    }
+    quad[] =
+    {
+        {{-1.0f, -1.0f}, {0x87654321, 0x12345678, 0xcccccccc, 0xdeadbeef}},
+        {{-1.0f,  1.0f}, {0x87654321, 0x12345678, 0xcccccccc, 0xdeadbeef}},
+        {{ 1.0f, -1.0f}, {0x87654321, 0x12345678, 0xcccccccc, 0xdeadbeef}},
+        {{ 1.0f,  1.0f}, {0x87654321, 0x12345678, 0xcccccccc, 0xdeadbeef}},
+    };
+
+    static const unsigned int vs_code[] =
+    {
+#if 0
+        void main(inout float4 position : sv_position, inout float4 color : COLOR)
+        {
+        }
+#endif
+        0x43425844, 0xc2f6fe60, 0x8a304938, 0x14c1a190, 0xe6f3e35e, 0x00000001, 0x00000144, 0x00000003,
+        0x0000002c, 0x00000080, 0x000000d4, 0x4e475349, 0x0000004c, 0x00000002, 0x00000008, 0x00000038,
+        0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x00000044, 0x00000000, 0x00000000,
+        0x00000003, 0x00000001, 0x00000f0f, 0x705f7673, 0x7469736f, 0x006e6f69, 0x4f4c4f43, 0xabab0052,
+        0x4e47534f, 0x0000004c, 0x00000002, 0x00000008, 0x00000038, 0x00000000, 0x00000001, 0x00000003,
+        0x00000000, 0x0000000f, 0x00000044, 0x00000000, 0x00000000, 0x00000003, 0x00000001, 0x0000000f,
+        0x705f7673, 0x7469736f, 0x006e6f69, 0x4f4c4f43, 0xabab0052, 0x52444853, 0x00000068, 0x00010040,
+        0x0000001a, 0x0300005f, 0x001010f2, 0x00000000, 0x0300005f, 0x001010f2, 0x00000001, 0x04000067,
+        0x001020f2, 0x00000000, 0x00000001, 0x03000065, 0x001020f2, 0x00000001, 0x05000036, 0x001020f2,
+        0x00000000, 0x00101e46, 0x00000000, 0x05000036, 0x001020f2, 0x00000001, 0x00101e46, 0x00000001,
+        0x0100003e,
+    };
+
+    static const unsigned int ps_code[] =
+    {
+#if 0
+        float4 main(float4 position : sv_position, float4 color : COLOR) : sv_target
+        {
+            return color;
+        }
+#endif
+        0x43425844, 0xb9b047ca, 0x73193a19, 0xb9a919ed, 0x21c2ff5f, 0x00000001, 0x000000f4, 0x00000003,
+        0x0000002c, 0x00000080, 0x000000b4, 0x4e475349, 0x0000004c, 0x00000002, 0x00000008, 0x00000038,
+        0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000000f, 0x00000044, 0x00000000, 0x00000000,
+        0x00000003, 0x00000001, 0x00000f0f, 0x705f7673, 0x7469736f, 0x006e6f69, 0x4f4c4f43, 0xabab0052,
+        0x4e47534f, 0x0000002c, 0x00000001, 0x00000008, 0x00000020, 0x00000000, 0x00000000, 0x00000003,
+        0x00000000, 0x0000000f, 0x745f7673, 0x65677261, 0xabab0074, 0x52444853, 0x00000038, 0x00000040,
+        0x0000000e, 0x03001062, 0x001010f2, 0x00000001, 0x03000065, 0x001020f2, 0x00000000, 0x05000036,
+        0x001020f2, 0x00000000, 0x00101e46, 0x00000001, 0x0100003e,
+    };
+
+    static const struct vec4 white = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    static const struct
+    {
+        DXGI_FORMAT format;
+        struct vec4 expect;
+    }
+    tests[] =
+    {
+        {DXGI_FORMAT_R32G32B32A32_FLOAT,    {-1.72477726e-34,  5.69045661e-28, -1.07374176e+08, -6.25985340e+18}},
+        {DXGI_FORMAT_R32G32B32_FLOAT,       {-1.72477726e-34,  5.69045661e-28, -1.07374176e+08,  1.0}},
+        {DXGI_FORMAT_R32G32_FLOAT,          {-1.72477726e-34,  5.69045661e-28,  0.0,             1.0}},
+        {DXGI_FORMAT_R32_FLOAT,             {-1.72477726e-34,  0.0,             0.0,             1.0}},
+
+        {DXGI_FORMAT_R10G10B10A2_UNORM,     { 7.82991230e-01,  3.28445762e-01,  1.15347020e-01,  6.66666666e-01}},
+
+        {DXGI_FORMAT_R11G11B10_FLOAT,       { 1.89453125e-01,  1.30000000e+01,  3.81250000e+00,  1.0}},
+
+        {DXGI_FORMAT_R16G16B16A16_FLOAT,    { 3.56445313e+00, -1.12831593e-04,  1.03500000e+02,  7.57217407e-04}},
+        {DXGI_FORMAT_R16G16B16A16_UNORM,    { 2.62226284e-01,  5.28892934e-01,  3.37773710e-01,  7.11070448e-02}},
+        {DXGI_FORMAT_R16G16B16A16_SNORM,    { 5.24460614e-01, -9.42258954e-01,  6.75557733e-01,  1.42216250e-01}},
+        {DXGI_FORMAT_R16G16_FLOAT,          { 3.56445313e+00, -1.12831593e-04,  0.0,             1.0}},
+        {DXGI_FORMAT_R16G16_UNORM,          { 2.62226284e-01,  5.28892934e-01,  0.0,             1.0}},
+        {DXGI_FORMAT_R16G16_SNORM,          { 5.24460614e-01, -9.42258954e-01,  0.0,             1.0}},
+        {DXGI_FORMAT_R16_FLOAT,             { 3.56445313e+00,  0.0,             0.0,             1.0}},
+        {DXGI_FORMAT_R16_UNORM,             { 2.62226284e-01,  0.0,             0.0,             1.0}},
+        {DXGI_FORMAT_R16_SNORM,             { 5.24460614e-01,  0.0,             0.0,             1.0}},
+
+        {DXGI_FORMAT_R8G8B8A8_UNORM,        { 1.29411772e-01,  2.62745112e-01,  3.96078438e-01,  5.29411793e-01}},
+        {DXGI_FORMAT_R8G8B8A8_SNORM,        { 2.59842515e-01,  5.27559042e-01,  7.95275569e-01, -9.52755928e-01}},
+        {DXGI_FORMAT_R8G8_UNORM,            { 1.29411772e-01,  2.62745112e-01,  0.0,             1.0}},
+        {DXGI_FORMAT_R8G8_SNORM,            { 2.59842515e-01,  5.27559042e-01,  0.0,             1.0}},
+        {DXGI_FORMAT_R8_UNORM,              { 1.29411772e-01,  0.0,             0.0,             1.0}},
+        {DXGI_FORMAT_R8_SNORM,              { 2.59842515e-01,  0.0,             0.0,             1.0}},
+
+        {DXGI_FORMAT_B8G8R8A8_UNORM,        { 3.96078438e-01,  2.62745112e-01,  1.29411772e-01,  5.29411793e-01}},
+        {DXGI_FORMAT_B8G8R8X8_UNORM,        { 3.96078438e-01,  2.62745112e-01,  1.29411772e-01,  1.0}},
+    };
+
+    if (!init_test_context(&test_context, NULL))
+        return;
+    device = test_context.device;
+    context = test_context.immediate_context;
+
+    hr = ID3D11Device_CreateTexture2D(device, &rt_desc, NULL, &rt);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+    hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource *)rt, NULL, &rtv);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+
+    hr = ID3D11Device_CreateVertexShader(device, vs_code, sizeof(vs_code), NULL, &test_context.vs);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+
+    hr = ID3D11Device_CreatePixelShader(device, ps_code, sizeof(ps_code), NULL, &test_context.ps);
+    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+
+    test_context.vb = create_buffer(device, D3D11_BIND_VERTEX_BUFFER, sizeof(quad), quad);
+
+    for (i = 0; i < ARRAY_SIZE(tests); ++i)
+    {
+        const D3D11_INPUT_ELEMENT_DESC layout_desc[] =
+        {
+            {
+                .SemanticName = "sv_position",
+                .SemanticIndex = 0,
+                .Format = DXGI_FORMAT_R32G32_FLOAT,
+                .InputSlot = 0,
+                .AlignedByteOffset = offsetof(struct quad, position),
+                .InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA,
+            },
+            {
+                .SemanticName = "COLOR",
+                .SemanticIndex = 0,
+                .Format = tests[i].format,
+                .InputSlot = 0,
+                .AlignedByteOffset = offsetof(struct quad, color),
+                .InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA,
+            },
+        };
+
+        static const unsigned int stride = sizeof(*quad);
+        static const unsigned int offset = 0;
+        ID3D11InputLayout *input_layout;
+        unsigned int format_support;
+
+        hr = ID3D11Device_CheckFormatSupport(device, tests[i].format, &format_support);
+        ok(hr == S_OK || hr == E_FAIL, "Got hr %#lx.\n", hr);
+
+        if (!(format_support & D3D11_FORMAT_SUPPORT_IA_VERTEX_BUFFER))
+            continue;
+
+        winetest_push_context("Format %#x", tests[i].format);
+
+        hr = ID3D11Device_CreateInputLayout(device, layout_desc, ARRAY_SIZE(layout_desc),
+                vs_code, sizeof(vs_code), &input_layout);
+        ok(hr == S_OK, "Got hr %#lx.\n", hr);
+
+        clear_rtv(context, rtv, &white);
+        ID3D11DeviceContext_OMSetRenderTargets(context, 1, &rtv, NULL);
+        ID3D11DeviceContext_IASetInputLayout(context, input_layout);
+        ID3D11DeviceContext_IASetPrimitiveTopology(context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+        ID3D11DeviceContext_IASetVertexBuffers(context, 0, 1, &test_context.vb, &stride, &offset);
+        ID3D11DeviceContext_VSSetShader(context, test_context.vs, NULL, 0);
+        ID3D11DeviceContext_PSSetShader(context, test_context.ps, NULL, 0);
+        ID3D11DeviceContext_Draw(context, 4, 0);
+
+        check_texture_vec4(rt, &tests[i].expect, 1);
+
+        ID3D11InputLayout_Release(input_layout);
+
+        winetest_pop_context();
+    }
+
+    ID3D11RenderTargetView_Release(rtv);
+    ID3D11Texture2D_Release(rt);
+    release_test_context(&test_context);
+}
+
 START_TEST(d3d11)
 {
     unsigned int argc, i;
@@ -34924,6 +35190,8 @@ START_TEST(d3d11)
     queue_test(test_user_defined_annotation);
     queue_test(test_logic_op);
     queue_test(test_rtv_depth_slice);
+    queue_test(test_vertex_formats);
+    queue_test(test_dxgi_resources);
 
     run_queued_tests();
 

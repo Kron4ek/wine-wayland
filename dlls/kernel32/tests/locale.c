@@ -78,6 +78,7 @@ static INT (WINAPI *pCompareStringEx)(LPCWSTR, DWORD, LPCWSTR, INT, LPCWSTR, INT
                                       LPNLSVERSIONINFO, LPVOID, LPARAM);
 static INT (WINAPI *pGetGeoInfoA)(GEOID, GEOTYPE, LPSTR, INT, LANGID);
 static INT (WINAPI *pGetGeoInfoW)(GEOID, GEOTYPE, LPWSTR, INT, LANGID);
+static INT (WINAPI *pGetGeoInfoEx)(const WCHAR *, GEOTYPE, PWSTR, INT);
 static INT (WINAPI *pGetUserDefaultGeoName)(LPWSTR, int);
 static BOOL (WINAPI *pSetUserGeoName)(PWSTR);
 static BOOL (WINAPI *pEnumSystemGeoID)(GEOCLASS, GEOID, GEO_ENUMPROC);
@@ -132,6 +133,7 @@ static void InitFunctionPointers(void)
   X(CompareStringEx);
   X(GetGeoInfoA);
   X(GetGeoInfoW);
+  X(GetGeoInfoEx);
   X(GetUserDefaultGeoName);
   X(SetUserGeoName);
   X(EnumSystemGeoID);
@@ -1402,6 +1404,7 @@ static void test_GetNumberFormatA(void)
   static char szComma[] = { ',', '\0' };
   int ret;
   LCID lcid = MAKELCID(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), SORT_DEFAULT);
+  WCHAR grouping[32], t1000[8], dec[8], frac[8], lzero[8];
   char buffer[BUFFER_SIZE];
   NUMBERFMTA format;
 
@@ -1520,6 +1523,22 @@ static void test_GetNumberFormatA(void)
   ret = GetNumberFormatA(lcid, 0, "123456789", &format, buffer, ARRAY_SIZE(buffer));
   expect_str(ret, buffer, "1234,567,89.0");
 
+  format.Grouping = 203;
+  ret = GetNumberFormatA(lcid, 0, "123456789", &format, buffer, ARRAY_SIZE(buffer));
+  expect_str(ret, buffer, "1,234,567,,89.0");
+
+  format.Grouping = 2030;
+  ret = GetNumberFormatA(lcid, 0, "123456789", &format, buffer, ARRAY_SIZE(buffer));
+  expect_str(ret, buffer, "1234,567,,89.0");
+
+  format.Grouping = 2003;
+  ret = GetNumberFormatA(lcid, 0, "123456789", &format, buffer, ARRAY_SIZE(buffer));
+  expect_str(ret, buffer, "1,234,567,,,89.0");
+
+  format.Grouping = 1200;
+  ret = GetNumberFormatA(lcid, 0, "123456789", &format, buffer, ARRAY_SIZE(buffer));
+  expect_str(ret, buffer, "123456,,78,9.0");
+
   /* Grouping of a negative number */
   format.NegativeOrder = NEG_LEFT;
   format.Grouping = 3;
@@ -1560,6 +1579,67 @@ static void test_GetNumberFormatA(void)
   {
     ret = GetNumberFormatA(lcid, NUO, "-12345", NULL, buffer, ARRAY_SIZE(buffer));
     expect_str(ret, buffer, "-12\xa0\x33\x34\x35,00"); /* Non breaking space */
+  }
+
+  /* Test the actual LOCALE_SGROUPING string, the rules for repeats are opposite */
+  if (GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SGROUPING, grouping, ARRAY_SIZE(grouping)) &&
+      GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, t1000, ARRAY_SIZE(t1000)) &&
+      GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, dec, ARRAY_SIZE(dec)) &&
+      GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_IDIGITS, frac, ARRAY_SIZE(frac)) &&
+      GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_ILZERO, lzero, ARRAY_SIZE(lzero)))
+  {
+    static const struct
+    {
+        const char *grouping;
+        const char *expected;
+    } tests[] = {
+        { "3;0",                "1,234,567,890.54321" },
+        { "2;3",                "12345,678,90.54321" },
+        { "1",                  "123456789,0.54321" },
+        { "1;0",                "1,2,3,4,5,6,7,8,9,0.54321" },
+        { "1;0;3",              "123456,789,,0.54321" },
+        { "0",                  "1234567890.54321" },
+        { "0;0",                "1234567890.54321" },
+        { "0;1",                "123456789,0.54321" },
+        { "0;0;0",              "1234567890.54321" },
+        { "0;1;0",              "1,2,3,4,5,6,7,8,9,0.54321" },
+        { "2;0;0",              "12345678,90.54321" },
+        { "2;0;0;0",            "12345678,,90.54321" },
+        { "2;0;0;0;0",          "12345678,,,90.54321" },
+        { "2;0;0;1;0",          "1,2,3,4,5,6,7,8,,,90.54321" },
+        { "1;3;2",              "1234,56,789,0.54321" },
+        { "1;3;2;0",            "12,34,56,789,0.54321" },
+        { "3;1;1;2;0",          "1,23,45,6,7,890.54321" },
+        { "6;1",                "123,4,567890.54321" },
+    };
+    unsigned i;
+
+    SetLocaleInfoA(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, ",");
+    SetLocaleInfoA(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, ".");
+    SetLocaleInfoA(LOCALE_USER_DEFAULT, LOCALE_IDIGITS, "5");
+    SetLocaleInfoA(LOCALE_USER_DEFAULT, LOCALE_ILZERO, "0");
+
+    for (i = 0; i < ARRAY_SIZE(tests); i++)
+    {
+      SetLocaleInfoA(LOCALE_USER_DEFAULT, LOCALE_SGROUPING, tests[i].grouping);
+      SetLastError(0xdeadbeef);
+      ret = GetNumberFormatA(LOCALE_USER_DEFAULT, 0, "1234567890.54321", NULL, buffer, ARRAY_SIZE(buffer));
+      if (ret)
+      {
+        ok(GetLastError() == 0xdeadbeef, "[%u] unexpected error %lu\n", i, GetLastError());
+        ok(ret == strlen(tests[i].expected) + 1, "[%u] unexpected ret %d\n", i, ret);
+        ok(!strcmp(buffer, tests[i].expected), "[%u] unexpected string %s\n", i, buffer);
+      }
+      else
+        ok(0, "[%u] expected success, got error %ld\n", i, GetLastError());
+    }
+
+    /* Restore */
+    ok(SetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SGROUPING, grouping), "Restoring SGROUPING failed\n");
+    ok(SetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, t1000), "Restoring STHOUSAND failed\n");
+    ok(SetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, dec), "Restoring SDECIMAL failed\n");
+    ok(SetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_IDIGITS, frac), "Restoring IDIGITS failed\n");
+    ok(SetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_ILZERO, lzero), "Restoring ILZERO failed\n");
   }
 }
 
@@ -1814,7 +1894,12 @@ static void test_CompareStringA(void)
   static const char ABC_FF[] = {'A','B','C',0,0xFF};
   int ret, i;
   char a[256];
+  BOOL is_utf8;
+  CPINFOEXA cpinfo;
   LCID lcid = MAKELCID(MAKELANGID(LANG_FRENCH, SUBLANG_DEFAULT), SORT_DEFAULT);
+
+  GetCPInfoExA( CP_ACP, 0, &cpinfo );
+  is_utf8 = cpinfo.CodePage == CP_UTF8;
 
   for (i = 0; i < ARRAY_SIZE(comparestringa_data); i++)
   {
@@ -1943,13 +2028,13 @@ static void test_CompareStringA(void)
     ret = CompareStringA(LOCALE_USER_DEFAULT, 0, ABC_EE, 3, ABC_FF, 3);
     ok(ret == CSTR_EQUAL, "expected CSTR_EQUAL, got %d\n", ret);
     ret = CompareStringA(LOCALE_USER_DEFAULT, 0, ABC_EE, 5, ABC_FF, 3);
-    ok(ret == CSTR_GREATER_THAN, "expected CSTR_GREATER_THAN, got %d\n", ret);
+    ok(ret == CSTR_GREATER_THAN || (is_utf8 && ret == CSTR_EQUAL), "expected CSTR_GREATER_THAN, got %d\n", ret);
     ret = CompareStringA(LOCALE_USER_DEFAULT, 0, ABC_EE, 3, ABC_FF, 5);
-    ok(ret == CSTR_LESS_THAN, "expected CSTR_LESS_THAN, got %d\n", ret);
+    ok(ret == CSTR_LESS_THAN || (is_utf8 && ret == CSTR_EQUAL), "expected CSTR_LESS_THAN, got %d\n", ret);
     ret = CompareStringA(LOCALE_USER_DEFAULT, 0, ABC_EE, 5, ABC_FF, 5);
-    ok(ret == CSTR_LESS_THAN, "expected CSTR_LESS_THAN, got %d\n", ret);
+    ok(ret == CSTR_LESS_THAN || (is_utf8 && ret == CSTR_EQUAL), "expected CSTR_LESS_THAN, got %d\n", ret);
     ret = CompareStringA(LOCALE_USER_DEFAULT, 0, ABC_FF, 5, ABC_EE, 5);
-    ok(ret == CSTR_GREATER_THAN, "expected CSTR_GREATER_THAN, got %d\n", ret);
+    ok(ret == CSTR_GREATER_THAN || (is_utf8 && ret == CSTR_EQUAL), "expected CSTR_GREATER_THAN, got %d\n", ret);
 }
 
 static void test_CompareStringW(void)
@@ -5856,6 +5941,7 @@ static void test_CompareStringOrdinal(void)
 static void test_GetGeoInfo(void)
 {
     char buffA[20];
+    WCHAR buffW[20];
     INT ret;
 
     if (!pGetGeoInfoA)
@@ -5964,6 +6050,37 @@ static void test_GetGeoInfo(void)
     ret = pGetGeoInfoA(203, GEO_ID + 1, NULL, 0, 0);
     ok(ret == 0, "got %d\n", ret);
     ok(GetLastError() == ERROR_INVALID_FLAGS, "got %ld\n", GetLastError());
+
+    /* Test for GetGeoInfoEx */
+    if (!pGetGeoInfoEx)
+    {
+        win_skip("GetGeoInfoEx is not available\n");
+        return;
+    }
+
+    /* Test with ISO 3166-1 */
+    ret = pGetGeoInfoEx(L"AR", GEO_ISO3, buffW, ARRAYSIZE(buffW));
+    ok(ret != 0, "GetGeoInfoEx failed %ld.\n", GetLastError());
+    ok(!wcscmp(buffW, L"ARG"), "expected string to be ARG, got %ls\n", buffW);
+
+    /* Test with UN M.49 */
+    SetLastError(0xdeadbeef);
+    ret = pGetGeoInfoEx(L"032", GEO_ISO3, buffW, ARRAYSIZE(buffW));
+    ok(ret == 0, "expected GetGeoInfoEx to fail.\n");
+    ok(GetLastError() == ERROR_INVALID_PARAMETER,
+                 "expected ERROR_INVALID_PARAMETER got %ld.\n", GetLastError());
+
+    /* Test GEO_ID */
+    ret = pGetGeoInfoEx(L"AR", GEO_ID, buffW, ARRAYSIZE(buffW));
+    ok(ret != 0, "GetGeoInfoEx failed %ld.\n", GetLastError());
+    ok(!wcscmp(buffW, L"11"), "expected string to be 11, got %ls\n", buffW);
+
+    /* Test with invalid geo type */
+    SetLastError(0xdeadbeef);
+    ret = pGetGeoInfoEx(L"AR", GEO_LCID, buffW, ARRAYSIZE(buffW));
+    ok(ret == 0, "expected GetGeoInfoEx to fail.\n");
+    ok(GetLastError() == ERROR_INVALID_FLAGS,
+                 "expected ERROR_INVALID_PARAMETER got %ld.\n", GetLastError());
 }
 
 static int geoidenum_count;
@@ -6702,6 +6819,16 @@ static void test_FindNLSStringEx(void)
         { localeW, FIND_ENDSWITH, L"SimpleSimple", L"Simp", -1, 0xdeadbeef},
         { localeW, FIND_FROMSTART, comb_s_accent1W, comb_s_accent2W, 0, 6 },
         { localeW, FIND_FROMSTART, comb_q_accent1W, comb_q_accent2W, 2, 7 },
+        { localeW, FIND_STARTSWITH, L"--Option", L"--", 0, 2},
+        { localeW, FIND_ENDSWITH, L"Option--", L"--", 6, 2},
+        { localeW, FIND_FROMSTART, L"----", L"--", 0, 2},
+        { localeW, FIND_FROMEND, L"----", L"--", 2, 2},
+        { localeW, FIND_FROMSTART, L"opt1--opt2--opt3", L"--", 4, 2},
+        { localeW, FIND_FROMEND, L"opt1--opt2--opt3", L"--", 10, 2},
+        { localeW, FIND_FROMSTART, L"x-oss-security", L"x-oss-", 0, 6},
+        { localeW, FIND_FROMSTART, L"x-oss-security", L"-oss", 1, 4},
+        { localeW, FIND_FROMSTART, L"x-oss-security", L"-oss--", -1, 0xdeadbeef},
+        { localeW, FIND_FROMEND, L"x-oss-oss2", L"-oss", 5, 4},
     };
     unsigned int i;
 

@@ -582,8 +582,7 @@ BOOL WINAPI DllMain( HINSTANCE instance, DWORD reason, void *reserved )
     switch (reason)
     {
     case DLL_PROCESS_ATTACH:
-        return !NtQueryVirtualMemory( GetCurrentProcess(), instance, MemoryWineUnixFuncs,
-                                      &ws_unix_handle, sizeof(ws_unix_handle), NULL );
+        return !__wine_init_unix_call();
 
     case DLL_THREAD_DETACH:
         free_per_thread_data();
@@ -3173,9 +3172,9 @@ int WINAPI setsockopt( SOCKET s, int level, int optname, const char *optval, int
         }
 
         case SO_ERROR:
-            FIXME( "SO_ERROR, stub!\n" );
-            SetLastError( WSAENOPROTOOPT );
-            return -1;
+            FIXME( "SO_ERROR, stub.\n" );
+            SetLastError( ERROR_SUCCESS );
+            return 0;
 
         case SO_KEEPALIVE:
             if (optlen <= 0 || !optval)
@@ -3710,7 +3709,9 @@ BOOL WINAPI WSAGetOverlappedResult( SOCKET s, LPWSAOVERLAPPED lpOverlapped,
         return FALSE;
     }
 
-    status = lpOverlapped->Internal;
+    /* Paired with the write-release in set_async_iosb() in ntdll; see the
+     * latter for details. */
+    status = ReadAcquire( (LONG *)&lpOverlapped->Internal );
     if (status == STATUS_PENDING)
     {
         if (!fWait)
@@ -3722,6 +3723,8 @@ BOOL WINAPI WSAGetOverlappedResult( SOCKET s, LPWSAOVERLAPPED lpOverlapped,
         if (WaitForSingleObject( lpOverlapped->hEvent ? lpOverlapped->hEvent : SOCKET2HANDLE(s),
                                  INFINITE ) == WAIT_FAILED)
             return FALSE;
+        /* We don't need to give this load acquire semantics; the wait above
+         * already guarantees that the IOSB and output buffer are filled. */
         status = lpOverlapped->Internal;
     }
 
@@ -3820,7 +3823,7 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
 {
     struct afd_create_params create_params;
     OBJECT_ATTRIBUTES attr;
-    UNICODE_STRING string;
+    UNICODE_STRING string = RTL_CONSTANT_STRING(L"\\Device\\Afd");
     IO_STATUS_BLOCK io;
     NTSTATUS status;
     HANDLE handle;
@@ -3898,7 +3901,6 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
         }
     }
 
-    RtlInitUnicodeString(&string, L"\\Device\\Afd");
     InitializeObjectAttributes(&attr, &string, (flags & WSA_FLAG_NO_HANDLE_INHERIT) ? 0 : OBJ_INHERIT, NULL, NULL);
     if ((status = NtOpenFile(&handle, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, &attr,
             &io, 0, (flags & WSA_FLAG_OVERLAPPED) ? 0 : FILE_SYNCHRONOUS_IO_NONALERT)))
@@ -4032,6 +4034,12 @@ int WINAPI WSARecv(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount,
                    LPWSAOVERLAPPED lpOverlapped,
                    LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine)
 {
+    if (!dwBufferCount)
+    {
+        SetLastError( WSAEINVAL );
+        return -1;
+    }
+
     return WS2_recv_base(s, lpBuffers, dwBufferCount, NumberOfBytesReceived, lpFlags,
                        NULL, NULL, lpOverlapped, lpCompletionRoutine, NULL);
 }

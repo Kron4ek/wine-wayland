@@ -138,7 +138,7 @@ struct unix_funcs
                                      INT width, INT height, HBITMAP mask, INT x_mask, INT y_mask,
                                      DWORD bk_color );
     BOOL     (WINAPI *pNtGdiPolyDraw)(HDC hdc, const POINT *points, const BYTE *types, DWORD count );
-    ULONG    (WINAPI *pNtGdiPolyPolyDraw)( HDC hdc, const POINT *points, const UINT *counts,
+    ULONG    (WINAPI *pNtGdiPolyPolyDraw)( HDC hdc, const POINT *points, const ULONG *counts,
                                            DWORD count, UINT function );
     BOOL     (WINAPI *pNtGdiPtVisible)( HDC hdc, INT x, INT y );
     BOOL     (WINAPI *pNtGdiRectVisible)( HDC hdc, const RECT *rect );
@@ -207,7 +207,6 @@ struct unix_funcs
     BOOL (CDECL *get_brush_bitmap_info)( HBRUSH handle, BITMAPINFO *info, void *bits, UINT *usage );
     BOOL (CDECL *get_file_outline_text_metric)( const WCHAR *path, OUTLINETEXTMETRICW *otm );
     BOOL (CDECL *get_icm_profile)( HDC hdc, BOOL allow_default, DWORD *size, WCHAR *filename );
-    struct opengl_funcs * (CDECL *get_wgl_driver)( HDC hdc, UINT version );
     BOOL (CDECL *wine_send_input)( HWND hwnd, const INPUT *input, const RAWINPUT *rawinput );
 };
 
@@ -265,7 +264,6 @@ extern BOOL register_imm_window( HWND hwnd ) DECLSPEC_HIDDEN;
 extern void unregister_imm_window( HWND hwnd ) DECLSPEC_HIDDEN;
 
 /* input.c */
-extern BOOL enable_mouse_in_pointer DECLSPEC_HIDDEN;
 extern BOOL destroy_caret(void) DECLSPEC_HIDDEN;
 extern LONG global_key_state_counter DECLSPEC_HIDDEN;
 extern HWND get_active_window(void) DECLSPEC_HIDDEN;
@@ -273,11 +271,16 @@ extern HWND get_capture(void) DECLSPEC_HIDDEN;
 extern BOOL get_cursor_pos( POINT *pt ) DECLSPEC_HIDDEN;
 extern HWND get_focus(void) DECLSPEC_HIDDEN;
 extern DWORD get_input_state(void) DECLSPEC_HIDDEN;
+extern HWND get_progman_window(void) DECLSPEC_HIDDEN;
+extern HWND get_shell_window(void) DECLSPEC_HIDDEN;
+extern HWND get_taskman_window(void) DECLSPEC_HIDDEN;
 extern BOOL WINAPI release_capture(void) DECLSPEC_HIDDEN;
 extern BOOL set_capture_window( HWND hwnd, UINT gui_flags, HWND *prev_ret ) DECLSPEC_HIDDEN;
 extern BOOL set_caret_blink_time( unsigned int time ) DECLSPEC_HIDDEN;
 extern BOOL set_caret_pos( int x, int y ) DECLSPEC_HIDDEN;
 extern BOOL set_foreground_window( HWND hwnd, BOOL mouse ) DECLSPEC_HIDDEN;
+extern HWND set_progman_window( HWND hwnd ) DECLSPEC_HIDDEN;
+extern HWND set_taskman_window( HWND hwnd ) DECLSPEC_HIDDEN;
 extern void toggle_caret( HWND hwnd ) DECLSPEC_HIDDEN;
 extern void update_mouse_tracking_info( HWND hwnd ) DECLSPEC_HIDDEN;
 
@@ -311,7 +314,7 @@ extern LRESULT send_internal_message_timeout( DWORD dest_pid, DWORD dest_tid, UI
 extern LRESULT send_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam ) DECLSPEC_HIDDEN;
 extern BOOL send_notify_message( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, BOOL ansi ) DECLSPEC_HIDDEN;
 extern LRESULT send_message_timeout( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
-                                     UINT flags, UINT timeout, BOOL ansi );
+                                     UINT flags, UINT timeout, BOOL ansi ) DECLSPEC_HIDDEN;
 
 /* rawinput.c */
 extern BOOL process_rawinput_message( MSG *msg, UINT hw_id, const struct hardware_msg_data *msg_data ) DECLSPEC_HIDDEN;
@@ -330,7 +333,8 @@ extern void track_scroll_bar( HWND hwnd, int scrollbar, POINT pt ) DECLSPEC_HIDD
 extern BOOL enable_thunk_lock DECLSPEC_HIDDEN;
 extern HBRUSH get_55aa_brush(void) DECLSPEC_HIDDEN;
 extern DWORD get_dialog_base_units(void) DECLSPEC_HIDDEN;
-extern LONG get_char_dimensions( HDC hdc, TEXTMETRICW *metric, LONG *height ) DECLSPEC_HIDDEN;
+extern LONG get_char_dimensions( HDC hdc, TEXTMETRICW *metric, int *height ) DECLSPEC_HIDDEN;
+extern INT get_display_depth( UNICODE_STRING *name ) DECLSPEC_HIDDEN;
 extern RECT get_display_rect( const WCHAR *display ) DECLSPEC_HIDDEN;
 extern UINT get_monitor_dpi( HMONITOR monitor ) DECLSPEC_HIDDEN;
 extern BOOL get_monitor_info( HMONITOR handle, MONITORINFO *info ) DECLSPEC_HIDDEN;
@@ -352,9 +356,9 @@ extern BOOL message_beep( UINT i ) DECLSPEC_HIDDEN;
 extern POINT point_phys_to_win_dpi( HWND hwnd, POINT pt ) DECLSPEC_HIDDEN;
 extern POINT point_thread_to_win_dpi( HWND hwnd, POINT pt ) DECLSPEC_HIDDEN;
 extern RECT rect_thread_to_win_dpi( HWND hwnd, RECT rect ) DECLSPEC_HIDDEN;
-extern HMONITOR monitor_from_point( POINT pt, DWORD flags, UINT dpi ) DECLSPEC_HIDDEN;
-extern HMONITOR monitor_from_rect( const RECT *rect, DWORD flags, UINT dpi ) DECLSPEC_HIDDEN;
-extern HMONITOR monitor_from_window( HWND hwnd, DWORD flags, UINT dpi ) DECLSPEC_HIDDEN;
+extern HMONITOR monitor_from_point( POINT pt, UINT flags, UINT dpi ) DECLSPEC_HIDDEN;
+extern HMONITOR monitor_from_rect( const RECT *rect, UINT flags, UINT dpi ) DECLSPEC_HIDDEN;
+extern HMONITOR monitor_from_window( HWND hwnd, UINT flags, UINT dpi ) DECLSPEC_HIDDEN;
 extern void user_lock(void) DECLSPEC_HIDDEN;
 extern void user_unlock(void) DECLSPEC_HIDDEN;
 extern void user_check_not_lock(void) DECLSPEC_HIDDEN;
@@ -450,11 +454,14 @@ static inline WCHAR win32u_towupper( WCHAR ch )
 
 extern CPTABLEINFO ansi_cp DECLSPEC_HIDDEN;
 
+CPTABLEINFO *get_cptable( WORD cp ) DECLSPEC_HIDDEN;
+const NLS_LOCALE_DATA *get_locale_data( LCID lcid ) DECLSPEC_HIDDEN;
 DWORD win32u_mbtowc( CPTABLEINFO *info, WCHAR *dst, DWORD dstlen, const char *src,
                      DWORD srclen ) DECLSPEC_HIDDEN;
 DWORD win32u_wctomb( CPTABLEINFO *info, char *dst, DWORD dstlen, const WCHAR *src,
                      DWORD srclen ) DECLSPEC_HIDDEN;
 DWORD win32u_wctomb_size( CPTABLEINFO *info, const WCHAR *src, DWORD srclen ) DECLSPEC_HIDDEN;
+DWORD win32u_mbtowc_size( CPTABLEINFO *info, const char *src, DWORD srclen ) DECLSPEC_HIDDEN;
 
 static inline WCHAR *win32u_wcsdup( const WCHAR *str )
 {
@@ -505,6 +512,15 @@ static inline const char *debugstr_us( const UNICODE_STRING *us )
 {
     if (!us) return "<null>";
     return debugstr_wn( us->Buffer, us->Length / sizeof(WCHAR) );
+}
+
+static inline const char *debugstr_color( COLORREF color )
+{
+    if (color & (1 << 24))  /* PALETTEINDEX */
+        return wine_dbg_sprintf( "PALETTEINDEX(%u)", LOWORD(color) );
+    if (color >> 16 == 0x10ff)  /* DIBINDEX */
+        return wine_dbg_sprintf( "DIBINDEX(%u)", LOWORD(color) );
+    return wine_dbg_sprintf( "RGB(%02x,%02x,%02x)", GetRValue(color), GetGValue(color), GetBValue(color) );
 }
 
 #endif /* __WINE_WIN32U_PRIVATE */

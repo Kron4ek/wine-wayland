@@ -337,6 +337,15 @@ static WCHAR *load_resource(const WCHAR *name)
     return pathW;
 }
 
+static BOOL is_MEDIASUBTYPE_RGB(const GUID *subtype)
+{
+    return IsEqualGUID(subtype, &MEDIASUBTYPE_RGB8)
+            || IsEqualGUID(subtype, &MEDIASUBTYPE_RGB555)
+            || IsEqualGUID(subtype, &MEDIASUBTYPE_RGB565)
+            || IsEqualGUID(subtype, &MEDIASUBTYPE_RGB24)
+            || IsEqualGUID(subtype, &MEDIASUBTYPE_RGB32);
+}
+
 struct test_callback
 {
     IMFAsyncCallback IMFAsyncCallback_iface;
@@ -4253,6 +4262,7 @@ image_size_tests[] =
     { &MFVideoFormat_RGB565, 1, 1, 4, 0, 64, 4, 64 },
     { &MFVideoFormat_RGB24, 3, 5, 60, 0, 320, 60, 64 },
     { &MFVideoFormat_RGB24, 1, 1, 4, 0, 64, 4, 64 },
+    { &MFVideoFormat_RGB24, 4, 3, 36, 0, 192, 36, 64 },
     { &MFVideoFormat_RGB32, 3, 5, 60, 0, 320, 60, 64 },
     { &MFVideoFormat_RGB32, 1, 1, 4, 0, 64, 4, 64 },
     { &MFVideoFormat_ARGB32, 3, 5, 60, 0, 320, 60, 64 },
@@ -4261,6 +4271,17 @@ image_size_tests[] =
     { &MFVideoFormat_A2R10G10B10, 1, 1, 4, 0, 64, 4, 64 },
     { &MFVideoFormat_A16B16G16R16F, 3, 5, 120, 0, 320, 120, 64 },
     { &MFVideoFormat_A16B16G16R16F, 1, 1, 8, 0, 64, 8, 64 },
+    { &MEDIASUBTYPE_RGB8,   3, 5, 20 },
+    { &MEDIASUBTYPE_RGB8,   1, 1, 4  },
+    { &MEDIASUBTYPE_RGB555, 3, 5, 40 },
+    { &MEDIASUBTYPE_RGB555, 1, 1, 4  },
+    { &MEDIASUBTYPE_RGB565, 3, 5, 40 },
+    { &MEDIASUBTYPE_RGB565, 1, 1, 4  },
+    { &MEDIASUBTYPE_RGB24,  3, 5, 60 },
+    { &MEDIASUBTYPE_RGB24,  1, 1, 4  },
+    { &MEDIASUBTYPE_RGB24,  4, 3, 36 },
+    { &MEDIASUBTYPE_RGB32,  3, 5, 60 },
+    { &MEDIASUBTYPE_RGB32,  1, 1, 4  },
 
     /* YUV 4:4:4, 32 bpp, packed */
     { &MFVideoFormat_AYUV, 1, 1, 4, 0, 64, 4, 64 },
@@ -4338,6 +4359,15 @@ image_size_tests[] =
     { &MFVideoFormat_IMC4, 4, 2, 12, 0, 384, 12, 128 },
     { &MFVideoFormat_IMC4, 4, 3, 18, 0, 576, 18, 128 },
     { &MFVideoFormat_IMC4, 320, 240, 115200, 0, 138240, 115200, 384 },
+
+    /* YUV 4:1:1, 12 bpp, semi-planar */
+    { &MFVideoFormat_NV11, 1,   3,   18,     4,  576,    3,      128 },
+    { &MFVideoFormat_NV11, 1,   2,   12,     3,  384,    2,      128 },
+    { &MFVideoFormat_NV11, 2,   2,   12,     6,  384,    6,      128 },
+    { &MFVideoFormat_NV11, 2,   4,   24,     12, 768,    12,     128 },
+    { &MFVideoFormat_NV11, 3,   2,   12,     9,  384,    8,      128 },
+    { &MFVideoFormat_NV11, 4,   2,   12,     0,  384,    12,     128 },
+    { &MFVideoFormat_NV11, 320, 240, 115200, 0,  138240, 115200, 384 },
 };
 
 static void test_MFCalculateImageSize(void)
@@ -4387,6 +4417,8 @@ static void test_MFGetPlaneSize(void)
     {
         const struct image_size_test *ptr = &image_size_tests[i];
         unsigned int plane_size = ptr->plane_size ? ptr->plane_size : ptr->size;
+        if ((is_MEDIASUBTYPE_RGB(ptr->subtype)))
+            continue;
 
         hr = pMFGetPlaneSize(ptr->subtype->Data1, ptr->width, ptr->height, &size);
         ok(hr == S_OK, "%u: failed to get plane size, hr %#lx.\n", i, hr);
@@ -5706,6 +5738,9 @@ static void test_MFGetStrideForBitmapInfoHeader(void)
         { &MFVideoFormat_IYUV, 2, 2 },
         { &MFVideoFormat_IYUV, 3, 3 },
         { &MFVideoFormat_IYUV, 320, 320 },
+        { &MFVideoFormat_NV11, 1, 1 },
+        { &MFVideoFormat_NV11, 2, 2 },
+        { &MFVideoFormat_NV11, 3, 3 },
     };
     unsigned int i;
     LONG stride;
@@ -5932,6 +5967,9 @@ static void test_MFCreate2DMediaBuffer(void)
     {
         const struct image_size_test *ptr = &image_size_tests[i];
 
+        if (is_MEDIASUBTYPE_RGB(ptr->subtype))
+            continue;
+
         hr = pMFCreate2DMediaBuffer(ptr->width, ptr->height, ptr->subtype->Data1, FALSE, &buffer);
         ok(hr == S_OK, "Failed to create a buffer, hr %#lx.\n", hr);
 
@@ -6069,6 +6107,9 @@ static void test_MFCreate2DMediaBuffer(void)
     for (i = 0; i < ARRAY_SIZE(image_size_tests); ++i)
     {
         const struct image_size_test *ptr = &image_size_tests[i];
+
+        if (is_MEDIASUBTYPE_RGB(ptr->subtype))
+            continue;
 
         hr = pMFCreate2DMediaBuffer(ptr->width, ptr->height, ptr->subtype->Data1, FALSE, &buffer);
         ok(hr == S_OK, "Failed to create a buffer, hr %#lx.\n", hr);

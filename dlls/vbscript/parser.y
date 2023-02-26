@@ -175,7 +175,9 @@ SourceElements
     | SourceElements ClassDeclaration       { source_add_class(ctx, $2); }
 
 GlobalDimDeclaration
-    : tPRIVATE DimDeclList                  { $$ = new_dim_statement(ctx, @$, $2); CHECK_ERROR; }
+    : tPRIVATE tCONST ConstDeclList         { $$ = new_const_statement(ctx, @$, $3); CHECK_ERROR; }
+    | tPUBLIC  tCONST ConstDeclList         { $$ = new_const_statement(ctx, @$, $3); CHECK_ERROR; }
+    | tPRIVATE DimDeclList                  { $$ = new_dim_statement(ctx, @$, $2); CHECK_ERROR; }
     | tPUBLIC  DimDeclList                  { $$ = new_dim_statement(ctx, @$, $2); CHECK_ERROR; }
 
 ExpressionNl_opt
@@ -312,18 +314,17 @@ ElseIfs
     | ElseIf ElseIfs                        { $1->next = $2; $$ = $1; }
 
 ElseIf
-    : tELSEIF Expression tTHEN tNL StatementsNl_opt
+    : tELSEIF Expression tTHEN StSep_opt StatementsNl_opt
                                             { $$ = new_elseif_decl(ctx, @$, $2, $5); }
 
 Else_opt
     : /* empty */                           { $$ = NULL; }
-    | tELSE tNL StatementsNl_opt            { $$ = $3; }
+    | tELSE StSep_opt StatementsNl_opt      { $$ = $3; }
 
 CaseClausules
-    : /* empty */                          { $$ = NULL; }
-    | tCASE tELSE StSep StatementsNl_opt   { $$ = new_case_clausule(ctx, NULL, $4, NULL); }
-    | tCASE ExpressionList StSep StatementsNl_opt CaseClausules
-                                           { $$ = new_case_clausule(ctx, $2, $4, $5); }
+    : /* empty */                                                      { $$ = NULL; }
+    | tCASE tELSE StSep_opt StatementsNl_opt                           { $$ = new_case_clausule(ctx, NULL, $4, NULL); }
+    | tCASE ExpressionList StSep_opt StatementsNl_opt CaseClausules    { $$ = new_case_clausule(ctx, $2, $4, $5); }
 
 Arguments
     : tEMPTYBRACKETS                { $$ = NULL; }
@@ -509,6 +510,10 @@ Identifier
     | tEXPLICIT      { ctx->last_token = tIdentifier; $$ = $1; }
     | tPROPERTY      { ctx->last_token = tIdentifier; $$ = $1; }
     | tSTEP          { ctx->last_token = tIdentifier; $$ = $1; }
+
+StSep_opt
+    : /* empty */
+    | StSep
 
 /* Most statements accept both new line and ':' as separators */
 StSep
@@ -1117,7 +1122,7 @@ static class_decl_t *add_class_function(parser_ctx_t *ctx, class_decl_t *class_d
 static class_decl_t *add_dim_prop(parser_ctx_t *ctx, class_decl_t *class_decl, dim_decl_t *dim_decl, unsigned storage_flags)
 {
     if(storage_flags & STORAGE_IS_DEFAULT) {
-        FIXME("variant prop van't be default value\n");
+        FIXME("variant prop can't be default value\n");
         ctx->hres = E_FAIL;
         return NULL;
     }

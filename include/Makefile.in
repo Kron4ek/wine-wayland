@@ -195,7 +195,6 @@ SOURCES = \
 	ddk/hidport.h \
 	ddk/hidsdi.h \
 	ddk/hidtypes.h \
-	ddk/imm.h \
 	ddk/mountmgr.h \
 	ddk/ndis.h \
 	ddk/ntddcdvd.h \
@@ -359,6 +358,7 @@ SOURCES = \
 	imagehlp.h \
 	ime.h \
 	imm.h \
+	immdev.h \
 	imnact.idl \
 	imnxport.idl \
 	in6addr.h \
@@ -378,6 +378,8 @@ SOURCES = \
 	iprtrmib.h \
 	iptypes.h \
 	isguids.h \
+	ivectorchangedeventargs.idl \
+	kbd.h \
 	knownfolders.h \
 	ks.h \
 	ksguid.h \
@@ -474,6 +476,7 @@ SOURCES = \
 	msvcrt/conio.h \
 	msvcrt/corecrt.h \
 	msvcrt/corecrt_io.h \
+	msvcrt/corecrt_malloc.h \
 	msvcrt/corecrt_startup.h \
 	msvcrt/corecrt_stdio_config.h \
 	msvcrt/corecrt_wctype.h \
@@ -511,6 +514,7 @@ SOURCES = \
 	msvcrt/setjmp.h \
 	msvcrt/share.h \
 	msvcrt/signal.h \
+	msvcrt/stdarg.h \
 	msvcrt/stdbool.h \
 	msvcrt/stddef.h \
 	msvcrt/stdint.h \
@@ -526,6 +530,7 @@ SOURCES = \
 	msvcrt/time.h \
 	msvcrt/uchar.h \
 	msvcrt/unistd.h \
+	msvcrt/vadefs.h \
 	msvcrt/wchar.h \
 	msvcrt/wctype.h \
 	mswsock.h \
@@ -625,6 +630,7 @@ SOURCES = \
 	ras.h \
 	rasdlg.h \
 	raserror.h \
+	realtimeapiset.h \
 	reason.h \
 	regstr.h \
 	relogger.idl \
@@ -685,6 +691,7 @@ SOURCES = \
 	shlobj.h \
 	shlwapi.h \
 	shobjidl.idl \
+	shobjidl_core.idl \
 	shtypes.idl \
 	sipbase.h \
 	slerror.h \
@@ -744,6 +751,7 @@ SOURCES = \
 	uiautomationcore.idl \
 	uiautomationcoreapi.h \
 	uiribbon.idl \
+	uiviewsettingsinterop.idl \
 	unexposeenums2managed.h \
 	unknwn.idl \
 	urlhist.idl \
@@ -770,6 +778,7 @@ SOURCES = \
 	wbemdisp.idl \
 	wbemprov.idl \
 	wct.h \
+	wdbgexts.h \
 	weakreference.idl \
 	webservices.h \
 	werapi.h \
@@ -813,9 +822,11 @@ SOURCES = \
 	windows.storage.streams.idl \
 	windows.system.idl \
 	windows.system.power.idl \
+	windows.system.profile.systemmanufacturers.idl \
 	windows.system.threading.idl \
 	windows.system.userprofile.idl \
 	windows.ui.idl \
+	windows.ui.viewmanagement.idl \
 	windowscontracts.idl \
 	windowsx.h \
 	wine/afd.h \
@@ -914,6 +925,7 @@ SOURCES = \
 	wmsdkidl.idl \
 	wmsecure.idl \
 	wnaspi32.h \
+	wofapi.h \
 	wownt16.h \
 	wownt32.h \
 	wpcapi.idl \
@@ -931,6 +943,7 @@ SOURCES = \
 	wshisotp.h \
 	wsipx.h \
 	wsnwlink.h \
+	wspiapi.h \
 	wtsapi32.h \
 	wtypes.idl \
 	wuapi.idl \

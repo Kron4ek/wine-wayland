@@ -691,6 +691,26 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessW( const WCHAR *app_name, WCHAR *cmd_
 }
 
 
+/**********************************************************************
+ *           SetProcessInformation   (kernelbase.@)
+ */
+BOOL WINAPI SetProcessInformation( HANDLE process, PROCESS_INFORMATION_CLASS info_class, void *info, DWORD size )
+{
+    switch (info_class)
+    {
+        case ProcessMemoryPriority:
+            return set_ntstatus( NtSetInformationProcess( process, ProcessPagePriority, info, size ));
+        case ProcessPowerThrottling:
+            return set_ntstatus( NtSetInformationProcess( process, ProcessPowerThrottlingState, info, size ));
+        case ProcessLeapSecondInfo:
+            return set_ntstatus( NtSetInformationProcess( process, ProcessLeapSecondInformation, info, size ));
+        default:
+            FIXME("Unrecognized information class %d.\n", info_class);
+            return FALSE;
+    }
+}
+
+
 /*********************************************************************
  *           DuplicateHandle   (kernelbase.@)
  */
@@ -1054,10 +1074,13 @@ BOOL WINAPI DECLSPEC_HOTPATCH ProcessIdToSessionId( DWORD pid, DWORD *id )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH QueryProcessCycleTime( HANDLE process, ULONG64 *cycle )
 {
-    static int once;
-    if (!once++) FIXME( "(%p,%p): stub!\n", process, cycle );
-    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
-    return FALSE;
+    PROCESS_CYCLE_TIME_INFORMATION time;
+
+    if (!set_ntstatus( NtQueryInformationProcess( process, ProcessCycleTime, &time, sizeof(time), NULL ) ))
+        return FALSE;
+
+    *cycle = time.AccumulatedCycles;
+    return TRUE;
 }
 
 

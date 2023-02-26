@@ -41,9 +41,9 @@ struct pool /* poor's man */
 
 void     pool_init(struct pool* a, size_t arena_size) DECLSPEC_HIDDEN;
 void     pool_destroy(struct pool* a) DECLSPEC_HIDDEN;
-void*    pool_alloc(struct pool* a, size_t len) DECLSPEC_HIDDEN;
-void*    pool_realloc(struct pool* a, void* ptr, size_t len) DECLSPEC_HIDDEN;
-char*    pool_strdup(struct pool* a, const char* str) DECLSPEC_HIDDEN;
+void*    pool_alloc(struct pool* a, size_t len) __WINE_ALLOC_SIZE(2) __WINE_MALLOC DECLSPEC_HIDDEN;
+void*    pool_realloc(struct pool* a, void* ptr, size_t len) __WINE_ALLOC_SIZE(3) DECLSPEC_HIDDEN;
+char*    pool_strdup(struct pool* a, const char* str) __WINE_MALLOC DECLSPEC_HIDDEN;
 
 struct vector
 {
@@ -111,6 +111,7 @@ void*    hash_table_iter_up(struct hash_table_iter* hti) DECLSPEC_HIDDEN;
 
 extern unsigned dbghelp_options DECLSPEC_HIDDEN;
 extern BOOL     dbghelp_opt_native DECLSPEC_HIDDEN;
+extern BOOL     dbghelp_opt_real_path DECLSPEC_HIDDEN;
 extern SYSTEM_INFO sysinfo DECLSPEC_HIDDEN;
 
 /* FIXME: this could be optimized later on by using relative offsets and smaller integral sizes */
@@ -514,6 +515,7 @@ struct process
     void*                       buffer;
 
     BOOL                        is_64bit;
+    BOOL                        is_system_64bit;
 };
 
 static inline BOOL read_process_memory(const struct process *process, UINT64 addr, void *buf, size_t size)
@@ -742,7 +744,7 @@ extern void         module_reset_debug_info(struct module* module) DECLSPEC_HIDD
 extern BOOL         module_remove(struct process* pcs,
                                   struct module* module) DECLSPEC_HIDDEN;
 extern void         module_set_module(struct module* module, const WCHAR* name) DECLSPEC_HIDDEN;
-extern WCHAR*       get_wine_loader_name(struct process *pcs) DECLSPEC_HIDDEN;
+extern WCHAR*       get_wine_loader_name(struct process *pcs) __WINE_DEALLOC(HeapFree, 3) __WINE_MALLOC DECLSPEC_HIDDEN;
 
 /* msc.c */
 extern BOOL         pe_load_debug_directory(const struct process* pcs,
@@ -762,9 +764,9 @@ extern BOOL pdb_virtual_unwind(struct cpu_stack_walk *csw, DWORD_PTR ip,
 extern BOOL         path_find_symbol_file(const struct process* pcs, const struct module* module,
                                           PCSTR full_path, enum module_type type, const GUID* guid, DWORD dw1, DWORD dw2,
                                           WCHAR *buffer, BOOL* is_unmatched) DECLSPEC_HIDDEN;
-extern WCHAR *get_dos_file_name(const WCHAR *filename) DECLSPEC_HIDDEN;
-extern BOOL search_dll_path(const struct process* process, const WCHAR *name,
-                            BOOL (*match)(void*, HANDLE, const WCHAR*), void *param) DECLSPEC_HIDDEN;
+extern WCHAR *get_dos_file_name(const WCHAR *filename) __WINE_DEALLOC(HeapFree, 3) __WINE_MALLOC DECLSPEC_HIDDEN;
+extern BOOL         search_dll_path(const struct process* process, const WCHAR *name, WORD machine,
+                                    BOOL (*match)(void*, HANDLE, const WCHAR*), void *param) DECLSPEC_HIDDEN;
 extern BOOL search_unix_path(const WCHAR *name, const WCHAR *path, BOOL (*match)(void*, HANDLE, const WCHAR*), void *param) DECLSPEC_HIDDEN;
 extern const WCHAR* file_name(const WCHAR* str) DECLSPEC_HIDDEN;
 extern const char* file_nameA(const char* str) DECLSPEC_HIDDEN;
@@ -953,7 +955,6 @@ static inline struct symt_function*
 extern struct symt_function*
                     symt_find_inlined_site(struct module* module,
                                            DWORD64 addr, DWORD inline_ctx) DECLSPEC_HIDDEN;
-extern DWORD        symt_get_inlinesite_depth(HANDLE hProcess, DWORD64 addr) DECLSPEC_HIDDEN;
 
 /* Inline context encoding (different from what native does):
  * bits 31:30: 3 ignore (includes INLINE_FRAME_CONTEXT_IGNORE=0xFFFFFFFF)

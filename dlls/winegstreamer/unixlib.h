@@ -42,6 +42,8 @@ struct wg_format
         WG_MAJOR_TYPE_VIDEO,
         WG_MAJOR_TYPE_VIDEO_CINEPAK,
         WG_MAJOR_TYPE_VIDEO_H264,
+        WG_MAJOR_TYPE_VIDEO_WMV,
+        WG_MAJOR_TYPE_VIDEO_INDEO,
     } major_type;
 
     union
@@ -126,6 +128,18 @@ struct wg_format
             uint32_t profile;
             uint32_t level;
         } video_h264;
+        struct
+        {
+            int32_t width, height;
+            uint32_t fps_n, fps_d;
+            uint32_t version;
+        } video_wmv;
+        struct
+        {
+            int32_t width, height;
+            uint32_t fps_n, fps_d;
+            uint32_t version;
+        } video_indeo;
     } u;
 };
 
@@ -135,6 +149,7 @@ enum wg_sample_flag
     WG_SAMPLE_FLAG_HAS_PTS = 2,
     WG_SAMPLE_FLAG_HAS_DURATION = 4,
     WG_SAMPLE_FLAG_SYNC_POINT = 8,
+    WG_SAMPLE_FLAG_DISCONTINUITY = 0x10,
 };
 
 struct wg_sample
@@ -251,6 +266,21 @@ struct wg_parser_stream_get_duration_params
     UINT64 duration;
 };
 
+enum wg_parser_tag
+{
+    WG_PARSER_TAG_LANGUAGE,
+    WG_PARSER_TAG_NAME,
+    WG_PARSER_TAG_COUNT
+};
+
+struct wg_parser_stream_get_tag_params
+{
+    struct wg_parser_stream *stream;
+    enum wg_parser_tag tag;
+    char *buffer;
+    UINT32 *size;
+};
+
 struct wg_parser_stream_seek_params
 {
     struct wg_parser_stream *stream;
@@ -287,6 +317,12 @@ struct wg_transform_set_output_format_params
     const struct wg_format *format;
 };
 
+struct wg_transform_get_status_params
+{
+    struct wg_transform *transform;
+    UINT32 accepts_input;
+};
+
 enum unix_funcs
 {
     unix_wg_parser_create,
@@ -311,6 +347,7 @@ enum unix_funcs
     unix_wg_parser_stream_notify_qos,
 
     unix_wg_parser_stream_get_duration,
+    unix_wg_parser_stream_get_tag,
     unix_wg_parser_stream_seek,
 
     unix_wg_transform_create,
@@ -319,6 +356,7 @@ enum unix_funcs
 
     unix_wg_transform_push_data,
     unix_wg_transform_read_data,
+    unix_wg_transform_get_status,
 };
 
 #endif /* __WINE_WINEGSTREAMER_UNIXLIB_H */

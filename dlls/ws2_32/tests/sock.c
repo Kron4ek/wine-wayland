@@ -1431,7 +1431,6 @@ static void test_set_getsockopt(void)
     SetLastError(0xdeadbeef);
     i = 1234;
     err = setsockopt(s, SOL_SOCKET, SO_ERROR, (char *) &i, size);
-    todo_wine
     ok( !err && !WSAGetLastError(),
         "got %d with %d (expected 0 with 0)\n",
         err, WSAGetLastError());
@@ -2154,7 +2153,7 @@ static void test_reuseaddr(void)
     };
 
     unsigned int rc, reuse, value;
-    struct sockaddr saddr;
+    struct sockaddr_storage saddr;
     SOCKET s1, s2, s3, s4;
     unsigned int i, j;
     int size;
@@ -2246,7 +2245,7 @@ static void test_reuseaddr(void)
 
         /* The connection is delivered to the first socket. */
         size = tests[i].addrlen;
-        s4 = accept(s1, &saddr, &size);
+        s4 = accept(s1, (struct sockaddr *)&saddr, &size);
         ok(s4 != INVALID_SOCKET, "got error %d.\n", WSAGetLastError());
 
         closesocket(s1);
@@ -2280,7 +2279,7 @@ static void test_reuseaddr(void)
         ok(!rc, "got error %d.\n", WSAGetLastError());
 
         size = tests[i].addrlen;
-        s4 = accept(s2, &saddr, &size);
+        s4 = accept(s2, (struct sockaddr *)&saddr, &size);
         todo_wine ok(s4 != INVALID_SOCKET, "got error %d.\n", WSAGetLastError());
 
         closesocket(s1);
@@ -2314,7 +2313,7 @@ static void test_reuseaddr(void)
         rc = connect(s3, tests[i].addr_loopback, tests[i].addrlen);
         ok(!rc, "got error %d.\n", WSAGetLastError());
         size = tests[i].addrlen;
-        s4 = accept(s1, &saddr, &size);
+        s4 = accept(s1, (struct sockaddr *)&saddr, &size);
 
         ok(s4 != INVALID_SOCKET, "got error %d.\n", WSAGetLastError());
 
@@ -3004,6 +3003,7 @@ static void test_WSASocket(void)
         int family, type, protocol;
         DWORD error;
         int ret_family, ret_type, ret_protocol;
+        int ret_family_alt;
     }
     tests[] =
     {
@@ -3031,14 +3031,14 @@ static void test_WSASocket(void)
         {AF_INET,   SOCK_DGRAM,  IPPROTO_TCP, WSAEPROTONOSUPPORT},
 
         /* 19 */
-        {AF_UNSPEC, SOCK_STREAM, IPPROTO_TCP, 0, AF_INET, SOCK_STREAM, IPPROTO_TCP},
+        {AF_UNSPEC, SOCK_STREAM, IPPROTO_TCP, 0, AF_INET, SOCK_STREAM, IPPROTO_TCP, AF_INET6 /* win11 */},
         {AF_UNSPEC, SOCK_STREAM, 0xdead,      WSAEPROTONOSUPPORT},
         {AF_UNSPEC, 0xdead,      IPPROTO_UDP, WSAESOCKTNOSUPPORT},
         {AF_UNSPEC, SOCK_STREAM, 0,           WSAEINVAL},
         {AF_UNSPEC, SOCK_DGRAM,  0,           WSAEINVAL},
         {AF_UNSPEC, 0xdead,      0,           WSAEINVAL},
-        {AF_UNSPEC, 0,           IPPROTO_TCP, 0, AF_INET, SOCK_STREAM, IPPROTO_TCP},
-        {AF_UNSPEC, 0,           IPPROTO_UDP, 0, AF_INET, SOCK_DGRAM,  IPPROTO_UDP},
+        {AF_UNSPEC, 0,           IPPROTO_TCP, 0, AF_INET, SOCK_STREAM, IPPROTO_TCP, AF_INET6 /* win11 */},
+        {AF_UNSPEC, 0,           IPPROTO_UDP, 0, AF_INET, SOCK_DGRAM,  IPPROTO_UDP, AF_INET6 /* win11 */},
         {AF_UNSPEC, 0,           0xdead,      WSAEPROTONOSUPPORT},
         {AF_UNSPEC, 0,           0,           WSAEINVAL},
     };
@@ -3062,7 +3062,9 @@ static void test_WSASocket(void)
             size = sizeof(info);
             err = getsockopt( sock, SOL_SOCKET, SO_PROTOCOL_INFOA, (char *)&info, &size );
             ok(!err, "Test %u: getsockopt failed, error %u\n", i, WSAGetLastError());
-            ok(info.iAddressFamily == tests[i].ret_family, "Test %u: got wrong family %d\n", i, info.iAddressFamily);
+            ok(info.iAddressFamily == tests[i].ret_family ||
+               (tests[i].ret_family_alt && info.iAddressFamily == tests[i].ret_family_alt),
+               "Test %u: got wrong family %d\n", i, info.iAddressFamily);
             ok(info.iSocketType == tests[i].ret_type, "Test %u: got wrong type %d\n", i, info.iSocketType);
             ok(info.iProtocol == tests[i].ret_protocol, "Test %u: got wrong protocol %d\n", i, info.iProtocol);
 
@@ -4760,6 +4762,88 @@ done:
         CloseHandle(server_ready);
     if (server_socket != INVALID_SOCKET)
         closesocket(server_socket);
+}
+
+/* Test what socket state is inherited from the listening socket by accept(). */
+static void test_accept_inheritance(void)
+{
+    struct sockaddr_in addr, destaddr;
+    SOCKET listener, server, client;
+    struct linger linger;
+    int ret, len, value;
+    unsigned int i;
+
+    static const struct
+    {
+        int optname;
+        int optval;
+        int value;
+    }
+    int_tests[] =
+    {
+        {SOL_SOCKET, SO_REUSEADDR, 1},
+        {SOL_SOCKET, SO_KEEPALIVE, 1},
+        {SOL_SOCKET, SO_OOBINLINE, 1},
+        {SOL_SOCKET, SO_SNDBUF, 0x123},
+        {SOL_SOCKET, SO_RCVBUF, 0x123},
+        {SOL_SOCKET, SO_SNDTIMEO, 0x123},
+        {SOL_SOCKET, SO_RCVTIMEO, 0x123},
+        {IPPROTO_TCP, TCP_NODELAY, 1},
+    };
+
+    listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ok(listener != -1, "failed to create socket, error %u\n", WSAGetLastError());
+
+    for (i = 0; i < ARRAY_SIZE(int_tests); ++i)
+    {
+        ret = setsockopt(listener, int_tests[i].optname, int_tests[i].optval,
+                (char *)&int_tests[i].value, sizeof(int_tests[i].value));
+        ok(!ret, "test %u: got error %u\n", i, WSAGetLastError());
+    }
+
+    linger.l_onoff = 1;
+    linger.l_linger = 555;
+    ret = setsockopt(listener, SOL_SOCKET, SO_LINGER, (char *)&linger, sizeof(linger));
+    ok(!ret, "got error %u\n", WSAGetLastError());
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    ret = bind(listener, (struct sockaddr *)&addr, sizeof(addr));
+    ok(!ret, "failed to bind, error %u\n", WSAGetLastError());
+    len = sizeof(destaddr);
+    ret = getsockname(listener, (struct sockaddr *)&destaddr, &len);
+    ok(!ret, "failed to get address, error %u\n", WSAGetLastError());
+
+    ret = listen(listener, 1);
+    ok(!ret, "failed to listen, error %u\n", WSAGetLastError());
+
+    client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ok(client != -1, "failed to create socket, error %u\n", WSAGetLastError());
+    ret = connect(client, (struct sockaddr *)&destaddr, sizeof(destaddr));
+    ok(!ret, "failed to connect, error %u\n", WSAGetLastError());
+    server = accept(listener, NULL, NULL);
+    ok(server != -1, "failed to accept, error %u\n", WSAGetLastError());
+
+    for (i = 0; i < ARRAY_SIZE(int_tests); ++i)
+    {
+        value = 0;
+        len = sizeof(value);
+        ret = getsockopt(server, int_tests[i].optname, int_tests[i].optval, (char *)&value, &len);
+        ok(!ret, "test %u: got error %u\n", i, WSAGetLastError());
+        ok(value == int_tests[i].value, "test %u: got value %#x\n", i, value);
+    }
+
+    len = sizeof(linger);
+    memset(&linger, 0, sizeof(linger));
+    ret = getsockopt(server, SOL_SOCKET, SO_LINGER, (char *)&linger, &len);
+    ok(!ret, "got error %u\n", WSAGetLastError());
+    ok(linger.l_onoff == 1, "got on/off %u\n", linger.l_onoff);
+    ok(linger.l_linger == 555, "got linger %u\n", linger.l_onoff);
+
+    close(server);
+    close(client);
+    close(listener);
 }
 
 static void test_extendedSocketOptions(void)
@@ -12125,6 +12209,8 @@ static void test_bind(void)
     {
         const IP_ADAPTER_UNICAST_ADDRESS *unicast_addr;
 
+        if (adapter->OperStatus != IfOperStatusUp) continue;
+
         for (unicast_addr = adapter->FirstUnicastAddress; unicast_addr != NULL; unicast_addr = unicast_addr->Next)
         {
             short family = unicast_addr->Address.lpSockaddr->sa_family;
@@ -12725,14 +12811,14 @@ static void test_empty_recv(void)
     WSASetLastError(0xdeadbeef);
     ret = WSARecv(client, NULL, 0, NULL, &flags, &overlapped, NULL);
     ok(ret == -1, "expected failure\n");
-    todo_wine ok(WSAGetLastError() == WSAEINVAL, "got error %u\n", WSAGetLastError());
+    ok(WSAGetLastError() == WSAEINVAL, "got error %u\n", WSAGetLastError());
 
     wsabuf.buf = buffer;
     wsabuf.len = 0;
     WSASetLastError(0xdeadbeef);
     ret = WSARecv(client, &wsabuf, 0, NULL, &flags, &overlapped, NULL);
     ok(ret == -1, "expected failure\n");
-    todo_wine ok(WSAGetLastError() == WSAEINVAL, "got error %u\n", WSAGetLastError());
+    ok(WSAGetLastError() == WSAEINVAL, "got error %u\n", WSAGetLastError());
 
     WSASetLastError(0xdeadbeef);
     ret = WSARecv(client, &wsabuf, 1, NULL, &flags, &overlapped, NULL);
@@ -13608,6 +13694,7 @@ START_TEST( sock )
     test_listen();
     test_select();
     test_accept();
+    test_accept_inheritance();
     test_getpeername();
     test_getsockname();
 

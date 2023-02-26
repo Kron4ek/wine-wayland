@@ -204,12 +204,12 @@
 @ stub -arch=arm ??0message_not_found@Concurrency@@QAA@XZ
 @ stub -arch=i386 ??0message_not_found@Concurrency@@QAE@XZ
 @ stub -arch=win64 ??0message_not_found@Concurrency@@QEAA@XZ
-@ stub -arch=arm ??0missing_wait@Concurrency@@QAA@PBD@Z
-@ stub -arch=i386 ??0missing_wait@Concurrency@@QAE@PBD@Z
-@ stub -arch=win64 ??0missing_wait@Concurrency@@QEAA@PEBD@Z
-@ stub -arch=arm ??0missing_wait@Concurrency@@QAA@XZ
-@ stub -arch=i386 ??0missing_wait@Concurrency@@QAE@XZ
-@ stub -arch=win64 ??0missing_wait@Concurrency@@QEAA@XZ
+@ cdecl -arch=arm ??0missing_wait@Concurrency@@QAA@PBD@Z(ptr str) msvcr120.??0missing_wait@Concurrency@@QAA@PBD@Z
+@ thiscall -arch=i386 ??0missing_wait@Concurrency@@QAE@PBD@Z(ptr str) msvcr120.??0missing_wait@Concurrency@@QAE@PBD@Z
+@ cdecl -arch=win64 ??0missing_wait@Concurrency@@QEAA@PEBD@Z(ptr str) msvcr120.??0missing_wait@Concurrency@@QEAA@PEBD@Z
+@ cdecl -arch=arm ??0missing_wait@Concurrency@@QAA@XZ(ptr) msvcr120.??0missing_wait@Concurrency@@QAA@XZ
+@ thiscall -arch=i386 ??0missing_wait@Concurrency@@QAE@XZ(ptr) msvcr120.??0missing_wait@Concurrency@@QAE@XZ
+@ cdecl -arch=win64 ??0missing_wait@Concurrency@@QEAA@XZ(ptr) msvcr120.??0missing_wait@Concurrency@@QEAA@XZ
 @ stub -arch=arm ??0nested_scheduler_missing_detach@Concurrency@@QAA@PBD@Z
 @ stub -arch=i386 ??0nested_scheduler_missing_detach@Concurrency@@QAE@PBD@Z
 @ stub -arch=win64 ??0nested_scheduler_missing_detach@Concurrency@@QEAA@PEBD@Z
@@ -1358,9 +1358,9 @@
 @ varargs _scprintf_p(str) msvcr120._scprintf_p
 @ varargs _scprintf_p_l(str ptr) msvcr120._scprintf_p_l
 @ varargs _scwprintf(wstr) msvcr120._scwprintf
-@ stub _scwprintf_l
-@ stub _scwprintf_p
-@ stub _scwprintf_p_l
+@ varargs _scwprintf_l(wstr ptr) msvcr120._scwprintf_l
+@ varargs _scwprintf_p(wstr) msvcr120._scwprintf_p
+@ varargs _scwprintf_p_l(wstr ptr) msvcr120._scwprintf_p_l
 @ stdcall -arch=i386 _seh_longjmp_unwind4(ptr) msvcr120._seh_longjmp_unwind4
 @ stdcall -arch=i386 _seh_longjmp_unwind(ptr) msvcr120._seh_longjmp_unwind
 @ cdecl -arch=i386 _set_SSE2_enable(long) msvcr120._set_SSE2_enable
